@@ -1,0 +1,16 @@
+[submodule "lilak_elog"]
+	path = lilak_elog
+	url = git@github.com:lilak-project/lilak_elog.git
+	branch = main
+[submodule "lilak_ui"]
+	path = lilak_ui
+	url = git@github.com:lilak-project/lilak_ui.git
+	branch = main
+[submodule "asset_manager"]
+	path = asset_manager
+	url = git@github.com:ejungwoo/cens-assets-tracker.git
+	branch = lilak-ui-frontend
+[submodule "scattering_simulation_2d"]
+	path = scattering_simulation_2d
+	url = git@github.com:lilak-project/scattering_simulation_2d.git
+	branch = main

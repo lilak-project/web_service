@@ -1,0 +1,18 @@
+{
+  "kind": "elog",
+  "mode": "managed",
+  "start": {
+    "cmd": "uvicorn main:app",
+    "cwd": "/app/lilak_elog/backend",
+    "env": {
+      "ELOG_DATA_DIR": "{project_data}",
+      "ELOG_EXPERIMENT": "{project}"
+    }
+  },
+  "health": "/api/auth/me",
+  "entry": "/",
+  "identity": { "accepts_portal_token": true, "link_by": "email" },
+  "capabilities": { "multi_project": true, "import_export": true },
+  "icon": null,
+  "color": null
+}

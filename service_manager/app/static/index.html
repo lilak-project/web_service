@@ -1,0 +1,189 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LILAK Service Manager</title>
+<style>
+  :root {
+    --bg: #f4f4f0; --ink: #14140f; --line: #14140f; --accent: #ffd23f;
+    --card: #ffffff; --muted: #6b6b60; --ok: #2f9e44; --bad: #e03131;
+    --radius: 0 12px 12px 12px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 ui-sans-serif, system-ui, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { display: flex; align-items: baseline; gap: 12px;
+           padding: 20px 24px; border-bottom: 3px solid var(--line); }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -.5px; }
+  header small { color: var(--muted); }
+  #who { margin-left: auto; font-size: 13px; }
+  main { max-width: 820px; margin: 0 auto; padding: 24px; }
+  .card { background: var(--card); border: 3px solid var(--line);
+          border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
+          box-shadow: 4px 4px 0 var(--line); }
+  input, button, select { font: inherit; border: 2px solid var(--line);
+          border-radius: var(--radius); padding: 8px 12px; background: #fff; }
+  button { cursor: pointer; font-weight: 600; background: var(--accent);
+           box-shadow: 2px 2px 0 var(--line); }
+  button.ghost { background: #fff; }
+  button:active { transform: translate(2px,2px); box-shadow: none; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .grid { display: grid; gap: 6px; max-width: 280px; }
+  .svc { display: flex; align-items: center; gap: 12px;
+         padding: 10px 0; border-top: 1px solid #e6e6df; }
+  .svc:first-child { border-top: 0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); }
+  .dot.on { background: var(--ok); }
+  .badge { font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+           border: 1.5px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+  .name { font-weight: 600; }
+  .spacer { margin-left: auto; }
+  .err { color: var(--bad); font-size: 13px; min-height: 18px; }
+  .hidden { display: none; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tabs button.active { background: var(--ink); color: var(--accent); }
+</style>
+
+<header>
+  <h1>LILAK</h1>
+  <small>Service Manager · cover</small>
+  <span id="who"></span>
+</header>
+
+<main>
+  <!-- Auth -->
+  <section id="auth" class="card">
+    <div class="tabs">
+      <button id="tab-login" class="active">Log in</button>
+      <button id="tab-reg" class="ghost">Sign up</button>
+    </div>
+    <div class="grid">
+      <input id="u" placeholder="username" autocomplete="username">
+      <input id="p" type="password" placeholder="password" autocomplete="current-password">
+      <input id="e" class="hidden" placeholder="email (optional)">
+      <button id="go">Log in</button>
+      <div class="err" id="autherr"></div>
+    </div>
+  </section>
+
+  <!-- Services -->
+  <section id="panel" class="card hidden">
+    <div class="row" style="margin-bottom:12px">
+      <strong>Services</strong>
+      <span class="spacer"></span>
+      <input id="newname" placeholder="new service name" style="max-width:180px">
+      <button id="create" class="ghost">+ New</button>
+      <button id="refresh" class="ghost">↻</button>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const tok = () => localStorage.getItem("portal_token");
+const setTok = t => t ? localStorage.setItem("portal_token", t) : localStorage.removeItem("portal_token");
+let mode = "login";
+
+async function api(path, opts = {}) {
+  const h = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (tok()) h.Authorization = "Bearer " + tok();
+  const r = await fetch(path, { ...opts, headers: h });
+  const body = r.headers.get("content-type")?.includes("json") ? await r.json() : await r.text();
+  if (!r.ok) throw new Error(body?.detail || r.statusText);
+  return body;
+}
+
+$("#tab-login").onclick = () => switchMode("login");
+$("#tab-reg").onclick   = () => switchMode("reg");
+function switchMode(m) {
+  mode = m;
+  $("#tab-login").classList.toggle("active", m === "login");
+  $("#tab-login").classList.toggle("ghost", m !== "login");
+  $("#tab-reg").classList.toggle("active", m === "reg");
+  $("#tab-reg").classList.toggle("ghost", m !== "reg");
+  $("#e").classList.toggle("hidden", m !== "reg");
+  $("#go").textContent = m === "login" ? "Log in" : "Create account";
+  $("#autherr").textContent = "";
+}
+
+$("#go").onclick = async () => {
+  $("#autherr").textContent = "";
+  const body = { username: $("#u").value.trim(), password: $("#p").value };
+  if (mode === "reg" && $("#e").value.trim()) body.email = $("#e").value.trim();
+  try {
+    const res = await api("/api/auth/" + (mode === "login" ? "login" : "register"),
+                          { method: "POST", body: JSON.stringify(body) });
+    setTok(res.access_token);
+    await boot();
+  } catch (e) { $("#autherr").textContent = e.message; }
+};
+
+$("#refresh").onclick = loadServices;
+$("#create").onclick = async () => {
+  const name = $("#newname").value.trim();
+  if (!name) return;
+  try { await api("/api/projects", { method: "POST", body: JSON.stringify({ name }) });
+        $("#newname").value = ""; await loadServices(); }
+  catch (e) { alert(e.message); }
+};
+
+async function boot() {
+  try {
+    const me = await api("/api/auth/me");
+    $("#who").innerHTML = `${me.display_name || me.username} · ${me.role} · ` +
+      `<a href="#" id="logout">log out</a>`;
+    $("#logout").onclick = e => { e.preventDefault(); setTok(null); location.reload(); };
+    $("#auth").classList.add("hidden");
+    $("#panel").classList.remove("hidden");
+    await loadServices();
+  } catch { setTok(null); $("#auth").classList.remove("hidden"); $("#panel").classList.add("hidden"); }
+}
+
+async function loadServices() {
+  const list = $("#list");
+  list.innerHTML = "loading…";
+  const svcs = await api("/api/services");
+  if (!svcs.length) { list.innerHTML = "<em>No services yet.</em>"; return; }
+  list.innerHTML = "";
+  for (const s of svcs) {
+    const el = document.createElement("div");
+    el.className = "svc";
+    el.innerHTML =
+      `<span class="dot ${s.running ? "on" : ""}"></span>` +
+      `<span class="name">${s.name}</span>` +
+      `<span class="badge">${s.kind || "?"}</span>` +
+      `<span class="badge">${s.mode || ""}</span>` +
+      `<span class="spacer"></span>`;
+    const acts = document.createElement("span");
+    acts.className = "row";
+    if (s.can_enter) {
+      const enter = btn(s.running ? "Open" : "Start", async () => {
+        if (!s.running) await api(`/api/projects/${s.name}/start`, { method: "POST" });
+        window.open(`/p/${s.name}/`, "_blank");
+        await loadServices();
+      });
+      acts.appendChild(enter);
+      if (s.running) acts.appendChild(btn("Stop", async () => {
+        await api(`/api/projects/${s.name}/stop`, { method: "POST" }); await loadServices();
+      }, true));
+    } else if (s.can_request) {
+      acts.appendChild(btn(s.requested ? "Requested ✓" : "Request access", async () => {
+        await api("/api/access-requests", { method: "POST", body: JSON.stringify({ service: s.name }) });
+        await loadServices();
+      }, true));
+    }
+    el.appendChild(acts);
+    list.appendChild(el);
+  }
+}
+
+function btn(label, fn, ghost) {
+  const b = document.createElement("button");
+  b.textContent = label;
+  if (ghost) b.className = "ghost";
+  b.onclick = fn;
+  return b;
+}
+
+boot();
+</script>

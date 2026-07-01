@@ -1,0 +1,23 @@
+# Production: build the image (all 3 repos) and run the portal with a persistent
+# data volume. Set STACK_DIR to the directory that holds the 3 repos as siblings.
+#
+#   STACK_DIR=/path/with/lilak_ui+lilak_elog+service_manager \
+#     docker compose -f deploy/docker-compose.yml up -d --build
+#
+# (on this split machine first run deploy/stage.sh to assemble STACK_DIR.)
+services:
+  portal:
+    build:
+      context: ${STACK_DIR:?set STACK_DIR to the dir containing lilak_ui, lilak_elog, service_manager}
+      dockerfile: service_manager/deploy/Dockerfile
+    image: lilak-web-portal:latest
+    ports:
+      - "${PORTAL_PORT:-8025}:8025"   # single front door; service ports stay internal
+    volumes:
+      - portal-data:/app/data          # the state: accounts + registry + service data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  portal-data:

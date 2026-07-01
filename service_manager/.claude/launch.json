@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "service_manager",
+      "runtimeExecutable": "/Users/jungwoo/web_service/service_manager/run.sh",
+      "runtimeArgs": [],
+      "port": 8025,
+      "autoPort": false
+    }
+  ]
+}

@@ -1,0 +1,831 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Day-of-week colors (stable across all themes) ────────────────────────── */
+.sched-sun { color: #ef4444 !important; }
+.sched-sat { color: #3b82f6 !important; }
+
+/* Blue section divider above grouped rows (left label column) */
+.sched-section-top { border-top: 1px solid #3b82f6 !important; }
+
+/* Hide spinner arrows on number inputs marked with .no-spin */
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spin { -moz-appearance: textfield; }
+[data-theme="dark"] .sched-sun { color: #f87171 !important; }
+[data-theme="dark"] .sched-sat { color: #60a5fa !important; }
+[data-theme="lowcontrast"] .sched-sun { color: #b04040 !important; }
+[data-theme="lowcontrast"] .sched-sat { color: #4060a0 !important; }
+
+/* ── Theme variables ──────────────────────────────────────────────────────── */
+/*  Semantic design tokens. The canonical definitions live in
+    frontend/src/theme/tokens.js; the values below MUST stay in sync with
+    that file (the Settings → 색상 팔레트 page reads from tokens.js).
+    The short --c-* aliases are kept for the older overrides farther below. */
+/* ── Font-size scale (single source of truth, theme-independent) ─────────────
+   9 named steps — use these everywhere instead of ad-hoc px. Where each goes:
+     --fs-micro (10) badges, key chips, tiny meta
+     --fs-tiny  (11) captions, table sub-text, hints
+     --fs-small (12) secondary text, table cells, SMALL/compact buttons, labels
+     --fs-body  (13) DEFAULT body text, inputs, standard buttons
+     --fs-medium(14) emphasized body, sub-headings, section labels
+     --fs-large (16) h3 / card titles
+     --fs-xlarge(18) h2
+     --fs-title (22) h1 / page titles
+     --fs-display(28) stat big numbers                                          */
+:root {
+  --fs-micro: 10px;  --fs-tiny: 11px;  --fs-small: 12px;  --fs-body: 13px;
+  --fs-medium: 14px; --fs-large: 16px; --fs-xlarge: 18px; --fs-title: 22px;
+  --fs-display: 28px;
+}
+
+/* Single source of truth for type size: route Tailwind's text utilities through
+   the --fs-* scale too, so pages still using `className="text-sm"` (the admin
+   sub-pages) are sized from the same 9-step scale as inline styles. This also
+   trims Tailwind's oversized defaults (text-sm 14→12, text-base 16→13). The
+   [data-size="large"] rules below are more specific and still win in large mode. */
+.text-xs   { font-size: var(--fs-tiny)    !important; }
+.text-sm   { font-size: var(--fs-small)   !important; }
+.text-base { font-size: var(--fs-body)    !important; }
+.text-lg   { font-size: var(--fs-large)   !important; }
+.text-xl   { font-size: var(--fs-xlarge)  !important; }
+.text-2xl  { font-size: var(--fs-title)   !important; }
+.text-3xl  { font-size: var(--fs-display) !important; }
+
+:root,
+[data-theme="bright"],
+[data-theme="teal"] {
+  /* Surface */
+  --app-bg:                 #f8fafc;
+  --surface:                #ffffff;
+  --surface-2:              #f1f5f9;
+  --surface-3:              #e2e8f0;
+  --overlay:                rgba(15,23,42,0.40);
+  /* Border */
+  --border-default:         #e2e8f0;
+  --border-subtle:          #f1f5f9;
+  --border-strong:          #cbd5e1;
+  --border-focus:           #3b82f6;
+  /* Text */
+  --text-primary:           #1e293b;
+  --text-secondary:         #475569;
+  --text-muted:             #94a3b8;
+  --text-emphasis:          #0f172a;
+  --text-inverse:           #ffffff;
+  --text-link:              #2563eb;
+  --text-link-hover:        #1d4ed8;
+  /* Status */
+  --success-bg:             #d1fae5;
+  --success-text:           #065f46;
+  --warning-bg:             #fef3c7;
+  --warning-text:           #92400e;
+  --danger-bg:              #fee2e2;
+  --danger-text:            #b91c1c;
+  --info-bg:                #dbeafe;
+  --info-text:              #1d4ed8;
+  /* Bubble */
+  --bubble-mine-bg:         #dbeafe;
+  --bubble-mine-border:     #bfdbfe;
+  --bubble-mine-text:       #1e293b;
+  --bubble-other-bg:        #ffffff;
+  --bubble-other-border:    #e2e8f0;
+  --bubble-other-text:      #1e293b;
+  --bubble-system-bg:       #f1f5f9;
+  --bubble-system-text:     #64748b;
+  --bubble-ai-bg:           #ede9fe;
+  --bubble-ai-border:       #c4b5fd;
+  --bubble-ai-text:         #5b21b6;
+  /* Button */
+  --btn-primary-bg:         #2563eb;
+  --btn-primary-hover:      #1d4ed8;
+  --btn-primary-text:       #ffffff;
+  --btn-secondary-bg:       #ffffff;
+  --btn-secondary-text:     #475569;
+  --btn-danger-bg:          #dc2626;
+  --btn-danger-text:        #ffffff;
+  /* Input */
+  --input-bg:               #ffffff;
+  --input-border:           #cbd5e1;
+  --input-focus-border:     #3b82f6;
+  --input-placeholder:      #94a3b8;
+  /* Schedule */
+  --today-marker:           #ef4444;
+  --focused-day-bg:         #bfdbfe;
+  --focused-day-ring:       #3b82f6;
+  --day-separator:          #cbd5e1;
+  --week-separator:         #64748b;
+  --section-divider:        #3b82f6;
+  /* Nav / command bars */
+  --nav-bg:                 #18181b;
+  --nav-border:             #27272a;
+  --nav-text:               #f4f4f5;
+  --nav-text-muted:         #a1a1aa;
+  --nav-accent:             #3f3f46;
+  /* Misc */
+  --highlight-bg:           #fef9c3;
+  --selection-bg:           rgba(59,130,246,0.30);
+  --scrollbar-thumb:        #cbd5e1;
+  /* Short aliases kept for legacy overrides */
+  --c-bg:      var(--app-bg);
+  --c-surface: var(--surface);
+  --c-srf2:    var(--surface-2);
+  --c-border:  var(--border-default);
+  --c-brd-s:   var(--border-subtle);
+  --c-tx1:     var(--text-primary);
+  --c-tx2:     var(--text-secondary);
+  --c-tx3:     var(--text-muted);
+}
+
+/* Teal — the bright base (above) with teal bars + accents, matching the kit
+   Teal preset. Recolours nav/command bars, buttons, links, focus and info. */
+[data-theme="teal"] {
+  --btn-primary-bg:    #0d9488;
+  --btn-primary-hover: #0f766e;
+  --btn-primary-text:  #ffffff;
+  --text-link:         #0d9488;
+  --text-link-hover:   #0f766e;
+  --border-focus:      #0d9488;
+  --input-focus-border:#0d9488;
+  --info-bg:           #ccfbf1;
+  --info-text:         #0f766e;
+  --selection-bg:      rgba(13,148,136,0.28);
+  --nav-bg:            #0d9488;
+  --nav-border:        #0f766e;
+  --nav-accent:        #0f766e;
+  --nav-text:          #ffffff;
+  --nav-text-muted:    #a7f3e4;
+}
+
+[data-theme="dark"] {
+  --app-bg:                 #0f172a;
+  --surface:                #1e293b;
+  --surface-2:              #162032;
+  --surface-3:              #334155;
+  --overlay:                rgba(0,0,0,0.55);
+  --border-default:         #334155;
+  --border-subtle:          #243347;
+  --border-strong:          #475569;
+  --border-focus:           #60a5fa;
+  --text-primary:           #e2e8f0;
+  --text-secondary:         #94a3b8;
+  --text-muted:             #64748b;
+  --text-emphasis:          #f8fafc;
+  --text-inverse:           #ffffff;
+  --text-link:              #60a5fa;
+  --text-link-hover:        #93c5fd;
+  --success-bg:             rgba(16,185,129,0.18);
+  --success-text:           #34d399;
+  --warning-bg:             rgba(120,53,15,0.35);
+  --warning-text:           #fcd34d;
+  --danger-bg:              rgba(127,29,29,0.35);
+  --danger-text:            #fca5a5;
+  --info-bg:                #1e3a5a;
+  --info-text:              #93c5fd;
+  --bubble-mine-bg:         #1e2e4a;
+  --bubble-mine-border:     #2a4068;
+  --bubble-mine-text:       #e2e8f0;
+  --bubble-other-bg:        #1e293b;
+  --bubble-other-border:    #334155;
+  --bubble-other-text:      #e2e8f0;
+  --bubble-system-bg:       #162032;
+  --bubble-system-text:     #94a3b8;
+  --bubble-ai-bg:           rgba(139,92,246,0.20);
+  --bubble-ai-border:       #7c3aed;
+  --bubble-ai-text:         #c4b5fd;
+  --btn-primary-bg:         #3b82f6;
+  --btn-primary-hover:      #2563eb;
+  --btn-primary-text:       #ffffff;
+  --btn-secondary-bg:       #1e293b;
+  --btn-secondary-text:     #cbd5e1;
+  --btn-danger-bg:          #dc2626;
+  --btn-danger-text:        #ffffff;
+  --input-bg:               #1e293b;
+  --input-border:           #334155;
+  --input-focus-border:     #60a5fa;
+  --input-placeholder:      #64748b;
+  --today-marker:           #f87171;
+  --focused-day-bg:         #1e3a5a;
+  --focused-day-ring:       #60a5fa;
+  --day-separator:          #334155;
+  --week-separator:         #94a3b8;
+  --section-divider:        #60a5fa;
+  --nav-bg:                 #070d1a;
+  --nav-border:             #1a2440;
+  --nav-text:               #e2e8f0;
+  --nav-text-muted:         #64748b;
+  --nav-accent:             #1e3a5a;
+  --highlight-bg:           rgba(250,204,21,0.25);
+  --selection-bg:           rgba(96,165,250,0.30);
+  --scrollbar-thumb:        #475569;
+  --c-bg:      var(--app-bg);
+  --c-surface: var(--surface);
+  --c-srf2:    var(--surface-2);
+  --c-border:  var(--border-default);
+  --c-brd-s:   var(--border-subtle);
+  --c-tx1:     var(--text-primary);
+  --c-tx2:     var(--text-secondary);
+  --c-tx3:     var(--text-muted);
+}
+
+[data-theme="lowcontrast"] {
+  --app-bg:                 #ede8dc;
+  --surface:                #f5f0e6;
+  --surface-2:              #e8e0ce;
+  --surface-3:              #dac9a0;
+  --overlay:                rgba(60,40,20,0.40);
+  --border-default:         #cec5af;
+  --border-subtle:          #dfd8c8;
+  --border-strong:          #b9a98e;
+  --border-focus:           #8a6040;
+  --text-primary:           #2c2618;
+  --text-secondary:         #5a5040;
+  --text-muted:             #998c78;
+  --text-emphasis:          #1a1408;
+  --text-inverse:           #fdf8f0;
+  --text-link:              #7a5020;
+  --text-link-hover:        #5a3810;
+  --success-bg:             #cce0c0;
+  --success-text:           #3a5028;
+  --warning-bg:             #e8d8a8;
+  --warning-text:           #7a5a10;
+  --danger-bg:              #e8c8c0;
+  --danger-text:            #8a3020;
+  --info-bg:                #e8d8c0;
+  --info-text:              #7a5020;
+  --bubble-mine-bg:         #e8d8c0;
+  --bubble-mine-border:     #c9b89a;
+  --bubble-mine-text:       #2c2618;
+  --bubble-other-bg:        #f5f0e6;
+  --bubble-other-border:    #cec5af;
+  --bubble-other-text:      #2c2618;
+  --bubble-system-bg:       #e8e0ce;
+  --bubble-system-text:     #7a6a50;
+  --bubble-ai-bg:           #e0d4d8;
+  --bubble-ai-border:       #b09498;
+  --bubble-ai-text:         #5a3858;
+  --btn-primary-bg:         #8a6040;
+  --btn-primary-hover:      #7a5030;
+  --btn-primary-text:       #fdf8f0;
+  --btn-secondary-bg:       #f5f0e6;
+  --btn-secondary-text:     #5a5040;
+  --btn-danger-bg:          #a04040;
+  --btn-danger-text:        #fdf8f0;
+  --input-bg:               #f5f0e6;
+  --input-border:           #cec5af;
+  --input-focus-border:     #8a6040;
+  --input-placeholder:      #998c78;
+  --today-marker:           #a04040;
+  --focused-day-bg:         #dac9a0;
+  --focused-day-ring:       #8a6040;
+  --day-separator:          #cec5af;
+  --week-separator:         #7a6a50;
+  --section-divider:        #8a6040;
+  --nav-bg:                 #6b5040;
+  --nav-border:             #5a4030;
+  --nav-text:               #fdf8f0;
+  --nav-text-muted:         #c0a070;
+  --nav-accent:             #7a5a38;
+  --highlight-bg:           #ead8a8;
+  --selection-bg:           rgba(138,96,64,0.30);
+  --scrollbar-thumb:        #b9a98e;
+  --c-bg:      var(--app-bg);
+  --c-surface: var(--surface);
+  --c-srf2:    var(--surface-2);
+  --c-border:  var(--border-default);
+  --c-brd-s:   var(--border-subtle);
+  --c-tx1:     var(--text-primary);
+  --c-tx2:     var(--text-secondary);
+  --c-tx3:     var(--text-muted);
+}
+
+/* Apply bg/text to root */
+html {
+  /* The app-wide default font (var(--font-sans)) is set by the kit's loadFonts()
+     as an inline style on <html>, overriding Tailwind preflight's system-ui. */
+  background-color: var(--c-bg);
+  color: var(--c-tx1);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+/* ── Structural Tailwind overrides ───────────────────────────────────────── */
+
+/* Backgrounds */
+[data-theme="dark"] .bg-white,
+[data-theme="lowcontrast"] .bg-white           { background-color: var(--c-surface) !important; }
+
+[data-theme="dark"] .bg-slate-50,
+[data-theme="lowcontrast"] .bg-slate-50        { background-color: var(--c-bg) !important; }
+
+[data-theme="dark"] .bg-slate-100,
+[data-theme="lowcontrast"] .bg-slate-100       { background-color: var(--c-srf2) !important; }
+
+[data-theme="dark"] .bg-slate-200,
+[data-theme="lowcontrast"] .bg-slate-200       { background-color: var(--c-border) !important; }
+
+/* Hover backgrounds */
+[data-theme="dark"] .hover\:bg-slate-100:hover,
+[data-theme="lowcontrast"] .hover\:bg-slate-100:hover { background-color: var(--c-srf2) !important; }
+
+[data-theme="dark"] .hover\:bg-slate-200:hover,
+[data-theme="lowcontrast"] .hover\:bg-slate-200:hover { background-color: var(--c-border) !important; }
+
+/* Borders */
+[data-theme="dark"] .border-slate-200,
+[data-theme="dark"] .border-slate-300,
+[data-theme="lowcontrast"] .border-slate-200,
+[data-theme="lowcontrast"] .border-slate-300   { border-color: var(--c-border) !important; }
+
+[data-theme="dark"] .border-slate-100,
+[data-theme="lowcontrast"] .border-slate-100   { border-color: var(--c-brd-s) !important; }
+
+/* Primary text */
+[data-theme="dark"] .text-slate-900,
+[data-theme="dark"] .text-slate-800,
+[data-theme="lowcontrast"] .text-slate-900,
+[data-theme="lowcontrast"] .text-slate-800     { color: var(--c-tx1) !important; }
+
+/* Secondary text */
+[data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-slate-600,
+[data-theme="lowcontrast"] .text-slate-700,
+[data-theme="lowcontrast"] .text-slate-600     { color: var(--c-tx2) !important; }
+
+/* Muted text */
+[data-theme="dark"] .text-slate-500,
+[data-theme="dark"] .text-slate-400,
+[data-theme="lowcontrast"] .text-slate-500,
+[data-theme="lowcontrast"] .text-slate-400     { color: var(--c-tx3) !important; }
+
+/* ── Navbar ───────────────────────────────────────────────────────────────── */
+[data-theme="bright"] nav.bg-blue-900       { background-color: #18181b !important; }
+[data-theme="dark"] nav.bg-blue-900         { background-color: #070d1a !important; }
+[data-theme="lowcontrast"] nav.bg-blue-900  { background-color: #6b5040 !important; }
+
+/* bright nav 내부 파란색 → zinc 계열 */
+[data-theme="bright"] nav .bg-blue-700,
+[data-theme="bright"] nav .hover\:bg-blue-700:hover  { background-color: #3f3f46 !important; }
+[data-theme="bright"] nav .bg-blue-800,
+[data-theme="bright"] nav .hover\:bg-blue-800:hover  { background-color: #27272a !important; }
+[data-theme="bright"] nav .bg-blue-600,
+[data-theme="bright"] nav .hover\:bg-blue-600:hover  { background-color: #52525b !important; }
+[data-theme="bright"] nav .border-blue-700           { border-color: #3f3f46 !important; }
+[data-theme="bright"] nav .border-blue-600           { border-color: #52525b !important; }
+[data-theme="bright"] nav .hover\:border-blue-400:hover { border-color: #a1a1aa !important; }
+[data-theme="bright"] nav .border-blue-800           { border-color: #27272a !important; }
+[data-theme="bright"] nav .text-blue-100             { color: #f4f4f5 !important; }
+[data-theme="bright"] nav .text-blue-200             { color: #d4d4d8 !important; }
+[data-theme="bright"] nav .text-blue-300             { color: #a1a1aa !important; }
+[data-theme="bright"] nav .text-blue-400             { color: #a1a1aa !important; }
+/* (removed) old-navbar search-input recolor — the kit CommandBar uses the bar
+   color (transparent input over --nav-bg) as the lilak-ui default. */
+
+/* lowcontrast nav 내부 파란색 → 갈색 계열 */
+[data-theme="lowcontrast"] nav .bg-blue-700,
+[data-theme="lowcontrast"] nav .hover\:bg-blue-700:hover  { background-color: #7a5a38 !important; }
+[data-theme="lowcontrast"] nav .bg-blue-800,
+[data-theme="lowcontrast"] nav .hover\:bg-blue-800:hover  { background-color: #5a4030 !important; }
+[data-theme="lowcontrast"] nav .bg-blue-600,
+[data-theme="lowcontrast"] nav .hover\:bg-blue-600:hover  { background-color: #8a6848 !important; }
+[data-theme="lowcontrast"] nav .border-blue-700           { border-color: #9a7858 !important; }
+[data-theme="lowcontrast"] nav .border-blue-600           { border-color: #a08060 !important; }
+[data-theme="lowcontrast"] nav .hover\:border-blue-400:hover { border-color: #c0a070 !important; }
+[data-theme="lowcontrast"] nav .border-blue-800           { border-color: #4a3020 !important; }
+[data-theme="lowcontrast"] nav .text-blue-100             { color: #f0e8d8 !important; }
+[data-theme="lowcontrast"] nav .text-blue-200             { color: #e0d0b8 !important; }
+[data-theme="lowcontrast"] nav .text-blue-300             { color: #d0b898 !important; }
+[data-theme="lowcontrast"] nav .text-blue-400             { color: #c0a078 !important; }
+[data-theme="lowcontrast"] nav .text-white                { color: #fdf8f0 !important; }
+/* navbar 검색창 */
+[data-theme="lowcontrast"] nav input {
+  background-color: #5a4030 !important;
+  border-color: #9a7858 !important;
+  color: #f0e8d8 !important;
+}
+[data-theme="lowcontrast"] nav input::placeholder         { color: #c0a070 !important; }
+[data-theme="lowcontrast"] nav input:focus                { background-color: #4a3020 !important; border-color: #c0a070 !important; }
+
+/* ── Form inputs (skip .bg-transparent — those are bar inputs on a dark bar) ─ */
+[data-theme="bright"] input:not(.bg-transparent):not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]),
+[data-theme="bright"] textarea:not(.bg-transparent),
+[data-theme="bright"] select:not(.bg-transparent),
+[data-theme="teal"] input:not(.bg-transparent):not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]),
+[data-theme="teal"] textarea:not(.bg-transparent),
+[data-theme="teal"] select:not(.bg-transparent) {
+  background-color: #ffffff;
+  color: #1e293b;
+  border-color: var(--c-border);
+}
+[data-theme="dark"] input:not(.bg-transparent):not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]),
+[data-theme="dark"] textarea:not(.bg-transparent),
+[data-theme="dark"] select:not(.bg-transparent) {
+  background-color: var(--c-surface) !important;
+  color: var(--c-tx1) !important;
+  border-color: var(--c-border) !important;
+}
+[data-theme="lowcontrast"] input:not(.bg-transparent):not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]),
+[data-theme="lowcontrast"] textarea:not(.bg-transparent),
+[data-theme="lowcontrast"] select:not(.bg-transparent) {
+  background-color: var(--c-surface) !important;
+  color: var(--c-tx1) !important;
+  border-color: var(--c-border) !important;
+}
+
+/* ── Tag / badge pills ───────────────────────────────────────────────────── */
+
+/* bright: 파란색 → zinc/검정 계열 */
+[data-theme="bright"] .bg-sky-100      { background-color: #e4e4e7 !important; }
+[data-theme="bright"] .text-sky-700    { color: #3f3f46 !important; }
+[data-theme="bright"] .hover\:bg-sky-200:hover { background-color: #d4d4d8 !important; }
+[data-theme="bright"] .bg-sky-500      { background-color: #52525b !important; }
+
+[data-theme="bright"] .bg-blue-100     { background-color: #e4e4e7 !important; }
+[data-theme="bright"] .text-blue-700   { color: #3f3f46 !important; }
+[data-theme="bright"] .text-blue-600   { color: #27272a !important; }
+[data-theme="bright"] .text-blue-500   { color: #52525b !important; }
+[data-theme="bright"] .text-blue-800   { color: #18181b !important; }
+[data-theme="bright"] .hover\:bg-blue-100:hover { background-color: #d4d4d8 !important; }
+[data-theme="bright"] .hover\:bg-blue-200:hover { background-color: #d4d4d8 !important; }
+[data-theme="bright"] .bg-blue-600     { background-color: #52525b !important; }
+[data-theme="bright"] .hover\:bg-blue-700:hover { background-color: #3f3f46 !important; }
+[data-theme="bright"] .bg-blue-50      { background-color: #fafafa !important; }
+[data-theme="bright"] .bg-blue-700     { background-color: #3f3f46 !important; }
+
+/* markdown links */
+[data-theme="bright"] .markdown-body a { color: #3f3f46 !important; }
+
+/* Sky (tags) */
+[data-theme="dark"] .bg-sky-100       { background-color: #0c2747 !important; }
+[data-theme="dark"] .text-sky-700     { color: #7dd3fc !important; }
+[data-theme="dark"] .hover\:bg-sky-200:hover { background-color: #0e2f55 !important; }
+[data-theme="dark"] .bg-sky-500       { background-color: #0369a1 !important; }
+
+[data-theme="lowcontrast"] .bg-sky-100      { background-color: #e4d8c8 !important; }
+[data-theme="lowcontrast"] .text-sky-700    { color: #7a5030 !important; }
+[data-theme="lowcontrast"] .hover\:bg-sky-200:hover { background-color: #d8c8b0 !important; }
+[data-theme="lowcontrast"] .bg-sky-500      { background-color: #9a7050 !important; }
+
+/* Blue (active filter, level info) */
+[data-theme="dark"] .bg-blue-100      { background-color: #1e3a5a !important; }
+[data-theme="dark"] .text-blue-700    { color: #93c5fd !important; }
+[data-theme="dark"] .text-blue-600    { color: #60a5fa !important; }
+[data-theme="dark"] .text-blue-500    { color: #60a5fa !important; }
+[data-theme="dark"] .hover\:bg-blue-200:hover { background-color: #1e4a74 !important; }
+
+/* lowcontrast: 파란색 → 갈색/베이지 */
+[data-theme="lowcontrast"] .bg-blue-100     { background-color: #e8d8c0 !important; }
+[data-theme="lowcontrast"] .text-blue-700   { color: #7a5020 !important; }
+[data-theme="lowcontrast"] .text-blue-600   { color: #8a6030 !important; }
+[data-theme="lowcontrast"] .text-blue-500   { color: #9a7040 !important; }
+[data-theme="lowcontrast"] .hover\:bg-blue-100:hover { background-color: #ddd0b0 !important; }
+[data-theme="lowcontrast"] .bg-blue-600     { background-color: #8a6040 !important; }
+[data-theme="lowcontrast"] .hover\:bg-blue-700:hover { background-color: #7a5030 !important; }
+[data-theme="lowcontrast"] .bg-blue-50      { background-color: #f5ede0 !important; }
+[data-theme="lowcontrast"] .text-blue-800   { color: #5a3810 !important; }
+
+/* Indigo (auto-log cards) */
+[data-theme="dark"] .bg-indigo-50\/40          { background-color: rgba(10, 14, 70, 0.4) !important; }
+[data-theme="dark"] .border-indigo-200         { border-color: #4338ca !important; }
+[data-theme="dark"] .bg-indigo-100             { background-color: rgba(49, 46, 129, 0.4) !important; }
+[data-theme="dark"] .text-indigo-700           { color: #a5b4fc !important; }
+[data-theme="dark"] .text-indigo-500           { color: #a5b4fc !important; }
+
+[data-theme="lowcontrast"] .bg-indigo-50\/40   { background-color: rgba(180, 160, 130, 0.2) !important; }
+[data-theme="lowcontrast"] .border-indigo-200  { border-color: #b09070 !important; }
+[data-theme="lowcontrast"] .bg-indigo-100      { background-color: #e8d8c0 !important; }
+[data-theme="lowcontrast"] .text-indigo-700    { color: #7a5830 !important; }
+[data-theme="lowcontrast"] .text-indigo-500    { color: #8a6840 !important; }
+
+/* Amber (level warning) */
+[data-theme="dark"] .bg-amber-100      { background-color: rgba(120, 53, 15, 0.35) !important; }
+[data-theme="dark"] .text-amber-700    { color: #fcd34d !important; }
+[data-theme="dark"] .bg-amber-500      { background-color: #92400e !important; }
+
+[data-theme="lowcontrast"] .bg-amber-100     { background-color: #e8d8a8 !important; }
+[data-theme="lowcontrast"] .text-amber-700   { color: #7a5a10 !important; }
+
+/* Red (level error/critical, deleted) */
+[data-theme="dark"] .bg-red-100        { background-color: rgba(127, 29, 29, 0.35) !important; }
+[data-theme="dark"] .text-red-700      { color: #fca5a5 !important; }
+[data-theme="dark"] .bg-red-600        { background-color: #7f1d1d !important; }
+[data-theme="dark"] .bg-red-200        { background-color: rgba(127, 29, 29, 0.5) !important; }
+[data-theme="dark"] .border-red-200    { border-color: #7f1d1d !important; }
+[data-theme="dark"] .bg-red-50         { background-color: rgba(127, 29, 29, 0.15) !important; }
+[data-theme="dark"] .text-red-500      { color: #f87171 !important; }
+
+[data-theme="lowcontrast"] .bg-red-100       { background-color: #e8d0cc !important; }
+[data-theme="lowcontrast"] .text-red-700     { color: #8a3030 !important; }
+[data-theme="lowcontrast"] .bg-red-200       { background-color: #dfc0bc !important; }
+[data-theme="lowcontrast"] .border-red-200   { border-color: #c4a0a0 !important; }
+[data-theme="lowcontrast"] .bg-red-50        { background-color: #f0e0dc !important; }
+[data-theme="lowcontrast"] .text-red-500     { color: #a04040 !important; }
+
+/* Purple / Teal / Pink / Orange (category badges) */
+[data-theme="dark"] .bg-purple-100     { background-color: rgba(59, 7, 100, 0.4) !important; }
+[data-theme="dark"] .text-purple-700   { color: #d8b4fe !important; }
+[data-theme="dark"] .bg-teal-100       { background-color: rgba(19, 78, 74, 0.4) !important; }
+[data-theme="dark"] .text-teal-700     { color: #5eead4 !important; }
+[data-theme="dark"] .bg-pink-100       { background-color: rgba(131, 24, 67, 0.35) !important; }
+[data-theme="dark"] .text-pink-700     { color: #f9a8d4 !important; }
+[data-theme="dark"] .bg-orange-100     { background-color: rgba(124, 45, 18, 0.35) !important; }
+[data-theme="dark"] .text-orange-700   { color: #fdba74 !important; }
+
+[data-theme="lowcontrast"] .bg-purple-100    { background-color: #dcd0e8 !important; }
+[data-theme="lowcontrast"] .text-purple-700  { color: #6a4880 !important; }
+[data-theme="lowcontrast"] .bg-teal-100      { background-color: #c8dcd8 !important; }
+[data-theme="lowcontrast"] .text-teal-700    { color: #2a6860 !important; }
+[data-theme="lowcontrast"] .bg-pink-100      { background-color: #e8d0d8 !important; }
+[data-theme="lowcontrast"] .text-pink-700    { color: #804060 !important; }
+[data-theme="lowcontrast"] .bg-orange-100    { background-color: #e8d4c0 !important; }
+[data-theme="lowcontrast"] .text-orange-700  { color: #804020 !important; }
+
+/* Green (status active badges) */
+[data-theme="dark"] .text-green-600    { color: #4ade80 !important; }
+[data-theme="dark"] .text-green-700    { color: #4ade80 !important; }
+[data-theme="dark"] .bg-green-100      { background-color: rgba(20, 83, 45, 0.4) !important; }
+
+[data-theme="lowcontrast"] .text-green-600   { color: #2a6840 !important; }
+[data-theme="lowcontrast"] .text-green-700   { color: #2a6840 !important; }
+
+/* ── Markdown body in dark/lowcontrast ───────────────────────────────────── */
+[data-theme="dark"] .markdown-body code,
+[data-theme="dark"] .markdown-body pre         { background-color: var(--c-srf2) !important; color: var(--c-tx1) !important; }
+[data-theme="dark"] .markdown-body pre code    { background-color: transparent !important; }
+[data-theme="dark"] .markdown-body blockquote  { border-color: var(--c-border) !important; color: var(--c-tx2) !important; }
+[data-theme="dark"] .markdown-body table       { color: var(--c-tx1) !important; }
+[data-theme="dark"] .markdown-body th          { background-color: var(--c-srf2) !important; border-color: var(--c-border) !important; }
+[data-theme="dark"] .markdown-body td          { border-color: var(--c-border) !important; }
+[data-theme="dark"] .markdown-body hr          { border-color: var(--c-border) !important; }
+[data-theme="dark"] .markdown-body a           { color: #60a5fa !important; }
+
+[data-theme="lowcontrast"] .markdown-body code,
+[data-theme="lowcontrast"] .markdown-body pre  { background-color: var(--c-srf2) !important; color: var(--c-tx1) !important; }
+[data-theme="lowcontrast"] .markdown-body pre code { background-color: transparent !important; }
+[data-theme="lowcontrast"] .markdown-body blockquote { border-color: var(--c-border) !important; color: var(--c-tx2) !important; }
+[data-theme="lowcontrast"] .markdown-body th   { background-color: var(--c-srf2) !important; border-color: var(--c-border) !important; }
+[data-theme="lowcontrast"] .markdown-body td   { border-color: var(--c-border) !important; }
+[data-theme="lowcontrast"] .markdown-body hr   { border-color: var(--c-border) !important; }
+[data-theme="lowcontrast"] .markdown-body a   { color: #8a6030 !important; }
+
+/* ── Markdown body (always) ──────────────────────────────────────────────── */
+.markdown-body h1 { @apply text-2xl font-bold mt-6 mb-3; }
+.markdown-body h2 { @apply text-xl font-bold mt-5 mb-2; }
+.markdown-body h3 { @apply text-lg font-semibold mt-4 mb-2; }
+.markdown-body p  { @apply mb-3 leading-relaxed; }
+/* Chat bubbles: paragraphs sit flush so the bubble hugs the text (height + vertical centering). */
+.markdown-body.cbubble p { margin: 0; line-height: 1.4; }
+.markdown-body.cbubble p + p { margin-top: 4px; }
+.markdown-body ul { @apply list-disc ml-6 mb-3; }
+.markdown-body ol { @apply list-decimal ml-6 mb-3; }
+.markdown-body li { @apply mb-1; }
+.markdown-body code { @apply bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-sm font-mono; }
+.markdown-body pre { @apply bg-slate-100 p-4 rounded-lg overflow-x-auto mb-3; }
+.markdown-body pre code { @apply bg-transparent p-0; }
+.markdown-body blockquote { @apply border-l-4 border-slate-300 pl-4 text-slate-600 italic mb-3; }
+.markdown-body table { @apply w-full border-collapse mb-3; }
+.markdown-body th { @apply border border-slate-300 px-3 py-2 bg-slate-100 font-semibold text-left; }
+.markdown-body td { @apply border border-slate-300 px-3 py-2; }
+.markdown-body a  { @apply text-blue-600 underline; }
+.markdown-body hr { @apply border-slate-200 my-4; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COMPACT DENSITY MODE
+   Triggers when <html data-density="compact">. Angular, tight, utilitarian.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Kill all border-radius (angular look) ─────────────────────────────── */
+[data-density="compact"] *,
+[data-density="compact"] *::before,
+[data-density="compact"] *::after {
+  border-radius: 0 !important;
+}
+
+/* ── Kill shadows (flat look) ──────────────────────────────────────────── */
+/* NOTE: do NOT use [class*="shadow-"] wildcard — it matches hover:shadow-*
+   classes too and would destroy Tailwind ring (ring-2 also uses box-shadow). */
+[data-density="compact"] .shadow,
+[data-density="compact"] .shadow-sm,
+[data-density="compact"] .shadow-md,
+[data-density="compact"] .shadow-lg,
+[data-density="compact"] .shadow-xl,
+[data-density="compact"] .shadow-2xl,
+[data-density="compact"] .shadow-inner {
+  box-shadow: none !important;
+}
+
+/* ── Monospace everywhere for that utilitarian feel ────────────────────── */
+[data-density="compact"] body,
+[data-density="compact"] input,
+[data-density="compact"] textarea,
+[data-density="compact"] button,
+[data-density="compact"] select {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
+               Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: -0.01em;
+}
+
+/* ── Tighter spacing for common containers ─────────────────────────────── */
+[data-density="compact"] main {
+  padding-top: 0.5rem !important;
+  padding-bottom: 3.5rem !important;
+}
+
+/* Tab content gap */
+[data-density="compact"] main > * > .mt-4 { margin-top: 0.25rem !important; }
+
+/* Cards / panels: reduce padding */
+[data-density="compact"] .p-4 { padding: 0.5rem !important; }
+[data-density="compact"] .p-5 { padding: 0.625rem !important; }
+[data-density="compact"] .p-6 { padding: 0.75rem !important; }
+[data-density="compact"] .py-3 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+[data-density="compact"] .py-4 { padding-top: 0.375rem !important; padding-bottom: 0.375rem !important; }
+[data-density="compact"] .py-5 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+[data-density="compact"] .py-6 { padding-top: 0.625rem !important; padding-bottom: 0.625rem !important; }
+
+/* ── Buttons: sharper, no fluff ────────────────────────────────────────── */
+[data-density="compact"] button {
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+}
+
+/* Strip out hover scale/transform niceties */
+[data-density="compact"] .transition-all,
+[data-density="compact"] .transition-colors,
+[data-density="compact"] .transition-transform,
+[data-density="compact"] .transition-opacity {
+  transition: none !important;
+}
+
+/* ── Hide decorative emoji icons (marked via .density-icon class or in TabBar) ── */
+[data-density="compact"] .density-icon {
+  display: none !important;
+}
+
+/* ── Tab bar: text-only, square underline ──────────────────────────────── */
+[data-density="compact"] [data-tab-bar] {
+  border-bottom-width: 1px !important;
+}
+[data-density="compact"] [data-tab-bar] button {
+  padding: 0.25rem 0.625rem !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+}
+
+/* ── Navbar: lower profile ─────────────────────────────────────────────── */
+[data-density="compact"] nav.bg-blue-900 > div {
+  padding-top: 0.125rem !important;
+  padding-bottom: 0.125rem !important;
+}
+
+/* ── Inputs: square + tighter (skip bar inputs — they should be invisible) ─ */
+[data-density="compact"] input:not(.bg-transparent),
+[data-density="compact"] textarea:not(.bg-transparent),
+[data-density="compact"] select:not(.bg-transparent) {
+  border-width: 1px !important;
+}
+
+/* ── Log row spacing in Home ───────────────────────────────────────────── */
+[data-density="compact"] .space-y-2 > * + * { margin-top: 0.125rem !important; }
+[data-density="compact"] .space-y-3 > * + * { margin-top: 0.25rem !important; }
+[data-density="compact"] .space-y-4 > * + * { margin-top: 0.375rem !important; }
+
+/* ── Markdown body: tighter prose in compact mode ──────────────────────── */
+[data-density="compact"] .markdown-body p  { margin-bottom: 0.5rem; line-height: 1.4; }
+[data-density="compact"] .markdown-body h1 { font-size: 1.25rem; margin: 0.5rem 0 0.25rem; }
+[data-density="compact"] .markdown-body h2 { font-size: 1.1rem; margin: 0.5rem 0 0.25rem; }
+[data-density="compact"] .markdown-body h3 { font-size: 1rem;  margin: 0.375rem 0 0.25rem; }
+[data-density="compact"] .markdown-body ul,
+[data-density="compact"] .markdown-body ol { margin-bottom: 0.5rem; }
+[data-density="compact"] .markdown-body li { margin-bottom: 0.125rem; }
+
+/* ── Bottom bar inputs: kill all browser default backgrounds ──────────── */
+/* Text/placeholder colors are bound to the --nav-* tokens so they follow
+   the navbar palette across every theme — including while focused/typing. */
+.fixed.bottom-0 input,
+.fixed.bottom-0 textarea {
+  background-color: transparent !important;
+  color: var(--nav-text) !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  box-shadow: none !important;
+  border: 0 !important;       /* no border, even in compact mode */
+}
+.fixed.bottom-0 input::placeholder,
+.fixed.bottom-0 textarea::placeholder {
+  color: var(--nav-text-muted) !important;
+}
+
+/* Kill browser autofill yellow background; keep text in nav palette */
+.fixed.bottom-0 input:-webkit-autofill,
+.fixed.bottom-0 textarea:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 100px transparent inset !important;
+  -webkit-text-fill-color: var(--nav-text) !important;
+  caret-color: var(--nav-text) !important;
+  transition: background-color 9999s ease-in-out 0s !important;
+}
+
+/* Focused state must hold the same colors — no theme override should kick in */
+.fixed.bottom-0 input:focus,
+.fixed.bottom-0 textarea:focus {
+  background-color: transparent !important;
+  color: var(--nav-text) !important;
+  caret-color: var(--nav-text) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Schedule borders (theme-aware, clearly visible) ──────────────────────── */
+/* Outer table/calendar borders + cell borders */
+.sched-border    { border-color: #475569 !important; }   /* slate-600 */
+.sched-border-b  { border-bottom-color: #475569 !important; }
+.sched-border-r  { border-right-color:  #475569 !important; }
+.sched-border-t  { border-top-color:    #475569 !important; }
+.sched-cell-border { border-color: #64748b !important; }   /* slate-500 */
+
+[data-theme="dark"] .sched-border    { border-color: #94a3b8 !important; }
+[data-theme="dark"] .sched-border-b  { border-bottom-color: #94a3b8 !important; }
+[data-theme="dark"] .sched-border-r  { border-right-color:  #94a3b8 !important; }
+[data-theme="dark"] .sched-border-t  { border-top-color:    #94a3b8 !important; }
+[data-theme="dark"] .sched-cell-border { border-color: #94a3b8 !important; }
+
+[data-theme="lowcontrast"] .sched-border    { border-color: #5a5040 !important; }
+[data-theme="lowcontrast"] .sched-border-b  { border-bottom-color: #5a5040 !important; }
+[data-theme="lowcontrast"] .sched-border-r  { border-right-color:  #5a5040 !important; }
+[data-theme="lowcontrast"] .sched-border-t  { border-top-color:    #5a5040 !important; }
+[data-theme="lowcontrast"] .sched-cell-border { border-color: #5a5040 !important; }
+
+/* Schedule grid column/row separator lines. Drawn behind cells so the grid
+   recedes; cells with bg color sit on top and stay readable. */
+.sched-grid-col { background-color: #94a3b8; opacity: 0.35; }   /* slate-400 */
+[data-theme="dark"] .sched-grid-col { background-color: #475569; opacity: 0.6; }
+[data-theme="lowcontrast"] .sched-grid-col { background-color: #5a5040; opacity: 0.5; }
+
+/* Section separator background (thick line between track groups) */
+.sched-sep-bg { background-color: #1e293b; }
+[data-theme="dark"] .sched-sep-bg { background-color: #cbd5e1 !important; }
+[data-theme="lowcontrast"] .sched-sep-bg { background-color: #2c2618 !important; }
+
+/* ── Community chat bubble bgs (and other light-pastel bgs) need dark overrides ── */
+[data-theme="dark"] .bg-blue-50      { background-color: #1e2e4a !important; }
+[data-theme="dark"] .bg-emerald-100  { background-color: rgba(16, 185, 129, 0.18) !important; }
+[data-theme="dark"] .bg-violet-100   { background-color: rgba(139, 92, 246, 0.20) !important; }
+[data-theme="dark"] .bg-emerald-200  { background-color: rgba(16, 185, 129, 0.25) !important; }
+[data-theme="dark"] .bg-blue-200     { background-color: rgba(59, 130, 246, 0.28) !important; }
+[data-theme="dark"] .bg-amber-200    { background-color: rgba(245, 158, 11, 0.28) !important; }
+[data-theme="dark"] .bg-purple-200   { background-color: rgba(168, 85, 247, 0.28) !important; }
+[data-theme="dark"] .bg-pink-200     { background-color: rgba(236, 72, 153, 0.28) !important; }
+[data-theme="dark"] .bg-teal-200     { background-color: rgba(20, 184, 166, 0.28) !important; }
+[data-theme="dark"] .bg-orange-200   { background-color: rgba(249, 115, 22, 0.28) !important; }
+[data-theme="dark"] .bg-rose-200     { background-color: rgba(244, 63, 94, 0.28) !important; }
+
+/* Brighten text colors that need to be visible on these dark-mode bubble bgs */
+[data-theme="dark"] .text-emerald-700 { color: #a7f3d0 !important; }
+[data-theme="dark"] .text-violet-700  { color: #c4b5fd !important; }
+[data-theme="dark"] .text-blue-700    { color: #93c5fd !important; }
+[data-theme="dark"] .text-amber-700   { color: #fde68a !important; }
+[data-theme="dark"] .text-purple-700  { color: #d8b4fe !important; }
+[data-theme="dark"] .text-pink-700    { color: #f9a8d4 !important; }
+[data-theme="dark"] .text-teal-700    { color: #5eead4 !important; }
+[data-theme="dark"] .text-orange-700  { color: #fdba74 !important; }
+[data-theme="dark"] .text-rose-700    { color: #fda4af !important; }
+[data-theme="dark"] .text-emerald-800 { color: #6ee7b7 !important; }
+[data-theme="dark"] .text-blue-800    { color: #93c5fd !important; }
+[data-theme="dark"] .text-amber-800   { color: #fcd34d !important; }
+[data-theme="dark"] .text-purple-800  { color: #d8b4fe !important; }
+[data-theme="dark"] .text-pink-800    { color: #f9a8d4 !important; }
+[data-theme="dark"] .text-teal-800    { color: #5eead4 !important; }
+[data-theme="dark"] .text-orange-800  { color: #fdba74 !important; }
+[data-theme="dark"] .text-rose-800    { color: #fda4af !important; }
+
+/* ── UI size: 'large' mode shifts the whole type scale up one notch ───────────
+   Instead of overriding each Tailwind text-* class, large mode just redefines
+   the --fs-* tokens. Every inline style, mapped Tailwind class, and kit Button
+   reads those tokens, so the entire app resizes from this one place. */
+[data-size="large"] {
+  font-size: 17px;   /* base bump for any remaining rem-based content */
+  --fs-micro: 11px;  --fs-tiny: 12px;  --fs-small: 13px;  --fs-body: 14px;
+  --fs-medium: 16px; --fs-large: 18px; --fs-xlarge: 20px; --fs-title: 24px;
+  --fs-display: 32px;
+}
+/* Control heights stay fixed across size modes so toolbar buttons match the
+   kit's fixed-height chips (only the text inside scales). */
+
+/* Log cards keep clear of the fixed top bar + bottom command bar when scrolled
+   into view (scrollIntoView respects scroll-margin). */
+[id^="log-card-"] { scroll-margin-top: 60px; scroll-margin-bottom: 56px; }
+
+/* ── Soft scrollbar: hidden until hover or active scroll (community, panels) ── */
+.scroll-soft { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.scroll-soft:hover,
+.scroll-soft.is-scrolling { scrollbar-color: var(--scrollbar-thumb) transparent; }
+.scroll-soft::-webkit-scrollbar { width: 10px; height: 10px; }
+.scroll-soft::-webkit-scrollbar-track { background: transparent; }
+.scroll-soft::-webkit-scrollbar-thumb {
+  background: transparent; border-radius: 6px;
+  border: 3px solid transparent; background-clip: padding-box;
+}
+.scroll-soft:hover::-webkit-scrollbar-thumb,
+.scroll-soft.is-scrolling::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); background-clip: padding-box; }

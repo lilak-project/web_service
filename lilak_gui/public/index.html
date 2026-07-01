@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>lilak_gui</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:flex; flex-direction:column; align-items:center;
+      justify-content:center; gap:14px; padding:32px; text-align:center;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background:#0e1116; color:#e6e8eb; }
+    h1 { margin:0; font-size:clamp(22px,4vw,34px); font-weight:700; letter-spacing:-.01em; }
+    p { margin:0; max-width:580px; line-height:1.65; color:#9aa3af; font-size:14px; }
+    code { background:#1b2230; padding:2px 6px; border-radius:5px; font-size:12px; color:#c7d2fe; }
+    .tag { font-size:11px; color:#8b95a5; letter-spacing:.08em; text-transform:uppercase; }
+  </style>
+</head>
+<body>
+  <div class="tag">LILAK Web Portal · service</div>
+  <h1>lilak gui</h1>
+  <p>서비스 공간만 준비된 스켈레톤입니다. 기존 <b>LILAK</b> 프레임워크(<code>$LILAK_PATH</code>로 탐색)를
+     웹 GUI로 쓰는 서비스가 될 예정입니다 — 파라미터 편집, run 실행, JSROOT로 결과 보기 등.</p>
+  <p>개발 명세는 <code>PLAN.md</code> 를 보세요. 이미 있는 LILAK 웹 UI
+     (<code>~/Research/lilak/ui</code>)를 포탈에 통합하는 것이 출발점입니다.</p>
+  <script>window.PORTAL_BASE = window.__PORTAL_BASE__ || ''</script>
+</body>
+</html>

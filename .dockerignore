@@ -1,0 +1,20 @@
+# Build context = this web_service/ dir. Keep it small + reproducible: source
+# only — node_modules/.venv/dists are rebuilt in the image, and runtime state
+# (data/, *.db) lives in a volume, never in the image.
+**/node_modules
+**/.venv
+**/dist
+**/__pycache__
+**/*.pyc
+**/.git
+**/.DS_Store
+# Only the TOP-LEVEL runtime data root (a volume at runtime). NOT a blanket
+# `**/data` — that would also drop lilak_ui/src/data/ (the kit's DataCard etc.).
+/data
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.log
+# the dev launcher app + staging artifacts
+_stack/
+**/.dev-server.pid

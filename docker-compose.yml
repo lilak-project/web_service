@@ -1,0 +1,25 @@
+# Run the whole LILAK Web Portal stack from one image.
+#
+#   cd ~/web_service
+#   cp .env.example .env          # then edit the secrets (+ optional PORTAL_DATA_DIR)
+#   docker compose up -d --build  # build + start; portal at http://<host>:8025
+#
+# The image bakes all the CODE; all STATE lives in ONE host folder bind-mounted at
+# /app/data (accounts + service registry + every service's data). That folder is
+# OUTSIDE Docker, so each server keeps its own data — back it up / sync it / move it
+# independently of the image. Default: ./portal-data next to this file; override
+# with PORTAL_DATA_DIR (e.g. an absolute path on a big disk: /srv/lilak/data).
+services:
+  portal:
+    build:
+      context: .                                   # web_service/ — holds every repo
+      dockerfile: service_manager/deploy/Dockerfile
+    image: lilak-web-portal:latest
+    ports:
+      - "${PORTAL_PORT:-8025}:8025"                # single front door; service ports stay internal
+    volumes:
+      # HOST folder ↔ container — all data lives here, on the host, per server.
+      - ${PORTAL_DATA_DIR:-./portal-data}:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped

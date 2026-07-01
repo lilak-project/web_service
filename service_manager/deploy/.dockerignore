@@ -1,0 +1,16 @@
+# Placed at the BUILD CONTEXT root (the dir holding lilak_ui/, lilak_elog/,
+# service_manager/). stage.sh copies it there; on a fresh co-located checkout put
+# it at the stack root too. Keeps the context small + reproducible.
+**/node_modules
+**/.venv
+**/dist
+**/__pycache__
+**/*.pyc
+**/.git
+**/.DS_Store
+# host data/state never goes in the image (it's a runtime volume)
+**/data
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.log

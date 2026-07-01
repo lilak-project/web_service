@@ -1,0 +1,17 @@
+# Dev override: bind-mount the source so you can edit code on the host and have
+# the BACKEND hot-reload (uvicorn --reload). Use alongside the base file:
+#
+#   SM_DIR=~/web_service/service_manager LILAK_ELOG_DIR=~/web_service/lilak_elog \
+#     docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up
+#
+# Backend edits apply live. FRONTEND edits need a rebuild (npm run build, or run
+# the Vite dev server on the host) — the container serves the built dist.
+services:
+  portal:
+    volumes:
+      - ${SM_DIR:?set SM_DIR to the service_manager repo}/app:/app/service_manager/app
+      - ${LILAK_ELOG_DIR:?set LILAK_ELOG_DIR to the lilak_elog repo}/backend:/app/lilak_elog/backend
+      - portal-data:/app/data
+    environment:
+      EMAIL_VERIFY_DEV_ECHO: "1"
+    command: ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8025", "--reload"]

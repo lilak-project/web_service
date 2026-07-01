@@ -1,0 +1,80 @@
+"""
+Configuration — everything is env-driven so the same code runs on a laptop or a
+deployed server (Phase C: host portability). No config file is required; sensible
+defaults make `./run.sh` work out of the box.
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+# Project root = the directory that contains `app/`.
+ROOT = Path(__file__).resolve().parent.parent
+
+# Where every service's data lives (one sub-dir per service). Kept OUTSIDE the
+# code repo by default (a sibling `web_service/data/`) so code and data stay
+# separate and the backup/move unit is just this folder (incl. `_portal/portal.db`).
+# Point PORTAL_DATA_ROOT at a dedicated/large volume in production.
+DATA_ROOT = Path(os.environ.get("PORTAL_DATA_ROOT", ROOT.parent / "data"))
+
+# The portal's own SQLite DB (accounts + service registry + permissions).
+# Kept under the reserved `_portal/` dir, which the service list skips.
+PORTAL_DB = Path(os.environ.get("PORTAL_DB", DATA_ROOT / "_portal" / "portal.db"))
+
+# Portal HTTP port. Defaults to 8025 to avoid colliding with the existing
+# lilak_elog launcher on :8010 (and another local service on :8020).
+PORTAL_PORT = int(os.environ.get("PORTAL_PORT", 8025))
+
+# Port window for managed (subprocess) services.
+SERVICE_PORT_START = int(os.environ.get("SERVICE_PORT_START", 8026))
+SERVICE_PORT_END = int(os.environ.get("SERVICE_PORT_END", 8044))
+
+# Public base URL the portal is reachable at (used when registering external
+# services / building entry links). Defaults to localhost for dev.
+BASE_URL = os.environ.get("PORTAL_BASE_URL", f"http://localhost:{PORTAL_PORT}")
+
+# Shared JWT secret. MUST match the secret of any managed service (e.g. elog) so
+# a portal token is trusted on entry. Reads ELOG_SECRET_KEY for backward-compat
+# with the existing elog deployment.
+SECRET_KEY = (
+    os.environ.get("PORTAL_SECRET_KEY")
+    or os.environ.get("ELOG_SECRET_KEY")
+    or "lilak-dev-secret-CHANGE-in-production"
+)
+TOKEN_EXPIRE_HOURS = int(os.environ.get("PORTAL_TOKEN_EXPIRE_HOURS", "24"))
+
+# Handshake registration token. A service self-registers by POSTing its descriptor
+# to `/api/handshake` with this bearer — so registering is "set the portal URL +
+# token in the service, done" instead of an admin filling a long form. Rotate via
+# env in production.
+REGISTER_TOKEN = os.environ.get("PORTAL_REGISTER_TOKEN", "lilak-portal-register-CHANGE")
+
+# Email verification. When DEV_ECHO is on (default), the verification link is
+# returned in the register response + logged, instead of being emailed — so the
+# flow is testable locally without an email provider. Set it off once a real
+# sender (e.g. Firebase) delivers the link. REQUIRED gates login on verification.
+EMAIL_VERIFY_REQUIRED = os.environ.get("EMAIL_VERIFY_REQUIRED", "1") not in ("0", "false", "False")
+EMAIL_VERIFY_DEV_ECHO = os.environ.get("EMAIL_VERIFY_DEV_ECHO", "1") not in ("0", "false", "False")
+
+# Sign-up email gating. A comma-separated allow-list of email domains that may
+# self-register freely (e.g. "ibs.re.kr,kaist.ac.kr"). Empty = any email allowed.
+# Anyone whose domain is NOT on the list may still sign up if they present a valid
+# invite code. (When Firebase Auth is wired, the same rule belongs in a
+# `beforeCreate` blocking function — see the note in auth.register.)
+SIGNUP_ALLOWED_DOMAINS = [
+    d.strip().lower() for d in os.environ.get("SIGNUP_ALLOWED_DOMAINS", "").split(",") if d.strip()
+]
+
+
+# Frontend the portal serves: its OWN build (frontend/dist), which depends only
+# on the lilak_ui kit — not on lilak_elog. Override with PORTAL_FRONTEND_DIST.
+# main.py falls back to the bundled minimal cover (app/static) if no build exists.
+FRONTEND_DIST = Path(os.environ.get(
+    "PORTAL_FRONTEND_DIST",
+    ROOT / "frontend" / "dist",
+))
+
+
+def ensure_dirs() -> None:
+    PORTAL_DB.parent.mkdir(parents=True, exist_ok=True)
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)

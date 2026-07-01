@@ -1,0 +1,7 @@
+# g4toy backend. For local/managed dev these are already in the portal's shared
+# .venv (service_manager/.venv); listed here for the future external container.
+fastapi
+uvicorn
+sqlalchemy
+python-jose
+pydantic

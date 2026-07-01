@@ -1,0 +1,21 @@
+{
+  "kind": "asset",
+  "mode": "managed",
+  "start": {
+    "cmd": "python3 -m http.server {port} --bind 0.0.0.0",
+    "cwd": "/app/asset_manager/dist",
+    "env": {}
+  },
+  "health": "/",
+  "entry": "/",
+  "identity": {
+    "accepts_portal_token": true,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": true,
+    "import_export": true
+  },
+  "icon": null,
+  "color": null
+}
