@@ -19,11 +19,16 @@ cat > "$DEST/Contents/MacOS/lilak-portal" <<EOF
 #!/bin/bash
 URL="http://localhost:$PORT/projects"
 HEALTH="http://localhost:$PORT/api/health"
-if ! /usr/bin/curl -s -m 2 "\$HEALTH" >/dev/null 2>&1; then
+if ! /usr/bin/curl -sf -m 2 "\$HEALTH" >/dev/null 2>&1; then
+  # Port may be held by a crashed reloader that no longer serves (health fails but
+  # the socket is bound) — a fresh run.sh would then die with "Address already in
+  # use" and the app would look "not responding". Clear any such stale listener.
+  STALE=\$(/usr/sbin/lsof -ti :$PORT -sTCP:LISTEN 2>/dev/null)
+  [ -n "\$STALE" ] && kill -9 \$STALE 2>/dev/null
   /usr/bin/nohup "$SM/run.sh" > /tmp/lilak-portal.log 2>&1 &
   for _ in \$(seq 1 40); do
     sleep 0.5
-    /usr/bin/curl -s -m 2 "\$HEALTH" >/dev/null 2>&1 && break
+    /usr/bin/curl -sf -m 2 "\$HEALTH" >/dev/null 2>&1 && break
   done
 fi
 /usr/bin/open "\$URL"
