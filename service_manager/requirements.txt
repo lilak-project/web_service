@@ -4,3 +4,4 @@ sqlalchemy>=2.0
 python-jose
 pydantic>=2
 python-multipart
+bcrypt

@@ -37,6 +37,11 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
     if not user or not security.verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+    # Transparently upgrade a legacy (sha256) hash to bcrypt now that we have the
+    # plaintext and it verified. One-time, on the account's next login.
+    if security.needs_rehash(user.password_hash):
+        user.password_hash = security.hash_password(payload.password)
+        db.commit()
     if config.EMAIL_VERIFY_REQUIRED and not user.email_verified:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="이메일 인증이 필요합니다. 가입 시 받은 인증 링크를 확인하세요.")
