@@ -37,14 +37,17 @@ export default function IconPick({ value, onChange, disabled, color }) {
   useEffect(() => {
     if (!open) return
     const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    const close = () => setOpen(false)
+    // Close on PAGE scroll/resize (the popover is position:fixed to a rect), but
+    // NOT when scrolling inside the popover's own icon grid.
+    const onScroll = (e) => { if (ref.current && ref.current.contains(e.target)) return; setOpen(false) }
+    const onResize = () => setOpen(false)
     document.addEventListener('mousedown', away)
-    window.addEventListener('scroll', close, true)
-    window.addEventListener('resize', close)
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onResize)
     return () => {
       document.removeEventListener('mousedown', away)
-      window.removeEventListener('scroll', close, true)
-      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onResize)
     }
   }, [open])
 
