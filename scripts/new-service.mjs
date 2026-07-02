@@ -501,9 +501,8 @@ put('backend/requirements.txt', requirements)
 // settings tab (portal-centric)
 if (WITH_SETTINGS) {
   put('frontend/src/pages/SettingsPage.jsx', `import { useEffect, useState } from 'react'
-import { SideNav } from 'lilak-ui'
-import { useLang } from 'lilak-ui'
-import { get, portalHome } from '../api'
+import { SideNav, useLang } from 'lilak-ui'
+import { get } from '../api'
 import AccountSection from './settings/AccountSection'
 import ManageUsers from './settings/ManageUsers'
 import ServiceLocal from './settings/ServiceLocal'
@@ -526,76 +525,93 @@ export default function SettingsPage() {
   ]
   const [active, setActive] = useState('account')
 
+  // Page wrapper gives the outer margin + centring (AppShell mounts pages flush);
+  // SideNav supplies its own right gap, so the content column has no extra padding.
   return (
-    <div style={{ display: 'flex', minHeight: 500 }}>
-      <SideNav title={t('tab_${SETTINGS_TAB ? SETTINGS_TAB.id : 'set'}')} sections={sections} active={active} onSelect={setActive} />
-      <div style={{ flex: 1, minWidth: 0, padding: 20 }}>
-        {active === 'account' && <AccountSection me={me} />}
-        {active === 'users' && <ManageUsers />}
-        {active === 'tabs' && <ServiceLocal title={t('set_tabs')} />}
-        {active === 'profiles' && <ServiceLocal title={t('set_profiles')} />}
+    <div style={{ maxWidth: 1180, margin: '0 auto', padding: '16px 16px 40px' }}>
+      <div style={{ display: 'flex', minHeight: 500 }}>
+        <SideNav title={t('tab_${SETTINGS_TAB ? SETTINGS_TAB.id : 'set'}')} sections={sections} active={active} onSelect={setActive} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {active === 'account' && <AccountSection me={me} />}
+          {active === 'users' && <ManageUsers />}
+          {active === 'tabs' && <ServiceLocal title={t('set_tabs')} />}
+          {active === 'profiles' && <ServiceLocal title={t('set_profiles')} />}
+        </div>
       </div>
     </div>
   )
 }
 `)
 
-  put('frontend/src/pages/settings/AccountSection.jsx', `import { Card, Button, useLang } from 'lilak-ui'
+  put('frontend/src/pages/settings/AccountSection.jsx', `import { Stack, Row, Button, useLang } from 'lilak-ui'
 import { portalHome } from '../../api'
+
+const card = { border: '1px solid var(--border-default)', backgroundColor: 'var(--surface)', borderRadius: 12, boxShadow: '0 1px 2px rgba(0,0,0,.04)', padding: 20 }
 
 // Portal-centric account view: show the SSO profile; account + password are
 // managed in the portal.
 export default function AccountSection({ me }) {
   const { t } = useLang()
+  const isManager = me?.role === 'manager'
   const row = (k, v) => (
-    <div style={{ display: 'flex', gap: 12, padding: '5px 0', fontSize: 'var(--fs-small, 12px)' }}>
-      <span style={{ width: 96, color: 'var(--text-muted)' }}>{k}</span>
-      <span style={{ fontFamily: 'var(--font-mono)' }}>{v || '—'}</span>
+    <div style={{ display: 'flex', gap: 12, fontSize: 'var(--fs-small, 12px)' }}>
+      <span style={{ width: 84, color: 'var(--text-muted)' }}>{k}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{v || '—'}</span>
     </div>
   )
   return (
-    <Card title={t('set_account')} style={{ maxWidth: 520 }}>
-      {row('name', me?.name)}
-      {row('username', me?.username)}
-      {row('email', me?.email)}
-      {row('role', me?.role)}
-      <div style={{ marginTop: 12, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{t('set_account_note')}</div>
-      <div style={{ marginTop: 10 }}>
-        <Button variant="secondary" onClick={() => { window.location.href = portalHome() }}>{t('set_open_portal')}</Button>
-      </div>
-    </Card>
+    <Stack gap={16} style={{ maxWidth: 384 }}>
+      <Stack gap={14} style={card}>
+        <Row gap={10} align="center">
+          <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--fs-large, 16px)', color: 'var(--text-primary)' }}>{me?.name || me?.username || 'guest'}</p>
+          {me?.role && (
+            <span style={{ fontSize: 'var(--fs-small, 12px)', padding: '1px 8px', borderRadius: 999, fontWeight: 500,
+              ...(isManager ? { backgroundColor: 'var(--warning-bg)', color: 'var(--warning-text)' } : { backgroundColor: 'var(--surface-2)', color: 'var(--text-secondary)' }) }}>{me.role}</span>
+          )}
+        </Row>
+        <Stack gap={8} style={{ paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+          {row('username', me?.username)}
+          {row('email', me?.email)}
+        </Stack>
+        <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{t('set_account_note')}</div>
+        <Button variant="secondary" onClick={() => { window.location.href = portalHome() }} style={{ width: '100%', padding: '8px 0' }}>{t('set_open_portal')}</Button>
+      </Stack>
+    </Stack>
   )
 }
 `)
 
-  put('frontend/src/pages/settings/ManageUsers.jsx', `import { Card, Button, useLang } from 'lilak-ui'
+  put('frontend/src/pages/settings/ManageUsers.jsx', `import { Stack, Button, useLang } from 'lilak-ui'
 import { portalHome } from '../../api'
+
+const card = { border: '1px solid var(--border-default)', backgroundColor: 'var(--surface)', borderRadius: 12, boxShadow: '0 1px 2px rgba(0,0,0,.04)', padding: 20 }
 
 // Portal owns accounts + permissions, so user management links out to the portal.
 export default function ManageUsers() {
   const { t } = useLang()
   return (
-    <Card title={t('set_users')} style={{ maxWidth: 520 }}>
-      <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{t('set_users_note')}</div>
-      <div style={{ marginTop: 10 }}>
-        <Button variant="secondary" onClick={() => { window.location.href = portalHome() }}>{t('set_open_portal')}</Button>
-      </div>
-    </Card>
+    <Stack gap={16} style={{ maxWidth: 384 }}>
+      <Stack gap={12} style={card}>
+        <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--fs-body, 13px)', color: 'var(--text-primary)' }}>{t('set_users')}</p>
+        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{t('set_users_note')}</div>
+        <Button variant="secondary" onClick={() => { window.location.href = portalHome() }} style={{ width: '100%', padding: '8px 0' }}>{t('set_open_portal')}</Button>
+      </Stack>
+    </Stack>
   )
 }
 `)
 
-  put('frontend/src/pages/settings/ServiceLocal.jsx', `import { Callout, useLang } from 'lilak-ui'
+  put('frontend/src/pages/settings/ServiceLocal.jsx', `import { Stack, Callout, useLang } from 'lilak-ui'
 
 // Placeholder for a service-local admin section (tabs / profile types). Replace
 // with a real editor backed by this service's own endpoints when needed.
 export default function ServiceLocal({ title }) {
   const { t } = useLang()
   return (
-    <div style={{ maxWidth: 560 }}>
-      <div style={{ fontSize: 'var(--fs-medium, 14px)', fontWeight: 600, marginBottom: 10 }}>{title}</div>
+    <Stack gap={12} style={{ maxWidth: 520 }}>
+      <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--fs-body, 13px)', color: 'var(--text-primary)' }}>{title}</p>
       <Callout tone="info">{t('set_service_local')}</Callout>
-    </div>
+    </Stack>
   )
 }
 `)
