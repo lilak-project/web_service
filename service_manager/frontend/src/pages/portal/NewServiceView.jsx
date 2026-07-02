@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Icon, ColorPicker } from 'lilak-ui'
+import { Button, Icon, ColorPicker, PROJECT_ICONS } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 
@@ -13,11 +13,54 @@ import { useLang } from '../../context/LangContext'
  * default portal rules) that shows up in the Home list on completion.
  */
 
-const ICON_CHOICES = ['home', 'table', 'settings', 'chart', 'folder', 'images', 'notebook',
-  'user', 'flask', 'cpu', 'database', 'calendar', 'bell', 'search', 'circle']
+// Use the kit's known-good icon set so every choice actually renders (and renders
+// the same way inside the generated service, which uses the same kit).
+const ICON_CHOICES = Array.from(new Set(PROJECT_ICONS))
+const DEFAULT_ICON = ICON_CHOICES[0]
 
 let _tabSeq = 1
-const newTab = (over = {}) => ({ key: _tabSeq++, id: '', label: '', icon: 'circle', ...over })
+const newTab = (over = {}) => ({ key: _tabSeq++, id: '', label: '', icon: DEFAULT_ICON, ...over })
+
+// Visual icon picker — a button showing the current icon; click for a grid of the
+// actual icons to pick from (no typing icon names blind).
+function IconPick({ value, onChange, disabled }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', away)
+    return () => document.removeEventListener('mousedown', away)
+  }, [open])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <Button variant="secondary" disabled={disabled} onClick={() => setOpen((o) => !o)}
+        style={{ width: 52, justifyContent: 'center' }} title={value}>
+        <Icon name={value} size={16} />
+      </Button>
+      {open && (
+        <div style={{
+          position: 'absolute', zIndex: 30, top: 36, left: 0, display: 'grid',
+          gridTemplateColumns: 'repeat(6, 30px)', gap: 4, padding: 8, maxHeight: 200, overflowY: 'auto',
+          backgroundColor: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 8,
+          boxShadow: '0 6px 20px rgba(0,0,0,.18)',
+        }}>
+          {ICON_CHOICES.map((ic) => (
+            <button key={ic} type="button" title={ic}
+              onClick={() => { onChange(ic); setOpen(false) }}
+              style={{
+                display: 'grid', placeItems: 'center', width: 30, height: 30, borderRadius: 6, cursor: 'pointer',
+                border: ic === value ? '2px solid var(--btn-primary-bg)' : '1px solid var(--input-border)',
+                backgroundColor: ic === value ? 'var(--info-bg, var(--surface-2))' : 'var(--surface)',
+              }}>
+              <Icon name={ic} size={16} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const field = {
   height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px',
@@ -119,10 +162,7 @@ export default function NewServiceView({ onCreated }) {
               onChange={(e) => setTab(tb.key, { id: e.target.value })} />
             <input style={{ ...field, flex: 1, minWidth: 0 }} value={tb.label} placeholder={t('newsvc_tab_label')} disabled={!!job}
               onChange={(e) => setTab(tb.key, { label: e.target.value })} />
-            <select style={{ ...field, width: 120 }} value={tb.icon} disabled={!!job}
-              onChange={(e) => setTab(tb.key, { icon: e.target.value })}>
-              {ICON_CHOICES.map((ic) => <option key={ic} value={ic}>{ic}</option>)}
-            </select>
+            <IconPick value={tb.icon} disabled={!!job} onChange={(ic) => setTab(tb.key, { icon: ic })} />
             <Button variant="ghost" icon disabled={!!job || tabs.length <= 1} onClick={() => delTab(tb.key)} title={t('newsvc_tab_del')}>
               <Icon name="trash" size={14} />
             </Button>
