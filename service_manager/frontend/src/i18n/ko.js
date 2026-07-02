@@ -622,6 +622,8 @@ export default {
   portal_vis_admin:        '관리자 전용',
   portal_nav_home:         '홈',
   portal_manage:           '관리',
+  portal_nav_handshake:    'handshake',
+  portal_guide_docs:       '연동 가이드 문서',
   manage_done:             '완료',
   manage_hint:             '아이콘·이름·색상·데이터 내려받기·순서를 관리합니다.',
   iconlab_card_hint:       '아이콘 편집 도구',

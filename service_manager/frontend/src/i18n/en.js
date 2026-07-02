@@ -622,6 +622,8 @@ export default {
   portal_vis_admin:        'Admin only',
   portal_nav_home:         'Home',
   portal_manage:           'Manage',
+  portal_nav_handshake:    'handshake',
+  portal_guide_docs:       'Integration guide docs',
   manage_done:             'Done',
   manage_hint:             'Edit icon, name, colour, data download and order.',
   iconlab_card_hint:       'Icon editor tool',

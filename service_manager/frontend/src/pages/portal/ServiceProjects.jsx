@@ -73,18 +73,6 @@ export default function ServiceProjects({ service, canManage }) {
     catch (e) { setErr(e?.response?.data?.detail || t('portal_proj_import_fail')) }
     finally { setBusy('') }
   }
-  async function exportProj(proj) {
-    // GET with the bearer (the endpoint is admin-only), then save the blob — a
-    // plain <a download> can't attach the Authorization header.
-    setBusy(proj)
-    try {
-      const res = await launcher.get(`/services/${svc}/projects/${proj}/export`, { responseType: 'blob' })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a'); a.href = url; a.download = `${proj}.zip`
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
-    } catch (e) { setErr(e?.response?.data?.detail || t('projects_export') + ' ✕') }
-    finally { setBusy('') }
-  }
 
   const dropProps = (canManage && canIE) ? {
     onDragOver: (e) => { e.preventDefault(); setDrag(true) },
@@ -157,7 +145,7 @@ export default function ServiceProjects({ service, canManage }) {
               <Button size="sm" variant="primary" disabled>{t('portal_proj_open')}</Button>
             )}
             {canManage && p.can_enter && p.running && <Button size="sm" variant="secondary" disabled={busy === p.name} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>}
-            {canManage && canIE && <Button size="sm" variant="ghost" icon disabled={busy === p.name} title={t('projects_export')} onClick={() => exportProj(p.name)}><Icon name="download" size={14} /></Button>}
+            {/* Data download (export) moved to Home "manage mode". */}
           </div>
         )
       })}

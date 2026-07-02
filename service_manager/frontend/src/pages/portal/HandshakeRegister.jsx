@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
-import ServiceManage from './ServiceManage'
 
 /**
- * ServicesAdminView — the portal admin's SERVICE-management screen (inline).
- * Register a service (managed/external) and configure each service's visibility /
- * removal. Per-account permissions live in the Users screen; per-project
- * create/manage lives in the Home (service) screen's inline panel.
+ * HandshakeRegister — register an EXTERNAL / self-hosted service with the portal.
+ * Primary path: the service self-registers by POSTing its descriptor to
+ * `/api/handshake` with the registration token (copy the snippet). A manual form
+ * is the fallback for managed/external services. Lives in the Guide/handshake tab;
+ * per-service management (icon, order, delete, …) is in Home's manage mode.
  */
 
 const VIS_OPTS = [
@@ -17,17 +17,13 @@ const VIS_OPTS = [
   { v: 3, key: 'portal_vis_admin' },
 ]
 const sectionHdr = { fontSize: 'var(--fs-small, 12px)', fontWeight: 600, color: 'var(--text-secondary)', margin: '4px 0 8px' }
-const kindBadge = { fontSize: 'var(--fs-micro, 10px)', padding: '1px 6px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }
 const selectStyle = { height: 28, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 6px', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
 const card = { border: '1px solid var(--border-default)', borderRadius: 8, padding: 10, marginBottom: 8 }
 const fieldStyle = { ...selectStyle, height: 28, flex: 1, minWidth: 0 }
 
-export default function ServicesAdminView({ onChanged }) {
+export default function HandshakeRegister({ onChanged }) {
   const { t } = useLang()
-  const [services, setServices] = useState([])
-  const [users, setUsers] = useState([])
-  const [managing, setManaging] = useState(null)   // service name expanded for management
-  const [hs, setHs] = useState(null)          // handshake info {endpoint, register_token}
+  const [hs, setHs] = useState(null)          // {endpoint, register_token}
   const [copied, setCopied] = useState(false)
   const [showManual, setShowManual] = useState(false)
   const [err, setErr] = useState('')
@@ -75,22 +71,11 @@ export default function ServicesAdminView({ onChanged }) {
   }
 
   async function load() {
-    try {
-      const [s, h, u] = await Promise.all([launcher.get('/admin/services'), launcher.get('/admin/handshake-info'), launcher.get('/admin/users')])
-      setServices(s.data); setHs(h.data); setUsers(u.data)
-    } catch (e) { setErr(e?.response?.data?.detail || t('portal_admin_load_fail')) }
+    try { setHs((await launcher.get('/admin/handshake-info')).data) }
+    catch (e) { setErr(e?.response?.data?.detail || t('portal_admin_load_fail')) }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function setVis(name, v) {
-    await launcher.put(`/admin/services/${name}`, { visibility: Number(v) })
-    setServices((s) => s.map((x) => (x.name === name ? { ...x, visibility: Number(v) } : x)))
-    onChanged?.()
-  }
-  async function removeService(name) {
-    if (!window.confirm(t('portal_admin_remove_confirm', name))) return
-    await launcher.delete(`/admin/services/${name}`); await load(); onChanged?.()
-  }
   async function testConn() {
     setProbe(null); setRegMsg('')
     try { setProbe((await launcher.post('/admin/external-services/test', { url: reg.url.trim(), token: reg.token.trim() || undefined, health: reg.health.trim() || '/' })).data) }
@@ -109,7 +94,7 @@ export default function ServicesAdminView({ onChanged }) {
         url: reg.mode === 'external' ? reg.url.trim() : undefined,
         token: reg.mode === 'external' ? (reg.token.trim() || undefined) : undefined,
       })
-      setReg(blankReg); setProbe(null); setRegMsg(t('portal_ext_added')); await load(); onChanged?.()
+      setReg(blankReg); setProbe(null); setRegMsg(t('portal_ext_added')); onChanged?.()
     } catch (e) { setRegMsg(e?.response?.data?.detail || t('portal_ext_fail')) }
   }
 
@@ -117,8 +102,6 @@ export default function ServicesAdminView({ onChanged }) {
     <div>
       {err && <div style={{ color: 'var(--danger-text)', fontSize: 'var(--fs-small, 12px)', marginBottom: 10 }}>{err}</div>}
 
-      {/* Primary path: a service self-registers via handshake. Paste this into the
-          service (set the portal URL + token); the long manual form is a fallback. */}
       <div style={sectionHdr}>{t('portal_hs_title')}</div>
       <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{t('portal_hs_desc')}</div>
@@ -132,37 +115,10 @@ export default function ServicesAdminView({ onChanged }) {
         <pre style={{ margin: 0, padding: 10, borderRadius: 6, background: 'var(--surface-3, var(--surface-2))',
           fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-tiny, 11px)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
           color: 'var(--text-primary)' }}>{hsSnippet || '…'}</pre>
-        <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>
-          {t('portal_hs_guide_hint')}
-        </div>
+        <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{t('portal_hs_guide_hint')}</div>
       </div>
 
-      <div style={sectionHdr}>{t('portal_admin_services')}</div>
-      {services.length === 0 ? (
-        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{t('projects_empty')}</div>
-      ) : services.map((svc) => (
-        <div key={svc.name} style={{ borderTop: '1px solid var(--border-subtle)', padding: '7px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 'var(--fs-small, 13px)' }}>{svc.name}</span>
-            <span style={kindBadge}>{svc.kind}</span>
-            {svc.mode === 'external' && <span style={kindBadge}>external</span>}
-            {svc.multi_project && <span style={kindBadge}>{t('portal_reg_multi')}</span>}
-            {svc.import_export && <span style={kindBadge}>I/E</span>}
-            <div style={{ flex: 1 }} />
-            <Button size="sm" variant={managing === svc.name ? 'secondary' : 'ghost'}
-              onClick={() => setManaging((m) => (m === svc.name ? null : svc.name))}>
-              {managing === svc.name ? t('portal_proj_close') : t('portal_svc_manage')}
-            </Button>
-            <select value={svc.visibility} onChange={(e) => setVis(svc.name, e.target.value)} style={selectStyle}>
-              {VIS_OPTS.map((o) => <option key={o.v} value={o.v}>{t(o.key)}</option>)}
-            </select>
-            <Button size="sm" variant="ghost" icon title={t('portal_admin_remove')} onClick={() => removeService(svc.name)}><Icon name="trash" size={14} /></Button>
-          </div>
-          {managing === svc.name && <ServiceManage svc={svc} users={users} />}
-        </div>
-      ))}
-
-      <div style={{ ...sectionHdr, marginTop: 18, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+      <div style={{ ...sectionHdr, marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         onClick={() => setShowManual((v) => !v)}>
         <Icon name={showManual ? 'close' : 'plus'} size={12} /> {t('portal_admin_register_manual')}
       </div>

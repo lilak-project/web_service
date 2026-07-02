@@ -270,7 +270,7 @@ export default function ProjectsPage() {
           <div style={{ flex: 1 }} />
           {navBtn('home', 'home', t('portal_nav_home'))}
           {navBtn('account', 'user', t('portal_nav_account'))}
-          {isManager && navBtn('guide', 'notebook', t('portal_guide_open'))}
+          {isManager && navBtn('guide', 'plug', t('portal_nav_handshake'))}
           <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
         </div>
       )}
@@ -281,7 +281,7 @@ export default function ProjectsPage() {
       ) : view === 'account' ? (
         <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout} />
       ) : view === 'guide' && isManager ? (
-        <GuideView />
+        <GuideView onChanged={refresh} />
       ) : (
         <>
           {error && (

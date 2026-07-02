@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { Button, Icon, Markdown } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import HandshakeRegister from './HandshakeRegister'
 
 /**
  * GuideView — the AI service-integration guide as an inline screen (no popup).
  * Fetches the markdown from the backend, renders it with the kit Markdown
  * component, and copies the raw markdown to the clipboard.
  */
-export default function GuideView() {
+export default function GuideView({ onChanged }) {
   const { t } = useLang()
   const [doc, setDoc] = useState('service-guide')
   const [md, setMd] = useState('')
@@ -44,6 +45,10 @@ export default function GuideView() {
 
   return (
     <div>
+      {/* Register an external / self-hosted service (handshake). */}
+      <HandshakeRegister onChanged={onChanged} />
+
+      <div style={{ fontSize: 'var(--fs-small, 12px)', fontWeight: 600, color: 'var(--text-secondary)', margin: '18px 0 8px' }}>{t('portal_guide_docs')}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
         {tab('service-guide', t('portal_guide_tab_guide'))}
         {tab('service-contract', t('portal_guide_tab_contract'))}

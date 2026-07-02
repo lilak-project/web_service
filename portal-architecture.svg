@@ -1,0 +1,94 @@
+<svg viewBox="0 0 1480 1030" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="ah" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto-start-reverse"><path d="M0,0 L9,4 L0,8 Z" fill="#475569"/></marker>
+    <marker id="ahg" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto-start-reverse"><path d="M0,0 L9,4 L0,8 Z" fill="#16a34a"/></marker>
+    <marker id="aha" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto-start-reverse"><path d="M0,0 L9,4 L0,8 Z" fill="#d97706"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1480" height="1030" rx="20" fill="#f7f8fb"/>
+  <text x="44" y="54" font-size="32" font-weight="800" fill="#0f172a">LILAK Web Portal — 구조</text>
+  <text x="46" y="84" font-size="16" fill="#64748b">계정 · 권한 · 서비스 · 데이터 흐름  (단일 출입구 :8025)</text>
+  <rect x="44" y="190" width="214" height="160" rx="14" fill="#eef2f7" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="64" y="226" font-size="18" font-weight="700" fill="#0f172a">브라우저 / Client</text>
+  <text x="64" y="256" font-size="13" fill="#475569">· 로그인 · 회원가입</text>
+  <text x="64" y="280" font-size="13" fill="#475569">· 화면 (React 커버 UI)</text>
+  <text x="64" y="304" font-size="13" fill="#475569">· 이벤트 · 데이터 송수신</text>
+  <text x="64" y="332" font-size="12" fill="#94a3b8">토큰을 쿠키+헤더로 보관</text>
+  <line x1="258" y1="250" x2="330" y2="250" stroke="#475569" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="262" y="240" font-size="12.5" fill="#334155">HTTPS · 로그인</text>
+  <line x1="330" y1="295" x2="258" y2="295" stroke="#475569" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="266" y="313" font-size="12.5" fill="#334155">JWT 토큰</text>
+  <rect x="330" y="150" width="648" height="690" rx="18" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="354" y="184" font-size="20" font-weight="800" fill="#1d4ed8">LILAK Portal · service_manager (FastAPI)</text>
+  <text x="354" y="206" font-size="13" fill="#3b82f6">단일 출입구 :8025 — 모든 서비스의 앞단</text>
+  <rect x="350" y="220" width="608" height="80" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="368" y="246" font-size="15.5" font-weight="700" fill="#0f172a">커버 UI (React · lilak_ui 키트)</text>
+  <text x="368" y="270" font-size="12.5" fill="#475569">Home · Account · Services · Guide  (인라인 화면 전환, 팝업 없음)</text>
+  <text x="368" y="290" font-size="12" fill="#64748b">base-path 인식 → 같은 출처에서 /api · /p · /pp 호출</text>
+  <rect x="350" y="310" width="608" height="96" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="368" y="335" font-size="15.5" font-weight="700" fill="#0f172a">계정 · 인증</text>
+  <text x="368" y="358" font-size="12.5" fill="#475569">중앙 계정(portal.db) · 로그인 → JWT(HS256, 공유 시크릿)</text>
+  <text x="368" y="378" font-size="12.5" fill="#475569">이메일 인증(연 1회 만료 → 보기전용) · 첫 가입 = 관리자</text>
+  <text x="368" y="398" font-size="12.5" fill="#475569">가입 제한: 허용 도메인 또는 초대코드 필요</text>
+  <rect x="350" y="416" width="608" height="116" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="368" y="441" font-size="15.5" font-weight="700" fill="#0f172a">권한 모델</text>
+  <text x="368" y="464" font-size="12.5" fill="#475569">프로젝트별 권한(직접) + 그룹 권한(멤버 자동 상속)</text>
+  <text x="368" y="484" font-size="12.5" fill="#475569">가시성 3단계: 비공개 · 보호 · 관리자</text>
+  <text x="368" y="504" font-size="12.5" fill="#475569">초대코드: 프로젝트/그룹 · 커스텀(8자+) · 일회용/벌크 · 기한</text>
+  <text x="368" y="524" font-size="12.5" fill="#475569">접근 요청 → 관리자 승인</text>
+  <rect x="350" y="542" width="608" height="92" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="368" y="567" font-size="15.5" font-weight="700" fill="#0f172a">서비스 레지스트리 + 어댑터</text>
+  <text x="368" y="590" font-size="12.5" fill="#475569">매니페스트 data/&lt;svc&gt;/service.json (kind · 권한 · 시작방법 · label · 아이콘)</text>
+  <text x="368" y="610" font-size="12.5" fill="#475569">managed = 서브프로세스 실행   ·   external = 원격 URL + 토큰</text>
+  <text x="368" y="628" font-size="12" fill="#64748b">단일 / 멀티프로젝트 · import/export</text>
+  <rect x="350" y="644" width="608" height="96" rx="10" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="368" y="669" font-size="15.5" font-weight="700" fill="#0f172a">리버스 프록시 (SSO)</text>
+  <text x="368" y="692" font-size="12.5" fill="#475569">/p/&lt;svc&gt;/  단일 서비스      ·      /pp/&lt;svc&gt;/&lt;proj&gt;/  프로젝트</text>
+  <text x="368" y="712" font-size="12.5" fill="#475569">진입 시 권한 쿠키 게이트 · &lt;base&gt; + __PORTAL_BASE__ 주입</text>
+  <text x="368" y="730" font-size="12" fill="#64748b">accepts_portal_token=true 면 사용자 JWT 전달(SSO, 이메일로 연동)</text>
+  <line x1="978" y1="500" x2="1030" y2="500" stroke="#16a34a" stroke-width="2.5" marker-end="url(#ahg)"/>
+  <text x="984" y="490" font-size="12.5" fill="#15803d">/p · /pp 프록시</text>
+  <rect x="1030" y="150" width="406" height="690" rx="16" fill="#ecfdf5" stroke="#22c55e" stroke-width="2"/>
+  <text x="1052" y="184" font-size="20" font-weight="800" fill="#15803d">서비스</text>
+  <text x="1052" y="206" font-size="12.5" fill="#16a34a">managed 서브프로세스 · external 컨테이너</text>
+  <rect x="1050" y="220" width="366" height="86" rx="10" fill="#ffffff" stroke="#6ee7b7"/>
+  <text x="1066" y="244" font-size="15" font-weight="700" fill="#065f46">elog</text>
+  <text x="1066" y="266" font-size="12" fill="#475569">멀티프로젝트 · 실험별 uvicorn 스폰</text>
+  <text x="1066" y="286" font-size="12" fill="#475569">포탈↔elog 이메일 연동(1회 인증)</text>
+  <rect x="1050" y="316" width="366" height="62" rx="10" fill="#ffffff" stroke="#6ee7b7"/>
+  <text x="1066" y="340" font-size="15" font-weight="700" fill="#065f46">asset_manager</text>
+  <text x="1066" y="362" font-size="12" fill="#475569">멀티 · 정적 PWA (브라우저 저장)</text>
+  <rect x="1050" y="388" width="366" height="62" rx="10" fill="#ffffff" stroke="#6ee7b7"/>
+  <text x="1066" y="412" font-size="15" font-weight="700" fill="#065f46">scattering_simulation_2d</text>
+  <text x="1066" y="434" font-size="12" fill="#475569">단일 정적 (Vite)</text>
+  <rect x="1050" y="460" width="366" height="62" rx="10" fill="#ffffff" stroke="#6ee7b7"/>
+  <text x="1066" y="484" font-size="15" font-weight="700" fill="#065f46">g4toy</text>
+  <text x="1066" y="506" font-size="12" fill="#475569">스켈레톤 · Geant4 toy (잡 큐 예정)</text>
+  <rect x="1050" y="532" width="366" height="62" rx="10" fill="#ffffff" stroke="#6ee7b7"/>
+  <text x="1066" y="556" font-size="15" font-weight="700" fill="#065f46">lilak gui</text>
+  <text x="1066" y="578" font-size="12" fill="#475569">스켈레톤 · LILAK GUI ($LILAK_PATH)</text>
+  <rect x="1050" y="604" width="366" height="72" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="1066" y="628" font-size="15" font-weight="700" fill="#334155">lilak icon</text>
+  <text x="1066" y="650" font-size="12" fill="#475569">빌트인 관리자 도구</text>
+  <text x="1066" y="668" font-size="12" fill="#64748b">파비콘 · 앱아이콘 · 헤더마크 편집</text>
+  <text x="1052" y="704" font-size="12" fill="#16a34a">진입은 권한 + 인증 통과한 계정만 (private 면 권한자만 노출)</text>
+  <text x="1052" y="726" font-size="12" fill="#64748b">서비스 포트 8026–8044 (내부), 8025만 외부</text>
+  <rect x="44" y="864" width="1392" height="150" rx="16" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8"/>
+  <text x="66" y="896" font-size="18" font-weight="800" fill="#b45309">데이터  ·  PORTAL_DATA_ROOT (코드 밖 단일 폴더)</text>
+  <text x="430" y="896" font-size="12.5" fill="#a16207">도커에선 호스트 폴더 bind mount → 서버마다 따로 관리</text>
+  <rect x="66" y="912" width="566" height="86" rx="10" fill="#ffffff" stroke="#fcd34d"/>
+  <text x="84" y="938" font-size="14.5" font-weight="700" fill="#92400e">data/_portal/portal.db</text>
+  <text x="84" y="960" font-size="12" fill="#475569">계정 · 권한 · 그룹 · 초대코드 · 서비스 등록(가시성)</text>
+  <text x="84" y="980" font-size="12" fill="#64748b">SQLite 하나 — 포탈 전체 상태</text>
+  <rect x="650" y="912" width="566" height="86" rx="10" fill="#ffffff" stroke="#fcd34d"/>
+  <text x="668" y="938" font-size="14.5" font-weight="700" fill="#92400e">data/&lt;service&gt;/ …</text>
+  <text x="668" y="960" font-size="12" fill="#475569">elog/projects/&lt;exp&gt;/elog.db · asset_manager/projects/… · g4toy/users/…</text>
+  <text x="668" y="980" font-size="12" fill="#64748b">각 서비스의 매니페스트 + 데이터</text>
+  <rect x="1234" y="912" width="182" height="86" rx="10" fill="#f0f9ff" stroke="#7dd3fc"/>
+  <text x="1252" y="938" font-size="14.5" font-weight="700" fill="#0369a1">Docker</text>
+  <text x="1252" y="959" font-size="11.5" fill="#475569">이미지 = 코드 전체</text>
+  <text x="1252" y="977" font-size="11.5" fill="#475569">데이터 = 호스트 폴더</text>
+  <line x1="560" y1="840" x2="560" y2="910" stroke="#d97706" stroke-width="2" marker-end="url(#aha)"/>
+  <text x="572" y="858" font-size="11.5" fill="#b45309">계정·권한·등록 저장</text>
+  <line x1="1140" y1="840" x2="1140" y2="910" stroke="#d97706" stroke-width="2" marker-end="url(#aha)"/>
+  <text x="980" y="858" font-size="11.5" fill="#b45309">서비스가 자기 데이터 읽기/쓰기</text>
+</svg>
