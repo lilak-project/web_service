@@ -21,6 +21,7 @@
  *   --register it only writes the manifest — register later via the Services UI.
  */
 import { mkdirSync, writeFileSync, existsSync, copyFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { resolve, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -54,6 +55,13 @@ const WITH_SETTINGS = !!args.settings
 const PORT = Number(args.port) || 5160
 const BPORT = Number(args['backend-port']) || 8160
 const FORCE = !!args.force
+// Portal-managed "live" service: everything (frontend + backend + manifest) lives
+// self-contained under OUT/<name>/ — point OUT at the portal DATA_ROOT so a created
+// service persists in the data volume (survives image rebuilds). Default layout
+// (code under OUT/<name>, manifest under OUT/data/<name>) is used otherwise.
+const DATA_SERVICE = !!args['data-service']
+const BUILD = !!args.build                              // npm install + build after scaffolding
+const LILAK_UI = resolve(expand(args['lilak-ui']) || process.env.LILAK_UI_PATH || join(OUT, 'lilak_ui'))
 if (!/^#[0-9a-f]{6}$/.test(COLOR)) { console.error(`error: --color must be a #rrggbb hex (got ${COLOR})`); process.exit(1) }
 
 // tabs: "id:label:icon,id:label:icon" — icon optional
@@ -616,7 +624,21 @@ admin **Services** UI or \`/api/handshake\` (see service_manager). Fix \`start.c
 per host if you move the checkout.
 `)
 
-putAbs(join(OUT, 'data', NAME, 'service.json'), manifest)
+// In --data-service mode the manifest sits INSIDE the service dir (self-contained
+// under the data volume); otherwise under OUT/data/<name>/ as before.
+putAbs(DATA_SERVICE ? join(ROOT, 'service.json') : join(OUT, 'data', NAME, 'service.json'), manifest)
+
+// ── optional: build the frontend so the portal can serve it immediately ───────
+let built = false
+if (BUILD) {
+  const fe = join(ROOT, 'frontend')
+  const env = { ...process.env, LILAK_UI_PATH: LILAK_UI }
+  console.log(`\n▶ building frontend  (LILAK_UI_PATH=${LILAK_UI}) …`)
+  let r = spawnSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: fe, env, stdio: 'inherit' })
+  if (r.status === 0) r = spawnSync('npm', ['run', 'build'], { cwd: fe, env, stdio: 'inherit' })
+  built = r.status === 0
+  console.log(built ? '✓ frontend built' : '✗ frontend build failed')
+}
 
 // ── optional: register the DB row via the portal handshake ────────────────────
 // The manifest (with its start block) is already on disk under the portal's data
@@ -642,10 +664,12 @@ if (args.register) {
 // ── report ──────────────────────────────────────────────────────────────────
 console.log(`\n✓ scaffolded ${NAME}  (${wrote} files written${skipped ? `, ${skipped} skipped — use --force to overwrite` : ''})`)
 console.log(`  root:     ${ROOT}`)
-console.log(`  manifest: ${join(OUT, 'data', NAME, 'service.json')}`)
+console.log(`  manifest: ${DATA_SERVICE ? join(ROOT, 'service.json') : join(OUT, 'data', NAME, 'service.json')}`)
 console.log(`  tabs:     ${TABS.map((t) => t.id).join(', ')}${WITH_SETTINGS ? '   (+ portal-centric Settings)' : ''}`)
 console.log(`  colour:   ${COLOR}  (nav ${PRESET['nav-bg']} · hover ${PRESET['btn-primary-hover']})`)
 console.log(`\nnext:`)
-console.log(`  cd ${join(ROOT, 'frontend')} && LILAK_UI_PATH=${join(OUT, 'lilak_ui')} npm install && npm run build`)
+if (!BUILT_OR_SKIP()) console.log(`  cd ${join(ROOT, 'frontend')} && LILAK_UI_PATH=${LILAK_UI} npm install && npm run build`)
 if (registered) console.log(`  registered with the portal — enter at /p/${NAME}/\n`)
+else if (DATA_SERVICE) console.log(`  (portal registers this service directly — enter at /p/${NAME}/)\n`)
 else console.log(`  register data/${NAME}/service.json with the portal: pass --register (admin token) or use the Services UI\n`)
+function BUILT_OR_SKIP() { return built }

@@ -5,6 +5,7 @@ import { useLang } from '../context/LangContext'
 import AccountView from './portal/AccountView'
 import ServicesAdminView from './portal/ServicesAdminView'
 import IconLabView from './portal/IconLabView'
+import NewServiceView from './portal/NewServiceView'
 import GuideView from './portal/GuideView'
 import ServiceProjects from './portal/ServiceProjects'
 import ServiceSingle from './portal/ServiceSingle'
@@ -28,6 +29,9 @@ const PORTAL_TOKEN_KEY = 'lilak_portal_token'
 // A built-in, admin-only "service": not a web app but listed like one. Opening
 // its card expands the icon editor inline (no proxy, no backend service entry).
 const ICON_SERVICE = { name: 'lilak icon', kind: 'tool', builtin: 'iconlab', icon: 'images', can_enter: true }
+// Admin-only builtin: opening it expands a form that scaffolds + builds + registers
+// a new lilak_ui-based service (see NewServiceView).
+const CREATE_SERVICE = { name: 'new-service', kind: 'tool', builtin: 'newservice', icon: 'plus', can_enter: true }
 
 // The mark next to the title. Uses the editable /lilak-header.svg (set from the
 // icon editor); falls back to the kit logo when that file isn't there yet.
@@ -304,7 +308,7 @@ export default function ProjectsPage() {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(isManager ? [ICON_SERVICE, ...(projects || [])] : (projects || [])).map((p) => {
+            {(isManager ? [ICON_SERVICE, CREATE_SERVICE, ...(projects || [])] : (projects || [])).map((p) => {
               const isOpen = expanded === p.name
               const isBuiltin = !!p.builtin
               return (
@@ -316,7 +320,7 @@ export default function ProjectsPage() {
                 } : undefined}>
                   <CoverCard
                     icon={iconFor(p.name, p.icon)}
-                    title={p.label || p.name}
+                    title={p.builtin === 'newservice' ? t('newsvc_title') : (p.label || p.name)}
                     active={false}
                     style={isOpen ? { border: 'none', borderRadius: 0 } : undefined}
                     badge={(
@@ -325,7 +329,7 @@ export default function ProjectsPage() {
                       </span>
                     )}
                     statusOn={isBuiltin || p.multi_project ? undefined : p.running}
-                    statusText={isBuiltin ? t('iconlab_card_hint')
+                    statusText={isBuiltin ? (p.builtin === 'newservice' ? t('newsvc_card_hint') : t('iconlab_card_hint'))
                       : p.multi_project ? t('portal_proj_open_svc')
                       : (p.running ? t('projects_running', p.port) : t('projects_stopped'))}
                     actions={
@@ -357,6 +361,9 @@ export default function ProjectsPage() {
                   {/* Inline expansion: builtin tool → editor; service → its projects. */}
                   {isOpen && isBuiltin && p.builtin === 'iconlab' && (
                     <div style={{ padding: '6px 14px 16px' }}><IconLabView /></div>
+                  )}
+                  {isOpen && isBuiltin && p.builtin === 'newservice' && (
+                    <NewServiceView onCreated={refresh} />
                   )}
                   {isOpen && !isBuiltin && p.multi_project && (
                     <ServiceProjects service={p} canManage={isManager} />

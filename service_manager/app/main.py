@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from . import config
-from .routers import accounts, auth, iconlab, project_mgmt, projects, proxy, services
+from .routers import accounts, auth, iconlab, project_mgmt, projects, proxy, scaffold, services
 
 config.ensure_dirs()
 
@@ -41,6 +41,7 @@ async def _strip_launcher_prefix(request: Request, call_next):
 app.include_router(auth.router)
 app.include_router(accounts.router)
 app.include_router(services.router)
+app.include_router(scaffold.router)        # /api/admin/services/scaffold (+ job status)
 app.include_router(iconlab.router)
 app.include_router(project_mgmt.router)   # /api/services/{svc}/projects… + /pp/…
 app.include_router(projects.router)
