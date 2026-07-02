@@ -3,7 +3,7 @@ import { Icon, Button, CoverPage, CoverCard, PROJECT_ICONS } from 'lilak-ui'
 import { launcher, setExperiment } from '../api'
 import { useLang } from '../context/LangContext'
 import AccountView from './portal/AccountView'
-import ManageList from './portal/ManageList'
+import ServiceManagePanel from './portal/ServiceManagePanel'
 import IconLabView from './portal/IconLabView'
 import NewServiceView from './portal/NewServiceView'
 import GuideView from './portal/GuideView'
@@ -205,6 +205,17 @@ export default function ProjectsPage() {
     finally { setBusy('') }
   }
 
+  // Manage mode: move a service up/down in the list, persisting the new order.
+  async function move(name, dir) {
+    const names = (projects || []).map((p) => p.name)
+    const i = names.indexOf(name), j = i + dir
+    if (i < 0 || j < 0 || j >= names.length) return
+    ;[names[i], names[j]] = [names[j], names[i]]
+    setProjects((ps) => names.map((n) => ps.find((p) => p.name === n)).filter(Boolean))  // optimistic
+    try { await launcher.put('/admin/service-order', { names }); await refresh() }
+    catch { await refresh() }
+  }
+
   // Single (non-multi) service: enter directly via /p/<name>/, handing over the token.
   function enter(name) {
     const tok = localStorage.getItem(PORTAL_TOKEN_KEY)
@@ -256,13 +267,15 @@ export default function ProjectsPage() {
 
   return (
     <CoverPage
+      fill
       icon={<HeaderMark />}
       title={t('projects_title')}
       subtitle={t('projects_subtitle')}
     >
-      {/* Account bar — its OWN row, below the title/subtitle (not in the header). */}
+      {/* Account bar — sticky at the top of the scrolling body so the nav stays put. */}
       {user && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          position: 'sticky', top: 0, zIndex: 5, backgroundColor: 'var(--app-bg, var(--surface-2))',
           padding: '2px 0 14px', marginBottom: 10, borderBottom: '1px solid var(--border-subtle)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
             <Icon name="user" size={14} /> {user.username}{isManager ? ' · admin' : ''}
@@ -295,8 +308,10 @@ export default function ProjectsPage() {
               <span style={{ flex: 1, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
                 {manage ? t('manage_hint') : t('projects_register_hint')}
               </span>
-              <Button variant={manage ? 'primary' : 'ghost'} onClick={() => { setManage((m) => !m); setExpanded(null) }}>
-                <Icon name="settings" size={15} /> {manage ? t('manage_done') : t('portal_manage')}
+              <Button variant="ghost" onClick={() => { setManage((m) => !m); setExpanded(null) }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: manage ? 'var(--btn-primary-bg)' : undefined }}>
+                <Icon name={manage ? 'toggle-right' : 'toggle-left'} size={22}
+                  color={manage ? 'var(--btn-primary-bg)' : 'var(--text-muted)'} /> {t('portal_manage')}
               </Button>
             </div>
           )}
@@ -310,13 +325,12 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          {manage && isManager ? (
-            <ManageList services={projects || []} onChanged={refresh} />
-          ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {(isManager ? [ICON_SERVICE, ...(projects || []), CREATE_SERVICE] : (projects || [])).map((p) => {
               const isOpen = expanded === p.name
               const isBuiltin = !!p.builtin
+              const realIdx = isBuiltin ? -1 : (projects || []).findIndex((x) => x.name === p.name)
+              const realCount = (projects || []).length
               return (
                 <div key={p.name} style={isOpen ? {
                   // Blue outline only on the OUTER box; the inner service-name card
@@ -341,6 +355,16 @@ export default function ProjectsPage() {
                       : (p.running ? t('projects_running', p.port) : t('projects_stopped'))}
                     actions={
                       <>
+                        {manage && isManager && !isBuiltin && (
+                          <>
+                            <Button variant="ghost" icon disabled={realIdx <= 0} title={t('manage_move_up')} onClick={() => move(p.name, -1)}>
+                              <Icon name="caret-up" size={15} />
+                            </Button>
+                            <Button variant="ghost" icon disabled={realIdx < 0 || realIdx >= realCount - 1} title={t('manage_move_down')} onClick={() => move(p.name, 1)}>
+                              <Icon name="caret-down" size={15} />
+                            </Button>
+                          </>
+                        )}
                         {p.can_enter ? (
                           // Every service opens its inline panel first; you Enter
                           // (and start/stop) from inside — single services too.
@@ -367,17 +391,19 @@ export default function ProjectsPage() {
                   {isOpen && isBuiltin && p.builtin === 'newservice' && (
                     <NewServiceView onCreated={refresh} />
                   )}
-                  {isOpen && !isBuiltin && p.multi_project && (
+                  {isOpen && !isBuiltin && manage && isManager && (
+                    <ServiceManagePanel service={p} initialIcon={iconFor(p.name, p.icon)} onChanged={refresh} />
+                  )}
+                  {isOpen && !isBuiltin && !(manage && isManager) && p.multi_project && (
                     <ServiceProjects service={p} canManage={isManager} />
                   )}
-                  {isOpen && !isBuiltin && !p.multi_project && (
+                  {isOpen && !isBuiltin && !(manage && isManager) && !p.multi_project && (
                     <ServiceSingle service={p} canManage={isManager} onChanged={refresh} />
                   )}
                 </div>
               )
             })}
           </div>
-          )}
         </>
       )}
     </CoverPage>
