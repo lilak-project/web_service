@@ -21,22 +21,28 @@ const field = {
 }
 const sel = { height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 6px', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
 
-export default function ServiceManagePanel({ service, initialIcon, first, last, onMove, onChanged }) {
+export default function ServiceManagePanel({ service, builtinKey, initialIcon, first, last, onMove, onChanged }) {
   const { t, lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const svc = service
+  const isBuiltin = !!builtinKey                              // builtins: rename/icon/order only
   const startIcon = service.icon || initialIcon || 'lilak'   // the icon actually on the card
   const startColor = service.color || '#9333ea'
+  const startLabel = isBuiltin ? (service.label || '') : (service.label || '')
   const [icon, setIcon] = useState(startIcon)
   const [color, setColor] = useState(startColor)
-  const [label, setLabel] = useState(service.label || '')
+  const [label, setLabel] = useState(startLabel)
   const [vis, setVis] = useState(service.visibility || 2)
   const [msg, setMsg] = useState('')
-  const dirty = (icon !== startIcon) || (color !== startColor) || (label !== (service.label || ''))
+  const dirty = (icon !== startIcon) || (color !== startColor) || (label !== startLabel)
 
   async function save() {
     try {
-      await launcher.put(`/admin/services/${svc.name}/appearance`, { icon, color, label: label.trim() })
+      if (isBuiltin) {
+        await launcher.put('/admin/home-builtin', { key: builtinKey, icon, color, label: label.trim() })
+      } else {
+        await launcher.put(`/admin/services/${svc.name}/appearance`, { icon, color, label: label.trim() })
+      }
       setMsg(L('저장됨', 'saved')); onChanged?.()
     } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
@@ -64,22 +70,27 @@ export default function ServiceManagePanel({ service, initialIcon, first, last, 
         <Button variant="primary" size="sm" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
       </div>
 
-      {/* visibility + reorder + delete */}
+      {/* visibility (services only) + reorder + delete (services only) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('공개 범위', 'Visibility')}</span>
-        <select value={vis} onChange={(e) => changeVis(e.target.value)} style={sel}>
-          {VIS_OPTS.map((o) => <option key={o.v} value={o.v}>{t(o.key)}</option>)}
-        </select>
-
-        <span style={{ width: 12 }} />
+        {!isBuiltin && (
+          <>
+            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('공개 범위', 'Visibility')}</span>
+            <select value={vis} onChange={(e) => changeVis(e.target.value)} style={sel}>
+              {VIS_OPTS.map((o) => <option key={o.v} value={o.v}>{t(o.key)}</option>)}
+            </select>
+            <span style={{ width: 12 }} />
+          </>
+        )}
         <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('순서', 'Order')}</span>
         <Button variant="ghost" size="sm" icon disabled={first} title={t('manage_move_up')} onClick={() => onMove(-1)}><Icon name="caret-up" size={15} /></Button>
         <Button variant="ghost" size="sm" icon disabled={last} title={t('manage_move_down')} onClick={() => onMove(1)}><Icon name="caret-down" size={15} /></Button>
 
         <div style={{ flex: 1 }} />
-        <Button variant="ghost" size="sm" onClick={removeService} title={L('서비스 삭제', 'Delete service')} style={{ color: 'var(--danger-text)' }}>
-          <Icon name="trash" size={15} /> {L('삭제', 'Delete')}
-        </Button>
+        {!isBuiltin && (
+          <Button variant="ghost" size="sm" onClick={removeService} title={L('서비스 삭제', 'Delete service')} style={{ color: 'var(--danger-text)' }}>
+            <Icon name="trash" size={15} /> {L('삭제', 'Delete')}
+          </Button>
+        )}
       </div>
 
       {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</div>}

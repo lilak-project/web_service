@@ -46,6 +46,16 @@ function HeaderMark({ size = 36 }) {
 function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h) }
 const iconFor = (name, stored) => stored || PROJECT_ICONS[hashStr(name) % PROJECT_ICONS.length]
 
+// A card's stable key (builtins use "@iconlab"/"@newservice"; services use the name).
+const cardKey = (p) => (p.builtin ? '@' + p.builtin : p.name)
+// Sort the combined card list by the admin-saved order; anything not listed keeps
+// its default position (after the ordered ones).
+function sortByHome(cards, order) {
+  const def = new Map(cards.map((c, i) => [cardKey(c), i]))
+  const pos = (c) => { const o = order.indexOf(cardKey(c)); return o >= 0 ? o : 1000 + def.get(cardKey(c)) }
+  return [...cards].sort((a, b) => pos(a) - pos(b))
+}
+
 const inputStyle = {
   width: '100%', height: 36, padding: '0 12px', borderRadius: 8, fontFamily: 'var(--font-mono)',
   fontSize: 'var(--fs-body, 13px)', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
@@ -174,6 +184,7 @@ export default function ProjectsPage() {
   const [manage, setManage] = useState(false)            // admin Home "manage mode"
 
   const [projects, setProjects] = useState(null)   // null = loading
+  const [homeCfg, setHomeCfg] = useState(null)     // admin: builtin overrides + card order
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')             // name currently acting on
 
@@ -192,11 +203,17 @@ export default function ProjectsPage() {
     try {
       const r = await launcher.get('/services')   // auth-aware filtered + flagged list
       setProjects(r.data); setError('')
+      if (isManager) { try { setHomeCfg((await launcher.get('/admin/home')).data) } catch { /* optional */ } }
     } catch {
       setProjects([]); setError(t('projects_unreachable'))
     }
   }
   useEffect(() => { refresh() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  // Load builtin overrides + saved card order once we know the user is an admin.
+  useEffect(() => {
+    if (!isManager) return
+    launcher.get('/admin/home').then((r) => setHomeCfg(r.data)).catch(() => {})
+  }, [isManager])
 
   async function requestAccess(name) {
     setBusy(name)
@@ -205,16 +222,6 @@ export default function ProjectsPage() {
     finally { setBusy('') }
   }
 
-  // Manage mode: move a service up/down in the list, persisting the new order.
-  async function move(name, dir) {
-    const names = (projects || []).map((p) => p.name)
-    const i = names.indexOf(name), j = i + dir
-    if (i < 0 || j < 0 || j >= names.length) return
-    ;[names[i], names[j]] = [names[j], names[i]]
-    setProjects((ps) => names.map((n) => ps.find((p) => p.name === n)).filter(Boolean))  // optimistic
-    try { await launcher.put('/admin/service-order', { names }); await refresh() }
-    catch { await refresh() }
-  }
 
   // Single (non-multi) service: enter directly via /p/<name>/, handing over the token.
   function enter(name) {
@@ -263,6 +270,26 @@ export default function ProjectsPage() {
         <Icon name={icon} size={14} /> {label}
       </Button>
     )
+  }
+
+  // Built-in cards, with the admin's saved label/icon/colour overrides applied.
+  const bi = homeCfg?.builtins || {}
+  const iconCard = { ...ICON_SERVICE, label: bi.iconlab?.label || ICON_SERVICE.name, icon: bi.iconlab?.icon || ICON_SERVICE.icon, color: bi.iconlab?.color }
+  const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label, icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color }
+  // The full home card list (builtins + services), ordered by the admin's saved order.
+  const cards = isManager
+    ? sortByHome([iconCard, ...(projects || []), createCard], homeCfg?.order || [])
+    : (projects || [])
+
+  // Manage mode: move any card (builtin or service) up/down; persist the unified order.
+  async function move(key, dir) {
+    const keys = cards.map(cardKey)
+    const i = keys.indexOf(key), j = i + dir
+    if (i < 0 || j < 0 || j >= keys.length) return
+    ;[keys[i], keys[j]] = [keys[j], keys[i]]
+    setHomeCfg((c) => ({ ...(c || { builtins: {} }), order: keys }))   // optimistic
+    try { await launcher.put('/admin/home-order', { keys }); await refresh() }
+    catch { await refresh() }
   }
 
   // The nav/tab bar lives in CoverPage's FIXED subheader (outside the scroll), with
@@ -329,15 +356,12 @@ export default function ProjectsPage() {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(isManager
-              ? (manage ? (projects || []) : [ICON_SERVICE, ...(projects || []), CREATE_SERVICE])
-              : (projects || [])).map((p) => {
-              const isOpen = expanded === p.name
+            {cards.map((p, i) => {
+              const key = cardKey(p)
+              const isOpen = expanded === key
               const isBuiltin = !!p.builtin
-              const realIdx = isBuiltin ? -1 : (projects || []).findIndex((x) => x.name === p.name)
-              const realCount = (projects || []).length
               return (
-                <div key={p.name} style={{
+                <div key={key} style={{
                   // The OUTER box always carries the border (the inner card's own
                   // border is removed below); it highlights when open.
                   border: (isOpen ? '1.5px solid var(--btn-primary-bg)' : '1px solid #6b7280'),
@@ -346,7 +370,7 @@ export default function ProjectsPage() {
                   <CoverCard
                     icon={<Icon name={iconFor(p.name, p.icon)} size={22} weight="duotone"
                       color={p.color || 'var(--text-primary)'} style={{ flexShrink: 0 }} />}
-                    title={p.builtin === 'newservice' ? t('newsvc_title') : (p.label || p.name)}
+                    title={p.builtin === 'newservice' ? (p.label || t('newsvc_title')) : (p.label || p.name)}
                     active={false}
                     style={{ border: 'none', borderRadius: 0 }}
                     badge={(
@@ -364,7 +388,7 @@ export default function ProjectsPage() {
                           // Every service opens its inline panel first; you Enter
                           // (and start/stop) from inside — single services too.
                           <Button variant={isOpen ? 'secondary' : 'primary'}
-                            onClick={() => setExpanded(isOpen ? null : p.name)}
+                            onClick={() => setExpanded(isOpen ? null : key)}
                             style={{ minWidth: 72, justifyContent: 'center' }}>
                             {isOpen ? t('portal_proj_close') : t('projects_open')}
                           </Button>
@@ -379,24 +403,22 @@ export default function ProjectsPage() {
                       </>
                     }
                   />
-                  {/* Inline expansion: builtin tool → editor; service → its projects. */}
-                  {isOpen && isBuiltin && p.builtin === 'iconlab' && (
+                  {/* Inline expansion: manage mode → management panel (builtins too);
+                      otherwise the builtin tool / the service's own panel. */}
+                  {isOpen && (manage && isManager ? (
+                    <ServiceManagePanel service={p} builtinKey={isBuiltin ? p.builtin : null}
+                      initialIcon={iconFor(p.name, p.icon)}
+                      first={i === 0} last={i === cards.length - 1}
+                      onMove={(dir) => move(key, dir)} onChanged={refresh} />
+                  ) : isBuiltin && p.builtin === 'iconlab' ? (
                     <div style={{ padding: '6px 14px 16px' }}><IconLabView /></div>
-                  )}
-                  {isOpen && isBuiltin && p.builtin === 'newservice' && (
+                  ) : isBuiltin && p.builtin === 'newservice' ? (
                     <NewServiceView onCreated={refresh} />
-                  )}
-                  {isOpen && !isBuiltin && manage && isManager && (
-                    <ServiceManagePanel service={p} initialIcon={iconFor(p.name, p.icon)}
-                      first={realIdx <= 0} last={realIdx < 0 || realIdx >= realCount - 1}
-                      onMove={(dir) => move(p.name, dir)} onChanged={refresh} />
-                  )}
-                  {isOpen && !isBuiltin && !(manage && isManager) && p.multi_project && (
+                  ) : p.multi_project ? (
                     <ServiceProjects service={p} canManage={isManager} />
-                  )}
-                  {isOpen && !isBuiltin && !(manage && isManager) && !p.multi_project && (
+                  ) : (
                     <ServiceSingle service={p} canManage={isManager} onChanged={refresh} />
-                  )}
+                  ))}
                 </div>
               )
             })}
