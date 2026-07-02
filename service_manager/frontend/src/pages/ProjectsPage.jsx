@@ -329,7 +329,9 @@ export default function ProjectsPage() {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(isManager ? [ICON_SERVICE, ...(projects || []), CREATE_SERVICE] : (projects || [])).map((p) => {
+            {(isManager
+              ? (manage ? (projects || []) : [ICON_SERVICE, ...(projects || []), CREATE_SERVICE])
+              : (projects || [])).map((p) => {
               const isOpen = expanded === p.name
               const isBuiltin = !!p.builtin
               const realIdx = isBuiltin ? -1 : (projects || []).findIndex((x) => x.name === p.name)
