@@ -338,7 +338,7 @@ export default function ProjectsPage() {
                 <div key={p.name} style={{
                   // The OUTER box always carries the border (the inner card's own
                   // border is removed below); it highlights when open.
-                  border: '1.5px solid ' + (isOpen ? 'var(--btn-primary-bg)' : 'var(--border-strong, #9ca3af)'),
+                  border: '1.5px solid ' + (isOpen ? 'var(--btn-primary-bg)' : '#000'),
                   borderRadius: 12, overflow: 'hidden', backgroundColor: 'var(--surface)',
                 }}>
                   <CoverCard
