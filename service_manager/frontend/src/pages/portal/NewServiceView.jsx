@@ -28,7 +28,7 @@ export default function NewServiceView({ onCreated }) {
   const [name, setName] = useState('')
   const [service, setService] = useState('')
   const [icon, setIcon] = useState(DEFAULT_ICON)
-  const [color, setColor] = useState('#9333ea')
+  const [color, setColor] = useState('#000000')
   const [settings, setSettings] = useState(true)
   const [tabs, setTabs] = useState(() => [newTab({ id: 'home', label: lang === 'ko' ? '홈' : 'Home', icon: 'home' })])
   const [job, setJob] = useState(null)          // {status, log, error, name}

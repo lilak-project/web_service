@@ -62,7 +62,7 @@ class ScaffoldBody(BaseModel):
     brand: str = "라일락"
     icon: str = "lilak"             # service mark shown on its Home card
     tabs: list[TabSpec] = []
-    color: str = "#9333ea"
+    color: str = "#000000"
     settings: bool = False
 
 

@@ -50,7 +50,7 @@ if (!NAME || !/^[a-z][a-z0-9_]*$/.test(NAME)) {
 const OUT = resolve(expand(args.out) || join(homedir(), 'web_service'))
 const SERVICE = args.service || 'app'                 // brand subtitle (lilak / <service>)
 const BRAND = args.brand || '라일락'
-const COLOR = (args.color || '#9333ea').toLowerCase()
+const COLOR = (args.color || '#000000').toLowerCase()
 const WITH_SETTINGS = !!args.settings
 const PORT = Number(args.port) || 5160
 const BPORT = Number(args['backend-port']) || 8160

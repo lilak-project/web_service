@@ -27,7 +27,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   const svc = service
   const isBuiltin = !!builtinKey                              // builtins: rename/icon/order only
   const startIcon = service.icon || initialIcon || 'lilak'   // the icon actually on the card
-  const startColor = service.color || '#9333ea'
+  const startColor = service.color || '#000000'
   const startLabel = isBuiltin ? (service.label || '') : (service.label || '')
   const [icon, setIcon] = useState(startIcon)
   const [color, setColor] = useState(startColor)
