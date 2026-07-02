@@ -270,13 +270,15 @@ export default function ProjectsPage() {
   const navBar = user ? (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
       padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)' }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-        <Icon name="user" size={14} /> {user.username}{isManager ? ' · admin' : ''}
-      </span>
-      <div style={{ flex: 1 }} />
+      {/* tabs — left */}
       {navBtn('home', 'home', t('portal_nav_home'))}
       {navBtn('account', 'user', t('portal_nav_account'))}
       {isManager && navBtn('guide', 'plug', t('portal_nav_handshake'))}
+      <div style={{ flex: 1 }} />
+      {/* account name + logout — right */}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+        <Icon name="user" size={14} /> {user.username}{isManager ? ' · admin' : ''}
+      </span>
       <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
     </div>
   ) : null
@@ -333,18 +335,18 @@ export default function ProjectsPage() {
               const realIdx = isBuiltin ? -1 : (projects || []).findIndex((x) => x.name === p.name)
               const realCount = (projects || []).length
               return (
-                <div key={p.name} style={isOpen ? {
-                  // Blue outline only on the OUTER box; the inner service-name card
-                  // gets no border of its own (set below).
-                  border: '1.5px solid var(--btn-primary-bg)', borderRadius: 12,
-                  overflow: 'hidden', backgroundColor: 'var(--surface)',
-                } : undefined}>
+                <div key={p.name} style={{
+                  // The OUTER box always carries the border (the inner card's own
+                  // border is removed below); it highlights when open.
+                  border: '1.5px solid ' + (isOpen ? 'var(--btn-primary-bg)' : 'var(--border-strong, #9ca3af)'),
+                  borderRadius: 12, overflow: 'hidden', backgroundColor: 'var(--surface)',
+                }}>
                   <CoverCard
                     icon={<Icon name={iconFor(p.name, p.icon)} size={22} weight="duotone"
                       color={p.color || 'var(--text-primary)'} style={{ flexShrink: 0 }} />}
                     title={p.builtin === 'newservice' ? t('newsvc_title') : (p.label || p.name)}
                     active={false}
-                    style={isOpen ? { border: 'none', borderRadius: 0 } : undefined}
+                    style={{ border: 'none', borderRadius: 0 }}
                     badge={(
                       <span style={{ fontSize: 'var(--fs-micro, 10px)', padding: '1px 6px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>
                         {p.kind || '?'}

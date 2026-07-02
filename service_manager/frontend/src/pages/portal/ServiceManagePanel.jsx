@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button, Icon, ColorPicker } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_WEIGHT } from './IconPick'
@@ -25,17 +25,18 @@ export default function ServiceManagePanel({ service, initialIcon, first, last, 
   const { t, lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const svc = service
-  const tint = service.color || undefined                    // existing colour tints the icon
   const startIcon = service.icon || initialIcon || 'lilak'   // the icon actually on the card
+  const startColor = service.color || '#9333ea'
   const [icon, setIcon] = useState(startIcon)
+  const [color, setColor] = useState(startColor)
   const [label, setLabel] = useState(service.label || '')
   const [vis, setVis] = useState(service.visibility || 2)
   const [msg, setMsg] = useState('')
-  const dirty = (icon !== startIcon) || (label !== (service.label || ''))
+  const dirty = (icon !== startIcon) || (color !== startColor) || (label !== (service.label || ''))
 
   async function save() {
     try {
-      await launcher.put(`/admin/services/${svc.name}/appearance`, { icon, label: label.trim() })
+      await launcher.put(`/admin/services/${svc.name}/appearance`, { icon, color, label: label.trim() })
       setMsg(L('저장됨', 'saved')); onChanged?.()
     } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
@@ -52,13 +53,14 @@ export default function ServiceManagePanel({ service, initialIcon, first, last, 
 
   return (
     <div style={{ padding: '14px 14px 16px 46px', borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* name + icon */}
+      {/* name + icon + colour */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, border: '1px solid var(--border-default)' }}>
-          <Icon name={icon} size={22} weight={ICON_WEIGHT} color={tint} />
+          <Icon name={icon} size={22} weight={ICON_WEIGHT} color={color} />
         </span>
         <input style={field} value={label} placeholder={svc.name} onChange={(e) => setLabel(e.target.value)} />
-        <IconPick value={icon} onChange={setIcon} color={tint} />
+        <IconPick value={icon} onChange={setIcon} color={color} />
+        <ColorPicker value={color} onChange={setColor} />
         <Button variant="primary" size="sm" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
       </div>
 
