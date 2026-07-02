@@ -1,0 +1,22 @@
+{
+  "kind": "generic",
+  "mode": "managed",
+  "health": "/api/health",
+  "entry": "/",
+  "identity": {
+    "accepts_portal_token": true,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": false,
+    "import_export": false
+  },
+  "label": "라일락 nptoy",
+  "icon": "alien",
+  "color": "#e08514",
+  "start": {
+    "cmd": "uvicorn main:app",
+    "cwd": "/app/nptoy/backend",
+    "env": {}
+  }
+}

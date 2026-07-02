@@ -14,11 +14,8 @@
 # ── 1) Frontend builder — build every dist against the shared kit ─────────────
 FROM node:20-slim AS frontend
 WORKDIR /src
-COPY lilak_ui ./lilak_ui
-COPY lilak_elog/frontend ./lilak_elog/frontend
-COPY service_manager/frontend ./service_manager/frontend
-COPY asset_manager ./asset_manager
-COPY scattering_simulation_2d ./scattering_simulation_2d
+# Whole stack SOURCE — .dockerignore keeps it lean (no node_modules/.git/dist/data).
+COPY . .
 ENV LILAK_UI_PATH=/src/lilak_ui
 # The kit is consumed as SOURCE (vite alias → lilak_ui/src). Its OWN bare imports
 # (@phosphor-icons/react, react, …) resolve from lilak_ui/node_modules, so install
@@ -29,10 +26,26 @@ RUN cd service_manager/frontend  && npm install --no-audit --no-fund && npm run 
 RUN cd asset_manager             && npm install --no-audit --no-fund && npm run build
 RUN cd scattering_simulation_2d  && npm install --no-audit --no-fund && npm run build
 
-# Admin "create empty service" runs the scaffold LIVE in the runtime container, so
-# ship the generator + a prebuilt node_modules every generated service can reuse
-# (identical deps → offline, fast build; no per-service npm install at runtime).
-COPY scripts ./scripts
+# Scaffolded services (admin "create empty service"): build EVERY deploy/seed/<name>
+# that ships uniform code (web_service/<name>/frontend on the kit, <name>/backend on
+# the shared venv), then assemble each one's backend + built dist into /out for a
+# single runtime COPY. New services thus deploy automatically once committed.
+RUN set -e; mkdir -p /out; \
+    for seed in service_manager/deploy/seed/*/; do \
+      name=$(basename "$seed"); \
+      case "$name" in elog|asset_manager|scattering_simulation_2d) continue ;; esac; \
+      [ -d "$name/backend" ] || continue; \
+      echo "→ scaffolded service: $name"; \
+      if [ -f "$name/frontend/package.json" ]; then \
+        (cd "$name/frontend" && LILAK_UI_PATH=/src/lilak_ui npm install --no-audit --no-fund && npm run build); \
+      fi; \
+      mkdir -p "/out/$name/frontend"; \
+      cp -a "$name/backend" "/out/$name/backend"; \
+      [ -d "$name/frontend/dist" ] && cp -a "$name/frontend/dist" "/out/$name/frontend/dist" || true; \
+    done
+
+# Live scaffolding also runs in the RUNTIME container, so prebuild a shared
+# node_modules every generated service can reuse (identical deps → offline, fast).
 RUN node scripts/new-service.mjs --name svctmpl --out /tmp/tmpl --data-service --lilak-ui /src/lilak_ui \
  && cd /tmp/tmpl/svctmpl/frontend && LILAK_UI_PATH=/src/lilak_ui npm install --no-audit --no-fund
 
@@ -58,6 +71,9 @@ COPY --from=frontend /src/service_manager/frontend/dist /app/service_manager/fro
 COPY --from=frontend /src/lilak_elog/frontend/dist      /app/lilak_elog/frontend/dist
 COPY --from=frontend /src/asset_manager/dist            /app/asset_manager/dist
 COPY --from=frontend /src/scattering_simulation_2d/dist /app/scattering_simulation_2d/dist
+# Scaffolded services (uniform layout): backend + built dist, assembled in stage 1.
+# cwd in each seed manifest points at /app/<name>/backend.
+COPY --from=frontend /out /app
 
 # Live service scaffolding (admin "create empty service"): Node runtime + the
 # generator + the kit source + a shared prebuilt node_modules. New services are

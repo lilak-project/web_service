@@ -14,6 +14,7 @@ polls `/api/admin/services/scaffold/{job_id}` for progress/log/status.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -43,6 +44,10 @@ LILAK_UI_PATH = Path(os.environ.get(
 # every other service. Its manifest goes to data/<name>/service.json and its
 # runtime data to data/<name>/ (standard layout), NOT the code into data/.
 SERVICES_ROOT = Path(os.environ.get("PORTAL_SERVICES_ROOT", str(config.ROOT.parent)))
+# Committed seed manifests (copied into the data volume on a fresh deploy → the
+# service is pre-registered). Writing one here makes a scaffolded service deploy
+# exactly like the built-in ones once committed.
+SEED_ROOT = Path(os.environ.get("PORTAL_SEED_ROOT", str(config.ROOT / "deploy" / "seed")))
 # Optional prebuilt node_modules shared by all generated services (set in Docker) —
 # makes the frontend build offline + fast (no per-service npm install).
 SVC_NODE_MODULES = os.environ.get("PORTAL_SVC_NODE_MODULES", "").strip()
@@ -148,6 +153,20 @@ def _run_job(job_id: str, body: ScaffoldBody) -> None:
         db.commit()
     finally:
         db.close()
+
+    # Write a SEED manifest (committed to git) so this service auto-registers on a
+    # fresh deploy — same mechanism as elog/asset/scattering. The seed points cwd at
+    # the container path; the local manifest keeps the local path.
+    try:
+        m = json.loads((config.DATA_ROOT / body.name / "service.json").read_text(encoding="utf-8"))
+        m.setdefault("start", {})["cwd"] = f"/app/{body.name}/backend"
+        seed = SEED_ROOT / body.name
+        seed.mkdir(parents=True, exist_ok=True)
+        (seed / "service.json").write_text(json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
+        _log(job_id, f"seed → service_manager/deploy/seed/{body.name}/service.json (commit to auto-register on deploy)")
+    except Exception as e:                       # noqa: BLE001
+        _log(job_id, f"⚠ seed manifest write skipped: {e}")
+
     _log(job_id, f"✓ 등록 완료 — /p/{body.name}/ 에서 열람")
     _set(job_id, status="done")
 
