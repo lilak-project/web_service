@@ -275,7 +275,7 @@ export default function ProjectsPage() {
   // Built-in cards, with the admin's saved label/icon/colour overrides applied.
   const bi = homeCfg?.builtins || {}
   const iconCard = { ...ICON_SERVICE, label: bi.iconlab?.label || ICON_SERVICE.name, icon: bi.iconlab?.icon || ICON_SERVICE.icon, color: bi.iconlab?.color }
-  const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label, icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color }
+  const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label || t('newsvc_title'), icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color }
   // The full home card list (builtins + services), ordered by the admin's saved order.
   const cards = isManager
     ? sortByHome([iconCard, ...(projects || []), createCard], homeCfg?.order || [])
