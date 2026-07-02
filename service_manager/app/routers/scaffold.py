@@ -39,6 +39,9 @@ SCAFFOLD_SCRIPT = Path(os.environ.get(
     "PORTAL_SCAFFOLD_SCRIPT", str(config.ROOT.parent / "scripts" / "new-service.mjs")))
 LILAK_UI_PATH = Path(os.environ.get(
     "LILAK_UI_PATH", str(config.ROOT.parent / "lilak_ui")))
+# Optional prebuilt node_modules shared by all generated services (set in Docker) —
+# makes the frontend build offline + fast (no per-service npm install).
+SVC_NODE_MODULES = os.environ.get("PORTAL_SVC_NODE_MODULES", "").strip()
 
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -109,6 +112,8 @@ def _run_job(job_id: str, body: ScaffoldBody) -> None:
         "--lilak-ui", str(LILAK_UI_PATH),
         "--data-service", "--build",
     ]
+    if SVC_NODE_MODULES:
+        argv += ["--shared-modules", SVC_NODE_MODULES]
     if body.settings:
         argv.append("--settings")
 

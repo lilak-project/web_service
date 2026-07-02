@@ -29,6 +29,13 @@ RUN cd service_manager/frontend  && npm install --no-audit --no-fund && npm run 
 RUN cd asset_manager             && npm install --no-audit --no-fund && npm run build
 RUN cd scattering_simulation_2d  && npm install --no-audit --no-fund && npm run build
 
+# Admin "create empty service" runs the scaffold LIVE in the runtime container, so
+# ship the generator + a prebuilt node_modules every generated service can reuse
+# (identical deps → offline, fast build; no per-service npm install at runtime).
+COPY scripts ./scripts
+RUN node scripts/new-service.mjs --name svctmpl --out /tmp/tmpl --data-service --lilak-ui /src/lilak_ui \
+ && cd /tmp/tmpl/svctmpl/frontend && LILAK_UI_PATH=/src/lilak_ui npm install --no-audit --no-fund
+
 # ── 2) Runtime — python + both backends + every built dist ────────────────────
 FROM python:3.12-slim AS runtime
 # lsof: elog stop() finds the port owner. librsvg2-bin: the icon editor's PDF/EPS
@@ -52,6 +59,16 @@ COPY --from=frontend /src/lilak_elog/frontend/dist      /app/lilak_elog/frontend
 COPY --from=frontend /src/asset_manager/dist            /app/asset_manager/dist
 COPY --from=frontend /src/scattering_simulation_2d/dist /app/scattering_simulation_2d/dist
 
+# Live service scaffolding (admin "create empty service"): Node runtime + the
+# generator + the kit source + a shared prebuilt node_modules. New services are
+# written to the data volume, built once here, then served like any other.
+COPY --from=frontend /usr/local/bin/node               /usr/local/bin/node
+COPY --from=frontend /usr/local/lib/node_modules/npm   /usr/local/lib/node_modules/npm
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
+COPY scripts                                            /app/scripts
+COPY --from=frontend /src/lilak_ui                      /app/lilak_ui
+COPY --from=frontend /tmp/tmpl/svctmpl/frontend/node_modules /app/_svc_node_modules
+
 # Seed (services pre-registered on first run) + entrypoint.
 COPY service_manager/deploy/seed          /app/data-seed
 COPY service_manager/deploy/entrypoint.sh /app/entrypoint.sh
@@ -60,7 +77,10 @@ RUN chmod +x /app/entrypoint.sh
 ENV PORTAL_DATA_ROOT=/app/data \
     PORTAL_PORT=8025 \
     PORTAL_PYTHON=python3 \
-    EMAIL_VERIFY_DEV_ECHO=1
+    EMAIL_VERIFY_DEV_ECHO=1 \
+    PORTAL_SCAFFOLD_SCRIPT=/app/scripts/new-service.mjs \
+    LILAK_UI_PATH=/app/lilak_ui \
+    PORTAL_SVC_NODE_MODULES=/app/_svc_node_modules
 WORKDIR /app/service_manager
 EXPOSE 8025
 ENTRYPOINT ["/app/entrypoint.sh"]

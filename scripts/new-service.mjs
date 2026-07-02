@@ -20,7 +20,7 @@
  *   (token/URL also read from PORTAL_REGISTER_TOKEN / PORTAL_BASE_URL). Without
  *   --register it only writes the manifest — register later via the Services UI.
  */
-import { mkdirSync, writeFileSync, existsSync, copyFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, existsSync, copyFileSync, symlinkSync, unlinkSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { resolve, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
@@ -629,14 +629,26 @@ per host if you move the checkout.
 putAbs(DATA_SERVICE ? join(ROOT, 'service.json') : join(OUT, 'data', NAME, 'service.json'), manifest)
 
 // ── optional: build the frontend so the portal can serve it immediately ───────
+// --shared-modules <dir>: reuse a prebuilt node_modules (all generated services
+// share identical deps) → build is offline + fast, no per-service npm install.
+// Only `dist` needs to persist, so the symlink is removed after building to keep
+// the data volume clean.
 let built = false
 if (BUILD) {
   const fe = join(ROOT, 'frontend')
   const env = { ...process.env, LILAK_UI_PATH: LILAK_UI }
-  console.log(`\n▶ building frontend  (LILAK_UI_PATH=${LILAK_UI}) …`)
-  let r = spawnSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: fe, env, stdio: 'inherit' })
+  const shared = expand(args['shared-modules'])
+  const nm = join(fe, 'node_modules')
+  let linked = false
+  if (shared && existsSync(shared) && !existsSync(nm)) {
+    try { symlinkSync(shared, nm, 'dir'); linked = true } catch (e) { console.error('shared-modules link failed:', e.message) }
+  }
+  console.log(`\n▶ building frontend  (LILAK_UI_PATH=${LILAK_UI}${linked ? ', shared node_modules' : ''}) …`)
+  let r = { status: 0 }
+  if (!linked) r = spawnSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: fe, env, stdio: 'inherit' })
   if (r.status === 0) r = spawnSync('npm', ['run', 'build'], { cwd: fe, env, stdio: 'inherit' })
   built = r.status === 0
+  if (linked) { try { unlinkSync(nm) } catch { /* leave it */ } }
   console.log(built ? '✓ frontend built' : '✗ frontend build failed')
 }
 
