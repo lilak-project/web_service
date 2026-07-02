@@ -20,6 +20,26 @@ services:
     volumes:
       # HOST folder ↔ container — all data lives here, on the host, per server.
       - ${PORTAL_DATA_DIR:-./portal-data}:/app/data
+      - sci-data:/sci                              # shared with sci-runner: nptoy reads sim results here
     env_file:
       - .env
     restart: unless-stopped
+
+  # Heavy simulation backend (ROOT + Geant4 + nptool) shared by nptoy (and later
+  # g4toy). NOT published — the portal reaches it internally at http://sci-runner:8100.
+  # A full build is long (Geant4 + nptool compile); build it on the x86_64 server.
+  # Enable with:  docker compose --profile sci up -d --build
+  sci-runner:
+    build:
+      context: ./sci-runner
+    image: lilak-sci-runner:latest
+    profiles: ["sci"]                              # opt-in: only builds/starts when asked
+    volumes:
+      - sci-data:/data
+    environment:
+      SCI_PORT: "8100"
+      SCI_TOKEN: "${SCI_TOKEN:-}"
+    restart: unless-stopped
+
+volumes:
+  sci-data:
