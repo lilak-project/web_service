@@ -39,9 +39,8 @@ RUN set -e; mkdir -p /out; \
       if [ -f "$name/frontend/package.json" ]; then \
         (cd "$name/frontend" && LILAK_UI_PATH=/src/lilak_ui npm install --no-audit --no-fund && npm run build); \
       fi; \
-      mkdir -p "/out/$name/frontend"; \
-      cp -a "$name/backend" "/out/$name/backend"; \
-      [ -d "$name/frontend/dist" ] && cp -a "$name/frontend/dist" "/out/$name/frontend/dist" || true; \
+      cp -a "$name" "/out/$name"; \
+      find "/out/$name" -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true; \
     done
 
 # Live scaffolding also runs in the RUNTIME container, so prebuild a shared

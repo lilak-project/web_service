@@ -1,0 +1,24 @@
+{
+  "kind": "simulation",
+  "mode": "managed",
+  "start": {
+    "cmd": "uvicorn main:app",
+    "cwd": "/app/g4toy/backend",
+    "env": {}
+  },
+  "health": "/api/health",
+  "entry": "/",
+  "url": null,
+  "token": null,
+  "identity": {
+    "accepts_portal_token": true,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": false,
+    "import_export": false
+  },
+  "icon": "spinner",
+  "color": "#ff9500",
+  "order": 2
+}

@@ -1,0 +1,27 @@
+{
+  "kind": "lilak",
+  "mode": "managed",
+  "start": {
+    "cmd": "uvicorn main:app",
+    "cwd": "/app/lilak_gui/backend",
+    "env": {
+      "LILAK_PATH": "/Users/jungwoo/Research/lilak"
+    }
+  },
+  "health": "/api/health",
+  "entry": "/",
+  "url": null,
+  "token": null,
+  "identity": {
+    "accepts_portal_token": true,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": false,
+    "import_export": false
+  },
+  "icon": "lilak",
+  "color": "#84009e",
+  "label": "lilak gui",
+  "order": 3
+}
