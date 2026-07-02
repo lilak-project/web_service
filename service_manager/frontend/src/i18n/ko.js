@@ -625,7 +625,7 @@ export default {
   portal_nav_handshake:    'handshake',
   portal_guide_docs:       '연동 가이드 문서',
   manage_done:             '완료',
-  manage_hint:             'open 을 눌러 아이콘·이름·색상·공개범위·데이터를 관리하고, 화살표로 순서를 바꿉니다.',
+  manage_hint:             'open 을 눌러 이름·아이콘·공개범위·순서·삭제를 관리합니다.',
   manage_move_up:          '위로',
   manage_move_down:        '아래로',
   iconlab_card_hint:       '아이콘 편집 도구',

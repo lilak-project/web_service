@@ -625,7 +625,7 @@ export default {
   portal_nav_handshake:    'handshake',
   portal_guide_docs:       'Integration guide docs',
   manage_done:             'Done',
-  manage_hint:             'Open a card to edit its icon, name, colour, visibility and data; use the arrows to reorder.',
+  manage_hint:             'Open a card to rename, change its icon, visibility, order, or delete it.',
   manage_move_up:          'Move up',
   manage_move_down:        'Move down',
   iconlab_card_hint:       'Icon editor tool',

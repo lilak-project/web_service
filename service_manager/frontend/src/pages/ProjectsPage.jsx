@@ -265,29 +265,30 @@ export default function ProjectsPage() {
     )
   }
 
+  // The nav/tab bar lives in CoverPage's FIXED subheader (outside the scroll), with
+  // a divider under it; only the tab CONTENT below scrolls.
+  const navBar = user ? (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+      padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+        <Icon name="user" size={14} /> {user.username}{isManager ? ' · admin' : ''}
+      </span>
+      <div style={{ flex: 1 }} />
+      {navBtn('home', 'home', t('portal_nav_home'))}
+      {navBtn('account', 'user', t('portal_nav_account'))}
+      {isManager && navBtn('guide', 'plug', t('portal_nav_handshake'))}
+      <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
+    </div>
+  ) : null
+
   return (
     <CoverPage
       fill
       icon={<HeaderMark />}
       title={t('projects_title')}
       subtitle={t('projects_subtitle')}
+      subheader={navBar}
     >
-      {/* Account bar — sticky at the top of the scrolling body so the nav stays put. */}
-      {user && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-          position: 'sticky', top: 0, zIndex: 5, backgroundColor: 'var(--app-bg, var(--surface-2))',
-          padding: '2px 0 14px', marginBottom: 10, borderBottom: '1px solid var(--border-subtle)' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-            <Icon name="user" size={14} /> {user.username}{isManager ? ' · admin' : ''}
-          </span>
-          <div style={{ flex: 1 }} />
-          {navBtn('home', 'home', t('portal_nav_home'))}
-          {navBtn('account', 'user', t('portal_nav_account'))}
-          {isManager && navBtn('guide', 'plug', t('portal_nav_handshake'))}
-          <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
-        </div>
-      )}
-
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
         <AuthCard t={t} onAuthed={(u) => { setUser(u); setView('home'); refresh() }} />
@@ -355,16 +356,6 @@ export default function ProjectsPage() {
                       : (p.running ? t('projects_running', p.port) : t('projects_stopped'))}
                     actions={
                       <>
-                        {manage && isManager && !isBuiltin && (
-                          <>
-                            <Button variant="ghost" icon disabled={realIdx <= 0} title={t('manage_move_up')} onClick={() => move(p.name, -1)}>
-                              <Icon name="caret-up" size={15} />
-                            </Button>
-                            <Button variant="ghost" icon disabled={realIdx < 0 || realIdx >= realCount - 1} title={t('manage_move_down')} onClick={() => move(p.name, 1)}>
-                              <Icon name="caret-down" size={15} />
-                            </Button>
-                          </>
-                        )}
                         {p.can_enter ? (
                           // Every service opens its inline panel first; you Enter
                           // (and start/stop) from inside — single services too.
@@ -392,7 +383,9 @@ export default function ProjectsPage() {
                     <NewServiceView onCreated={refresh} />
                   )}
                   {isOpen && !isBuiltin && manage && isManager && (
-                    <ServiceManagePanel service={p} initialIcon={iconFor(p.name, p.icon)} onChanged={refresh} />
+                    <ServiceManagePanel service={p} initialIcon={iconFor(p.name, p.icon)}
+                      first={realIdx <= 0} last={realIdx < 0 || realIdx >= realCount - 1}
+                      onMove={(dir) => move(p.name, dir)} onChanged={refresh} />
                   )}
                   {isOpen && !isBuiltin && !(manage && isManager) && p.multi_project && (
                     <ServiceProjects service={p} canManage={isManager} />
