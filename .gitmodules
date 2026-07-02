@@ -22,3 +22,7 @@
 	path = lilak_gui
 	url = git@github.com:lilak-project/lilak_gui.git
 	branch = main
+[submodule "nptoy"]
+	path = nptoy
+	url = git@github.com:lilak-project/nptoy.git
+	branch = main
