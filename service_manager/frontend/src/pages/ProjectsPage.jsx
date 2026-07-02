@@ -3,7 +3,7 @@ import { Icon, Button, CoverPage, CoverCard, PROJECT_ICONS } from 'lilak-ui'
 import { launcher, setExperiment } from '../api'
 import { useLang } from '../context/LangContext'
 import AccountView from './portal/AccountView'
-import ServicesAdminView from './portal/ServicesAdminView'
+import ManageList from './portal/ManageList'
 import IconLabView from './portal/IconLabView'
 import NewServiceView from './portal/NewServiceView'
 import GuideView from './portal/GuideView'
@@ -169,8 +169,9 @@ export default function ProjectsPage() {
   const isManager = user?.role === 'manager'
 
   // No popups: the app is a single page with logged-in screens, switched here.
-  const [view, setView] = useState('home')          // 'home' | 'account' | 'services' | 'guide'
+  const [view, setView] = useState('home')          // 'home' | 'account' | 'guide'
   const [expanded, setExpanded] = useState(null)         // multi-project svc expanded inline
+  const [manage, setManage] = useState(false)            // admin Home "manage mode"
 
   const [projects, setProjects] = useState(null)   // null = loading
   const [error, setError] = useState('')
@@ -269,7 +270,6 @@ export default function ProjectsPage() {
           <div style={{ flex: 1 }} />
           {navBtn('home', 'home', t('portal_nav_home'))}
           {navBtn('account', 'user', t('portal_nav_account'))}
-          {isManager && navBtn('services', 'settings', t('portal_nav_services'))}
           {isManager && navBtn('guide', 'notebook', t('portal_guide_open'))}
           <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
         </div>
@@ -280,8 +280,6 @@ export default function ProjectsPage() {
         <AuthCard t={t} onAuthed={(u) => { setUser(u); setView('home'); refresh() }} />
       ) : view === 'account' ? (
         <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout} />
-      ) : view === 'services' && isManager ? (
-        <ServicesAdminView onChanged={refresh} />
       ) : view === 'guide' && isManager ? (
         <GuideView />
       ) : (
@@ -293,8 +291,13 @@ export default function ProjectsPage() {
             </div>
           )}
           {isManager && (
-            <div style={{ margin: '12px 0 18px', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
-              {t('projects_register_hint')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 16px' }}>
+              <span style={{ flex: 1, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
+                {manage ? t('manage_hint') : t('projects_register_hint')}
+              </span>
+              <Button variant={manage ? 'primary' : 'ghost'} onClick={() => { setManage((m) => !m); setExpanded(null) }}>
+                <Icon name="settings" size={15} /> {manage ? t('manage_done') : t('portal_manage')}
+              </Button>
             </div>
           )}
 
@@ -307,6 +310,9 @@ export default function ProjectsPage() {
             </div>
           )}
 
+          {manage && isManager ? (
+            <ManageList services={projects || []} onChanged={refresh} />
+          ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {(isManager ? [ICON_SERVICE, ...(projects || []), CREATE_SERVICE] : (projects || [])).map((p) => {
               const isOpen = expanded === p.name
@@ -349,13 +355,8 @@ export default function ProjectsPage() {
                             {p.requested ? t('projects_requested') : t('projects_request')}
                           </Button>
                         ) : null}
-                        {/* Admin: a settings gear (manage in the Services screen) replaces
-                            the per-card stop/export/trash. Not shown for the builtin tool. */}
-                        {isManager && !isBuiltin && (
-                          <Button variant="ghost" icon onClick={() => { setExpanded(null); setView('services') }} title={t('portal_nav_services')}>
-                            <Icon name="settings" size={16} />
-                          </Button>
-                        )}
+                        {/* Icon / name / colour / data-download / reorder now live
+                            in Home "manage mode" (the gear above the list). */}
                       </>
                     }
                   />
@@ -376,6 +377,7 @@ export default function ProjectsPage() {
               )
             })}
           </div>
+          )}
         </>
       )}
     </CoverPage>

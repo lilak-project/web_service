@@ -178,6 +178,30 @@ def admin_set_service(
 class ServiceAppearanceBody(BaseModel):
     icon: Optional[str] = None
     color: Optional[str] = None
+    label: Optional[str] = None
+
+
+class ServiceOrderBody(BaseModel):
+    names: list[str]
+
+
+# NOTE: registered before the generic `/{name}` PUT so "service-order" isn't
+# swallowed as a service name. (Distinct path avoids the collision entirely.)
+@router.put("/api/admin/service-order")
+def admin_set_order(
+    body: ServiceOrderBody,
+    _: models.User = Depends(require_portal_admin),
+):
+    """Persist the Home display order (manage mode). Writes an `order` index into
+    each named service's manifest; the service list sorts by it."""
+    n = 0
+    for i, name in enumerate(body.names):
+        if registry.service_dir(name).exists():
+            manifest = registry.read_manifest(name)
+            manifest["order"] = i
+            registry.write_manifest(name, manifest)
+            n += 1
+    return {"ok": True, "count": n}
 
 
 @router.put("/api/admin/services/{name}/appearance")
@@ -186,8 +210,8 @@ def admin_set_appearance(
     _: models.User = Depends(require_portal_admin),
     db: Session = Depends(get_db),
 ):
-    """Edit a service's card icon + colour (stored in its manifest, surfaced in
-    the Home list). Both optional; a blank value clears the override."""
+    """Edit a service's card icon + colour + display name (stored in its manifest,
+    surfaced in the Home list). All optional; a blank value clears the override."""
     if not registry.service_dir(name).exists():
         raise HTTPException(404, f"'{name}' 서비스를 찾을 수 없습니다.")
     manifest = registry.read_manifest(name)
@@ -199,8 +223,11 @@ def admin_set_appearance(
         if color and not re.match(r"^#[0-9a-fA-F]{6}$", color):
             raise HTTPException(400, "color는 #rrggbb 형식이어야 합니다.")
         manifest["color"] = color or None
+    if body.label is not None:
+        manifest["label"] = body.label.strip() or None
     registry.write_manifest(name, manifest)
-    return {"name": name, "icon": manifest.get("icon"), "color": manifest.get("color")}
+    return {"name": name, "icon": manifest.get("icon"),
+            "color": manifest.get("color"), "label": manifest.get("label")}
 
 
 @router.get("/api/admin/users")

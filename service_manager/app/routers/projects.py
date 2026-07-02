@@ -38,11 +38,14 @@ def raw_service(name: str) -> dict:
         "color": manifest.get("color"),
         "multi_project": bool(caps.get("multi_project")),
         "import_export": bool(caps.get("import_export")),
+        "order": manifest.get("order", 1000),      # admin-set display order (manage mode)
     }
 
 
 def list_raw_services() -> list[dict]:
-    return [raw_service(n) for n in registry.list_service_names()]
+    # Sort by the admin-set order (manage mode), then name for stability.
+    return sorted((raw_service(n) for n in registry.list_service_names()),
+                  key=lambda s: (s.get("order", 1000), s["name"]))
 
 
 @router.get("/api/projects")
