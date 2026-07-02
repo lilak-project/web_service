@@ -67,7 +67,10 @@ COPY --from=frontend /usr/local/lib/node_modules/npm   /usr/local/lib/node_modul
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 COPY scripts                                            /app/scripts
 COPY --from=frontend /src/lilak_ui                      /app/lilak_ui
-COPY --from=frontend /tmp/tmpl/svctmpl/frontend/node_modules /app/_svc_node_modules
+# Must live at a path literally ending in `node_modules`: a generated service
+# symlinks its frontend/node_modules here, and Node resolves vite's deps (esbuild…)
+# by walking up from the realpath looking for a `node_modules` ancestor.
+COPY --from=frontend /tmp/tmpl/svctmpl/frontend/node_modules /app/svc-modules/node_modules
 
 # Seed (services pre-registered on first run) + entrypoint.
 COPY service_manager/deploy/seed          /app/data-seed
@@ -80,7 +83,7 @@ ENV PORTAL_DATA_ROOT=/app/data \
     EMAIL_VERIFY_DEV_ECHO=1 \
     PORTAL_SCAFFOLD_SCRIPT=/app/scripts/new-service.mjs \
     LILAK_UI_PATH=/app/lilak_ui \
-    PORTAL_SVC_NODE_MODULES=/app/_svc_node_modules
+    PORTAL_SVC_NODE_MODULES=/app/svc-modules/node_modules
 WORKDIR /app/service_manager
 EXPOSE 8025
 ENTRYPOINT ["/app/entrypoint.sh"]
