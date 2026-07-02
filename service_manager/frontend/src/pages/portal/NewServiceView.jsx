@@ -25,23 +25,50 @@ const newTab = (over = {}) => ({ key: _tabSeq++, id: '', label: '', icon: DEFAUL
 // actual icons to pick from (no typing icon names blind).
 function IconPick({ value, onChange, disabled }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)          // {top,left} in viewport coords
   const ref = useRef(null)
+  const btnRef = useRef(null)
+
+  // Popover is position:fixed (not absolute) so an ancestor's overflow:hidden —
+  // the expanded service card clips its children — can't cut it off. Anchor it to
+  // the trigger's on-screen rect, flipping above if there's no room below.
+  function place() {
+    const b = btnRef.current?.getBoundingClientRect()
+    if (!b) return
+    const W = 6 * 34 + 16, H = 210
+    let left = Math.min(b.left, window.innerWidth - W - 8)
+    let top = b.bottom + 4
+    if (top + H > window.innerHeight - 8) top = Math.max(8, b.top - H - 4)
+    setPos({ top, left: Math.max(8, left) })
+  }
+  function toggle() { if (!open) place(); setOpen((o) => !o) }
+
   useEffect(() => {
     if (!open) return
     const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const reflow = () => setOpen(false)
     document.addEventListener('mousedown', away)
-    return () => document.removeEventListener('mousedown', away)
+    window.addEventListener('scroll', reflow, true)
+    window.addEventListener('resize', reflow)
+    return () => {
+      document.removeEventListener('mousedown', away)
+      window.removeEventListener('scroll', reflow, true)
+      window.removeEventListener('resize', reflow)
+    }
   }, [open])
+
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <Button variant="secondary" disabled={disabled} onClick={() => setOpen((o) => !o)}
-        style={{ width: 52, justifyContent: 'center' }} title={value}>
-        <Icon name={value} size={16} />
-      </Button>
-      {open && (
-        <div style={{
-          position: 'absolute', zIndex: 30, top: 36, left: 0, display: 'grid',
-          gridTemplateColumns: 'repeat(6, 30px)', gap: 4, padding: 8, maxHeight: 200, overflowY: 'auto',
+    <>
+      <span ref={btnRef} style={{ display: 'inline-flex' }}>
+        <Button variant="secondary" disabled={disabled} onClick={toggle}
+          style={{ width: 52, justifyContent: 'center' }} title={value}>
+          <Icon name={value} size={16} />
+        </Button>
+      </span>
+      {open && pos && (
+        <div ref={ref} style={{
+          position: 'fixed', zIndex: 1000, top: pos.top, left: pos.left, display: 'grid',
+          gridTemplateColumns: 'repeat(6, 30px)', gap: 4, padding: 8, maxHeight: 210, overflowY: 'auto',
           backgroundColor: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 8,
           boxShadow: '0 6px 20px rgba(0,0,0,.18)',
         }}>
@@ -58,7 +85,7 @@ function IconPick({ value, onChange, disabled }) {
           ))}
         </div>
       )}
-    </div>
+    </>
   )
 }
 

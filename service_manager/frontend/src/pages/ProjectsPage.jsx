@@ -308,7 +308,7 @@ export default function ProjectsPage() {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(isManager ? [ICON_SERVICE, CREATE_SERVICE, ...(projects || [])] : (projects || [])).map((p) => {
+            {(isManager ? [ICON_SERVICE, ...(projects || []), CREATE_SERVICE] : (projects || [])).map((p) => {
               const isOpen = expanded === p.name
               const isBuiltin = !!p.builtin
               return (
