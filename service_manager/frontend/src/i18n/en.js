@@ -630,6 +630,7 @@ export default {
   newsvc_name_bad:         'Name must start lowercase and use [a-z0-9_] only.',
   newsvc_brand:            'Display name (subtitle)',
   newsvc_brand_ph:         'e.g. sample',
+  newsvc_icon:             'Icon',
   newsvc_color:            'Colour',
   newsvc_tabs:             'Tabs',
   newsvc_tab_label:        'Tab label',

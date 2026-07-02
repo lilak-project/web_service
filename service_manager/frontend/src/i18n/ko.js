@@ -630,6 +630,7 @@ export default {
   newsvc_name_bad:         '이름은 소문자로 시작하고 [a-z0-9_] 만 가능합니다.',
   newsvc_brand:            '표시 이름 (부제)',
   newsvc_brand_ph:         '예: sample',
+  newsvc_icon:             '아이콘',
   newsvc_color:            '색상',
   newsvc_tabs:             '탭',
   newsvc_tab_label:        '탭 이름',

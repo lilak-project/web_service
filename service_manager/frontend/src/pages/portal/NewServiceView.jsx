@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Icon, ColorPicker, PROJECT_ICONS } from 'lilak-ui'
+import { Button, Icon, ColorPicker } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import IconPick, { DEFAULT_ICON } from './IconPick'
 
 /**
  * NewServiceView — the in-portal "create an empty service" form (opened from the
@@ -13,81 +14,8 @@ import { useLang } from '../../context/LangContext'
  * default portal rules) that shows up in the Home list on completion.
  */
 
-// Use the kit's known-good icon set so every choice actually renders (and renders
-// the same way inside the generated service, which uses the same kit).
-const ICON_CHOICES = Array.from(new Set(PROJECT_ICONS))
-const DEFAULT_ICON = ICON_CHOICES[0]
-
 let _tabSeq = 1
 const newTab = (over = {}) => ({ key: _tabSeq++, id: '', label: '', icon: DEFAULT_ICON, ...over })
-
-// Visual icon picker — a button showing the current icon; click for a grid of the
-// actual icons to pick from (no typing icon names blind).
-function IconPick({ value, onChange, disabled }) {
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState(null)          // {top,left} in viewport coords
-  const ref = useRef(null)
-  const btnRef = useRef(null)
-
-  // Popover is position:fixed (not absolute) so an ancestor's overflow:hidden —
-  // the expanded service card clips its children — can't cut it off. Anchor it to
-  // the trigger's on-screen rect, flipping above if there's no room below.
-  function place() {
-    const b = btnRef.current?.getBoundingClientRect()
-    if (!b) return
-    const W = 6 * 34 + 16, H = 210
-    let left = Math.min(b.left, window.innerWidth - W - 8)
-    let top = b.bottom + 4
-    if (top + H > window.innerHeight - 8) top = Math.max(8, b.top - H - 4)
-    setPos({ top, left: Math.max(8, left) })
-  }
-  function toggle() { if (!open) place(); setOpen((o) => !o) }
-
-  useEffect(() => {
-    if (!open) return
-    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    const reflow = () => setOpen(false)
-    document.addEventListener('mousedown', away)
-    window.addEventListener('scroll', reflow, true)
-    window.addEventListener('resize', reflow)
-    return () => {
-      document.removeEventListener('mousedown', away)
-      window.removeEventListener('scroll', reflow, true)
-      window.removeEventListener('resize', reflow)
-    }
-  }, [open])
-
-  return (
-    <>
-      <span ref={btnRef} style={{ display: 'inline-flex' }}>
-        <Button variant="secondary" disabled={disabled} onClick={toggle}
-          style={{ width: 52, justifyContent: 'center' }} title={value}>
-          <Icon name={value} size={16} />
-        </Button>
-      </span>
-      {open && pos && (
-        <div ref={ref} style={{
-          position: 'fixed', zIndex: 1000, top: pos.top, left: pos.left, display: 'grid',
-          gridTemplateColumns: 'repeat(6, 30px)', gap: 4, padding: 8, maxHeight: 210, overflowY: 'auto',
-          backgroundColor: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 8,
-          boxShadow: '0 6px 20px rgba(0,0,0,.18)',
-        }}>
-          {ICON_CHOICES.map((ic) => (
-            <button key={ic} type="button" title={ic}
-              onClick={() => { onChange(ic); setOpen(false) }}
-              style={{
-                display: 'grid', placeItems: 'center', width: 30, height: 30, borderRadius: 6, cursor: 'pointer',
-                border: ic === value ? '2px solid var(--btn-primary-bg)' : '1px solid var(--input-border)',
-                backgroundColor: ic === value ? 'var(--info-bg, var(--surface-2))' : 'var(--surface)',
-              }}>
-              <Icon name={ic} size={16} />
-            </button>
-          ))}
-        </div>
-      )}
-    </>
-  )
-}
 
 const field = {
   height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px',
@@ -99,6 +27,7 @@ export default function NewServiceView({ onCreated }) {
   const { t, lang } = useLang()
   const [name, setName] = useState('')
   const [service, setService] = useState('')
+  const [icon, setIcon] = useState(DEFAULT_ICON)
   const [color, setColor] = useState('#9333ea')
   const [settings, setSettings] = useState(true)
   const [tabs, setTabs] = useState(() => [newTab({ id: 'home', label: lang === 'ko' ? '홈' : 'Home', icon: 'home' })])
@@ -128,7 +57,7 @@ export default function NewServiceView({ onCreated }) {
     setBusy(true)
     try {
       const { data } = await launcher.post('/admin/services/scaffold', {
-        name, service: service.trim(), tabs: cleanTabs, color, settings,
+        name, service: service.trim(), icon, tabs: cleanTabs, color, settings,
       })
       setJob({ status: 'queued', log: [], name: data.name })
       poll.current = setInterval(() => pollOnce(data.job_id), 1200)
@@ -171,6 +100,12 @@ export default function NewServiceView({ onCreated }) {
           <span style={lbl}>{t('newsvc_brand')}</span>
           <input style={field} value={service} placeholder={t('newsvc_brand_ph')} disabled={!!job}
             onChange={(e) => setService(e.target.value)} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={lbl}>{t('newsvc_icon')}</span>
+          <div style={{ display: 'flex', alignItems: 'center', height: 30 }}>
+            <IconPick value={icon} onChange={setIcon} disabled={!!job} color={color} />
+          </div>
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl}>{t('newsvc_color')}</span>

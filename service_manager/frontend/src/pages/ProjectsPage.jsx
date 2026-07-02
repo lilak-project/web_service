@@ -319,7 +319,8 @@ export default function ProjectsPage() {
                   overflow: 'hidden', backgroundColor: 'var(--surface)',
                 } : undefined}>
                   <CoverCard
-                    icon={iconFor(p.name, p.icon)}
+                    icon={<Icon name={iconFor(p.name, p.icon)} size={22} weight="duotone"
+                      color={p.color || 'var(--text-primary)'} style={{ flexShrink: 0 }} />}
                     title={p.builtin === 'newservice' ? t('newsvc_title') : (p.label || p.name)}
                     active={false}
                     style={isOpen ? { border: 'none', borderRadius: 0 } : undefined}

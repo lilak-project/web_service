@@ -60,6 +60,7 @@ class ScaffoldBody(BaseModel):
     name: str
     service: str = "app"            # brand subtitle (라일락 / <service>)
     brand: str = "라일락"
+    icon: str = "lilak"             # service mark shown on its Home card
     tabs: list[TabSpec] = []
     color: str = "#9333ea"
     settings: bool = False
@@ -106,6 +107,7 @@ def _run_job(job_id: str, body: ScaffoldBody) -> None:
         "--name", body.name,
         "--service", body.service or "app",
         "--brand", body.brand or "라일락",
+        "--icon", re.sub(r"[^a-z0-9_-]", "", (body.icon or "lilak").lower()) or "lilak",
         "--tabs", _tabs_arg(body.tabs),
         "--color", (body.color or "#9333ea").lower(),
         "--out", str(config.DATA_ROOT),

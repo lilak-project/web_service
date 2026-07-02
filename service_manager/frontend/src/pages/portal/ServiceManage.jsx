@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button, Icon, ColorPicker } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import IconPick, { ICON_WEIGHT } from './IconPick'
 
 /**
  * ServiceManage — admin panel for one service (inline, under its row in the
@@ -31,6 +32,8 @@ export default function ServiceManage({ svc, users }) {
   const [nc, setNc] = useState({ project: '', days: 1 })
   const [newProj, setNewProj] = useState('')
   const [msg, setMsg] = useState('')
+  const [icon, setIcon] = useState(svc.icon || 'lilak')
+  const [color, setColor] = useState(svc.color || '#9333ea')
   const fileRef = useRef(null)
   const multi = !!svc.multi_project
 
@@ -69,6 +72,8 @@ export default function ServiceManage({ svc, users }) {
   const genCode = () => run(launcher.post('/admin/invite-codes', { service: svc.name, project: nc.project, days: Number(nc.days) }),
     (r) => L(`코드 생성: ${r.data.code}`, `code: ${r.data.code}`))
   const revokeCode = (id) => run(launcher.delete(`/admin/invite-codes/${id}`), () => L('코드 삭제됨', 'code removed'))
+  const saveAppearance = () => run(launcher.put(`/admin/services/${svc.name}/appearance`, { icon, color }),
+    () => L('아이콘·색 저장됨 (홈에서 반영)', 'icon & colour saved (shows on Home)'))
   const copyCode = (code) => { try { navigator.clipboard.writeText(code) } catch { /* ignore */ } say(L(`복사됨: ${code}`, `copied: ${code}`)) }
   async function exportProj(name) {
     try {
@@ -85,6 +90,21 @@ export default function ServiceManage({ svc, users }) {
   return (
     <div style={{ padding: '10px 12px 12px', background: 'var(--surface-2)', borderRadius: 8, marginTop: 6 }}>
       {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', marginBottom: 6 }}>{msg}</div>}
+
+      {/* Appearance: card icon + colour (stored in the manifest, shown on Home) */}
+      {!svc.builtin && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 'var(--fs-small, 12px)', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>{L('아이콘 · 색상', 'Icon & colour')}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--surface)' }}>
+              <Icon name={icon} size={22} weight={ICON_WEIGHT} color={color} />
+            </span>
+            <IconPick value={icon} onChange={setIcon} color={color} />
+            <ColorPicker value={color} onChange={setColor} />
+            <Button variant="primary" onClick={saveAppearance}>{L('저장', 'Save')}</Button>
+          </div>
+        </div>
+      )}
 
       {/* Projects */}
       {multi && (

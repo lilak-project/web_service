@@ -473,7 +473,7 @@ const manifest = JSON.stringify({
   kind: 'generic', mode: 'managed', health: '/api/health', entry: '/',
   identity: { accepts_portal_token: true, link_by: 'email' },
   capabilities: { multi_project: false, import_export: false },
-  label: `${BRAND} ${SERVICE}`.trim(), icon: 'lilak', color: COLOR,
+  label: `${BRAND} ${SERVICE}`.trim(), icon: (args.icon || 'lilak'), color: COLOR,
   start: { cmd: 'uvicorn main:app', cwd: join(ROOT, 'backend'), env: {} },
 }, null, 2) + '\n'
 

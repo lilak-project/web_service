@@ -9,6 +9,7 @@ Admins (role "manager") see and enter everything.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import urllib.error
 import urllib.request
@@ -172,6 +173,34 @@ def admin_set_service(
         svc.kind = body.kind
     db.commit()
     return {"name": svc.name, "kind": svc.kind, "visibility": svc.visibility}
+
+
+class ServiceAppearanceBody(BaseModel):
+    icon: Optional[str] = None
+    color: Optional[str] = None
+
+
+@router.put("/api/admin/services/{name}/appearance")
+def admin_set_appearance(
+    name: str, body: ServiceAppearanceBody,
+    _: models.User = Depends(require_portal_admin),
+    db: Session = Depends(get_db),
+):
+    """Edit a service's card icon + colour (stored in its manifest, surfaced in
+    the Home list). Both optional; a blank value clears the override."""
+    if not registry.service_dir(name).exists():
+        raise HTTPException(404, f"'{name}' 서비스를 찾을 수 없습니다.")
+    manifest = registry.read_manifest(name)
+    if body.icon is not None:
+        icon = re.sub(r"[^a-z0-9_-]", "", body.icon.strip().lower())
+        manifest["icon"] = icon or None
+    if body.color is not None:
+        color = body.color.strip()
+        if color and not re.match(r"^#[0-9a-fA-F]{6}$", color):
+            raise HTTPException(400, "color는 #rrggbb 형식이어야 합니다.")
+        manifest["color"] = color or None
+    registry.write_manifest(name, manifest)
+    return {"name": name, "icon": manifest.get("icon"), "color": manifest.get("color")}
 
 
 @router.get("/api/admin/users")
