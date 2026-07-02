@@ -39,6 +39,10 @@ SCAFFOLD_SCRIPT = Path(os.environ.get(
     "PORTAL_SCAFFOLD_SCRIPT", str(config.ROOT.parent / "scripts" / "new-service.mjs")))
 LILAK_UI_PATH = Path(os.environ.get(
     "LILAK_UI_PATH", str(config.ROOT.parent / "lilak_ui")))
+# Where a new service's CODE is written — the stack root (web_service/), same as
+# every other service. Its manifest goes to data/<name>/service.json and its
+# runtime data to data/<name>/ (standard layout), NOT the code into data/.
+SERVICES_ROOT = Path(os.environ.get("PORTAL_SERVICES_ROOT", str(config.ROOT.parent)))
 # Optional prebuilt node_modules shared by all generated services (set in Docker) —
 # makes the frontend build offline + fast (no per-service npm install).
 SVC_NODE_MODULES = os.environ.get("PORTAL_SVC_NODE_MODULES", "").strip()
@@ -109,10 +113,10 @@ def _run_job(job_id: str, body: ScaffoldBody) -> None:
         "--brand", body.brand or "라일락",
         "--icon", re.sub(r"[^a-z0-9_-]", "", (body.icon or "lilak").lower()) or "lilak",
         "--tabs", _tabs_arg(body.tabs),
-        "--color", (body.color or "#9333ea").lower(),
-        "--out", str(config.DATA_ROOT),
+        "--color", (body.color or "#000000").lower(),
+        "--out", str(SERVICES_ROOT),        # code → web_service/<name>/ (standard layout)
         "--lilak-ui", str(LILAK_UI_PATH),
-        "--data-service", "--build",
+        "--build",
     ]
     if SVC_NODE_MODULES:
         argv += ["--shared-modules", SVC_NODE_MODULES]
@@ -120,7 +124,7 @@ def _run_job(job_id: str, body: ScaffoldBody) -> None:
         argv.append("--settings")
 
     _set(job_id, status="running")
-    _log(job_id, f"$ new-service.mjs --name {body.name} --tabs {_tabs_arg(body.tabs)} --data-service --build")
+    _log(job_id, f"$ new-service.mjs --name {body.name} --tabs {_tabs_arg(body.tabs)} --build")
     try:
         proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 text=True, bufsize=1)
@@ -133,7 +137,7 @@ def _run_job(job_id: str, body: ScaffoldBody) -> None:
     if rc != 0:
         return _set(job_id, status="error", error=f"스캐폴드/빌드 실패 (exit {rc})")
 
-    dist = config.DATA_ROOT / body.name / "frontend" / "dist" / "index.html"
+    dist = SERVICES_ROOT / body.name / "frontend" / "dist" / "index.html"
     if not dist.exists():
         return _set(job_id, status="error", error="빌드 결과(dist)가 생성되지 않았습니다.")
 
@@ -153,7 +157,7 @@ def scaffold_service(body: ScaffoldBody, _: models.User = Depends(require_portal
     name = (body.name or "").strip().lower()
     if not _NAME_RE.match(name):
         raise HTTPException(400, "이름은 소문자로 시작하고 [a-z0-9_] 만 사용할 수 있습니다.")
-    if registry.service_dir(name).exists():
+    if registry.service_dir(name).exists() or (SERVICES_ROOT / name).exists():
         raise HTTPException(409, f"'{name}' 이(가) 이미 존재합니다.")
     body.name = name
     job_id = uuid.uuid4().hex[:12]
