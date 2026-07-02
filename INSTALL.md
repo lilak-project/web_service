@@ -97,6 +97,31 @@ docker compose logs -f portal                                       # 로그 보
 **맨 처음 가입하는 계정이 자동으로 관리자(admin)** 가 되고, 가입 도메인/초대코드 제한도
 면제됩니다. 이후 계정은 관리자가 Account 탭에서 관리합니다.
 
+> 위 `docker compose up` 은 **가벼운 포탈 이미지만** 빌드합니다(elog/asset/scattering/
+> nptoy/g4toy/lilak_gui 는 managed 서비스로 포함). ROOT+Geant4+nptool 이 필요한
+> 무거운 `sci-runner` 는 아래처럼 **따로(opt-in)** 빌드합니다.
+
+## sci-runner (nptoy 시뮬 백엔드 — ROOT + Geant4 + nptool)
+
+nptoy 웹은 포탈 안 managed 서비스로 돌고, 실제 시뮬 계산은 별도 `sci-runner` 컨테이너가
+합니다. 무겁고(이미지 ~수 GB) **Geant4 + nptool 컴파일에 ~1시간** 걸리므로 opt-in 입니다.
+
+```sh
+# x86_64 리눅스 서버에서 (네이티브 → 정상 컴파일). 여유 디스크 ~20GB 권장.
+# nptool_cens(dev)는 public 이라 빌드 중 자동 clone (SSH 키 불필요, 인터넷만 필요).
+docker compose --profile sci up -d --build     # 처음 한 번은 ~1시간
+
+# 확인
+docker compose ps                              # portal + sci-runner 둘 다 Up
+docker compose exec sci-runner curl -s localhost:8100/health   # {"ok":true,...}
+```
+
+- 포탈과 sci-runner 는 내부 네트워크로 연결(`http://sci-runner:8100`), 결과는 공유
+  볼륨(`sci-data`)에 저장돼 nptoy 가 읽습니다. sci-runner 포트는 **외부에 공개되지 않음**.
+- ROOT 6.38 / Geant4 11.4 로 고정(`sci-runner/Dockerfile` 의 build arg 에서 변경 가능).
+- **arm 맥에서는 빌드 불가**(ROOT 베이스가 amd64 전용 → 에뮬레이션 시 컴파일러 segfault).
+  반드시 x86_64 호스트에서 빌드하세요.
+
 ---
 
 ## 2. 업데이트 (코드 새 버전 반영)
