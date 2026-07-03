@@ -228,7 +228,7 @@ def _account_view(db: Session, u: models.User) -> dict:
         left = VERIFY_VALID_DAYS - days_ago
     return {
         "id": u.id, "username": u.username, "display_name": u.display_name, "email": u.email,
-        "role": u.role, "email_verified": u.email_verified,
+        "role": u.role, "is_active": u.is_active, "email_verified": u.email_verified,
         # elog-style profile (the portal account is a superset — these flow to elog via SSO)
         "phone": u.phone, "experiment_role": u.experiment_role,
         "participation_from": u.participation_from, "participation_to": u.participation_to,
@@ -382,6 +382,40 @@ def admin_approve_email(uid: int, body: ApproveEmailBody, _: models.User = Depen
     return _account_view(db, u)
 
 
+class RoleBody(BaseModel):
+    role: str
+
+
+@router.post("/api/admin/users/{uid}/role")
+def admin_set_role(uid: int, body: RoleBody, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    u = _get_user(db, uid)
+    role = body.role if body.role in ("user", "manager") else None
+    if role is None:
+        raise HTTPException(400, "role은 user 또는 manager 여야 합니다.")
+    if u.role == "manager" and role != "manager" and db.query(models.User).filter(models.User.role == "manager").count() <= 1:
+        raise HTTPException(400, "마지막 관리자는 강등할 수 없습니다.")
+    u.role = role
+    if role == "manager":
+        u.profile_color = config.MANAGER_COLOR      # managers always get the reserved colour
+    db.commit()
+    return _account_view(db, u)
+
+
+class ActiveBody(BaseModel):
+    active: bool
+
+
+@router.post("/api/admin/users/{uid}/active")
+def admin_set_active(uid: int, body: ActiveBody, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    u = _get_user(db, uid)
+    if not body.active and u.role == "manager" and db.query(models.User).filter(
+            models.User.role == "manager", models.User.is_active == True).count() <= 1:  # noqa: E712
+        raise HTTPException(400, "마지막 활성 관리자는 비활성화할 수 없습니다.")
+    u.is_active = bool(body.active)
+    db.commit()
+    return _account_view(db, u)
+
+
 @router.delete("/api/admin/users/{uid}")
 def admin_delete_user(uid: int, admin: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
     u = _get_user(db, uid)
@@ -460,6 +494,22 @@ def update_group(gid: int, body: GroupMetaBody, _: models.User = Depends(require
         g.color = c or None
     db.commit(); db.refresh(g)
     return _group_view(db, g)
+
+
+@router.post("/api/admin/groups/{gid}/deactivate")
+def deactivate_group(gid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    """Deactivate every (non-manager) member of a group at once."""
+    if not db.query(models.Group).filter(models.Group.id == gid).first():
+        raise HTTPException(404, "그룹을 찾을 수 없습니다.")
+    uids = [m.user_id for m in db.query(models.GroupMembership).filter(models.GroupMembership.group_id == gid).all()]
+    n = 0
+    for u in db.query(models.User).filter(models.User.id.in_(uids)).all():
+        if u.role == "manager" or not u.is_active:
+            continue                                  # never deactivate admins via a group action
+        u.is_active = False
+        n += 1
+    db.commit()
+    return {"deactivated": n}
 
 
 @router.delete("/api/admin/groups/{gid}")

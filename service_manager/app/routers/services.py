@@ -247,6 +247,7 @@ def admin_list_users(
         if u.email_verified_at:
             left = models.VERIFY_VALID_DAYS - (_dt.utcnow() - u.email_verified_at).days
         out.append({"id": u.id, "username": u.username, "email": u.email, "role": u.role,
+                    "is_active": u.is_active,
                     "display_name": u.display_name, "pending_email": u.pending_email,
                     "verification_current": permissions.verification_current(u),
                     "verify_days_left": left, "groups": memb.get(u.id, []),

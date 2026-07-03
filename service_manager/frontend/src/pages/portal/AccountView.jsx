@@ -71,6 +71,9 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const adminVerify = (u) => run(launcher.post(`/admin/users/${u.id}/verify`), () => L(`${u.username} 인증됨`, `${u.username} verified`))
   const adminApprove = (u, approve) => run(launcher.post(`/admin/users/${u.id}/approve-email`, { approve }), () => approve ? L('이메일 변경 승인됨', 'email approved') : L('거절됨', 'rejected'))
   const adminDelete = (u) => { if (window.confirm(L(`${u.username} 계정을 삭제할까요?`, `Delete ${u.username}?`))) run(launcher.delete(`/admin/users/${u.id}`), () => L('삭제됨', 'deleted')) }
+  const adminRole = (u) => { const to = u.role === 'manager' ? 'user' : 'manager'; run(launcher.post(`/admin/users/${u.id}/role`, { role: to }), () => L(`${u.username} → ${to}`, `${u.username} → ${to}`)) }
+  const adminActive = (u) => run(launcher.post(`/admin/users/${u.id}/active`, { active: u.is_active === false }), () => L(u.is_active === false ? '활성화됨' : '비활성화됨', u.is_active === false ? 'activated' : 'deactivated'))
+  const removeFromGroup = (u, g) => run(launcher.delete(`/admin/groups/${g.id}/members/${u.id}`), () => L(`${g.name}에서 제외됨`, `removed from ${g.name}`))
   const resolveReq = (rid, action) => run(launcher.post(`/admin/access-requests/${rid}`, { action }), () => action === 'approve' ? L('승인됨', 'approved') : L('거절됨', 'rejected'))
 
   if (!me) return <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-small,12px)' }}>{msg || '…'}</div>
@@ -173,30 +176,43 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
       {users.filter((u) => u.id !== me.id)
         .filter((u) => !groupFilter || (u.groups || []).some((g) => String(g.id) === String(groupFilter)))
         .map((u) => (
-        <div key={u.id} style={card}>
+        <div key={u.id} style={{ ...card, opacity: u.is_active === false ? 0.6 : 1 }}>
           <div style={{ ...rowS }}>
             <Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={22} />
             <b style={{ fontSize: 'var(--fs-small, 13px)' }}>{u.username}</b>
-            <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{u.email}</span>
             <span style={badge}>{u.role}</span>
-            {u.verification_current === false
-              ? <span style={{ ...badge, background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
-              : (u.verify_days_left != null && <span style={badge}>{L(`${u.verify_days_left}일 남음`, `${u.verify_days_left}d left`)}</span>)}
-            {(u.groups || []).map((g) => <span key={g.id} style={{ ...badge, display: 'inline-flex', alignItems: 'center', gap: 4 }}><GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}</span>)}
-            {u.pending_email && <span style={badge}>{L('변경대기', 'pending')}: {u.pending_email}</span>}
+            {u.is_active === false && <span style={{ ...badge, background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{L('비활성', 'inactive')}</span>}
             <div style={{ flex: 1 }} />
             <Button size="sm" variant={openUser === u.id ? 'secondary' : 'ghost'} onClick={() => setOpenUser(openUser === u.id ? null : u.id)}>{openUser === u.id ? L('닫기', 'Close') : L('관리', 'Manage')}</Button>
           </div>
           {openUser === u.id && (
-            <div style={{ ...rowS, marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
-              <Button size="sm" variant="ghost" onClick={() => adminSetPw(u)}>{L('비번 재설정', 'Set password')}</Button>
-              <Button size="sm" variant="ghost" onClick={() => adminVerify(u)}>{L('인증 처리', 'Verify')}</Button>
-              {u.pending_email && <>
-                <Button size="sm" variant="primary" onClick={() => adminApprove(u, true)}>{L('이메일 승인', 'Approve email')}</Button>
-                <Button size="sm" variant="ghost" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
-              </>}
-              <div style={{ flex: 1 }} />
-              <Button size="sm" variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('삭제', 'Delete')}</Button>
+            <div style={{ marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 'var(--fs-small, 12px)' }}>
+              {/* info — one per line */}
+              <div style={{ color: 'var(--text-muted)' }}>{u.email}</div>
+              <div>{L('역할', 'role')}: <b>{u.role}</b>{u.is_active === false ? ' · ' + L('비활성', 'inactive') : ''}</div>
+              <div>{u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify needed')}</span>
+                : (u.verify_days_left != null ? L(`인증 ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}</div>
+              {u.pending_email && <div>{L('이메일 변경 대기', 'pending email')}: {u.pending_email}</div>}
+              {/* groups — one per line with remove */}
+              {(u.groups || []).map((g) => (
+                <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <GroupMark icon={g.icon} color={g.color} size={14} /> {g.name}
+                  <Button size="sm" variant="ghost" onClick={() => removeFromGroup(u, g)}>{L('그룹에서 제외', 'Remove from group')}</Button>
+                </div>
+              ))}
+              {/* actions */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                <Button size="sm" variant="ghost" onClick={() => adminSetPw(u)}>{L('비번 재설정', 'Set password')}</Button>
+                <Button size="sm" variant="ghost" onClick={() => adminVerify(u)}>{L('인증 처리', 'Verify')}</Button>
+                <Button size="sm" variant="ghost" onClick={() => adminRole(u)}>{u.role === 'manager' ? L('매니저 해제', 'Revoke manager') : L('매니저 부여', 'Grant manager')}</Button>
+                {u.pending_email && <>
+                  <Button size="sm" variant="primary" onClick={() => adminApprove(u, true)}>{L('이메일 승인', 'Approve email')}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
+                </>}
+                <div style={{ flex: 1 }} />
+                <Button size="sm" variant="ghost" onClick={() => adminActive(u)}>{u.is_active === false ? L('활성화', 'Activate') : L('비활성화', 'Deactivate')}</Button>
+                <Button size="sm" variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('삭제', 'Delete')}</Button>
+              </div>
             </div>
           )}
         </div>

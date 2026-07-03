@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon, ColorPicker, AVATAR_COLORS } from 'lilak-ui'
+import { Button, Icon, ColorPicker, AVATAR_COLORS, Avatar } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_CHOICES } from './IconPick'
@@ -63,6 +63,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
 
   const createGroup = () => newName.trim() && run(launcher.post('/admin/groups', { name: newName.trim(), icon: rnd(ICON_CHOICES), color: rnd(AVATAR_COLORS) }), () => { setNewName(''); return L('그룹 생성됨', 'group created') })
   const delGroup = (g) => { if (window.confirm(L(`그룹 '${g.name}' 삭제?`, `Delete group '${g.name}'?`))) run(launcher.delete(`/admin/groups/${g.id}`), () => L('삭제됨', 'deleted')) }
+  const deactivateGroup = (g) => { if (window.confirm(L(`'${g.name}'의 모든 멤버(관리자 제외)를 비활성화할까요?`, `Deactivate all members (except admins) of '${g.name}'?`))) run(launcher.post(`/admin/groups/${g.id}/deactivate`), (r) => L(`${r.data.deactivated}명 비활성화됨`, `${r.data.deactivated} deactivated`)) }
   const addMember = (gid, uid) => uid && run(launcher.post(`/admin/groups/${gid}/members`, { user_id: Number(uid) }), () => { setAdd((s) => ({ ...s, uid: '' })); return L('멤버 추가됨', 'member added') })
   const removeMember = (gid, uid) => run(launcher.delete(`/admin/groups/${gid}/members/${uid}`), () => L('멤버 제거됨', 'member removed'))
   const grantPerm = (gid) => add.svc && run(launcher.post('/admin/group-permissions', { group_id: gid, service: add.svc, project: add.proj }), () => { setAdd((s) => ({ ...s, svc: '', proj: '' })); return L('권한 부여됨', 'granted') })
@@ -110,12 +111,17 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                   {/* members */}
                   <div>
                     <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', marginBottom: 4 }}>{L('멤버', 'Members')}</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
                       {membersOf(g.id).length === 0 ? <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>—</span>
                         : membersOf(g.id).map((u) => (
-                          <span key={u.id} style={chip}>{u.username}
-                            <button onClick={() => removeMember(g.id, u.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'inline-flex' }}>×</button>
-                          </span>))}
+                          <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-small, 12px)', opacity: u.is_active === false ? 0.55 : 1 }}>
+                            <Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={18} />
+                            <span>{u.username}</span>
+                            <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{u.email}</span>
+                            {u.is_active === false && <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--danger-text)' }}>{L('비활성', 'inactive')}</span>}
+                            <div style={{ flex: 1 }} />
+                            <Button size="sm" variant="ghost" onClick={() => removeMember(g.id, u.id)}>{L('제외', 'Remove')}</Button>
+                          </div>))}
                     </div>
                     <input value={mSearch} onChange={(e) => setMSearch(e.target.value)} placeholder={L('계정 검색해서 추가…', 'search accounts to add…')} style={{ ...input, maxWidth: 220 }} />
                     {mSearch.trim() && (() => {
@@ -154,8 +160,9 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                       <Button size="sm" variant="primary" disabled={!add.svc} onClick={() => grantPerm(g.id)}>{L('권한 부여', 'Grant')}</Button>
                     </div>
                   </div>
-                  {/* delete group (moved into manage) */}
-                  <div style={{ display: 'flex', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+                  {/* deactivate all members / delete group (in manage) */}
+                  <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
+                    <Button size="sm" variant="ghost" onClick={() => deactivateGroup(g)}>{L('멤버 전체 비활성화', 'Deactivate all members')}</Button>
                     <div style={{ flex: 1 }} />
                     <Button size="sm" variant="dangerSoft" onClick={() => delGroup(g)}><Icon name="trash" size={13} /> {L('그룹 삭제', 'Delete group')}</Button>
                   </div>
