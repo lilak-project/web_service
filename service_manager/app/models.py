@@ -104,6 +104,8 @@ class Group(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(64), unique=True, nullable=False, index=True)
     description = Column(String(256), nullable=True)
+    icon = Column(String(64), nullable=True)     # square-mark icon (kit ICONS name)
+    color = Column(String(16), nullable=True)    # group colour (hex)
     created_at = Column(DateTime, default=_now)
 
 

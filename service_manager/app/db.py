@@ -46,6 +46,11 @@ def _migrate() -> None:
         add_missing("portal_access_requests", {
             "project": "ALTER TABLE portal_access_requests ADD COLUMN project VARCHAR(128) NOT NULL DEFAULT ''",
         })
+    if "portal_groups" in names:
+        add_missing("portal_groups", {
+            "icon": "ALTER TABLE portal_groups ADD COLUMN icon VARCHAR(64)",
+            "color": "ALTER TABLE portal_groups ADD COLUMN color VARCHAR(16)",
+        })
     if "portal_invite_codes" in names:
         add_missing("portal_invite_codes", {
             "kind": "ALTER TABLE portal_invite_codes ADD COLUMN kind VARCHAR(16) NOT NULL DEFAULT 'project'",

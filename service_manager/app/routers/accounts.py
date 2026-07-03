@@ -196,7 +196,7 @@ def _user_groups(db: Session, user_id: int) -> list[dict]:
         models.GroupMembership.user_id == user_id).all()]
     if not gids:
         return []
-    return [{"id": g.id, "name": g.name} for g in
+    return [{"id": g.id, "name": g.name, "icon": g.icon, "color": g.color} for g in
             db.query(models.Group).filter(models.Group.id.in_(gids)).order_by(models.Group.name).all()]
 
 
@@ -383,7 +383,8 @@ def _group_view(db: Session, g: models.Group) -> dict:
     members = db.query(models.GroupMembership).filter(models.GroupMembership.group_id == g.id).count()
     perms = [{"service": p.service_name, "project": p.project or None}
              for p in db.query(models.GroupPermission).filter(models.GroupPermission.group_id == g.id).all()]
-    return {"id": g.id, "name": g.name, "description": g.description, "members": members, "permissions": perms}
+    return {"id": g.id, "name": g.name, "description": g.description,
+            "icon": g.icon, "color": g.color, "members": members, "permissions": perms}
 
 
 @router.get("/api/admin/groups")
@@ -394,6 +395,8 @@ def list_groups(_: models.User = Depends(require_portal_admin), db: Session = De
 class GroupBody(BaseModel):
     name: str
     description: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
 
 
 @router.post("/api/admin/groups", status_code=201)
@@ -403,8 +406,43 @@ def create_group(body: GroupBody, _: models.User = Depends(require_portal_admin)
         raise HTTPException(400, "그룹 이름을 입력하세요.")
     if db.query(models.Group).filter(models.Group.name == name).first():
         raise HTTPException(409, "이미 존재하는 그룹입니다.")
-    g = models.Group(name=name, description=(body.description or None))
+    icon = re.sub(r"[^a-z0-9_-]", "", (body.icon or "").strip().lower()) or None
+    color = (body.color or "").strip() or None
+    g = models.Group(name=name, description=(body.description or None), icon=icon, color=color)
     db.add(g); db.commit(); db.refresh(g)
+    return _group_view(db, g)
+
+
+class GroupMetaBody(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+
+
+@router.put("/api/admin/groups/{gid}")
+def update_group(gid: int, body: GroupMetaBody, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    """Edit a group's name / description / icon / colour (the square group mark)."""
+    g = db.query(models.Group).filter(models.Group.id == gid).first()
+    if not g:
+        raise HTTPException(404, "그룹을 찾을 수 없습니다.")
+    data = body.model_dump(exclude_unset=True)
+    if "name" in data and data["name"] is not None:
+        nm = data["name"].strip()
+        if nm and db.query(models.Group).filter(models.Group.name == nm, models.Group.id != gid).first():
+            raise HTTPException(409, "이미 존재하는 그룹입니다.")
+        if nm:
+            g.name = nm
+    if "description" in data:
+        g.description = (data["description"] or None)
+    if "icon" in data:
+        g.icon = re.sub(r"[^a-z0-9_-]", "", (data["icon"] or "").strip().lower()) or None
+    if "color" in data:
+        c = (data["color"] or "").strip()
+        if c and not re.match(r"^#[0-9a-fA-F]{6}$", c):
+            raise HTTPException(400, "color는 #rrggbb 형식이어야 합니다.")
+        g.color = c or None
+    db.commit(); db.refresh(g)
     return _group_view(db, g)
 
 

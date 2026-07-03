@@ -5,6 +5,7 @@ import { useLang } from '../../context/LangContext'
 import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
 import ProfileEditor from './ProfileEditor'
+import GroupMark from './GroupMark'
 
 /**
  * AccountView — account settings. A LEFT vertical menu switches between sub-tabs:
@@ -93,10 +94,10 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     return (
       <button key={key} type="button" onClick={() => setTab(key)} style={{
         display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
-        padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 'var(--fs-small, 12px)',
-        border: 'none', borderLeft: on ? '3px solid var(--btn-primary-bg)' : '3px solid transparent',
-        background: on ? 'var(--surface-2)' : 'transparent',
+        padding: '7px 4px', cursor: 'pointer', fontSize: 'var(--fs-small, 12px)',
+        border: 'none', background: 'transparent',
         color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: on ? 600 : 400,
+        textDecoration: on ? 'underline' : 'none', textUnderlineOffset: 4, textDecorationThickness: 2,
       }}><Icon name={icon} size={15} /> {label}</button>
     )
   }
@@ -109,7 +110,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
         <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{me.email}</span>
         <span style={badge}>{me.role}</span>
         {verifyChip}
-        {(me.groups || []).map((g) => <span key={g.id} style={grpBadge}>{g.name}</span>)}
+        {(me.groups || []).map((g) => <span key={g.id} style={{ ...badge, display: 'inline-flex', alignItems: 'center', gap: 4 }}><GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}</span>)}
         {me.pending_email && <span style={badge}>{L('변경대기', 'pending')}: {me.pending_email}</span>}
       </div>
 
@@ -180,7 +181,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
             {u.verification_current === false
               ? <span style={{ ...badge, background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
               : (u.verify_days_left != null && <span style={badge}>{L(`${u.verify_days_left}일 남음`, `${u.verify_days_left}d left`)}</span>)}
-            {(u.groups || []).map((g) => <span key={g.id} style={grpBadge}>{g.name}</span>)}
+            {(u.groups || []).map((g) => <span key={g.id} style={{ ...badge, display: 'inline-flex', alignItems: 'center', gap: 4 }}><GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}</span>)}
             {u.pending_email && <span style={badge}>{L('변경대기', 'pending')}: {u.pending_email}</span>}
           </div>
           <div style={rowS}>

@@ -1,7 +1,33 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button, Icon, ColorPicker, AVATAR_COLORS } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import IconPick, { ICON_CHOICES } from './IconPick'
+import GroupMark from './GroupMark'
+
+const rnd = (a) => a[Math.floor(Math.random() * a.length)]
+
+// Per-group icon + colour editor (the square group mark). Staged; applied on Save.
+function GroupProfile({ group, onSaved }) {
+  const [icon, setIcon] = useState(group.icon || 'users')
+  const [color, setColor] = useState(group.color || '#64748b')
+  const [msg, setMsg] = useState('')
+  const dirty = icon !== (group.icon || 'users') || color !== (group.color || '#64748b')
+  const save = async () => {
+    try { await launcher.put(`/admin/groups/${group.id}`, { icon, color }); setMsg('✓'); onSaved?.() }
+    catch (e) { setMsg(e?.response?.data?.detail || '✕') }
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <GroupMark icon={icon} color={color} size={30} />
+      <IconPick value={icon} onChange={setIcon} color={color} />
+      <ColorPicker value={color} onChange={setColor} />
+      <Button size="sm" variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title="random"><Icon name="refresh" size={13} /></Button>
+      <Button size="sm" variant="primary" disabled={!dirty} onClick={save}>{'Save'}</Button>
+      {msg && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</span>}
+    </div>
+  )
+}
 
 /**
  * GroupsAdmin — admin panel (in the Account screen) to manage groups: create,
@@ -30,7 +56,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
   async function run(p, ok) { try { const r = await p; if (ok) setMsg(ok(r)); await load(); onChanged?.() } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) } }
 
-  const createGroup = () => newName.trim() && run(launcher.post('/admin/groups', { name: newName.trim() }), () => { setNewName(''); return L('그룹 생성됨', 'group created') })
+  const createGroup = () => newName.trim() && run(launcher.post('/admin/groups', { name: newName.trim(), icon: rnd(ICON_CHOICES), color: rnd(AVATAR_COLORS) }), () => { setNewName(''); return L('그룹 생성됨', 'group created') })
   const delGroup = (g) => { if (window.confirm(L(`그룹 '${g.name}' 삭제?`, `Delete group '${g.name}'?`))) run(launcher.delete(`/admin/groups/${g.id}`), () => L('삭제됨', 'deleted')) }
   const addMember = (gid, uid) => uid && run(launcher.post(`/admin/groups/${gid}/members`, { user_id: Number(uid) }), () => { setAdd((s) => ({ ...s, uid: '' })); return L('멤버 추가됨', 'member added') })
   const removeMember = (gid, uid) => run(launcher.delete(`/admin/groups/${gid}/members/${uid}`), () => L('멤버 제거됨', 'member removed'))
@@ -62,7 +88,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
           return (
             <div key={g.id} style={card}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icon name="user" size={14} />
+                <GroupMark icon={g.icon} color={g.color} size={22} />
                 <b style={{ fontSize: 'var(--fs-small, 13px)' }}>{g.name}</b>
                 <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{g.members} {L('명', 'members')} · {g.permissions.length} {L('권한', 'perms')}</span>
                 <div style={{ flex: 1 }} />
@@ -72,6 +98,11 @@ export default function GroupsAdmin({ users, services, onChanged }) {
 
               {isOpen && (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {/* group mark (icon + colour) */}
+                  <div>
+                    <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', marginBottom: 4 }}>{L('그룹 아이콘 · 색상', 'Group icon · colour')}</div>
+                    <GroupProfile group={g} onSaved={load} />
+                  </div>
                   {/* members */}
                   <div>
                     <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', marginBottom: 4 }}>{L('멤버', 'Members')}</div>
