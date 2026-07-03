@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Icon, ColorPicker } from 'lilak-ui'
+import { Button, Icon, ColorPicker, AVATAR_COLORS } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
-import IconPick, { DEFAULT_ICON } from './IconPick'
+import IconPick, { DEFAULT_ICON, ICON_CHOICES } from './IconPick'
+
+const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
 /**
  * NewServiceView — the in-portal "create an empty service" form (opened from the
@@ -111,6 +113,14 @@ export default function NewServiceView({ onCreated }) {
           <span style={lbl}>{t('newsvc_color')}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30 }}>
             <ColorPicker value={color} onChange={setColor} />
+          </div>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={lbl}>&nbsp;</span>
+          <div style={{ display: 'flex', alignItems: 'center', height: 30 }}>
+            <Button variant="secondary" disabled={!!job} onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }}>
+              <Icon name="refresh" size={13} /> {t('newsvc_random')}
+            </Button>
           </div>
         </label>
       </div>

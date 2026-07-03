@@ -249,7 +249,9 @@ def admin_list_users(
         out.append({"id": u.id, "username": u.username, "email": u.email, "role": u.role,
                     "display_name": u.display_name, "pending_email": u.pending_email,
                     "verification_current": permissions.verification_current(u),
-                    "verify_days_left": left, "groups": memb.get(u.id, [])})
+                    "verify_days_left": left, "groups": memb.get(u.id, []),
+                    "profile_shape": u.profile_shape,
+                    "profile_color": config.MANAGER_COLOR if u.role == "manager" else u.profile_color})
     return out
 
 

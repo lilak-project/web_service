@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { Button, Icon, ColorPicker } from 'lilak-ui'
+import { Button, Icon, ColorPicker, AVATAR_COLORS } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
-import IconPick, { ICON_WEIGHT } from './IconPick'
+import IconPick, { ICON_WEIGHT, ICON_CHOICES } from './IconPick'
+
+const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
 /**
  * ServiceManagePanel — management content shown INSIDE a service card when Home is
@@ -67,6 +69,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
         <input style={field} value={label} placeholder={svc.name} onChange={(e) => setLabel(e.target.value)} />
         <IconPick value={icon} onChange={setIcon} color={color} />
         <ColorPicker value={color} onChange={setColor} />
+        <Button variant="secondary" size="sm" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'Random')}><Icon name="refresh" size={13} /></Button>
         <Button variant="primary" size="sm" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
       </div>
 

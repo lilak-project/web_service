@@ -639,6 +639,7 @@ export default {
   newsvc_brand_ph:         '예: sample',
   newsvc_icon:             '아이콘',
   newsvc_color:            '색상',
+  newsvc_random:           '랜덤',
   newsvc_tabs:             '탭',
   newsvc_tab_label:        '탭 이름',
   newsvc_tab_add:          '탭 추가',

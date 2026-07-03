@@ -639,6 +639,7 @@ export default {
   newsvc_brand_ph:         'e.g. sample',
   newsvc_icon:             'Icon',
   newsvc_color:            'Colour',
+  newsvc_random:           'Random',
   newsvc_tabs:             'Tabs',
   newsvc_tab_label:        'Tab label',
   newsvc_tab_add:          'Add tab',
