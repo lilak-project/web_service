@@ -58,7 +58,8 @@ def _invite_view(db: Session, c: models.InviteCode) -> dict:
             "service": c.service_name or None, "project": c.project or None,
             "group_id": c.group_id, "group": _group_name(db, c.group_id),
             "expires_at": c.expires_at.isoformat(), "uses": c.uses,
-            "max_uses": c.max_uses, "status": _code_status(c)}
+            "max_uses": c.max_uses, "no_verify": bool(getattr(c, "no_verify", False)),
+            "status": _code_status(c)}
 
 
 class InviteCreate(BaseModel):
@@ -70,6 +71,7 @@ class InviteCreate(BaseModel):
     code: Optional[str] = None          # admin-chosen (≥8 chars); else generated
     max_uses: int = 0                   # 0 = unlimited; 1 = single-use; N = N
     count: int = 1                      # bulk: generate this many codes at once
+    no_verify: bool = False             # signup with this code skips email verification
 
 
 @router.post("/api/admin/invite-codes", status_code=201)
@@ -103,7 +105,7 @@ def create_invite(body: InviteCreate, admin: models.User = Depends(require_porta
         project=(body.project or "").strip() if kind == "project" else "",
         group_id=body.group_id if kind == "group" else None,
         expires_at=datetime.utcnow() + timedelta(days=days),
-        created_by=admin.id, max_uses=max_uses)
+        created_by=admin.id, max_uses=max_uses, no_verify=bool(body.no_verify))
 
     made = []
     for _ in range(count):
@@ -145,6 +147,14 @@ def extend_invite(cid: int, body: ExtendBody, _: models.User = Depends(require_p
     return _invite_view(db, c)
 
 
+@router.post("/api/admin/invite-codes/prune-expired")
+def prune_expired_invites(_: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    """Bulk-delete every EXPIRED code (past its expiry). Revoked/used ones are kept."""
+    n = db.query(models.InviteCode).filter(models.InviteCode.expires_at < datetime.utcnow()).delete()
+    db.commit()
+    return {"deleted": n}
+
+
 @router.delete("/api/admin/invite-codes/{cid}")
 def revoke_invite(cid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
     db.query(models.InviteCode).filter(models.InviteCode.id == cid).delete()
@@ -176,6 +186,12 @@ def redeem_code(db: Session, user_id: int, code: str) -> dict:
 def code_is_valid(db: Session, code: str) -> bool:
     c = db.query(models.InviteCode).filter(models.InviteCode.code == (code or "").strip().upper()).first()
     return bool(c and _code_status(c) == "active")
+
+
+def code_no_verify(db: Session, code: str) -> bool:
+    """True if an ACTIVE code is flagged to skip email verification on signup."""
+    c = db.query(models.InviteCode).filter(models.InviteCode.code == (code or "").strip().upper()).first()
+    return bool(c and _code_status(c) == "active" and getattr(c, "no_verify", False))
 
 
 class RedeemBody(BaseModel):

@@ -18,7 +18,7 @@ export default function InvitesAdmin({ services, onChanged }) {
   const [codes, setCodes] = useState([])
   const [groups, setGroups] = useState([])
   const [projCache, setProjCache] = useState({})
-  const [f, setF] = useState({ kind: 'project', service: '', project: '', group_id: '', days: 7, code: '', max_uses: 0, count: 1 })
+  const [f, setF] = useState({ kind: 'project', service: '', project: '', group_id: '', days: 7, code: '', max_uses: 0, count: 1, no_verify: false })
   const [msg, setMsg] = useState('')
   const setF1 = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
@@ -42,7 +42,7 @@ export default function InvitesAdmin({ services, onChanged }) {
   function create() {
     const count = Math.max(1, Math.min(100, Number(f.count) || 1))
     const body = { kind: f.kind, days: Number(f.days) || 7, code: f.code.trim() || undefined,
-      max_uses: Math.max(0, Number(f.max_uses) || 0), count }
+      max_uses: Math.max(0, Number(f.max_uses) || 0), count, no_verify: !!f.no_verify }
     if (f.kind === 'project') { body.service = f.service; body.project = f.project }
     else body.group_id = Number(f.group_id)
     if (f.kind === 'project' ? !f.service : !f.group_id) { setMsg(L('대상을 선택하세요.', 'pick a target')); return }
@@ -54,6 +54,7 @@ export default function InvitesAdmin({ services, onChanged }) {
     })
   }
   const extend = (c) => { const d = window.prompt(L('며칠 연장? (1~365)', 'extend by days (1–365)'), '7'); if (d) run(launcher.put(`/admin/invite-codes/${c.id}`, { days: Number(d) }), () => L('기간 연장됨', 'extended')) }
+  const pruneExpired = () => run(launcher.post('/admin/invite-codes/prune-expired'), (r) => L(`만료 코드 ${r.data.deleted}개 삭제됨`, `${r.data.deleted} expired codes deleted`))
   const del = (c) => { if (window.confirm(L(`코드 ${c.code} 삭제?`, `Delete code ${c.code}?`))) run(launcher.delete(`/admin/invite-codes/${c.id}`), () => L('삭제됨', 'deleted')) }
   const copy = (code) => { try { navigator.clipboard.writeText(code) } catch { /* ignore */ } setMsg(L(`복사됨: ${code}`, `copied: ${code}`)) }
   const fmt = (iso) => { try { return new Date(iso).toLocaleDateString() } catch { return iso } }
@@ -100,6 +101,10 @@ export default function InvitesAdmin({ services, onChanged }) {
             title={L('체크하면 1회만 사용 가능', 'redeemable once')}>
             <input type="checkbox" checked={Number(f.max_uses) === 1} onChange={(e) => setF((s) => ({ ...s, max_uses: e.target.checked ? 1 : 0 }))} /> {L('일회용', 'Single-use')}
           </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+            title={L('이 코드로 가입하면 이메일 인증 없이 승인됨', 'signup with this code is approved without email verification')}>
+            <input type="checkbox" checked={!!f.no_verify} onChange={(e) => setF((s) => ({ ...s, no_verify: e.target.checked }))} /> {L('이메일 인증 생략', 'Skip email verify')}
+          </label>
           <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('사용 횟수', 'max uses')}</span>
           <input type="number" min={0} max={100000} value={f.max_uses} onChange={setF1('max_uses')} style={{ ...input, width: 64 }} title={L('0 = 무제한', '0 = unlimited')} />
           <div style={{ flex: 1 }} />
@@ -109,6 +114,15 @@ export default function InvitesAdmin({ services, onChanged }) {
         </div>
       </div>
 
+      {/* list header + bulk actions */}
+      {codes.some((c) => c.status === 'expired') && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+          <Button size="sm" variant="dangerSoft" onClick={pruneExpired}>
+            <Icon name="trash" size={13} /> {L('만료 코드 일괄 삭제', 'Delete expired')}
+          </Button>
+        </div>
+      )}
+
       {/* list */}
       {codes.length === 0 ? <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('코드 없음', 'no codes')}</div>
         : codes.map((c) => (
@@ -117,6 +131,7 @@ export default function InvitesAdmin({ services, onChanged }) {
             <span style={{ fontSize: 'var(--fs-micro, 10px)', padding: '1px 6px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
               {c.kind === 'group' ? `${L('그룹', 'group')}: ${c.group}` : `${c.service}${c.project ? '/' + c.project : ''}`}
             </span>
+            {c.no_verify && <span style={{ fontSize: 'var(--fs-micro, 10px)', padding: '1px 6px', borderRadius: 999, background: 'var(--info-bg, var(--surface-2))', color: 'var(--info-text, var(--text-secondary))' }}>{L('인증생략', 'no-verify')}</span>}
             <span style={{ fontSize: 'var(--fs-micro, 10px)', color: c.status === 'active' ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }}>
               {c.status} · {c.uses}/{c.max_uses ? c.max_uses : '∞'}{L('회', 'x')}{c.max_uses === 1 ? L(' (일회용)', ' (single)') : ''} · ~{fmt(c.expires_at)}
             </span>

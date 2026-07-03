@@ -30,6 +30,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const [tab, setTab] = useState('me')                 // 'me' | 'accounts' | 'groups' | 'invites'
   const [msg, setMsg] = useState('')
   const [f, setF] = useState({ code: '', cur: '', npw: '', email: '' })
+  const [openUser, setOpenUser] = useState(null)       // accounts: expanded user id
   const setField = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   async function load() {
@@ -173,7 +174,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
         .filter((u) => !groupFilter || (u.groups || []).some((g) => String(g.id) === String(groupFilter)))
         .map((u) => (
         <div key={u.id} style={card}>
-          <div style={{ ...rowS, marginBottom: 8 }}>
+          <div style={{ ...rowS }}>
             <Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={22} />
             <b style={{ fontSize: 'var(--fs-small, 13px)' }}>{u.username}</b>
             <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{u.email}</span>
@@ -183,17 +184,21 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
               : (u.verify_days_left != null && <span style={badge}>{L(`${u.verify_days_left}일 남음`, `${u.verify_days_left}d left`)}</span>)}
             {(u.groups || []).map((g) => <span key={g.id} style={{ ...badge, display: 'inline-flex', alignItems: 'center', gap: 4 }}><GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}</span>)}
             {u.pending_email && <span style={badge}>{L('변경대기', 'pending')}: {u.pending_email}</span>}
-          </div>
-          <div style={rowS}>
-            <Button size="sm" variant="ghost" onClick={() => adminSetPw(u)}>{L('비번 재설정', 'Set password')}</Button>
-            <Button size="sm" variant="ghost" onClick={() => adminVerify(u)}>{L('인증 처리', 'Verify')}</Button>
-            {u.pending_email && <>
-              <Button size="sm" variant="primary" onClick={() => adminApprove(u, true)}>{L('이메일 승인', 'Approve email')}</Button>
-              <Button size="sm" variant="ghost" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
-            </>}
             <div style={{ flex: 1 }} />
-            <Button size="sm" variant="dangerSoft" icon title={L('삭제', 'delete')} onClick={() => adminDelete(u)}><Icon name="trash" size={14} /></Button>
+            <Button size="sm" variant={openUser === u.id ? 'secondary' : 'ghost'} onClick={() => setOpenUser(openUser === u.id ? null : u.id)}>{openUser === u.id ? L('닫기', 'Close') : L('관리', 'Manage')}</Button>
           </div>
+          {openUser === u.id && (
+            <div style={{ ...rowS, marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+              <Button size="sm" variant="ghost" onClick={() => adminSetPw(u)}>{L('비번 재설정', 'Set password')}</Button>
+              <Button size="sm" variant="ghost" onClick={() => adminVerify(u)}>{L('인증 처리', 'Verify')}</Button>
+              {u.pending_email && <>
+                <Button size="sm" variant="primary" onClick={() => adminApprove(u, true)}>{L('이메일 승인', 'Approve email')}</Button>
+                <Button size="sm" variant="ghost" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
+              </>}
+              <div style={{ flex: 1 }} />
+              <Button size="sm" variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('삭제', 'Delete')}</Button>
+            </div>
+          )}
         </div>
       ))}
       {users.filter((u) => u.id !== me.id).length === 0 && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('다른 계정 없음', 'no other accounts')}</div>}

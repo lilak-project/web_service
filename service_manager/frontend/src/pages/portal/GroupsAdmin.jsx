@@ -7,23 +7,27 @@ import GroupMark from './GroupMark'
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
-// Per-group icon + colour editor (the square group mark). Staged; applied on Save.
+// Per-group name + icon + colour editor. Staged; applied on Save.
 function GroupProfile({ group, onSaved }) {
+  const { lang } = useLang()
+  const L = (ko, en) => (lang === 'ko' ? ko : en)
+  const [name, setName] = useState(group.name)
   const [icon, setIcon] = useState(group.icon || 'users')
   const [color, setColor] = useState(group.color || '#64748b')
   const [msg, setMsg] = useState('')
-  const dirty = icon !== (group.icon || 'users') || color !== (group.color || '#64748b')
+  const dirty = name.trim() !== group.name || icon !== (group.icon || 'users') || color !== (group.color || '#64748b')
   const save = async () => {
-    try { await launcher.put(`/admin/groups/${group.id}`, { icon, color }); setMsg('✓'); onSaved?.() }
+    try { await launcher.put(`/admin/groups/${group.id}`, { name: name.trim() || undefined, icon, color }); setMsg('✓'); onSaved?.() }
     catch (e) { setMsg(e?.response?.data?.detail || '✕') }
   }
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <GroupMark icon={icon} color={color} size={30} />
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={L('그룹 이름', 'group name')} style={{ height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px', minWidth: 120, background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }} />
       <IconPick value={icon} onChange={setIcon} color={color} />
       <ColorPicker value={color} onChange={setColor} />
-      <Button size="sm" variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title="random"><Icon name="refresh" size={13} /></Button>
-      <Button size="sm" variant="primary" disabled={!dirty} onClick={save}>{'Save'}</Button>
+      <Button size="sm" variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'random')}><Icon name="refresh" size={13} /></Button>
+      <Button size="sm" variant="primary" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
       {msg && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</span>}
     </div>
   )
@@ -47,6 +51,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
   const [newName, setNewName] = useState('')
   const [projCache, setProjCache] = useState({})    // svc -> [projects]
   const [add, setAdd] = useState({ uid: '', svc: '', proj: '' })
+  const [mSearch, setMSearch] = useState('')          // member add: search accounts by text
   const [msg, setMsg] = useState('')
 
   async function load() {
@@ -93,7 +98,6 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                 <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{g.members} {L('명', 'members')} · {g.permissions.length} {L('권한', 'perms')}</span>
                 <div style={{ flex: 1 }} />
                 <Button size="sm" variant={isOpen ? 'secondary' : 'ghost'} onClick={() => setOpen(isOpen ? null : g.id)}>{isOpen ? L('닫기', 'Close') : L('관리', 'Manage')}</Button>
-                <Button size="sm" variant="dangerSoft" icon title={L('삭제', 'delete')} onClick={() => delGroup(g)}><Icon name="trash" size={13} /></Button>
               </div>
 
               {isOpen && (
@@ -113,13 +117,20 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                             <button onClick={() => removeMember(g.id, u.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'inline-flex' }}>×</button>
                           </span>))}
                     </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <select value={add.uid} onChange={(e) => setAdd((s) => ({ ...s, uid: e.target.value }))} style={{ ...input, maxWidth: 200 }}>
-                        <option value="">{L('계정 선택…', 'select account…')}</option>
-                        {nonMembers(g.id).map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
-                      </select>
-                      <Button size="sm" variant="ghost" disabled={!add.uid} onClick={() => addMember(g.id, add.uid)}>{L('멤버 추가', 'Add member')}</Button>
-                    </div>
+                    <input value={mSearch} onChange={(e) => setMSearch(e.target.value)} placeholder={L('계정 검색해서 추가…', 'search accounts to add…')} style={{ ...input, maxWidth: 220 }} />
+                    {mSearch.trim() && (() => {
+                      const q = mSearch.trim().toLowerCase()
+                      const hits = nonMembers(g.id).filter((u) => u.username.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)).slice(0, 12)
+                      return (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                          {hits.length === 0 ? <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{L('일치하는 계정 없음', 'no match')}</span>
+                            : hits.map((u) => (
+                              <Button key={u.id} size="sm" variant="ghost" onClick={() => { addMember(g.id, u.id); setMSearch('') }}>
+                                <Icon name="plus" size={12} /> {u.username}
+                              </Button>))}
+                        </div>
+                      )
+                    })()}
                   </div>
                   {/* permissions */}
                   <div>
@@ -142,6 +153,11 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                       </select>
                       <Button size="sm" variant="primary" disabled={!add.svc} onClick={() => grantPerm(g.id)}>{L('권한 부여', 'Grant')}</Button>
                     </div>
+                  </div>
+                  {/* delete group (moved into manage) */}
+                  <div style={{ display: 'flex', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+                    <div style={{ flex: 1 }} />
+                    <Button size="sm" variant="dangerSoft" onClick={() => delGroup(g)}><Icon name="trash" size={13} /> {L('그룹 삭제', 'Delete group')}</Button>
                   </div>
                 </div>
               )}

@@ -56,6 +56,7 @@ def _migrate() -> None:
             "kind": "ALTER TABLE portal_invite_codes ADD COLUMN kind VARCHAR(16) NOT NULL DEFAULT 'project'",
             "group_id": "ALTER TABLE portal_invite_codes ADD COLUMN group_id INTEGER",
             "max_uses": "ALTER TABLE portal_invite_codes ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 0",
+            "no_verify": "ALTER TABLE portal_invite_codes ADD COLUMN no_verify BOOLEAN NOT NULL DEFAULT 0",
         })
     # Backfill: existing verified accounts get a verified_at so they aren't
     # instantly treated as "expired" by the annual check.

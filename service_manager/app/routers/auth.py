@@ -71,7 +71,9 @@ def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=403,
                 detail="허용된 이메일 도메인이 아닙니다. 가입하려면 유효한 초대 코드가 필요합니다.")
     token = secrets.token_urlsafe(32)
-    verified = not config.EMAIL_VERIFY_REQUIRED
+    # An invite code flagged `no_verify` approves the signup without email verification.
+    from .accounts import code_no_verify
+    verified = (not config.EMAIL_VERIFY_REQUIRED) or bool(code and code_no_verify(db, code))
     from datetime import datetime as _dt
     user = models.User(
         username=payload.username,

@@ -154,3 +154,5 @@ class InviteCode(Base):
     # Redemption cap. 0 = unlimited; 1 = single-use; N = N redemptions, then "used".
     max_uses = Column(Integer, nullable=False, default=0)
     active = Column(Boolean, nullable=False, default=True)
+    # Signing up with this code skips email verification (auto-approved).
+    no_verify = Column(Boolean, nullable=False, default=False)
