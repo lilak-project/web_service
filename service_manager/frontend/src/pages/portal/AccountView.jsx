@@ -4,6 +4,7 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
+import ProfileEditor from './ProfileEditor'
 
 /**
  * AccountView — account settings, visible to every signed-in account (replaces
@@ -137,6 +138,12 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
           <div style={{ flex: 1 }} />
           <Button size="sm" variant="dangerSoft" onClick={deleteSelf}>{L('계정 삭제', 'Delete account')}</Button>
         </div>
+      </div>
+
+      {/* ── profile (elog-style; flows to elog via SSO) ── */}
+      <div style={sectionHdr}>{L('프로필 (elog 공용)', 'Profile (shared with elog)')}</div>
+      <div style={card}>
+        <ProfileEditor me={me} onSaved={load} />
       </div>
 
       {/* ── admin: pending access requests ── */}

@@ -208,6 +208,10 @@ def _account_view(db: Session, u: models.User) -> dict:
     return {
         "id": u.id, "username": u.username, "display_name": u.display_name, "email": u.email,
         "role": u.role, "email_verified": u.email_verified,
+        # elog-style profile (the portal account is a superset — these flow to elog via SSO)
+        "phone": u.phone, "experiment_role": u.experiment_role,
+        "participation_from": u.participation_from, "participation_to": u.participation_to,
+        "profile_color": u.profile_color, "profile_shape": u.profile_shape,
         "verification_current": permissions.verification_current(u),
         "verified_at": u.email_verified_at.isoformat() if u.email_verified_at else None,
         "verify_days_ago": days_ago, "verify_days_left": left, "pending_email": u.pending_email,
@@ -217,6 +221,30 @@ def _account_view(db: Session, u: models.User) -> dict:
 
 @router.get("/api/account")
 def my_account(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    return _account_view(db, user)
+
+
+class ProfileBody(BaseModel):
+    display_name: Optional[str] = None
+    phone: Optional[str] = None
+    experiment_role: Optional[str] = None
+    participation_from: Optional[str] = None
+    participation_to: Optional[str] = None
+    profile_color: Optional[str] = None
+    profile_shape: Optional[str] = None
+
+
+@router.post("/api/account/profile")
+def update_profile(body: ProfileBody, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    """Edit the elog-style profile. Only the fields present in the body are touched;
+    a null clears that field. These propagate to elog on the next SSO entry."""
+    data = body.model_dump(exclude_unset=True)
+    for k in ("display_name", "phone", "experiment_role", "participation_from",
+              "participation_to", "profile_color", "profile_shape"):
+        if k in data:
+            v = data[k]
+            setattr(user, k, (v.strip() or None) if isinstance(v, str) else v)
+    db.commit()
     return _account_view(db, user)
 
 

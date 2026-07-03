@@ -20,6 +20,11 @@ def portal_token(user: models.User) -> str:
         "color": user.profile_color,
         "shape": user.profile_shape,
         "prole": user.role,
+        # rest of the elog-style profile, so elog provisions a full mirror
+        "phone": user.phone,
+        "erole": user.experiment_role,
+        "pfrom": user.participation_from,
+        "pto": user.participation_to,
     })
 
 
