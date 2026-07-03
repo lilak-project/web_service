@@ -5,9 +5,9 @@ import { useLang } from '../../context/LangContext'
 
 /**
  * ProfileEditor — the portal account's avatar (profile_shape icon + profile_colour),
- * shared with elog via SSO. Colour is role-gated exactly like elog: admins/managers
- * always use the reserved MANAGER_COLOR (black) and can't pick another; non-admins
- * choose from AVATAR_COLORS and can never take the manager colour.
+ * shared with elog via SSO. Picks are staged locally; nothing is applied until Save.
+ * Colour is role-gated like elog: admins are locked to MANAGER_COLOR (black); others
+ * pick from AVATAR_COLORS and can never take the manager colour.
  */
 
 const rowS = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
@@ -18,23 +18,30 @@ export default function ProfileEditor({ me, onSaved }) {
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const isAdmin = me.is_admin || me.role === 'manager'
   const MC = me.manager_color || MANAGER_COLOR
-  const [shape, setShape] = useState(me.profile_shape || '')
-  const [color, setColor] = useState(isAdmin ? MC : (me.profile_color || ''))
+
+  const initShape = me.profile_shape || ''
+  const initColor = isAdmin ? MC : (me.profile_color || '')
+  const [shape, setShape] = useState(initShape)
+  const [color, setColor] = useState(initColor)
   const [open, setOpen] = useState(false)
   const [msg, setMsg] = useState('')
-  const effColor = isAdmin ? MC : color
+  const [busy, setBusy] = useState(false)
 
-  async function save(nextShape = shape, nextColor = color) {
-    const c = isAdmin ? MC : nextColor
-    setShape(nextShape); setColor(c)
+  const effColor = isAdmin ? MC : color
+  const dirty = shape !== initShape || (!isAdmin && color !== initColor)
+
+  const pick = (nextShape = shape, nextColor = color) => {
+    setShape(nextShape); setColor(isAdmin ? MC : nextColor); setMsg('')
+  }
+  const roll = () => { const a = randomAvatar(); pick(a.profile_shape, a.profile_color) }
+
+  async function save() {
+    setBusy(true)
     try {
-      await launcher.post('/account/profile', { profile_shape: nextShape || null, profile_color: c || null })
+      await launcher.post('/account/profile', { profile_shape: shape || null, profile_color: (isAdmin ? MC : color) || null })
       setMsg(L('저장됨', 'saved')); onSaved?.()
     } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
-  }
-  const roll = () => {
-    const a = randomAvatar()
-    save(a.profile_shape, isAdmin ? MC : a.profile_color)   // admins: new icon, colour stays black
+    finally { setBusy(false) }
   }
 
   return (
@@ -44,7 +51,9 @@ export default function ProfileEditor({ me, onSaved }) {
         <Avatar icon={shape} color={effColor} seed={me.username} size={40} />
         <Button size="sm" variant="secondary" onClick={roll}><Icon name="refresh" size={13} /> {L('랜덤', 'Random')}</Button>
         <Button size="sm" variant={open ? 'primary' : 'ghost'} onClick={() => setOpen((o) => !o)}>{open ? L('닫기', 'Close') : L('고르기', 'Pick')}</Button>
-        {isAdmin && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{L('관리자는 검은색 고정', 'admins are locked to black')}</span>}
+        <Button size="sm" variant="primary" disabled={!dirty || busy} onClick={save}>{L('저장', 'Save')}</Button>
+        {isAdmin && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{L('관리자는 검은색 고정', 'admins locked to black')}</span>}
+        {dirty && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{L('저장 안 됨', 'unsaved')}</span>}
         {msg && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</span>}
       </div>
       {open && (
@@ -53,7 +62,7 @@ export default function ProfileEditor({ me, onSaved }) {
           {!isAdmin && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {AVATAR_COLORS.map((c) => (
-                <button key={c} type="button" onClick={() => save(shape, c)} title={c}
+                <button key={c} type="button" onClick={() => pick(shape, c)} title={c}
                   style={{ width: 22, height: 22, borderRadius: '50%', backgroundColor: c, cursor: 'pointer',
                     border: color === c ? '2px solid var(--text-primary)' : '1px solid var(--border-default)' }} />
               ))}
@@ -61,7 +70,7 @@ export default function ProfileEditor({ me, onSaved }) {
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 4, maxHeight: 170, overflowY: 'auto' }}>
             {AVATAR_ICONS.map((ic) => (
-              <button key={ic} type="button" title={ic} onClick={() => save(ic, color)}
+              <button key={ic} type="button" title={ic} onClick={() => pick(ic, color)}
                 style={{ display: 'grid', placeItems: 'center', padding: 3, borderRadius: 8, cursor: 'pointer',
                   border: shape === ic ? '2px solid var(--btn-primary-bg)' : '1px solid transparent',
                   background: shape === ic ? 'var(--surface-2)' : 'transparent' }}>
