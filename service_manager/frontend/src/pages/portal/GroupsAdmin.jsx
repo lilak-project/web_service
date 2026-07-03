@@ -93,12 +93,11 @@ export default function GroupsAdmin({ users, services, onChanged }) {
           const isOpen = open === g.id
           return (
             <div key={g.id} style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setOpen(isOpen ? null : g.id)}>
+                <Icon name={isOpen ? 'caret-down' : 'caret-right'} size={13} color="var(--text-muted)" />
                 <GroupMark icon={g.icon} color={g.color} size={22} />
                 <b style={{ fontSize: 'var(--fs-small, 13px)' }}>{g.name}</b>
                 <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{g.members} {L('명', 'members')} · {g.permissions.length} {L('권한', 'perms')}</span>
-                <div style={{ flex: 1 }} />
-                <Button size="sm" variant={isOpen ? 'secondary' : 'ghost'} onClick={() => setOpen(isOpen ? null : g.id)}>{isOpen ? L('닫기', 'Close') : L('관리', 'Manage')}</Button>
               </div>
 
               {isOpen && (

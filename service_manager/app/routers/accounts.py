@@ -362,6 +362,29 @@ def admin_verify(uid: int, _: models.User = Depends(require_portal_admin), db: S
     return _account_view(db, u)
 
 
+@router.post("/api/admin/users/{uid}/request-verify")
+def admin_request_verify(uid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    """Issue a fresh verification link for the user to (re)verify their email. No real
+    sender yet, so in dev the link is returned to hand to the user."""
+    u = _get_user(db, uid)
+    token = secrets.token_urlsafe(32)
+    u.verify_token = token
+    db.commit()
+    url = f"{config.BASE_URL}/api/auth/verify?token={token}"
+    return {"ok": True, "verify_url": url if config.EMAIL_VERIFY_DEV_ECHO else None}
+
+
+@router.post("/api/admin/users/{uid}/reset-password-email")
+def admin_reset_password_email(uid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    """Set a NEW random password (would be emailed to the user). No sender yet, so in
+    dev the new password is returned so the admin can pass it on."""
+    u = _get_user(db, uid)
+    newpw = secrets.token_urlsafe(9)
+    u.password_hash = security.hash_password(newpw)
+    db.commit()
+    return {"ok": True, "email": u.email, "password": newpw if config.EMAIL_VERIFY_DEV_ECHO else None}
+
+
 class ApproveEmailBody(BaseModel):
     approve: bool = True
 
@@ -416,8 +439,15 @@ def admin_set_active(uid: int, body: ActiveBody, _: models.User = Depends(requir
     return _account_view(db, u)
 
 
+class ConfirmPwBody(BaseModel):
+    password: str = ""
+
+
 @router.delete("/api/admin/users/{uid}")
-def admin_delete_user(uid: int, admin: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+def admin_delete_user(uid: int, body: ConfirmPwBody, admin: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    # Deleting an account requires the admin to re-enter their own password.
+    if not security.verify_password(body.password or "", admin.password_hash):
+        raise HTTPException(403, "관리자 비밀번호가 올바르지 않습니다.")
     u = _get_user(db, uid)
     if u.role == "manager" and db.query(models.User).filter(models.User.role == "manager").count() <= 1:
         raise HTTPException(400, "마지막 관리자 계정은 삭제할 수 없습니다.")
