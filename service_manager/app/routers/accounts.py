@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import models, permissions, registry, security
+from .. import config, models, permissions, registry, security
 from ..db import get_db
 from ..deps import require_portal_admin, require_portal_user
 from ..models import VERIFY_VALID_DAYS
@@ -200,6 +200,11 @@ def _user_groups(db: Session, user_id: int) -> list[dict]:
             db.query(models.Group).filter(models.Group.id.in_(gids)).order_by(models.Group.name).all()]
 
 
+def effective_color(u: models.User) -> Optional[str]:
+    """Admins/managers always show the reserved MANAGER_COLOR; others keep theirs."""
+    return config.MANAGER_COLOR if u.role == "manager" else u.profile_color
+
+
 def _account_view(db: Session, u: models.User) -> dict:
     left = days_ago = None
     if u.email_verified_at:
@@ -211,7 +216,8 @@ def _account_view(db: Session, u: models.User) -> dict:
         # elog-style profile (the portal account is a superset — these flow to elog via SSO)
         "phone": u.phone, "experiment_role": u.experiment_role,
         "participation_from": u.participation_from, "participation_to": u.participation_to,
-        "profile_color": u.profile_color, "profile_shape": u.profile_shape,
+        "profile_color": effective_color(u), "profile_shape": u.profile_shape,
+        "is_admin": u.role == "manager", "manager_color": config.MANAGER_COLOR,
         "verification_current": permissions.verification_current(u),
         "verified_at": u.email_verified_at.isoformat() if u.email_verified_at else None,
         "verify_days_ago": days_ago, "verify_days_left": left, "pending_email": u.pending_email,
@@ -244,6 +250,12 @@ def update_profile(body: ProfileBody, user: models.User = Depends(require_portal
         if k in data:
             v = data[k]
             setattr(user, k, (v.strip() or None) if isinstance(v, str) else v)
+    # Colour is role-gated: admins always get MANAGER_COLOR; non-admins can never
+    # take it (silently dropped). elog uses the same rule.
+    if user.role == "manager":
+        user.profile_color = config.MANAGER_COLOR
+    elif (user.profile_color or "").lower() == config.MANAGER_COLOR.lower():
+        user.profile_color = None
     db.commit()
     return _account_view(db, user)
 

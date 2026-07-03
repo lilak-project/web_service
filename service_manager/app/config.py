@@ -21,6 +21,10 @@ DATA_ROOT = Path(os.environ.get("PORTAL_DATA_ROOT", ROOT.parent / "data"))
 # Kept under the reserved `_portal/` dir, which the service list skips.
 PORTAL_DB = Path(os.environ.get("PORTAL_DB", DATA_ROOT / "_portal" / "portal.db"))
 
+# Avatar colour reserved for admins/managers (same as elog's MANAGER_COLOR). Admins
+# always get it; non-admins can never pick it.
+MANAGER_COLOR = "#111827"
+
 # Portal HTTP port. Defaults to 8025 to avoid colliding with the existing
 # lilak_elog launcher on :8010 (and another local service on :8020).
 PORTAL_PORT = int(os.environ.get("PORTAL_PORT", 8025))
