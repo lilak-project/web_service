@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Icon, Button, CoverPage, CoverCard, PROJECT_ICONS } from 'lilak-ui'
+import { Icon, Button, CoverPage, CoverCard, PROJECT_ICONS, Avatar, MANAGER_COLOR } from 'lilak-ui'
 import { launcher, setExperiment } from '../api'
 import { useLang } from '../context/LangContext'
 import AccountView from './portal/AccountView'
@@ -303,8 +303,9 @@ export default function ProjectsPage() {
       {isManager && navBtn('guide', 'plug', t('portal_nav_handshake'))}
       <div style={{ flex: 1 }} />
       {/* account name + logout — right */}
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-        <Icon name="user" size={14} /> {user.username}{isManager ? ' · admin' : ''}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
+        {user.username}{isManager ? ' · admin' : ''}
       </span>
       <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
     </div>
