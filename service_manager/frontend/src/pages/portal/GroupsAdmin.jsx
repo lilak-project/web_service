@@ -4,6 +4,7 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_CHOICES } from './IconPick'
 import GroupMark from './GroupMark'
+import ExpandBox from './ExpandBox'
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
@@ -92,16 +93,13 @@ export default function GroupsAdmin({ users, services, onChanged }) {
         : groups.map((g) => {
           const isOpen = open === g.id
           return (
-            <div key={g.id} style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setOpen(isOpen ? null : g.id)}>
-                <Icon name={isOpen ? 'caret-down' : 'caret-right'} size={13} color="var(--text-muted)" />
-                <GroupMark icon={g.icon} color={g.color} size={22} />
-                <b style={{ fontSize: 'var(--fs-small, 13px)' }}>{g.name}</b>
-                <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{g.members} {L('명', 'members')} · {g.permissions.length} {L('권한', 'perms')}</span>
-              </div>
-
-              {isOpen && (
-                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <ExpandBox key={g.id} open={isOpen}
+              onToggle={() => setOpen(isOpen ? null : g.id)}
+              icon={<GroupMark icon={g.icon} color={g.color} size={28} />}
+              title={g.name}
+              subtitle={`${g.members} ${L('명', 'members')} · ${g.permissions.length} ${L('권한', 'perms')}`}
+            >
+                <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {/* group mark (icon + colour) */}
                   <div>
                     <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', marginBottom: 4 }}>{L('그룹 아이콘 · 색상', 'Group icon · colour')}</div>
@@ -166,8 +164,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                     <Button size="sm" variant="dangerSoft" onClick={() => delGroup(g)}><Icon name="trash" size={13} /> {L('그룹 삭제', 'Delete group')}</Button>
                   </div>
                 </div>
-              )}
-            </div>
+            </ExpandBox>
           )
         })}
     </div>

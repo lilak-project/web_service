@@ -6,6 +6,7 @@ import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
 import ProfileEditor from './ProfileEditor'
 import GroupMark from './GroupMark'
+import ExpandBox from './ExpandBox'
 
 /**
  * AccountView — account settings. A LEFT vertical menu switches between sub-tabs:
@@ -178,17 +179,17 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
       {users.filter((u) => u.id !== me.id)
         .filter((u) => !groupFilter || (u.groups || []).some((g) => String(g.id) === String(groupFilter)))
         .map((u) => (
-        <div key={u.id} style={{ ...card, opacity: u.is_active === false ? 0.6 : 1 }}>
-          {/* click the whole header to open/close */}
-          <div style={{ ...rowS, cursor: 'pointer' }} onClick={() => setOpenUser(openUser === u.id ? null : u.id)}>
-            <Icon name={openUser === u.id ? 'caret-down' : 'caret-right'} size={13} color="var(--text-muted)" />
-            <Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={22} />
-            <b style={{ fontSize: 'var(--fs-small, 13px)' }}>{u.username}</b>
+        <ExpandBox key={u.id} open={openUser === u.id}
+          onToggle={() => setOpenUser(openUser === u.id ? null : u.id)}
+          style={{ opacity: u.is_active === false ? 0.6 : 1 }}
+          icon={<Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={28} />}
+          title={u.username}
+          badges={<>
             <span style={badge}>{u.role}</span>
             {u.is_active === false && <span style={{ ...badge, background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{L('비활성', 'inactive')}</span>}
-          </div>
-          {openUser === u.id && (
-            <div style={{ marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 'var(--fs-small, 12px)' }}>
+          </>}
+        >
+            <div style={{ padding: '10px 14px 12px', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 'var(--fs-small, 13px)' }}>
               {/* email · verification · verify actions */}
               <div style={{ ...rowS }}>
                 <span style={{ color: 'var(--text-muted)' }}>{u.email}</span>
@@ -232,8 +233,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
                 <Button size="sm" variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('계정 삭제', 'Delete account')}</Button>
               </div>
             </div>
-          )}
-        </div>
+        </ExpandBox>
       ))}
       {users.filter((u) => u.id !== me.id).length === 0 && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('다른 계정 없음', 'no other accounts')}</div>}
     </div>

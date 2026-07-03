@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Icon, Button, CoverPage, CoverCard, PROJECT_ICONS, Avatar, MANAGER_COLOR } from 'lilak-ui'
+import { Icon, Button, CoverPage, PROJECT_ICONS, Avatar, MANAGER_COLOR } from 'lilak-ui'
+import ExpandBox from './portal/ExpandBox'
 import { launcher, setExperiment } from '../api'
 import { useLang } from '../context/LangContext'
 import AccountView from './portal/AccountView'
@@ -256,19 +257,27 @@ export default function ProjectsPage() {
     a.download = `${name}.zip`; document.body.appendChild(a); a.click(); a.remove()
   }
 
-  // Header nav button — the active tab gets a filled box with a visible border so
-  // you can always tell which screen you're on.
+  // Header nav tab — a big icon with its name underneath. The active tab fills
+  // with a clear blue border so you always know which screen you're on; hovering
+  // an inactive tab previews that border.
   const navBtn = (id, icon, label) => {
     const active = view === id
     return (
-      <Button variant={active ? 'secondary' : 'ghost'} onClick={() => setView(id)}
+      <button type="button" onClick={() => setView(id)}
+        onMouseEnter={(e) => { if (!active) e.currentTarget.style.borderColor = 'var(--border-strong, #94a3b8)' }}
+        onMouseLeave={(e) => { if (!active) e.currentTarget.style.borderColor = 'transparent' }}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          border: active ? '1.5px solid var(--btn-primary-bg, #4c6ef5)' : '1.5px solid transparent',
-          backgroundColor: active ? 'var(--surface-2)' : undefined,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+          minWidth: 78, padding: '9px 14px', borderRadius: 12, cursor: 'pointer',
+          border: `2px solid ${active ? 'var(--btn-primary-bg, #2563eb)' : 'transparent'}`,
+          backgroundColor: active ? 'var(--surface-2)' : 'transparent',
+          color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+          transition: 'border-color .12s, background-color .12s',
         }}>
-        <Icon name={icon} size={14} /> {label}
-      </Button>
+        <Icon name={icon} size={26} weight={active ? 'duotone' : 'regular'}
+          color={active ? 'var(--btn-primary-bg, #2563eb)' : 'currentColor'} />
+        <span style={{ fontSize: 'var(--fs-small, 13px)', fontWeight: active ? 700 : 500 }}>{label}</span>
+      </button>
     )
   }
 
@@ -303,8 +312,8 @@ export default function ProjectsPage() {
       {isManager && navBtn('guide', 'plug', t('portal_nav_handshake'))}
       <div style={{ flex: 1 }} />
       {/* account name + logout — right */}
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-medium, 15px)', color: 'var(--text-secondary)' }}>
+        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={30} />
         {user.username}{isManager ? ' · admin' : ''}
       </span>
       <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
@@ -356,57 +365,46 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {cards.map((p, i) => {
               const key = cardKey(p)
               const isOpen = expanded === key
               const isBuiltin = !!p.builtin
+              // In manage mode admins can open every card (to manage it); otherwise
+              // only enterable services toggle — request-only cards stay inert.
+              const canToggle = (manage && isManager) || !!p.can_enter
+              const statusText = isBuiltin ? (p.builtin === 'newservice' ? t('newsvc_card_hint') : t('iconlab_card_hint'))
+                : p.multi_project ? t('portal_proj_open_svc')
+                : (p.running ? t('projects_running', p.port) : t('projects_stopped'))
               return (
-                <div key={key} style={{
-                  // The OUTER box always carries the border (the inner card's own
-                  // border is removed below); it highlights when open.
-                  border: `${isOpen ? '1.5px' : '1px'} ${manage && isManager ? 'dashed' : 'solid'} ${isOpen ? 'var(--btn-primary-bg)' : '#6b7280'}`,
-                  borderRadius: 12, overflow: 'hidden', backgroundColor: 'var(--surface)',
-                }}>
-                  <CoverCard
-                    icon={<Icon name={iconFor(p.name, p.icon)} size={22} weight="duotone"
-                      color={p.color || 'var(--text-primary)'} style={{ flexShrink: 0 }} />}
-                    title={p.builtin === 'newservice' ? (p.label || t('newsvc_title')) : (p.label || p.name)}
-                    active={false}
-                    style={{ border: 'none', borderRadius: 0 }}
-                    badge={(
-                      <span style={{ fontSize: 'var(--fs-micro, 10px)', padding: '1px 6px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>
-                        {p.kind || '?'}
-                      </span>
-                    )}
-                    statusOn={isBuiltin || p.multi_project ? undefined : p.running}
-                    statusText={isBuiltin ? (p.builtin === 'newservice' ? t('newsvc_card_hint') : t('iconlab_card_hint'))
-                      : p.multi_project ? t('portal_proj_open_svc')
-                      : (p.running ? t('projects_running', p.port) : t('projects_stopped'))}
-                    actions={
-                      <>
-                        {p.can_enter ? (
-                          // Every service opens its inline panel first; you Enter
-                          // (and start/stop) from inside — single services too.
-                          <Button variant={isOpen ? 'secondary' : 'primary'}
-                            onClick={() => setExpanded(isOpen ? null : key)}
-                            style={{ minWidth: 72, justifyContent: 'center' }}>
-                            {isOpen ? t('portal_proj_close') : t('projects_open')}
-                          </Button>
-                        ) : p.can_request ? (
-                          <Button variant="secondary" disabled={p.requested || busy === p.name} onClick={() => requestAccess(p.name)}
-                            style={{ minWidth: 112, justifyContent: 'center' }}>
-                            {p.requested ? t('projects_requested') : t('projects_request')}
-                          </Button>
-                        ) : null}
-                        {/* Icon / name / colour / data-download / reorder now live
-                            in Home "manage mode" (the gear above the list). */}
-                      </>
-                    }
-                  />
+                <ExpandBox key={key} open={isOpen} manage={manage && isManager}
+                  toggleable={canToggle} divider={false}
+                  onToggle={() => setExpanded(isOpen ? null : key)}
+                  icon={<Icon name={iconFor(p.name, p.icon)} size={30} weight="duotone"
+                    color={p.color || 'var(--text-primary)'} />}
+                  title={p.builtin === 'newservice' ? (p.label || t('newsvc_title')) : (p.label || p.name)}
+                  badges={<span style={{ fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>{p.kind || '?'}</span>}
+                  subtitle={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {(!isBuiltin && !p.multi_project) && <span style={{ width: 8, height: 8, borderRadius: 999, background: p.running ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }} />}
+                    {statusText}
+                  </span>}
+                  right={
+                    p.can_enter ? (
+                      <Button variant={isOpen ? 'secondary' : 'primary'} onClick={() => setExpanded(isOpen ? null : key)}
+                        style={{ minWidth: 76, justifyContent: 'center' }}>
+                        {isOpen ? t('portal_proj_close') : t('projects_open')}
+                      </Button>
+                    ) : p.can_request ? (
+                      <Button variant="secondary" disabled={p.requested || busy === p.name} onClick={() => requestAccess(p.name)}
+                        style={{ minWidth: 112, justifyContent: 'center' }}>
+                        {p.requested ? t('projects_requested') : t('projects_request')}
+                      </Button>
+                    ) : null
+                  }
+                >
                   {/* Inline expansion: manage mode → management panel (builtins too);
                       otherwise the builtin tool / the service's own panel. */}
-                  {isOpen && (manage && isManager ? (
+                  {manage && isManager ? (
                     <ServiceManagePanel service={p} builtinKey={isBuiltin ? p.builtin : null}
                       initialIcon={iconFor(p.name, p.icon)}
                       first={i === 0} last={i === cards.length - 1}
@@ -419,8 +417,8 @@ export default function ProjectsPage() {
                     <ServiceProjects service={p} canManage={isManager} />
                   ) : (
                     <ServiceSingle service={p} canManage={isManager} onChanged={refresh} />
-                  ))}
-                </div>
+                  )}
+                </ExpandBox>
               )
             })}
           </div>
