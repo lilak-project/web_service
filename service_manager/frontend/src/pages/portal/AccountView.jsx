@@ -101,6 +101,11 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
           {me.pending_email && <span style={badge}>{L('변경대기', 'pending')}: {me.pending_email}</span>}
         </div>
 
+        {/* profile avatar (shared with elog via SSO) */}
+        <div style={{ marginBottom: 10 }}>
+          <ProfileEditor me={me} onSaved={load} />
+        </div>
+
         {/* email verification — request anytime; required yearly to keep entering */}
         <div style={{ ...rowS, marginBottom: 10 }}>
           <span style={{ minWidth: 120, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('이메일 인증', 'Email verification')}</span>
@@ -138,12 +143,6 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
           <div style={{ flex: 1 }} />
           <Button size="sm" variant="dangerSoft" onClick={deleteSelf}>{L('계정 삭제', 'Delete account')}</Button>
         </div>
-      </div>
-
-      {/* ── profile (elog-style; flows to elog via SSO) ── */}
-      <div style={sectionHdr}>{L('프로필 (elog 공용)', 'Profile (shared with elog)')}</div>
-      <div style={card}>
-        <ProfileEditor me={me} onSaved={load} />
       </div>
 
       {/* ── admin: pending access requests ── */}
