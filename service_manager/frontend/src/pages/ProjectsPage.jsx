@@ -257,27 +257,19 @@ export default function ProjectsPage() {
     a.download = `${name}.zip`; document.body.appendChild(a); a.click(); a.remove()
   }
 
-  // Header nav tab — a big icon with its name underneath. The active tab fills
-  // with a clear blue border so you always know which screen you're on; hovering
-  // an inactive tab previews that border.
+  // Header nav button — the active tab gets a filled box with a visible border so
+  // you can always tell which screen you're on.
   const navBtn = (id, icon, label) => {
     const active = view === id
     return (
-      <button type="button" onClick={() => setView(id)}
-        onMouseEnter={(e) => { if (!active) e.currentTarget.style.borderColor = 'var(--border-strong, #94a3b8)' }}
-        onMouseLeave={(e) => { if (!active) e.currentTarget.style.borderColor = 'transparent' }}
+      <Button variant={active ? 'secondary' : 'ghost'} onClick={() => setView(id)}
         style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-          minWidth: 78, padding: '9px 14px', borderRadius: 12, cursor: 'pointer',
-          border: `2px solid ${active ? 'var(--btn-primary-bg, #2563eb)' : 'transparent'}`,
-          backgroundColor: active ? 'var(--surface-2)' : 'transparent',
-          color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-          transition: 'border-color .12s, background-color .12s',
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          border: active ? '1.5px solid var(--btn-primary-bg, #4c6ef5)' : '1.5px solid transparent',
+          backgroundColor: active ? 'var(--surface-2)' : undefined,
         }}>
-        <Icon name={icon} size={26} weight={active ? 'duotone' : 'regular'}
-          color={active ? 'var(--btn-primary-bg, #2563eb)' : 'currentColor'} />
-        <span style={{ fontSize: 'var(--fs-small, 13px)', fontWeight: active ? 700 : 500 }}>{label}</span>
-      </button>
+        <Icon name={icon} size={14} /> {label}
+      </Button>
     )
   }
 
@@ -312,8 +304,8 @@ export default function ProjectsPage() {
       {isManager && navBtn('guide', 'plug', t('portal_nav_handshake'))}
       <div style={{ flex: 1 }} />
       {/* account name + logout — right */}
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-medium, 15px)', color: 'var(--text-secondary)' }}>
-        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={30} />
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
         {user.username}{isManager ? ' · admin' : ''}
       </span>
       <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>

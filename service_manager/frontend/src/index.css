@@ -38,9 +38,9 @@
      --fs-title (22) h1 / page titles
      --fs-display(28) stat big numbers                                          */
 :root {
-  --fs-micro: 11px;  --fs-tiny: 12px;  --fs-small: 13px;  --fs-body: 14px;
-  --fs-medium: 15px; --fs-large: 17px; --fs-xlarge: 20px; --fs-title: 25px;
-  --fs-display: 32px;
+  --fs-micro: 10px;  --fs-tiny: 11px;  --fs-small: 12px;  --fs-body: 13px;
+  --fs-medium: 14px; --fs-large: 16px; --fs-xlarge: 18px; --fs-title: 22px;
+  --fs-display: 28px;
 }
 
 /* Single source of truth for type size: route Tailwind's text utilities through
