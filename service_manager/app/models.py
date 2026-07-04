@@ -156,3 +156,20 @@ class InviteCode(Base):
     active = Column(Boolean, nullable=False, default=True)
     # Signing up with this code skips email verification (auto-approved).
     no_verify = Column(Boolean, nullable=False, default=False)
+
+
+# ── Feedback: bug reports / recommendations / inquiries ───────────────────────
+class Report(Base):
+    """A message from a user to the admins. `kind` sorts the intent
+    (bug | recommendation | inquiry); admins reply and mark it resolved."""
+    __tablename__ = "portal_reports"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    kind = Column(String(16), nullable=False, default="inquiry")   # bug | recommendation | inquiry
+    subject = Column(String(200), nullable=False, default="")
+    body = Column(Text, nullable=False, default="")
+    status = Column(String(16), nullable=False, default="open")    # open | resolved
+    reply = Column(Text, nullable=True)                            # admin's answer
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)

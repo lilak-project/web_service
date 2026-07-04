@@ -623,6 +623,7 @@ export default {
   portal_nav_home:         'Home',
   portal_manage:           'Manage',
   portal_nav_handshake:    'handshake',
+  portal_nav_feedback:     'Feedback',
   portal_guide_docs:       'Integration guide docs',
   manage_done:             'Done',
   manage_hint:             'Open a card to rename, change its icon, visibility, order, or delete it.',

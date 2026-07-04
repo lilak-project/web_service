@@ -19,6 +19,7 @@ const rowS = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
 const input = { height: 32, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', minWidth: 0 }
 const badge = { fontSize: 'var(--fs-micro, 10px)', padding: '1px 7px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }
 const fieldLbl = { minWidth: 120, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }
+const secLbl = { fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', marginBottom: 4 }   // group-style section label
 
 export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const { lang } = useLang()
@@ -189,47 +190,65 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
             {u.is_active === false && <span style={{ ...badge, background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{L('비활성', 'inactive')}</span>}
           </>}
         >
-            <div style={{ padding: '10px 14px 12px', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 'var(--fs-small, 13px)' }}>
-              {/* email · verification · verify actions */}
-              <div style={{ ...rowS }}>
-                <span style={{ color: 'var(--text-muted)' }}>{u.email}</span>
-                <span style={{ color: 'var(--border-strong, #999)' }}>|</span>
-                <span>{u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
-                  : (u.verify_days_left != null ? L(`인증됨 · ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}</span>
-                <Button size="sm" variant="ghost" onClick={() => adminRequestVerify(u)}>{L('메일 인증 요청', 'Request verification')}</Button>
-                <Button size="sm" variant="ghost" onClick={() => adminVerify(u)}>{L('매니저 인증', 'Verify (admin)')}</Button>
+            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* verification */}
+              <div>
+                <div style={secLbl}>{L('이메일 · 인증', 'Email · verification')}</div>
+                <div style={{ ...rowS }}>
+                  <span style={{ color: 'var(--text-muted)' }}>{u.email}</span>
+                  <span>· {u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
+                    : (u.verify_days_left != null ? L(`인증됨 · ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}</span>
+                  <div style={{ flex: 1 }} />
+                  <Button size="sm" variant="secondary" onClick={() => adminRequestVerify(u)}>{L('메일 인증 요청', 'Request verification')}</Button>
+                  <Button size="sm" variant="secondary" onClick={() => adminVerify(u)}>{L('매니저 인증', 'Verify')}</Button>
+                </div>
               </div>
               {/* pending email change */}
               {u.pending_email && (
-                <div style={{ ...rowS }}>
-                  <span>{L('이메일 변경 대기', 'pending email')}: {u.pending_email}</span>
-                  <Button size="sm" variant="primary" onClick={() => adminApprove(u, true)}>{L('승인', 'Approve')}</Button>
-                  <Button size="sm" variant="ghost" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
+                <div>
+                  <div style={secLbl}>{L('이메일 변경 대기', 'Pending email change')}</div>
+                  <div style={{ ...rowS }}>
+                    <span>{u.pending_email}</span>
+                    <div style={{ flex: 1 }} />
+                    <Button size="sm" variant="primary" onClick={() => adminApprove(u, true)}>{L('승인', 'Approve')}</Button>
+                    <Button size="sm" variant="secondary" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
+                  </div>
                 </div>
               )}
-              {/* role · manager toggle */}
-              <div style={{ ...rowS }}>
-                <span>role: <b>{u.role}</b></span>
-                <Button size="sm" variant="ghost" onClick={() => adminRole(u)}>{u.role === 'manager' ? L('매니저 해제', 'Revoke manager') : L('매니저 부여', 'Grant manager')}</Button>
-              </div>
-              {/* groups — one per line */}
-              {(u.groups || []).map((g) => (
-                <div key={g.id} style={{ ...rowS }}>
-                  <GroupMark icon={g.icon} color={g.color} size={14} /> <span>{g.name}</span>
-                  <Button size="sm" variant="ghost" onClick={() => removeFromGroup(u, g)}>{L('그룹에서 제외', 'Remove from group')}</Button>
+              {/* role */}
+              <div>
+                <div style={secLbl}>{L('역할', 'Role')}</div>
+                <div style={{ ...rowS }}>
+                  <b>{u.role}</b>
+                  <div style={{ flex: 1 }} />
+                  <Button size="sm" variant="secondary" onClick={() => adminRole(u)}>{u.role === 'manager' ? L('매니저 해제', 'Revoke manager') : L('매니저 부여', 'Grant manager')}</Button>
                 </div>
-              ))}
-              {/* password — two related actions on one line */}
-              <div style={{ ...rowS }}>
-                <Button size="sm" variant="ghost" onClick={() => adminResetPwEmail(u)}>{L('이메일로 새 비번 발송', 'Change password via email')}</Button>
-                <Button size="sm" variant="ghost" onClick={() => adminSetPw(u)}>{L('비밀번호 직접 설정', 'Set password')}</Button>
               </div>
-              {/* deactivate */}
-              <div style={{ ...rowS }}>
+              {/* groups */}
+              <div>
+                <div style={secLbl}>{L('그룹', 'Groups')}</div>
+                {(u.groups || []).length === 0
+                  ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>—</span>
+                  : (u.groups || []).map((g) => (
+                    <div key={g.id} style={{ ...rowS, marginTop: 4 }}>
+                      <GroupMark icon={g.icon} color={g.color} size={16} /> <span>{g.name}</span>
+                      <div style={{ flex: 1 }} />
+                      <Button size="sm" variant="ghost" onClick={() => removeFromGroup(u, g)}>{L('제외', 'Remove')}</Button>
+                    </div>
+                  ))}
+              </div>
+              {/* password */}
+              <div>
+                <div style={secLbl}>{L('비밀번호', 'Password')}</div>
+                <div style={{ ...rowS }}>
+                  <Button size="sm" variant="secondary" onClick={() => adminResetPwEmail(u)}>{L('이메일로 새 비번 발송', 'Change password via email')}</Button>
+                  <Button size="sm" variant="secondary" onClick={() => adminSetPw(u)}>{L('비밀번호 직접 설정', 'Set password')}</Button>
+                </div>
+              </div>
+              {/* deactivate / delete — bottom row (delete requires admin password) */}
+              <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
                 <Button size="sm" variant="ghost" onClick={() => adminActive(u)}>{u.is_active === false ? L('활성화', 'Activate') : L('비활성화', 'Deactivate')}</Button>
-              </div>
-              {/* delete (requires admin password) */}
-              <div style={{ ...rowS }}>
+                <div style={{ flex: 1 }} />
                 <Button size="sm" variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('계정 삭제', 'Delete account')}</Button>
               </div>
             </div>

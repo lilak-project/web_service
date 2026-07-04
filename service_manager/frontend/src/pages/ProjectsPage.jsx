@@ -4,6 +4,7 @@ import ExpandBox from './portal/ExpandBox'
 import { launcher, setExperiment } from '../api'
 import { useLang } from '../context/LangContext'
 import AccountView from './portal/AccountView'
+import FeedbackView from './portal/FeedbackView'
 import ServiceManagePanel from './portal/ServiceManagePanel'
 import IconLabView from './portal/IconLabView'
 import NewServiceView from './portal/NewServiceView'
@@ -149,19 +150,26 @@ function AuthCard({ t, onAuthed }) {
         {tabBtn('login', t('projects_login_title'))}
         {tabBtn('signup', t('projects_signup'))}
       </div>
-      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <input autoFocus placeholder={t('projects_login_user')} value={f.username} onChange={set('username')} style={inputStyle} />
+      {/* Order: id, email, password, code. On signup we deliberately break the
+          browser's login autofill (off / new-password) so it doesn't drop the
+          saved sign-in id/password into the new-account fields. */}
+      <form onSubmit={submit} autoComplete={mode === 'signup' ? 'off' : 'on'}
+        style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <input autoFocus placeholder={t('projects_login_user')} value={f.username} onChange={set('username')} style={inputStyle}
+          name={mode === 'signup' ? 'signup_username' : 'username'}
+          autoComplete={mode === 'signup' ? 'off' : 'username'} />
         {mode === 'signup' && (
-          <input placeholder={t('projects_signup_email')} value={f.email} onChange={set('email')} style={inputStyle} />
+          <input placeholder={t('projects_signup_email')} value={f.email} onChange={set('email')} style={inputStyle}
+            name="signup_email" autoComplete="off" />
         )}
+        <input type="password" placeholder={t('projects_login_pass')} value={f.password} onChange={set('password')} style={inputStyle}
+          name={mode === 'signup' ? 'signup_password' : 'password'}
+          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} />
         {mode === 'signup' && (
-          <input placeholder={t('projects_signup_code')} value={f.invite_code} onChange={set('invite_code')} style={inputStyle} />
+          <input placeholder={t('projects_signup_code')} value={f.invite_code} onChange={set('invite_code')} style={inputStyle}
+            name="signup_code" autoComplete="off" />
         )}
-        <input type="password" placeholder={t('projects_login_pass')} value={f.password} onChange={set('password')} style={inputStyle} />
         {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
-        {mode === 'signup' && (
-          <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{t('projects_signup_admin_hint')}</div>
-        )}
         <Button type="submit" style={{ justifyContent: 'center', marginTop: 2 }}
           disabled={busy || !f.username.trim() || !f.password || (mode === 'signup' && !f.email.trim())}>
           {t(mode === 'login' ? 'projects_login_submit' : 'projects_signup_submit')}
@@ -301,6 +309,7 @@ export default function ProjectsPage() {
       {/* tabs — left */}
       {navBtn('home', 'home', t('portal_nav_home'))}
       {navBtn('account', 'user', t('portal_nav_account'))}
+      {navBtn('feedback', 'chats', t('portal_nav_feedback'))}
       {isManager && navBtn('guide', 'plug', t('portal_nav_handshake'))}
       <div style={{ flex: 1 }} />
       {/* account name + logout — right */}
@@ -325,6 +334,8 @@ export default function ProjectsPage() {
         <AuthCard t={t} onAuthed={(u) => { setUser(u); setView('home'); refresh() }} />
       ) : view === 'account' ? (
         <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout} />
+      ) : view === 'feedback' ? (
+        <FeedbackView isManager={isManager} />
       ) : view === 'guide' && isManager ? (
         <GuideView onChanged={refresh} />
       ) : (

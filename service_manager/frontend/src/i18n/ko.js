@@ -623,6 +623,7 @@ export default {
   portal_nav_home:         '홈',
   portal_manage:           '관리',
   portal_nav_handshake:    'handshake',
+  portal_nav_feedback:     '문의',
   portal_guide_docs:       '연동 가이드 문서',
   manage_done:             '완료',
   manage_hint:             'open 을 눌러 이름·아이콘·공개범위·순서·삭제를 관리합니다.',

@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from . import config
-from .routers import accounts, auth, home, iconlab, project_mgmt, projects, proxy, scaffold, services
+from .routers import accounts, auth, home, iconlab, project_mgmt, projects, proxy, reports, scaffold, services
 
 config.ensure_dirs()
 
@@ -44,6 +44,7 @@ app.include_router(services.router)
 app.include_router(scaffold.router)        # /api/admin/services/scaffold (+ job status)
 app.include_router(home.router)            # /api/admin/home (builtin overrides + card order)
 app.include_router(iconlab.router)
+app.include_router(reports.router)         # /api/reports + /api/admin/reports (feedback)
 app.include_router(project_mgmt.router)   # /api/services/{svc}/projects… + /pp/…
 app.include_router(projects.router)
 app.include_router(proxy.router)
