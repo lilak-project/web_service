@@ -371,7 +371,6 @@ export default function ProjectsPage() {
               return (
                 <ExpandBox key={key} open={isOpen} manage={manage && isManager}
                   toggleable={canToggle} divider={false}
-                  padding="11px 14px" titleSize="var(--fs-medium, 14px)"
                   onToggle={() => setExpanded(isOpen ? null : key)}
                   icon={<Icon name={iconFor(p.name, p.icon)} size={26} weight="duotone"
                     color={p.color || 'var(--text-primary)'} />}

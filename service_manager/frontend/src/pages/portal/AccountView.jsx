@@ -182,7 +182,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
         <ExpandBox key={u.id} open={openUser === u.id}
           onToggle={() => setOpenUser(openUser === u.id ? null : u.id)}
           style={{ opacity: u.is_active === false ? 0.6 : 1 }}
-          icon={<Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={28} />}
+          icon={<Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={26} />}
           title={u.username}
           badges={<>
             <span style={badge}>{u.role}</span>

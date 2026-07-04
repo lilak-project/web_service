@@ -24,7 +24,7 @@ import { Icon } from 'lilak-ui'
 export default function ExpandBox({
   open, onToggle, toggleable = true, manage = false, divider = true,
   icon, title, badges, subtitle, right, children, style,
-  padding = '13px 15px', titleSize = 'var(--fs-large, 16px)',
+  padding = '11px 14px', titleSize = 'var(--fs-medium, 14px)',
 }) {
   const border = `${open ? '2px' : '1.5px'} ${manage ? 'dashed' : 'solid'} ${open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)'}`
   return (

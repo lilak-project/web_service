@@ -95,7 +95,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
           return (
             <ExpandBox key={g.id} open={isOpen}
               onToggle={() => setOpen(isOpen ? null : g.id)}
-              icon={<GroupMark icon={g.icon} color={g.color} size={28} />}
+              icon={<GroupMark icon={g.icon} color={g.color} size={26} />}
               title={g.name}
               subtitle={`${g.members} ${L('명', 'members')} · ${g.permissions.length} ${L('권한', 'perms')}`}
             >
