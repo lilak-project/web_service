@@ -413,7 +413,7 @@ export default function ProjectsPage() {
                       first={i === 0} last={i === cards.length - 1}
                       onMove={(dir) => move(key, dir)} onChanged={refresh} />
                   ) : isBuiltin && p.builtin === 'iconlab' ? (
-                    <div style={{ padding: '6px 14px 16px' }}><IconLabView /></div>
+                    <div style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)' }}><IconLabView /></div>
                   ) : isBuiltin && p.builtin === 'newservice' ? (
                     <NewServiceView onCreated={refresh} />
                   ) : p.multi_project ? (

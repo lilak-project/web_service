@@ -86,7 +86,7 @@ export default function NewServiceView({ onCreated }) {
   }
 
   return (
-    <div style={{ padding: '6px 14px 16px', display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 620 }}>
+    <div style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 620 }}>
       <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{t('newsvc_intro')}</div>
 
       {/* name + brand + colour */}
