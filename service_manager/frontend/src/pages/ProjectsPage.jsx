@@ -371,8 +371,9 @@ export default function ProjectsPage() {
               return (
                 <ExpandBox key={key} open={isOpen} manage={manage && isManager}
                   toggleable={canToggle} divider={false}
+                  padding="18px 18px" titleSize="var(--fs-xlarge, 18px)"
                   onToggle={() => setExpanded(isOpen ? null : key)}
-                  icon={<Icon name={iconFor(p.name, p.icon)} size={30} weight="duotone"
+                  icon={<Icon name={iconFor(p.name, p.icon)} size={40} weight="duotone"
                     color={p.color || 'var(--text-primary)'} />}
                   title={p.builtin === 'newservice' ? (p.label || t('newsvc_title')) : (p.label || p.name)}
                   badges={<span style={{ fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>{p.kind || '?'}</span>}

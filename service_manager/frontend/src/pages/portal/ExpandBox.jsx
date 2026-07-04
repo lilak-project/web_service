@@ -18,22 +18,25 @@ import { Icon } from 'lilak-ui'
  * toggleable=false → header is inert (e.g. a Home card you can only "Request").
  * manage=true      → dashed border (Home admin manage mode).
  * divider=true     → a top rule between header and children.
+ * padding/titleSize → per-surface sizing (Home service cards run larger than the
+ *   compact Accounts/Groups rows).
  */
 export default function ExpandBox({
   open, onToggle, toggleable = true, manage = false, divider = true,
   icon, title, badges, subtitle, right, children, style,
+  padding = '13px 15px', titleSize = 'var(--fs-large, 16px)',
 }) {
   const border = `${open ? '2px' : '1.5px'} ${manage ? 'dashed' : 'solid'} ${open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)'}`
   return (
     <div style={{ border, borderRadius: 12, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10, ...style }}>
       <div onClick={toggleable ? onToggle : undefined}
-        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 15px',
+        style={{ display: 'flex', alignItems: 'center', gap: 13, padding,
           cursor: toggleable ? 'pointer' : 'default' }}>
         {toggleable && <Icon name={open ? 'caret-down' : 'caret-right'} size={15} color="var(--text-muted)" style={{ flexShrink: 0 }} />}
         {icon != null && <div style={{ flexShrink: 0, display: 'flex' }}>{icon}</div>}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 'var(--fs-large, 17px)', fontWeight: 600 }}>{title}</span>
+            <span style={{ fontSize: titleSize, fontWeight: 600 }}>{title}</span>
             {badges}
           </div>
           {subtitle != null && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-muted)', marginTop: 3 }}>{subtitle}</div>}
