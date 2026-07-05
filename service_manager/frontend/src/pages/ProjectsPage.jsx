@@ -321,13 +321,29 @@ export default function ProjectsPage() {
     </div>
   ) : null
 
+  // The Home "manage mode" toggle. Lives in the FIXED subheader (outside the
+  // scroll) so it stays reachable no matter how far the service list is scrolled.
+  const manageBar = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0 2px' }}>
+      <span style={{ flex: 1, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
+        {manage ? t('manage_hint') : t('projects_register_hint')}
+      </span>
+      <Button variant="ghost" onClick={() => { setManage((m) => !m); setExpanded(null) }}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 'var(--fs-body, 13px)',
+          padding: '8px 15px', color: manage ? 'var(--btn-primary-bg)' : undefined }}>
+        <Icon name={manage ? 'toggle-right' : 'toggle-left'} size={26}
+          color={manage ? 'var(--btn-primary-bg)' : 'var(--text-muted)'} /> {t('portal_manage')}
+      </Button>
+    </div>
+  )
+
   return (
     <CoverPage
       fill
       icon={<HeaderMark />}
       title={t('projects_title')}
       subtitle={t('projects_subtitle')}
-      subheader={navBar}
+      subheader={user ? <>{navBar}{view === 'home' && isManager && manageBar}</> : null}
     >
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
@@ -344,18 +360,6 @@ export default function ProjectsPage() {
             <div style={{ margin: '8px 0', padding: '10px 12px', borderRadius: 8, fontSize: 'var(--fs-small, 12px)',
               backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', border: '1px solid var(--danger-border, transparent)' }}>
               {error}
-            </div>
-          )}
-          {isManager && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 16px' }}>
-              <span style={{ flex: 1, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
-                {manage ? t('manage_hint') : t('projects_register_hint')}
-              </span>
-              <Button variant="ghost" onClick={() => { setManage((m) => !m); setExpanded(null) }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: manage ? 'var(--btn-primary-bg)' : undefined }}>
-                <Icon name={manage ? 'toggle-right' : 'toggle-left'} size={22}
-                  color={manage ? 'var(--btn-primary-bg)' : 'var(--text-muted)'} /> {t('portal_manage')}
-              </Button>
             </div>
           )}
 
