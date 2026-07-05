@@ -17,7 +17,8 @@ const rnd = (a) => a[Math.floor(Math.random() * a.length)]
  */
 
 let _tabSeq = 1
-const newTab = (over = {}) => ({ key: _tabSeq++, id: '', label: '', icon: DEFAULT_ICON, kind: '', ...over })
+// regular tabs get a random icon (re-rollable + click-to-pick); built-in tabs pass their own
+const newTab = (over = {}) => ({ key: _tabSeq++, id: '', label: '', icon: rnd(ICON_CHOICES), kind: '', ...over })
 
 const field = {
   height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px',
@@ -31,7 +32,6 @@ export default function NewServiceView({ onCreated }) {
   const [service, setService] = useState('')
   const [icon, setIcon] = useState(DEFAULT_ICON)
   const [color, setColor] = useState('#000000')
-  const [settings, setSettings] = useState(true)
   const [tabs, setTabs] = useState(() => [newTab({ id: 'home', label: lang === 'ko' ? '홈' : 'Home', icon: 'home' })])
   const [job, setJob] = useState(null)          // {status, log, error, name}
   const [busy, setBusy] = useState(false)
@@ -56,6 +56,7 @@ export default function NewServiceView({ onCreated }) {
       .map((x) => ({ id: x.id.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''), label: (x.label || x.id).trim(), icon: x.icon || 'circle', kind: x.kind || '' }))
       .filter((x) => x.id)
     if (!cleanTabs.length) { setErr(t('newsvc_tabs_bad')); return }
+    const settings = cleanTabs.some((x) => x.kind === 'settings')   // a Settings tab was added
     setBusy(true)
     try {
       const { data } = await launcher.post('/admin/services/scaffold', {
@@ -118,7 +119,10 @@ export default function NewServiceView({ onCreated }) {
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl}>&nbsp;</span>
           <div style={{ display: 'flex', alignItems: 'center', height: 30 }}>
-            <Button variant="secondary" disabled={!!job} onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }}>
+            <Button variant="secondary" disabled={!!job} onClick={() => {
+              setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS))
+              setTabs((ts) => ts.map((x) => (x.kind ? x : { ...x, icon: rnd(ICON_CHOICES) })))   // re-roll regular tab icons
+            }}>
               <Icon name="refresh" size={13} /> {t('newsvc_random')}
             </Button>
           </div>
@@ -135,32 +139,35 @@ export default function NewServiceView({ onCreated }) {
             <input style={{ ...field, flex: 1, minWidth: 0 }} value={tb.label} placeholder={t('newsvc_tab_label')} disabled={!!job}
               onChange={(e) => setTab(tb.key, { label: e.target.value })} />
             <IconPick value={tb.icon} disabled={!!job} onChange={(ic) => setTab(tb.key, { icon: ic })} />
-            <select style={{ ...field, width: 116 }} value={tb.kind || ''} disabled={!!job}
-              onChange={(e) => setTab(tb.key, e.target.value === 'community' ? { kind: 'community', icon: 'community' } : { kind: '' })}
-              title={t('newsvc_tab_kind') || 'Tab type'}>
-              <option value="">{t('newsvc_tab_kind_basic') || '일반'}</option>
-              <option value="community">{t('newsvc_tab_kind_community') || '커뮤니티'}</option>
-            </select>
+            {/* built-in kind badge (community / settings tabs added via the buttons below) */}
+            <span style={{ width: 72, flexShrink: 0, textAlign: 'center', fontSize: 'var(--fs-tiny, 11px)',
+              color: tb.kind ? 'var(--info-text)' : 'var(--text-muted)',
+              background: tb.kind ? 'var(--info-bg)' : 'transparent', borderRadius: 999, padding: '2px 0' }}>
+              {tb.kind === 'community' ? t('newsvc_tab_kind_community')
+                : tb.kind === 'settings' ? t('newsvc_tab_kind_settings')
+                : t('newsvc_tab_kind_basic')}
+            </span>
             <Button variant="ghost" icon disabled={!!job || tabs.length <= 1} onClick={() => delTab(tb.key)} title={t('newsvc_tab_del')}>
               <Icon name="trash" size={14} />
             </Button>
           </div>
         ))}
         {!job && (
-          <div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Button variant="secondary" onClick={() => setTabs((ts) => [...ts, newTab()])}>
               <Icon name="plus" size={13} /> {t('newsvc_tab_add')}
+            </Button>
+            <Button variant="secondary" disabled={tabs.some((x) => x.kind === 'community')}
+              onClick={() => setTabs((ts) => [...ts, newTab({ id: 'community', label: lang === 'ko' ? '커뮤니티' : 'Community', icon: 'community', kind: 'community' })])}>
+              <Icon name="community" size={13} /> {t('newsvc_tab_add_community')}
+            </Button>
+            <Button variant="secondary" disabled={tabs.some((x) => x.kind === 'settings')}
+              onClick={() => setTabs((ts) => [...ts, newTab({ id: 'set', label: lang === 'ko' ? '설정' : 'Settings', icon: 'settings', kind: 'settings' })])}>
+              <Icon name="settings" size={13} /> {t('newsvc_tab_add_settings')}
             </Button>
           </div>
         )}
       </div>
-
-      {!job && (
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-          <input type="checkbox" checked={settings} onChange={(e) => setSettings(e.target.checked)} />
-          {t('newsvc_settings')}
-        </label>
-      )}
 
       {err && (
         <div style={{ padding: '8px 10px', borderRadius: 8, fontSize: 'var(--fs-small, 12px)',
