@@ -112,6 +112,11 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             system TEXT, enabled INTEGER DEFAULT 1
         );
         """)
+        # migration: poll bubble link (existing DBs)
+        try:
+            c.execute("ALTER TABLE cm_messages ADD COLUMN poll_id TEXT")
+        except Exception:
+            pass
 
     # load persisted anon-name pool (if an admin edited it)
     with conn() as c:
@@ -132,8 +137,10 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
     def who(user: dict) -> dict:
         name = user.get("name") or user.get("username") or user.get("email") or "guest"
         key = "u:" + hashlib.sha256((user.get("email") or user.get("username") or name).encode()).hexdigest()[:16]
+        # use the portal profile avatar when the token carries it; else a stable fallback
         return {"key": key, "name": name, "role": user.get("role") or "user",
-                "color": _pick(key, _COLORS), "shape": _pick(key, _ICONS)}
+                "color": user.get("color") or _pick(key, _COLORS),
+                "shape": user.get("shape") or _pick(key, _ICONS)}
 
     def anon_of(real_key: str) -> dict:
         with conn() as c:
@@ -155,6 +162,7 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             "author_color": r["author_color"], "author_shape": r["author_shape"],
             "anon": bool(r["anon"]), "body": r["body"], "kind": r["kind"], "done": bool(r["done"]),
             "reply_to_id": r["reply_to_id"], "attachments": json.loads(r["attachments"] or "[]"),
+            "poll_id": (r["poll_id"] if "poll_id" in r.keys() else None),
             "created_at": r["created_at"],
         }
         if r["reply_to_id"]:
@@ -275,7 +283,8 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
     def questions(user: dict = Depends(identity)):
         w = who(user)
         with conn() as c:
-            rows = c.execute("SELECT * FROM cm_messages WHERE kind='question' AND done=0 ORDER BY id").fetchall()
+            # all questions stay listed here (completed ones too — flagged done)
+            rows = c.execute("SELECT * FROM cm_messages WHERE kind='question' ORDER BY id").fetchall()
         return {"questions": [row_to_msg(r, w["role"] == "manager") for r in rows]}
 
     @router.get("/completed")
@@ -329,6 +338,11 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         with conn() as c:
             c.execute("INSERT INTO cm_polls(id,title,options,deadline,owner_key,created_at) VALUES(?,?,?,?,?,?)",
                       (pid, title, json.dumps(options, ensure_ascii=False), payload.get("deadline") or "", w["key"], _now()))
+            # drop a poll bubble into the chat so everyone sees it (click → side panel)
+            c.execute("""INSERT INTO cm_messages(author_key,author_name,author_color,author_shape,anon,
+                         real_key,real_name,body,kind,poll_id,reply_to_id,attachments,created_at)
+                         VALUES(?,?,?,?,0,?,?,?, 'poll', ?, 0, '[]', ?)""",
+                      (w["key"], w["name"], w["color"], w["shape"], w["key"], w["name"], title, pid, _now()))
         return {"id": pid}
 
     @router.post("/polls/{pid}/vote")

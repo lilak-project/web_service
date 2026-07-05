@@ -140,7 +140,7 @@ ${placeholderDict(' — 준비 중')}
     notif_title: '알림', notif_empty: '알림 없음',
     set_theme: '테마', set_lang: '언어',
     cmd_help: '단축키 도움말', cmd_placeholder: '명령 입력…', shortcuts_title: '키보드 단축키',
-${HAS_SETTINGS ? `    set_account: '계정', set_users: '사용자 관리', set_tabs: '탭', set_profiles: '프로필 유형',
+${HAS_SETTINGS ? `    set_account: '계정', set_users: '사용자 관리', set_tabs: '탭', set_profiles: '프로필 유형', set_anon: '익명 이름',
     set_account_note: '계정과 비밀번호는 포털에서 관리합니다.', set_users_note: '사용자 관리는 포털에서 합니다.',
     set_open_portal: '포털 열기', set_service_local: '서비스 로컬 설정 (구현 예정)',\n` : ''}  },
   en: {
@@ -153,7 +153,7 @@ ${placeholderDict(' — coming soon')}
     notif_title: 'Notifications', notif_empty: 'No notifications',
     set_theme: 'Theme', set_lang: 'Language',
     cmd_help: 'Shortcuts help', cmd_placeholder: 'Type a command…', shortcuts_title: 'Keyboard shortcuts',
-${HAS_SETTINGS ? `    set_account: 'Account', set_users: 'Users', set_tabs: 'Tabs', set_profiles: 'Profile types',
+${HAS_SETTINGS ? `    set_account: 'Account', set_users: 'Users', set_tabs: 'Tabs', set_profiles: 'Profile types', set_anon: 'Anon names',
     set_account_note: 'Account and password are managed in the portal.', set_users_note: 'User management lives in the portal.',
     set_open_portal: 'Open portal', set_service_local: 'Service-local setting (coming soon)',\n` : ''}  },
 }
@@ -473,13 +473,17 @@ def identity(request: Request, authorization: Optional[str] = Header(default=Non
     token = _token_from_request(authorization, request)
     payload = decode_token(token) if token else None
     if not payload:
-        return {"authenticated": False, "email": None, "username": None, "name": None, "role": None}
+        return {"authenticated": False, "email": None, "username": None, "name": None, "role": None,
+                "color": None, "shape": None}
     return {
         "authenticated": True,
         "email": payload.get("email"),
         "username": payload.get("username") or payload.get("name"),
         "name": payload.get("name") or payload.get("username"),
         "role": payload.get("prole") or payload.get("role"),
+        # portal profile avatar (elog-style), so services mirror the same identity
+        "color": payload.get("color"),
+        "shape": payload.get("shape"),
     }
 `
 
@@ -542,6 +546,40 @@ export default function CommunityTab({ onOpenFiles }) {
 }
 `
 
+const anonNamesJsx = `import { useEffect, useState } from 'react'
+import { Button, Callout, useLang } from 'lilak-ui'
+import { communityApi } from '../../community_api'
+
+// Manager-only: edit the anonymous name pool (surnames × given names).
+export default function AnonNames() {
+  const { t } = useLang()
+  const [names, setNames] = useState(null)
+  const [saved, setSaved] = useState(false)
+  useEffect(() => { communityApi.anonNames().then(setNames).catch(() => {}) }, [])
+  if (!names) return null
+  const save = async () => { const r = await communityApi.saveAnonNames(names); setNames(r); setSaved(true); setTimeout(() => setSaved(false), 1500) }
+  const split = (s) => s.split(/[\\s,]+/).filter(Boolean)
+  const ta = { width: '100%', boxSizing: 'border-box', minHeight: 140, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 'var(--fs-small,12px)', fontFamily: 'inherit', resize: 'vertical' }
+  const lbl = { fontSize: 'var(--fs-small,12px)', fontWeight: 600, marginBottom: 4, display: 'block' }
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <div style={{ fontSize: 'var(--fs-medium,14px)', fontWeight: 600, marginBottom: 8 }}>{t('set_anon')}</div>
+      <Callout tone="info">익명 모드에서 배정되는 이름은 성씨 × 이름 조합입니다. 공백·쉼표·줄바꿈으로 구분해 편집하세요.</Callout>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12, marginTop: 12 }}>
+        <div><span style={lbl}>성씨 ({names.surnames.length})</span>
+          <textarea style={ta} value={names.surnames.join(' ')} onChange={(e) => setNames((n) => ({ ...n, surnames: split(e.target.value) }))} /></div>
+        <div><span style={lbl}>이름 ({names.given.length})</span>
+          <textarea style={ta} value={names.given.join(' ')} onChange={(e) => setNames((n) => ({ ...n, given: split(e.target.value) }))} /></div>
+      </div>
+      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Button variant="primary" onClick={save}>저장 · {names.surnames.length}×{names.given.length} 조합</Button>
+        {saved && <span style={{ color: 'var(--info-text)', fontSize: 'var(--fs-small,12px)' }}>저장됨</span>}
+      </div>
+    </div>
+  )
+}
+`
+
 // ── manifest (written under data/<name>/) ─────────────────────────────────────
 const manifest = JSON.stringify({
   kind: 'generic', mode: 'managed', health: '/api/health', entry: '/',
@@ -579,6 +617,7 @@ if (HAS_COMMUNITY) {
   if (existsSync(cmSrc) && (FORCE || !existsSync(cmDest))) { copyFileSync(cmSrc, cmDest); wrote++ } else if (existsSync(cmDest)) skipped++
   put('frontend/src/community_api.js', communityApiJs)
   put('frontend/src/pages/CommunityTab.jsx', communityTabJsx)
+  if (HAS_SETTINGS) put('frontend/src/pages/settings/AnonNames.jsx', anonNamesJsx)
 }
 
 // settings tab (portal-centric)
@@ -589,7 +628,7 @@ import { get } from '../api'
 import AccountSection from './settings/AccountSection'
 import ManageUsers from './settings/ManageUsers'
 import ServiceLocal from './settings/ServiceLocal'
-
+${HAS_COMMUNITY ? "import AnonNames from './settings/AnonNames'\n" : ''}
 // Portal-centric Settings: account + user management come from the portal;
 // tabs / profile-types are service-local stubs to fill in.
 export default function SettingsPage() {
@@ -602,7 +641,7 @@ export default function SettingsPage() {
     { id: 'account', label: t('set_account'), icon: 'user', group: 'me' },
     { id: 'users', label: t('set_users'), icon: 'users', group: 'people' },
     ...(isManager ? [
-      { id: 'tabs', label: t('set_tabs'), icon: 'browse', group: 'appearance' },
+${HAS_COMMUNITY ? "      { id: 'anon', label: t('set_anon'), icon: 'eye', group: 'community' },\n" : ''}      { id: 'tabs', label: t('set_tabs'), icon: 'browse', group: 'appearance' },
       { id: 'profiles', label: t('set_profiles'), icon: 'user', group: 'appearance' },
     ] : []),
   ]
@@ -617,7 +656,7 @@ export default function SettingsPage() {
         <div style={{ flex: 1, minWidth: 0 }}>
           {active === 'account' && <AccountSection me={me} />}
           {active === 'users' && <ManageUsers />}
-          {active === 'tabs' && <ServiceLocal title={t('set_tabs')} />}
+${HAS_COMMUNITY ? "          {active === 'anon' && <AnonNames />}\n" : ''}          {active === 'tabs' && <ServiceLocal title={t('set_tabs')} />}
           {active === 'profiles' && <ServiceLocal title={t('set_profiles')} />}
         </div>
       </div>
