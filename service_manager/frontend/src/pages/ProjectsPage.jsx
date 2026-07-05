@@ -328,10 +328,12 @@ export default function ProjectsPage() {
       <span style={{ flex: 1, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
         {manage ? t('manage_hint') : t('projects_register_hint')}
       </span>
-      <Button variant="ghost" onClick={() => { setManage((m) => !m); setExpanded(null) }}
+      {/* Keep any open box open — its content switches between the normal panel
+          and the manage panel with `manage` (no close on toggle). */}
+      <Button variant="ghost" onClick={() => setManage((m) => !m)}
         style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 'var(--fs-body, 13px)',
           padding: '8px 15px', color: manage ? 'var(--btn-primary-bg)' : undefined }}>
-        <Icon name={manage ? 'toggle-right' : 'toggle-left'} size={26}
+        <Icon name={manage ? 'toggle-right' : 'toggle-left'} size={26} weight={manage ? 'fill' : 'regular'}
           color={manage ? 'var(--btn-primary-bg)' : 'var(--text-muted)'} /> {t('portal_manage')}
       </Button>
     </div>
