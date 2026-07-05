@@ -39,7 +39,7 @@ export default function ExpandBox({
             <span style={{ fontSize: titleSize, fontWeight: 600 }}>{title}</span>
             {badges}
           </div>
-          {subtitle != null && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-muted)', marginTop: 3 }}>{subtitle}</div>}
+          {subtitle != null && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-muted)', marginTop: 1 }}>{subtitle}</div>}
         </div>
         {right != null && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
