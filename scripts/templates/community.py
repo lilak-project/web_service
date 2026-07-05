@@ -477,6 +477,38 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             c.execute("INSERT OR REPLACE INTO cm_config(key,value) VALUES('anon_given',?)", (json.dumps(_GIVEN, ensure_ascii=False),))
         return {"surnames": _SURNAMES, "given": _GIVEN}
 
+    # ── 광장(plaza / spatial) display config — manager-controlled, room-wide ──
+    _PLAZA_DEFAULTS = {"lifetime": 0, "max": 30, "per_account": 3, "show_names": True}
+
+    def _plaza_config() -> dict:
+        cfg = dict(_PLAZA_DEFAULTS)
+        with conn() as c:
+            row = c.execute("SELECT value FROM cm_config WHERE key='plaza'").fetchone()
+        if row:
+            try:
+                cfg.update(json.loads(row["value"]))
+            except Exception:
+                pass
+        return cfg
+
+    @router.get("/plaza-config")
+    def get_plaza_config(user: dict = Depends(identity)):
+        return _plaza_config()
+
+    @router.put("/plaza-config")
+    def put_plaza_config(payload: dict, user: dict = Depends(identity)):
+        require_manager(user)
+        cfg = _plaza_config()
+        for k, cast in (("lifetime", int), ("max", int), ("per_account", int), ("show_names", bool)):
+            if k in payload and payload[k] is not None:
+                try:
+                    cfg[k] = cast(payload[k])
+                except Exception:
+                    pass
+        with conn() as c:
+            c.execute("INSERT OR REPLACE INTO cm_config(key,value) VALUES('plaza',?)", (json.dumps(cfg, ensure_ascii=False),))
+        return cfg
+
     # ── AI bots (@botname → provider reply) ───────────────────────────────────
     @router.get("/bots")
     def list_bots(user: dict = Depends(identity)):
