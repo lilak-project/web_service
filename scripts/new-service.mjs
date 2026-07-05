@@ -525,7 +525,7 @@ export const communityApi = {
   anonNames: () => req('GET', P + '/anon-names'),
   saveAnonNames: (n) => req('PUT', P + '/anon-names', n),
   plazaConfig: () => req('GET', P + '/plaza-config'),
-  savePlazaConfig: (c) => req('PUT', P + '/plaza-config', c),
+  savePlazaConfig: (c) => req('POST', P + '/plaza-config', c),
   bots: () => req('GET', P + '/bots').then((d) => d.bots),
   saveBot: (b) => req('POST', P + '/bots', b),
   delBot: (name) => req('DELETE', P + '/bots/' + name),

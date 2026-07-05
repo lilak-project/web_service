@@ -478,7 +478,7 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         return {"surnames": _SURNAMES, "given": _GIVEN}
 
     # ── 광장(plaza / spatial) display config — manager-controlled, room-wide ──
-    _PLAZA_DEFAULTS = {"lifetime": 0, "max": 30, "per_account": 3, "show_names": True}
+    _PLAZA_DEFAULTS = {"lifetime": 30, "max": 30, "per_account": 3, "show_names": True}
 
     def _plaza_config() -> dict:
         cfg = dict(_PLAZA_DEFAULTS)
@@ -495,7 +495,7 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
     def get_plaza_config(user: dict = Depends(identity)):
         return _plaza_config()
 
-    @router.put("/plaza-config")
+    @router.api_route("/plaza-config", methods=["PUT", "POST"])
     def put_plaza_config(payload: dict, user: dict = Depends(identity)):
         require_manager(user)
         cfg = _plaza_config()
