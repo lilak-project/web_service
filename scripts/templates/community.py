@@ -112,11 +112,20 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             system TEXT, enabled INTEGER DEFAULT 1
         );
         """)
-        # migration: poll bubble link (existing DBs)
-        try:
-            c.execute("ALTER TABLE cm_messages ADD COLUMN poll_id TEXT")
-        except Exception:
-            pass
+        # migrations for existing DBs (ignore "duplicate column" on re-run)
+        for ddl in (
+            "ALTER TABLE cm_messages ADD COLUMN poll_id TEXT",
+            "ALTER TABLE cm_polls ADD COLUMN named INTEGER DEFAULT 1",   # 1=실명투표 · 0=익명투표
+            "ALTER TABLE cm_votes ADD COLUMN name TEXT",                 # voter display identity (for 결과 보기)
+            "ALTER TABLE cm_votes ADD COLUMN shape TEXT",
+            "ALTER TABLE cm_votes ADD COLUMN color TEXT",
+            "ALTER TABLE cm_votes ADD COLUMN anon INTEGER DEFAULT 0",
+            "ALTER TABLE cm_votes ADD COLUMN real_name TEXT",
+        ):
+            try:
+                c.execute(ddl)
+            except Exception:
+                pass
 
     # load persisted anon-name pool (if an admin edited it)
     with conn() as c:
@@ -313,8 +322,9 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             tallies = {row["option_id"]: row["n"] for row in
                        c.execute("SELECT option_id, COUNT(*) n FROM cm_votes WHERE poll_id=? GROUP BY option_id", (r["id"],)).fetchall()}
             mine = c.execute("SELECT option_id FROM cm_votes WHERE poll_id=? AND user_key=?", (r["id"], user_key)).fetchone()
+        named = ("named" not in r.keys()) or bool(r["named"])   # default 실명 (older rows)
         return {"id": r["id"], "title": r["title"], "closed": bool(r["closed"]), "deadline": r["deadline"],
-                "owner": r["owner_key"], "my_vote": mine["option_id"] if mine else None,
+                "owner": r["owner_key"], "named": named, "my_vote": mine["option_id"] if mine else None,
                 "options": [{"id": o["id"], "text": o["text"], "votes": tallies.get(o["id"], 0)} for o in opts]}
 
     @router.get("/polls")
@@ -335,9 +345,10 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             raise HTTPException(400, "제목과 항목이 필요합니다.")
         pid = uuid.uuid4().hex[:12]
         options = [{"id": f"o{i}", "text": t} for i, t in enumerate(opts)]
+        named = 0 if payload.get("named") is False else 1     # default 실명투표
         with conn() as c:
-            c.execute("INSERT INTO cm_polls(id,title,options,deadline,owner_key,created_at) VALUES(?,?,?,?,?,?)",
-                      (pid, title, json.dumps(options, ensure_ascii=False), payload.get("deadline") or "", w["key"], _now()))
+            c.execute("INSERT INTO cm_polls(id,title,options,deadline,owner_key,created_at,named) VALUES(?,?,?,?,?,?,?)",
+                      (pid, title, json.dumps(options, ensure_ascii=False), payload.get("deadline") or "", w["key"], _now(), named))
             # drop a poll bubble into the chat so everyone sees it (click → side panel)
             c.execute("""INSERT INTO cm_messages(author_key,author_name,author_color,author_shape,anon,
                          real_key,real_name,body,kind,poll_id,reply_to_id,attachments,created_at)
@@ -349,12 +360,45 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
     def vote(pid: str, payload: dict, user: dict = Depends(identity)):
         w = who(user)
         oid = payload.get("option_id")
+        # respect chat anonymity: an anon-active voter is recorded under their anon identity
+        anon = bool(payload.get("anonymous"))
+        if anon:
+            ident = anon_of(w["key"]); disp_name, disp_shape, disp_color = ident["name"], ident["shape"], None
+        else:
+            disp_name, disp_shape, disp_color = w["name"], w["shape"], w["color"]
         with conn() as c:
             p = c.execute("SELECT closed FROM cm_polls WHERE id=?", (pid,)).fetchone()
             if not p or p["closed"]:
                 raise HTTPException(400, "종료된 투표")
-            c.execute("INSERT OR REPLACE INTO cm_votes(poll_id,user_key,option_id) VALUES(?,?,?)", (pid, w["key"], oid))
+            c.execute("""INSERT OR REPLACE INTO cm_votes(poll_id,user_key,option_id,name,shape,color,anon,real_name)
+                         VALUES(?,?,?,?,?,?,?,?)""",
+                      (pid, w["key"], oid, disp_name, disp_shape, disp_color, int(anon), w["name"]))
         return {"ok": True}
+
+    @router.get("/polls/{pid}/results")
+    def poll_results(pid: str, user: dict = Depends(identity)):
+        """Per-option voter breakdown. Only for 실명(named) polls; anon polls stay
+        count-only. Anon-active voters appear under their anon name; managers may
+        unmask them (like chat)."""
+        w = who(user)
+        with conn() as c:
+            p = c.execute("SELECT * FROM cm_polls WHERE id=?", (pid,)).fetchone()
+            if not p:
+                raise HTTPException(404, "없음")
+            named = ("named" not in p.keys()) or bool(p["named"])
+            opts = json.loads(p["options"])
+            if not named:
+                return {"named": False, "options": [{"id": o["id"], "text": o["text"], "voters": []} for o in opts]}
+            rows = c.execute("SELECT * FROM cm_votes WHERE poll_id=?", (pid,)).fetchall()
+        mgr = w["role"] == "manager"
+        by_opt: dict = {}
+        for r in rows:
+            v = {"key": r["user_key"], "name": r["name"] or "?", "shape": r["shape"],
+                 "color": r["color"], "anon": bool(r["anon"])}
+            if r["anon"] and mgr:
+                v["real_name"] = r["real_name"]
+            by_opt.setdefault(r["option_id"], []).append(v)
+        return {"named": True, "options": [{"id": o["id"], "text": o["text"], "voters": by_opt.get(o["id"], [])} for o in opts]}
 
     @router.post("/polls/{pid}/close")
     def close_poll(pid: str, user: dict = Depends(identity)):
