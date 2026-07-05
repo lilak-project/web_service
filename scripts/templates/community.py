@@ -31,6 +31,7 @@ import re
 import sqlite3
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -83,10 +84,23 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
     uploads_dir.mkdir(parents=True, exist_ok=True)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
+    @contextmanager
     def conn():
-        c = sqlite3.connect(db_path)
+        # NOTE: sqlite3's own `with connection` commits but never CLOSES the
+        # connection — under the frontend's periodic polling that leaks a
+        # connection per call and eventually exhausts file descriptors (→ 500s
+        # that appear "after a while"). This wrapper always closes. WAL +
+        # busy_timeout also let readers/writers coexist instead of racing on a
+        # whole-db lock (the auto-close UPDATE in GET /polls runs every poll).
+        c = sqlite3.connect(db_path, timeout=30)
         c.row_factory = sqlite3.Row
-        return c
+        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA busy_timeout=5000")
+        try:
+            yield c
+            c.commit()
+        finally:
+            c.close()
 
     with conn() as c:
         c.executescript("""
