@@ -5,7 +5,7 @@ import { Button, Icon, PICKER_ICONS, PROJECT_ICONS } from 'lilak-ui'
 // render in DUOTONE — the house style for service marks.
 export const ICON_CHOICES = Array.from(new Set(PICKER_ICONS && PICKER_ICONS.length ? PICKER_ICONS : PROJECT_ICONS))
 export const DEFAULT_ICON = (PROJECT_ICONS && PROJECT_ICONS[0]) || ICON_CHOICES[0]
-export const ICON_WEIGHT = 'duotone'
+export const ICON_WEIGHT = 'fill'
 
 /**
  * IconPick — a button showing the current icon; click for a grid of the actual
