@@ -665,7 +665,7 @@ ${HAS_COMMUNITY ? "          {active === 'anon' && <AnonNames />}\n" : ''}      
 }
 `)
 
-  put('frontend/src/pages/settings/AccountSection.jsx', `import { Stack, Row, Button, useLang } from 'lilak-ui'
+  put('frontend/src/pages/settings/AccountSection.jsx', `import { Stack, Row, Button, Avatar, useLang } from 'lilak-ui'
 import { portalHome } from '../../api'
 
 const card = { border: '1px solid var(--border-default)', backgroundColor: 'var(--surface)', borderRadius: 12, boxShadow: '0 1px 2px rgba(0,0,0,.04)', padding: 20 }
@@ -685,6 +685,7 @@ export default function AccountSection({ me }) {
     <Stack gap={16} style={{ maxWidth: 384 }}>
       <Stack gap={14} style={card}>
         <Row gap={10} align="center">
+          <Avatar icon={me?.shape} color={me?.color} seed={me?.username || me?.email || 'guest'} size={38} />
           <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--fs-large, 16px)', color: 'var(--text-primary)' }}>{me?.name || me?.username || 'guest'}</p>
           {me?.role && (
             <span style={{ fontSize: 'var(--fs-small, 12px)', padding: '1px 8px', borderRadius: 999, fontWeight: 500,
