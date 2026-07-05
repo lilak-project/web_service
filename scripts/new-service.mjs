@@ -509,6 +509,7 @@ export const communityApi = {
   upload: async (fd) => (await fetch(apiURL(P + '/upload'), { method: 'POST', headers: H(), body: fd })).json(),
   blobURL: async (url) => { const r = await fetch(apiURL(url), { headers: H() }); return URL.createObjectURL(await r.blob()) },
   del: (id) => req('DELETE', P + '/messages/' + id),
+  edit: (id, body) => req('PATCH', P + '/messages/' + id, { body }),
   clearAll: () => req('POST', P + '/clear'),
   users: () => req('GET', P + '/users').then((d) => d.users),
   ban: (k, n, b) => req('POST', P + '/ban', { user_key: k, name: n, banned: b }),

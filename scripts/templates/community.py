@@ -129,12 +129,15 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         # migrations for existing DBs (ignore "duplicate column" on re-run)
         for ddl in (
             "ALTER TABLE cm_messages ADD COLUMN poll_id TEXT",
+            "ALTER TABLE cm_messages ADD COLUMN author_username TEXT",   # portal username → avatar seed (profile match)
+            "ALTER TABLE cm_messages ADD COLUMN edited_at TEXT",         # set when the author edits the message
             "ALTER TABLE cm_polls ADD COLUMN named INTEGER DEFAULT 1",   # 1=실명투표 · 0=익명투표
             "ALTER TABLE cm_votes ADD COLUMN name TEXT",                 # voter display identity (for 결과 보기)
             "ALTER TABLE cm_votes ADD COLUMN shape TEXT",
             "ALTER TABLE cm_votes ADD COLUMN color TEXT",
             "ALTER TABLE cm_votes ADD COLUMN anon INTEGER DEFAULT 0",
             "ALTER TABLE cm_votes ADD COLUMN real_name TEXT",
+            "ALTER TABLE cm_votes ADD COLUMN username TEXT",             # voter avatar seed (profile match)
         ):
             try:
                 c.execute(ddl)
@@ -159,11 +162,14 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
     # ── identity helpers ──────────────────────────────────────────────────────
     def who(user: dict) -> dict:
         name = user.get("name") or user.get("username") or user.get("email") or "guest"
+        uname = user.get("username") or user.get("email") or name
         key = "u:" + hashlib.sha256((user.get("email") or user.get("username") or name).encode()).hexdigest()[:16]
-        # use the portal profile avatar when the token carries it; else a stable fallback
-        return {"key": key, "name": name, "role": user.get("role") or "user",
-                "color": user.get("color") or _pick(key, _COLORS),
-                "shape": user.get("shape") or _pick(key, _ICONS)}
+        # Carry the portal profile (color/shape) AND the username verbatim. When
+        # the profile isn't set we deliberately leave color/shape None so the
+        # frontend falls back with the SAME avatarFor(username) the portal uses
+        # — otherwise a python-side guess would diverge from the portal avatar.
+        return {"key": key, "name": name, "username": uname, "role": user.get("role") or "user",
+                "color": user.get("color"), "shape": user.get("shape")}
 
     def anon_of(real_key: str) -> dict:
         with conn() as c:
@@ -183,9 +189,12 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         m = {
             "id": r["id"], "author_key": r["author_key"], "author_name": r["author_name"],
             "author_color": r["author_color"], "author_shape": r["author_shape"],
+            # avatar seed for the profile-match fallback (never leak username for anon)
+            "author_username": (None if r["anon"] else (r["author_username"] if "author_username" in r.keys() else None)),
             "anon": bool(r["anon"]), "body": r["body"], "kind": r["kind"], "done": bool(r["done"]),
             "reply_to_id": r["reply_to_id"], "attachments": json.loads(r["attachments"] or "[]"),
             "poll_id": (r["poll_id"] if "poll_id" in r.keys() else None),
+            "edited": bool(r["edited_at"]) if "edited_at" in r.keys() else False,
             "created_at": r["created_at"],
         }
         if r["reply_to_id"]:
@@ -201,9 +210,9 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
     @router.get("/messages")
     def list_messages(user: dict = Depends(identity)):
         w = who(user)
-        presence[w["key"]] = {"name": w["name"], "color": w["color"], "shape": w["shape"], "ts": time.time()}
+        presence[w["key"]] = {"name": w["name"], "username": w["username"], "color": w["color"], "shape": w["shape"], "ts": time.time()}
         cutoff = time.time() - 15
-        online = [{"key": k, **{x: v[x] for x in ("name", "color", "shape")}}
+        online = [{"key": k, **{x: v.get(x) for x in ("name", "username", "color", "shape")}}
                   for k, v in presence.items() if v["ts"] > cutoff]
         mgr = w["role"] == "manager"
         with conn() as c:
@@ -230,12 +239,13 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         else:
             author_key, author_name, author_color, author_shape = w["key"], w["name"], w["color"], w["shape"]
         kind = "question" if payload.get("kind") == "question" else "msg"
+        author_username = None if anon else w["username"]
         with conn() as c:
             cur = c.execute(
-                """INSERT INTO cm_messages(author_key,author_name,author_color,author_shape,anon,
+                """INSERT INTO cm_messages(author_key,author_name,author_color,author_shape,author_username,anon,
                    real_key,real_name,body,kind,reply_to_id,attachments,created_at)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (author_key, author_name, author_color, author_shape, int(anon),
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (author_key, author_name, author_color, author_shape, author_username, int(anon),
                  w["key"], w["name"], body, kind, int(payload.get("reply_to_id") or 0),
                  json.dumps(atts), _now()))
             mid = cur.lastrowid
@@ -271,9 +281,32 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
 
     @router.delete("/messages/{mid}", status_code=204)
     def delete_message(mid: int, user: dict = Depends(identity)):
-        require_manager(user)
+        # the author may delete their own message; managers may delete anyone's
+        w = who(user)
         with conn() as c:
+            r = c.execute("SELECT author_key FROM cm_messages WHERE id=?", (mid,)).fetchone()
+            if not r:
+                return
+            if w["role"] != "manager" and r["author_key"] != w["key"]:
+                raise HTTPException(403, "본인 메시지만 삭제할 수 있습니다.")
             c.execute("DELETE FROM cm_messages WHERE id=?", (mid,))
+
+    @router.patch("/messages/{mid}")
+    def edit_message(mid: int, payload: dict, user: dict = Depends(identity)):
+        # the author may edit their own message body (managers too)
+        w = who(user)
+        body = (payload.get("body") or "").strip()
+        if not body:
+            raise HTTPException(400, "빈 메시지")
+        with conn() as c:
+            r = c.execute("SELECT author_key FROM cm_messages WHERE id=?", (mid,)).fetchone()
+            if not r:
+                raise HTTPException(404, "없음")
+            if w["role"] != "manager" and r["author_key"] != w["key"]:
+                raise HTTPException(403, "본인 메시지만 수정할 수 있습니다.")
+            c.execute("UPDATE cm_messages SET body=?, edited_at=? WHERE id=?", (body, _now(), mid))
+            r2 = c.execute("SELECT * FROM cm_messages WHERE id=?", (mid,)).fetchone()
+        return row_to_msg(r2, w["role"] == "manager")
 
     @router.post("/clear")
     def clear_all(user: dict = Depends(identity)):
@@ -364,10 +397,10 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             c.execute("INSERT INTO cm_polls(id,title,options,deadline,owner_key,created_at,named) VALUES(?,?,?,?,?,?,?)",
                       (pid, title, json.dumps(options, ensure_ascii=False), payload.get("deadline") or "", w["key"], _now(), named))
             # drop a poll bubble into the chat so everyone sees it (click → side panel)
-            c.execute("""INSERT INTO cm_messages(author_key,author_name,author_color,author_shape,anon,
+            c.execute("""INSERT INTO cm_messages(author_key,author_name,author_color,author_shape,author_username,anon,
                          real_key,real_name,body,kind,poll_id,reply_to_id,attachments,created_at)
-                         VALUES(?,?,?,?,0,?,?,?, 'poll', ?, 0, '[]', ?)""",
-                      (w["key"], w["name"], w["color"], w["shape"], w["key"], w["name"], title, pid, _now()))
+                         VALUES(?,?,?,?,?,0,?,?,?, 'poll', ?, 0, '[]', ?)""",
+                      (w["key"], w["name"], w["color"], w["shape"], w["username"], w["key"], w["name"], title, pid, _now()))
         return {"id": pid}
 
     @router.post("/polls/{pid}/vote")
@@ -377,16 +410,16 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         # respect chat anonymity: an anon-active voter is recorded under their anon identity
         anon = bool(payload.get("anonymous"))
         if anon:
-            ident = anon_of(w["key"]); disp_name, disp_shape, disp_color = ident["name"], ident["shape"], None
+            ident = anon_of(w["key"]); disp_name, disp_shape, disp_color, disp_uname = ident["name"], ident["shape"], None, None
         else:
-            disp_name, disp_shape, disp_color = w["name"], w["shape"], w["color"]
+            disp_name, disp_shape, disp_color, disp_uname = w["name"], w["shape"], w["color"], w["username"]
         with conn() as c:
             p = c.execute("SELECT closed FROM cm_polls WHERE id=?", (pid,)).fetchone()
             if not p or p["closed"]:
                 raise HTTPException(400, "종료된 투표")
-            c.execute("""INSERT OR REPLACE INTO cm_votes(poll_id,user_key,option_id,name,shape,color,anon,real_name)
-                         VALUES(?,?,?,?,?,?,?,?)""",
-                      (pid, w["key"], oid, disp_name, disp_shape, disp_color, int(anon), w["name"]))
+            c.execute("""INSERT OR REPLACE INTO cm_votes(poll_id,user_key,option_id,name,shape,color,anon,real_name,username)
+                         VALUES(?,?,?,?,?,?,?,?,?)""",
+                      (pid, w["key"], oid, disp_name, disp_shape, disp_color, int(anon), w["name"], disp_uname))
         return {"ok": True}
 
     @router.get("/polls/{pid}/results")
@@ -408,7 +441,8 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         by_opt: dict = {}
         for r in rows:
             v = {"key": r["user_key"], "name": r["name"] or "?", "shape": r["shape"],
-                 "color": r["color"], "anon": bool(r["anon"])}
+                 "color": r["color"], "anon": bool(r["anon"]),
+                 "username": (r["username"] if "username" in r.keys() else None)}
             if r["anon"] and mgr:
                 v["real_name"] = r["real_name"]
             by_opt.setdefault(r["option_id"], []).append(v)
