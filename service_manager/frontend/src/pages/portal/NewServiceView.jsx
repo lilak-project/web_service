@@ -17,7 +17,7 @@ const rnd = (a) => a[Math.floor(Math.random() * a.length)]
  */
 
 let _tabSeq = 1
-const newTab = (over = {}) => ({ key: _tabSeq++, id: '', label: '', icon: DEFAULT_ICON, ...over })
+const newTab = (over = {}) => ({ key: _tabSeq++, id: '', label: '', icon: DEFAULT_ICON, kind: '', ...over })
 
 const field = {
   height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px',
@@ -53,7 +53,7 @@ export default function NewServiceView({ onCreated }) {
     setErr('')
     if (!nameOk) { setErr(t('newsvc_name_bad')); return }
     const cleanTabs = tabs
-      .map((x) => ({ id: x.id.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''), label: (x.label || x.id).trim(), icon: x.icon || 'circle' }))
+      .map((x) => ({ id: x.id.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''), label: (x.label || x.id).trim(), icon: x.icon || 'circle', kind: x.kind || '' }))
       .filter((x) => x.id)
     if (!cleanTabs.length) { setErr(t('newsvc_tabs_bad')); return }
     setBusy(true)
@@ -135,6 +135,12 @@ export default function NewServiceView({ onCreated }) {
             <input style={{ ...field, flex: 1, minWidth: 0 }} value={tb.label} placeholder={t('newsvc_tab_label')} disabled={!!job}
               onChange={(e) => setTab(tb.key, { label: e.target.value })} />
             <IconPick value={tb.icon} disabled={!!job} onChange={(ic) => setTab(tb.key, { icon: ic })} />
+            <select style={{ ...field, width: 116 }} value={tb.kind || ''} disabled={!!job}
+              onChange={(e) => setTab(tb.key, e.target.value === 'community' ? { kind: 'community', icon: 'community' } : { kind: '' })}
+              title={t('newsvc_tab_kind') || 'Tab type'}>
+              <option value="">{t('newsvc_tab_kind_basic') || '일반'}</option>
+              <option value="community">{t('newsvc_tab_kind_community') || '커뮤니티'}</option>
+            </select>
             <Button variant="ghost" icon disabled={!!job || tabs.length <= 1} onClick={() => delTab(tb.key)} title={t('newsvc_tab_del')}>
               <Icon name="trash" size={14} />
             </Button>

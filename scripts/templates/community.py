@@ -106,7 +106,24 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         );
         CREATE TABLE IF NOT EXISTS cm_votes (poll_id TEXT, user_key TEXT, option_id TEXT,
             PRIMARY KEY (poll_id, user_key));
+        CREATE TABLE IF NOT EXISTS cm_config (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE IF NOT EXISTS cm_bots (
+            name TEXT PRIMARY KEY, provider TEXT, model TEXT, api_key TEXT,
+            system TEXT, enabled INTEGER DEFAULT 1
+        );
         """)
+
+    # load persisted anon-name pool (if an admin edited it)
+    with conn() as c:
+        for row in c.execute("SELECT key, value FROM cm_config WHERE key IN ('anon_surnames','anon_given')"):
+            try:
+                vals = json.loads(row["value"])
+                if row["key"] == "anon_surnames" and vals:
+                    globals()["_SURNAMES"] = vals
+                elif row["key"] == "anon_given" and vals:
+                    globals()["_GIVEN"] = vals
+            except Exception:
+                pass
 
     presence: dict[str, dict] = {}          # user_key -> {name,color,shape,ts}
     router = APIRouter(prefix="/api/community", tags=["community"])
@@ -192,6 +209,8 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
                  json.dumps(atts), _now()))
             mid = cur.lastrowid
             r = c.execute("SELECT * FROM cm_messages WHERE id=?", (mid,)).fetchone()
+        if body:
+            trigger_bots(body, mid)      # @bot mentions → async-ish bot replies
         return row_to_msg(r, w["role"] == "manager")
 
     # ── attachments ───────────────────────────────────────────────────────────
@@ -335,8 +354,100 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             c.execute("UPDATE cm_polls SET closed=1 WHERE id=?", (pid,))
         return {"ok": True}
 
+    # ── anonymous name pool (admin-editable, persisted) ───────────────────────
+    @router.get("/anon-names")
+    def get_anon_names(user: dict = Depends(identity)):
+        require_manager(user)
+        return {"surnames": _SURNAMES, "given": _GIVEN}
+
+    @router.put("/anon-names")
+    def put_anon_names(payload: dict, user: dict = Depends(identity)):
+        require_manager(user)
+        sur = [s.strip() for s in (payload.get("surnames") or []) if s and s.strip()]
+        giv = [s.strip() for s in (payload.get("given") or []) if s and s.strip()]
+        set_anon_names(sur or None, giv or None)
+        with conn() as c:
+            c.execute("INSERT OR REPLACE INTO cm_config(key,value) VALUES('anon_surnames',?)", (json.dumps(_SURNAMES, ensure_ascii=False),))
+            c.execute("INSERT OR REPLACE INTO cm_config(key,value) VALUES('anon_given',?)", (json.dumps(_GIVEN, ensure_ascii=False),))
+        return {"surnames": _SURNAMES, "given": _GIVEN}
+
+    # ── AI bots (@botname → provider reply) ───────────────────────────────────
+    @router.get("/bots")
+    def list_bots(user: dict = Depends(identity)):
+        require_manager(user)
+        with conn() as c:
+            rows = c.execute("SELECT name, provider, model, enabled FROM cm_bots").fetchall()
+        return {"bots": [{"name": r["name"], "provider": r["provider"], "model": r["model"], "enabled": bool(r["enabled"])} for r in rows]}
+
+    @router.post("/bots")
+    def upsert_bot(payload: dict, user: dict = Depends(identity)):
+        require_manager(user)
+        name = (payload.get("name") or "").strip().lower()
+        if not name:
+            raise HTTPException(400, "봇 이름이 필요합니다.")
+        with conn() as c:
+            c.execute("""INSERT OR REPLACE INTO cm_bots(name,provider,model,api_key,system,enabled)
+                         VALUES(?,?,?,?,?,?)""",
+                      (name, payload.get("provider") or "echo", payload.get("model") or "",
+                       payload.get("api_key") or "", payload.get("system") or "", int(payload.get("enabled", 1))))
+        return {"ok": True, "name": name}
+
+    @router.delete("/bots/{name}", status_code=204)
+    def delete_bot(name: str, user: dict = Depends(identity)):
+        require_manager(user)
+        with conn() as c:
+            c.execute("DELETE FROM cm_bots WHERE name=?", (name.lower(),))
+
+    def trigger_bots(body: str, trigger_id: int) -> None:
+        mentioned = {m.lower() for m in _MENTION_RE.findall(body)}
+        if not mentioned:
+            return
+        with conn() as c:
+            bots = c.execute("SELECT * FROM cm_bots WHERE enabled=1").fetchall()
+        for b in bots:
+            if b["name"] not in mentioned:
+                continue
+            reply = _call_bot(b["provider"], b["model"], b["api_key"], b["system"], body)
+            with conn() as c:
+                c.execute("""INSERT INTO cm_messages(author_key,author_name,author_color,author_shape,anon,
+                             real_key,real_name,body,kind,reply_to_id,attachments,created_at)
+                             VALUES(?,?,?,?,0,NULL,NULL,?,?,?, '[]', ?)""",
+                          ("bot:" + b["name"], b["name"], "#8b5cf6", "robot", reply, "msg", trigger_id, _now()))
+
     return router
 
 
 def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+
+
+def _call_bot(provider: str, model: str, api_key: str, system: str, prompt: str) -> str:
+    """Return a bot reply. Real providers when a key is present; otherwise a
+    stub echo so the feature works end-to-end without external credentials."""
+    provider = (provider or "echo").lower()
+    key = api_key or ""
+    try:
+        if provider == "openai" and key:
+            import urllib.request
+            req = urllib.request.Request(
+                "https://api.openai.com/v1/chat/completions",
+                data=json.dumps({"model": model or "gpt-4o-mini",
+                                 "messages": ([{"role": "system", "content": system}] if system else []) +
+                                             [{"role": "user", "content": prompt}]}).encode(),
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read())["choices"][0]["message"]["content"].strip()
+        if provider == "anthropic" and key:
+            import urllib.request
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=json.dumps({"model": model or "claude-sonnet-5", "max_tokens": 1024,
+                                 **({"system": system} if system else {}),
+                                 "messages": [{"role": "user", "content": prompt}]}).encode(),
+                headers={"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return "".join(b.get("text", "") for b in json.loads(r.read())["content"]).strip()
+    except Exception as e:                       # noqa: BLE001
+        return f"(봇 호출 오류: {e})"
+    # echo fallback (no key / provider 'echo')
+    return f"🤖 {prompt.strip()[:200]}"

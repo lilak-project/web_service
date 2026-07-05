@@ -63,6 +63,7 @@ class TabSpec(BaseModel):
     id: str
     label: str
     icon: str = "circle"
+    kind: str = ""                  # '' = placeholder; 'community' = built-in chat tab
 
 
 class ScaffoldBody(BaseModel):
@@ -81,8 +82,9 @@ def _tabs_arg(tabs: list[TabSpec]) -> str:
         tid = re.sub(r"[^a-z0-9_]", "", (t.id or "").lower())
         label = (t.label or tid).strip().replace(",", " ").replace(":", " ")
         icon = re.sub(r"[^a-z0-9_-]", "", (t.icon or "circle").lower()) or "circle"
+        kind = re.sub(r"[^a-z]", "", (t.kind or "").lower())      # 'community' or ''
         if tid:
-            parts.append(f"{tid}:{label}:{icon}")
+            parts.append(f"{tid}:{label}:{icon}:{kind}" if kind else f"{tid}:{label}:{icon}")
     return ",".join(parts) or "home:home:home"
 
 

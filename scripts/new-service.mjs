@@ -23,6 +23,7 @@
 import { mkdirSync, writeFileSync, existsSync, copyFileSync, symlinkSync, unlinkSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { resolve, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 
 // ── args ─────────────────────────────────────────────────────────────────────
@@ -64,15 +65,21 @@ const BUILD = !!args.build                              // npm install + build a
 const LILAK_UI = resolve(expand(args['lilak-ui']) || process.env.LILAK_UI_PATH || join(OUT, 'lilak_ui'))
 if (!/^#[0-9a-f]{6}$/.test(COLOR)) { console.error(`error: --color must be a #rrggbb hex (got ${COLOR})`); process.exit(1) }
 
-// tabs: "id:label:icon,id:label:icon" — icon optional
+// tabs: "id:label:icon[:kind]" — icon optional; kind='community' → built-in chat tab
 const TABS = String(args.tabs || 'home:홈:home').split(',').map((s) => {
-  const [id, label, icon] = s.split(':')
-  return { id: id.trim(), label: (label || id).trim(), icon: (icon || 'circle').trim() }
+  const [id, label, icon, kind] = s.split(':')
+  const t = { id: id.trim(), label: (label || id).trim(), icon: (icon || 'circle').trim() }
+  const k = (kind || '').trim() || (t.icon === 'community' ? 'community' : '')
+  if (k) t.kind = k
+  return t
 })
 if (WITH_SETTINGS && !TABS.some((t) => t.id === 'set' || t.id === 'settings')) {
   TABS.push({ id: 'set', label: '설정', icon: 'settings' })
 }
 const SETTINGS_TAB = TABS.find((t) => t.id === 'set' || t.id === 'settings')
+const COMMUNITY_TABS = TABS.filter((t) => t.kind === 'community')
+const HAS_COMMUNITY = COMMUNITY_TABS.length > 0
+const FILES_TAB = TABS.find((t) => t.id === 'files')
 
 // ── colour helpers (derive hover / tint / muted from the one main colour) ─────
 const hex2rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
@@ -114,7 +121,7 @@ function putAbs(abs, content) {
 const dq = (s) => JSON.stringify(s)
 
 const tabsDict = (labels) => TABS.map((t) => `    tab_${t.id}: ${dq(labels[t.id] || t.label)},`).join('\n')
-const placeholderDict = (suffix) => TABS.filter((t) => t !== SETTINGS_TAB)
+const placeholderDict = (suffix) => TABS.filter((t) => t !== SETTINGS_TAB && t.kind !== 'community')
   .map((t) => `    placeholder_${t.id}: ${dq(t.label + suffix)},`).join('\n')
 
 const i18n = `// i18n dictionaries for the ${NAME} shell — the kit LangProvider consumes this.
@@ -243,14 +250,18 @@ export async function post(url, body) {
 export function portalHome() { return PORTAL_BASE ? PORTAL_BASE.replace(/\\/p\\/[^/]+$/, '/') || '/' : '/' }
 `
 
-// pages: placeholder-per-tab + optional SettingsPage
-const pagesImports = TABS.map((t) => t === SETTINGS_TAB
-  ? `import SettingsPage from '../pages/SettingsPage'`
-  : null).filter(Boolean).join('\n')
+// pages: placeholder-per-tab + optional SettingsPage + built-in Community tabs
+const pagesImports = [
+  SETTINGS_TAB ? `import SettingsPage from '../pages/SettingsPage'` : null,
+  HAS_COMMUNITY ? `import CommunityTab from '../pages/CommunityTab'` : null,
+].filter(Boolean).join('\n')
 
+const onFiles = FILES_TAB ? `() => setTab(${dq(FILES_TAB.id)})` : 'undefined'
 const pagesMap = TABS.map((t) => t === SETTINGS_TAB
   ? `    ${t.id}: <SettingsPage />,`
-  : `    ${t.id}: <Placeholder icon=${dq(t.icon)} title={t('tab_${t.id}')} note={t('placeholder_${t.id}')} />,`).join('\n')
+  : t.kind === 'community'
+    ? `    ${t.id}: <CommunityTab onOpenFiles={${onFiles}} />,`
+    : `    ${t.id}: <Placeholder icon=${dq(t.icon)} title={t('tab_${t.id}')} note={t('placeholder_${t.id}')} />,`).join('\n')
 
 const shellJsx = `/**
  * Shell — ${NAME} chrome: a thin config of the kit's AppShell (top bar, /command
@@ -389,13 +400,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from portal_auth import identity
-
+${HAS_COMMUNITY ? 'from community import build_community_router\n' : ''}
 app = FastAPI(title="${NAME}")
 
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
-
+${HAS_COMMUNITY ? `
+# Built-in community/chat tab — data persists in the service's data dir.
+_CM_DATA = Path(__file__).resolve().parents[1] / "community_data"
+app.include_router(build_community_router(
+    db_path=_CM_DATA / "community.db", uploads_dir=_CM_DATA / "uploads", identity=identity))
+` : ''}
 
 @app.get("/api/health")
 def health():
@@ -466,6 +482,60 @@ def identity(request: Request, authorization: Optional[str] = Header(default=Non
 const requirements = `fastapi
 uvicorn[standard]
 python-jose[cryptography]
+${HAS_COMMUNITY ? 'python-multipart\n' : ''}`
+
+// ── built-in community tab (frontend adapter + page) ─────────────────────────
+const communityApiJs = `// Community backend adapter → the kit <Community> talks to /api/community/* via this.
+import { apiURL, token } from './api'
+const P = '/api/community'
+const H = () => (token() ? { Authorization: \`Bearer \${token()}\` } : {})
+async function req(method, path, body) {
+  const res = await fetch(apiURL(path), { method, headers: { ...H(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
+  if (res.status === 204) return null
+  if (!res.ok) throw new Error(res.status + ' ' + await res.text())
+  return res.json()
+}
+export const communityApi = {
+  poll: () => req('GET', P + '/messages'),
+  send: (p) => req('POST', P + '/messages', p),
+  upload: async (fd) => (await fetch(apiURL(P + '/upload'), { method: 'POST', headers: H(), body: fd })).json(),
+  blobURL: async (url) => { const r = await fetch(apiURL(url), { headers: H() }); return URL.createObjectURL(await r.blob()) },
+  del: (id) => req('DELETE', P + '/messages/' + id),
+  clearAll: () => req('POST', P + '/clear'),
+  users: () => req('GET', P + '/users').then((d) => d.users),
+  ban: (k, n, b) => req('POST', P + '/ban', { user_key: k, name: n, banned: b }),
+  questions: () => req('GET', P + '/questions').then((d) => d.questions),
+  completed: () => req('GET', P + '/completed').then((d) => d.questions),
+  complete: (id) => req('POST', P + '/complete/' + id),
+  anonIdentity: () => req('GET', P + '/anon-identity'),
+  polls: () => req('GET', P + '/polls').then((d) => d.polls),
+  createPoll: (p) => req('POST', P + '/polls', p),
+  vote: (pid, oid) => req('POST', P + '/polls/' + pid + '/vote', { option_id: oid }),
+  closePoll: (pid) => req('POST', P + '/polls/' + pid + '/close'),
+  anonNames: () => req('GET', P + '/anon-names'),
+  saveAnonNames: (n) => req('PUT', P + '/anon-names', n),
+  bots: () => req('GET', P + '/bots').then((d) => d.bots),
+  saveBot: (b) => req('POST', P + '/bots', b),
+  delBot: (name) => req('DELETE', P + '/bots/' + name),
+}
+`
+
+const communityTabJsx = `import { useEffect, useState } from 'react'
+import { Community } from 'lilak-ui'
+import { get } from '../api'
+import { communityApi } from '../community_api'
+
+// Built-in community/chat tab (kit <Community> + this service's backend module).
+export default function CommunityTab({ onOpenFiles }) {
+  const [role, setRole] = useState('user')
+  useEffect(() => { get('/api/whoami').then((u) => setRole(u.role || 'user')).catch(() => {}) }, [])
+  return (
+    <div style={{ height: '100%', boxSizing: 'border-box', padding: 12 }}>
+      <Community api={communityApi} role={role} onOpenFiles={onOpenFiles}
+        features={{ attachments: true, questions: true, anon: true, polls: true, mentions: true, moderation: true }} />
+    </div>
+  )
+}
 `
 
 // ── manifest (written under data/<name>/) ─────────────────────────────────────
@@ -497,6 +567,15 @@ if (existsSync(favSrc)) { mkdirSync(join(ROOT, 'frontend/public'), { recursive: 
 put('backend/main.py', backendMain)
 put('backend/portal_auth.py', portalAuth)
 put('backend/requirements.txt', requirements)
+
+// built-in community tab: copy the shared backend module + write the frontend glue
+if (HAS_COMMUNITY) {
+  const cmSrc = join(dirname(fileURLToPath(import.meta.url)), 'templates', 'community.py')
+  const cmDest = join(ROOT, 'backend/community.py')
+  if (existsSync(cmSrc) && (FORCE || !existsSync(cmDest))) { copyFileSync(cmSrc, cmDest); wrote++ } else if (existsSync(cmDest)) skipped++
+  put('frontend/src/community_api.js', communityApiJs)
+  put('frontend/src/pages/CommunityTab.jsx', communityTabJsx)
+}
 
 // settings tab (portal-centric)
 if (WITH_SETTINGS) {
