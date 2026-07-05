@@ -651,6 +651,7 @@ export default {
   newsvc_tab_kind_settings: 'Settings',
   newsvc_tab_add_community: 'Community',
   newsvc_tab_add_settings:  'Settings',
+  newsvc_command_bar:       'Bottom command bar (collapsible, opened with /)',
   newsvc_tabs_bad:         'Add at least one tab.',
   newsvc_settings:         'Add a portal Settings tab (account · user-management links)',
   newsvc_create:           'Create',

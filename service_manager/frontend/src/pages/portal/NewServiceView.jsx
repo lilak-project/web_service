@@ -32,6 +32,7 @@ export default function NewServiceView({ onCreated }) {
   const [service, setService] = useState('')
   const [icon, setIcon] = useState(DEFAULT_ICON)
   const [color, setColor] = useState('#000000')
+  const [commandBar, setCommandBar] = useState(true)   // collapsible bottom command bar
   const [tabs, setTabs] = useState(() => [newTab({ id: 'home', label: lang === 'ko' ? '홈' : 'Home', icon: 'home' })])
   const [job, setJob] = useState(null)          // {status, log, error, name}
   const [busy, setBusy] = useState(false)
@@ -60,7 +61,7 @@ export default function NewServiceView({ onCreated }) {
     setBusy(true)
     try {
       const { data } = await launcher.post('/admin/services/scaffold', {
-        name, service: service.trim(), icon, tabs: cleanTabs, color, settings,
+        name, service: service.trim(), icon, tabs: cleanTabs, color, settings, command_bar: commandBar,
       })
       setJob({ status: 'queued', log: [], name: data.name })
       poll.current = setInterval(() => pollOnce(data.job_id), 1200)
@@ -168,6 +169,13 @@ export default function NewServiceView({ onCreated }) {
           </div>
         )}
       </div>
+
+      {!job && (
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+          <input type="checkbox" checked={commandBar} onChange={(e) => setCommandBar(e.target.checked)} />
+          {t('newsvc_command_bar')}
+        </label>
+      )}
 
       {err && (
         <div style={{ padding: '8px 10px', borderRadius: 8, fontSize: 'var(--fs-small, 12px)',

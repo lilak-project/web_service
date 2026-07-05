@@ -651,6 +651,7 @@ export default {
   newsvc_tab_kind_settings: '설정',
   newsvc_tab_add_community: '커뮤니티',
   newsvc_tab_add_settings:  '설정',
+  newsvc_command_bar:       '하단 명령바 (/ 로 여는 접이식)',
   newsvc_tabs_bad:         '탭을 하나 이상 입력하세요.',
   newsvc_settings:         '포탈 설정 탭 추가 (계정·사용자 관리 링크)',
   newsvc_create:           '만들기',

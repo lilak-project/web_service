@@ -74,6 +74,7 @@ class ScaffoldBody(BaseModel):
     tabs: list[TabSpec] = []
     color: str = "#000000"
     settings: bool = False
+    command_bar: bool = True         # collapsible bottom `/` command bar
 
 
 def _tabs_arg(tabs: list[TabSpec]) -> str:
@@ -129,6 +130,8 @@ def _run_job(job_id: str, body: ScaffoldBody) -> None:
         argv += ["--shared-modules", SVC_NODE_MODULES]
     if body.settings:
         argv.append("--settings")
+    if not body.command_bar:
+        argv.append("--no-command-bar")
 
     _set(job_id, status="running")
     _log(job_id, f"$ new-service.mjs --name {body.name} --tabs {_tabs_arg(body.tabs)} --build")

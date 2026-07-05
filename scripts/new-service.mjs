@@ -53,6 +53,7 @@ const SERVICE = args.service || 'app'                 // brand subtitle (lilak /
 const BRAND = args.brand || '라일락'
 const COLOR = (args.color || '#000000').toLowerCase()
 const WITH_SETTINGS = !!args.settings
+const COMMAND_BAR = !args['no-command-bar']     // collapsible bottom `/` command bar (default on)
 const PORT = Number(args.port) || 5160
 const BPORT = Number(args['backend-port']) || 8160
 const FORCE = !!args.force
@@ -309,6 +310,7 @@ ${pagesMap}
       tabs={tabs}
       active={tab}
       onTab={setTab}
+      commandBar={${COMMAND_BAR}}
       themes={ENABLED_THEMES}
       status={status}
       labels={labels}
