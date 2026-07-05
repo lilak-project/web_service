@@ -15,9 +15,33 @@ services:
       - "${PORTAL_PORT:-8025}:8025"   # single front door; service ports stay internal
     volumes:
       - portal-data:/app/data          # the state: accounts + registry + service data
+      - sci-data:/sci                  # nptoy reads sci-runner sim outputs from here
+    environment:
+      # nptoy delegates heavy nptool work to the sci-runner (see sci-runner/DEPLOY.md).
+      - SCI_RUNNER_URL=http://sci-runner:8100
+      - SCI_SHARED_DIR=/sci
+      - SCI_TOKEN=${SCI_TOKEN:-}
     env_file:
       - .env
+    depends_on:
+      - sci-runner
+    restart: unless-stopped
+
+  # Heavy simulation backend: ROOT + Geant4 + nptool (built from the LOCAL snapshot,
+  # sci-runner/nptool-src, produced by sci-runner/stage-nptool.sh). INTERNAL only —
+  # never published to the internet; the portal reaches it at http://sci-runner:8100.
+  sci-runner:
+    build:
+      context: ${STACK_DIR}/sci-runner
+      dockerfile: Dockerfile
+    image: lilak-sci-runner:latest
+    volumes:
+      - sci-data:/data                 # jobs/<id>/ outputs land here (shared with portal)
+    environment:
+      - SCI_TOKEN=${SCI_TOKEN:-}
+      - SCI_JOB_TIMEOUT=${SCI_JOB_TIMEOUT:-1800}
     restart: unless-stopped
 
 volumes:
   portal-data:
+  sci-data:

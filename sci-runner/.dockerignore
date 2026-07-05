@@ -1,0 +1,6 @@
+# Keep nptool-src/ (the Dockerfile COPYs it); drop only local junk.
+__pycache__/
+*.pyc
+.DS_Store
+DEPLOY.md
+.gitignore

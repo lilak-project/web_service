@@ -1,0 +1,5 @@
+# Staged nptool snapshot (191 MB) — a build input produced by stage-nptool.sh,
+# never committed. Re-create it before each build.
+nptool-src/
+__pycache__/
+*.pyc
