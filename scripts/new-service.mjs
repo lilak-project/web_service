@@ -49,7 +49,7 @@ if (!NAME || !/^[a-z][a-z0-9_]*$/.test(NAME)) {
   process.exit(1)
 }
 const OUT = resolve(expand(args.out) || join(homedir(), 'web_service'))
-const SERVICE = args.service || 'app'                 // brand subtitle (lilak / <service>)
+const SERVICE = args.service || NAME   // brand subtitle (lilak / <service>); defaults to the service name so the portal card is identifiable
 const BRAND = args.brand || '라일락'
 const COLOR = (args.color || '#000000').toLowerCase()
 const WITH_SETTINGS = !!args.settings
