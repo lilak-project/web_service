@@ -730,21 +730,36 @@ putAbs(DATA_SERVICE ? join(ROOT, 'service.json') : join(OUT, 'data', NAME, 'serv
 // share identical deps) → build is offline + fast, no per-service npm install.
 // Only `dist` needs to persist, so the symlink is removed after building to keep
 // the data volume clean.
+// Resolve an npm binary robustly: a portal/launchd/cron env often has a minimal
+// PATH without npm, so bare spawnSync('npm') fails ENOENT (silent build failure).
+// Prefer the npm that ships next to the running node, then common install dirs.
+function findNpm() {
+  const nodeDir = dirname(process.execPath)
+  for (const c of [join(nodeDir, 'npm'), '/opt/homebrew/bin/npm', '/usr/local/bin/npm', '/usr/bin/npm']) {
+    if (existsSync(c)) return c
+  }
+  return 'npm'
+}
+
 let built = false
 if (BUILD) {
   const fe = join(ROOT, 'frontend')
-  const env = { ...process.env, LILAK_UI_PATH: LILAK_UI }
+  const npmBin = findNpm()
+  // widen PATH so npm can find node (+ git etc.) even under a stripped env
+  const PATH = [...new Set([dirname(process.execPath), dirname(npmBin), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', process.env.PATH].filter(Boolean))].join(':')
+  const env = { ...process.env, LILAK_UI_PATH: LILAK_UI, PATH }
   const shared = expand(args['shared-modules'])
   const nm = join(fe, 'node_modules')
   let linked = false
   if (shared && existsSync(shared) && !existsSync(nm)) {
     try { symlinkSync(shared, nm, 'dir'); linked = true } catch (e) { console.error('shared-modules link failed:', e.message) }
   }
-  console.log(`\n▶ building frontend  (LILAK_UI_PATH=${LILAK_UI}${linked ? ', shared node_modules' : ''}) …`)
+  console.log(`\n▶ building frontend  (npm=${npmBin}, LILAK_UI_PATH=${LILAK_UI}${linked ? ', shared node_modules' : ''}) …`)
   let r = { status: 0 }
-  if (!linked) r = spawnSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: fe, env, stdio: 'inherit' })
-  if (r.status === 0) r = spawnSync('npm', ['run', 'build'], { cwd: fe, env, stdio: 'inherit' })
-  built = r.status === 0
+  if (!linked) r = spawnSync(npmBin, ['install', '--no-audit', '--no-fund'], { cwd: fe, env, stdio: 'inherit' })
+  if (r.status === 0 && !r.error) r = spawnSync(npmBin, ['run', 'build'], { cwd: fe, env, stdio: 'inherit' })
+  built = r.status === 0 && !r.error
+  if (r.error) console.error(`✗ could not run npm (${npmBin}): ${r.error.message}`)
   if (linked) { try { unlinkSync(nm) } catch { /* leave it */ } }
   console.log(built ? '✓ frontend built' : '✗ frontend build failed')
 }
