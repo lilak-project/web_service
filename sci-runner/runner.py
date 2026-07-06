@@ -37,6 +37,22 @@ class JobSpec(BaseModel):
     argv: list[str]                              # e.g. ["npsimulation","-D","proj.detector","-E","reac.reaction","-O","out"]
     name: str | None = None
     timeout: int | None = None
+    # Working dir for the run, as a path RELATIVE to SCI_DATA (the shared volume).
+    # Lets the caller (nptoy) stage a self-contained workspace and run there, so the
+    # sim's own relative paths resolve exactly as on the dev box. Defaults to the
+    # job's dir; must stay inside SCI_DATA.
+    cwd: str | None = None
+
+
+def _resolve_cwd(cwd: str | None, jd: Path) -> Path:
+    if not cwd:
+        return jd
+    base = SCI_DATA.resolve()
+    cand = (SCI_DATA / cwd).resolve()
+    if cand != base and base not in cand.parents:
+        raise ValueError("cwd escapes SCI_DATA")
+    cand.mkdir(parents=True, exist_ok=True)
+    return cand
 
 
 def _auth(authorization: str | None) -> None:
@@ -57,8 +73,9 @@ def _run(job_id: str, spec: JobSpec) -> None:
     with _lock:                                  # serialize: one job at a time
         _jobs[job_id].update(status="running", started=time.time())
         try:
+            wd = _resolve_cwd(spec.cwd, jd)      # run in the caller's staged dir if given
             with open(logf, "w") as out:
-                proc = subprocess.run(spec.argv, cwd=jd, stdout=out, stderr=subprocess.STDOUT,
+                proc = subprocess.run(spec.argv, cwd=wd, stdout=out, stderr=subprocess.STDOUT,
                                       timeout=to, env=os.environ, check=False)
             rc = proc.returncode
             _jobs[job_id].update(status="done" if rc == 0 else "error", rc=rc, ended=time.time())
