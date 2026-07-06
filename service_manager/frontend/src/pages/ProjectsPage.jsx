@@ -86,6 +86,7 @@ function AuthCard({ t, onAuthed }) {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState(null)   // email-verification notice
+  const [verifyCode, setVerifyCode] = useState('')
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   async function login() {
@@ -106,6 +107,7 @@ function AuthCard({ t, onAuthed }) {
         invite_code: f.invite_code.trim() || undefined,
       })
       if (res.data.verify_required) {
+        setVerifyCode('')
         setPending(res.data)                     // show "check your email" notice
       } else {
         setPortalToken(res.data.access_token)    // verification disabled → log in
@@ -117,12 +119,48 @@ function AuthCard({ t, onAuthed }) {
     } finally { setBusy(false) }
   }
 
+  async function submitVerifyCode(e) {
+    e?.preventDefault()
+    setBusy(true); setErr('')
+    try {
+      const res = await launcher.post('/auth/verify-code', {
+        username: pending?.username || f.username.trim(),
+        code: verifyCode.trim(),
+      })
+      setPortalToken(res.data.access_token)
+      const me = await launcher.get('/auth/me')
+      onAuthed(me.data)
+    } catch (e2) {
+      setErr(e2?.response?.data?.detail || '인증 코드가 올바르지 않습니다.')
+    } finally { setBusy(false) }
+  }
+
   if (pending) {
     return (
       <div style={{ maxWidth: 360, margin: '28px auto 0', display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'center' }}>
         <div style={{ fontSize: 32 }}>✉️</div>
         <div style={{ fontWeight: 600 }}>{pending.message || '인증 메일을 확인하세요.'}</div>
         <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{pending.email}</div>
+        <form onSubmit={submitVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input
+            autoFocus
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="6자리 인증 코드"
+            value={verifyCode}
+            onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            style={{ ...inputStyle, textAlign: 'center', letterSpacing: 4, fontSize: 18 }}
+          />
+          {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
+          <Button type="submit" disabled={busy || verifyCode.length !== 6}
+            style={{ justifyContent: 'center' }}>인증하고 로그인</Button>
+        </form>
+        {pending.verify_code && (
+          <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', wordBreak: 'break-all',
+            border: '1px dashed var(--border, #ccc)', borderRadius: 8, padding: 8 }}>
+            DEV — 메일 대신 인증 코드: {pending.verify_code}
+          </div>
+        )}
         {pending.verify_url && (
           <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', wordBreak: 'break-all',
             border: '1px dashed var(--border, #ccc)', borderRadius: 8, padding: 8 }}>

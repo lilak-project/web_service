@@ -26,6 +26,11 @@ class RegisterRequest(BaseModel):
     invite_code: Optional[str] = None   # optional project-access code → instant grant
 
 
+class VerifyCodeRequest(BaseModel):
+    username: str
+    code: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

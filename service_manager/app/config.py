@@ -53,12 +53,15 @@ TOKEN_EXPIRE_HOURS = int(os.environ.get("PORTAL_TOKEN_EXPIRE_HOURS", "24"))
 # env in production.
 REGISTER_TOKEN = os.environ.get("PORTAL_REGISTER_TOKEN", "lilak-portal-register-CHANGE")
 
-# Email verification. When DEV_ECHO is on (default), the verification link is
-# returned in the register response + logged, instead of being emailed — so the
-# flow is testable locally without an email provider. Set it off once a real
-# sender (e.g. Firebase) delivers the link. REQUIRED gates login on verification.
+# Email verification. When DEV_ECHO is on, the verification link is returned in
+# the register response + logged, so the flow is testable locally without an
+# email provider. In production, configure Resend and keep DEV_ECHO off.
+# REQUIRED gates login on verification.
 EMAIL_VERIFY_REQUIRED = os.environ.get("EMAIL_VERIFY_REQUIRED", "1") not in ("0", "false", "False")
 EMAIL_VERIFY_DEV_ECHO = os.environ.get("EMAIL_VERIFY_DEV_ECHO", "1") not in ("0", "false", "False")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "").strip()
+RESEND_REPLY_TO = os.environ.get("RESEND_REPLY_TO", "").strip()
 
 # Sign-up email gating. A comma-separated allow-list of email domains that may
 # self-register freely (e.g. "ibs.re.kr,kaist.ac.kr"). Empty = any email allowed.

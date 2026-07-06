@@ -16,7 +16,7 @@ services:
       dockerfile: service_manager/deploy/Dockerfile
     image: lilak-web-portal:latest
     ports:
-      - "${PORTAL_PORT:-8025}:8025"                # single front door; service ports stay internal
+      - "${PORTAL_BIND:-127.0.0.1}:${PORTAL_PORT:-8025}:8025"  # localhost front door; service ports stay internal
     volumes:
       # HOST folder ↔ container — all data lives here, on the host, per server.
       - ${PORTAL_DATA_DIR:-./portal-data}:/app/data
