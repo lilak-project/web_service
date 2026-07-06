@@ -131,6 +131,7 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             "ALTER TABLE cm_messages ADD COLUMN poll_id TEXT",
             "ALTER TABLE cm_messages ADD COLUMN author_username TEXT",   # portal username → avatar seed (profile match)
             "ALTER TABLE cm_messages ADD COLUMN edited_at TEXT",         # set when the author edits the message
+            "ALTER TABLE cm_messages ADD COLUMN notice INTEGER DEFAULT 0",  # 관리자 공지 (pinned under the title)
             "ALTER TABLE cm_polls ADD COLUMN named INTEGER DEFAULT 1",   # 1=실명투표 · 0=익명투표
             "ALTER TABLE cm_votes ADD COLUMN name TEXT",                 # voter display identity (for 결과 보기)
             "ALTER TABLE cm_votes ADD COLUMN shape TEXT",
@@ -192,6 +193,7 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             # avatar seed for the profile-match fallback (never leak username for anon)
             "author_username": (None if r["anon"] else (r["author_username"] if "author_username" in r.keys() else None)),
             "anon": bool(r["anon"]), "body": r["body"], "kind": r["kind"], "done": bool(r["done"]),
+            "notice": bool(r["notice"]) if "notice" in r.keys() else False,
             "reply_to_id": r["reply_to_id"], "attachments": json.loads(r["attachments"] or "[]"),
             "poll_id": (r["poll_id"] if "poll_id" in r.keys() else None),
             "edited": bool(r["edited_at"]) if "edited_at" in r.keys() else False,
@@ -239,14 +241,16 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         else:
             author_key, author_name, author_color, author_shape = w["key"], w["name"], w["color"], w["shape"]
         kind = "question" if payload.get("kind") == "question" else "msg"
+        # 공지: only a manager may post/flag an announcement
+        notice = 1 if (payload.get("notice") and w["role"] == "manager") else 0
         author_username = None if anon else w["username"]
         with conn() as c:
             cur = c.execute(
                 """INSERT INTO cm_messages(author_key,author_name,author_color,author_shape,author_username,anon,
-                   real_key,real_name,body,kind,reply_to_id,attachments,created_at)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   real_key,real_name,body,kind,notice,reply_to_id,attachments,created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (author_key, author_name, author_color, author_shape, author_username, int(anon),
-                 w["key"], w["name"], body, kind, int(payload.get("reply_to_id") or 0),
+                 w["key"], w["name"], body, kind, notice, int(payload.get("reply_to_id") or 0),
                  json.dumps(atts), _now()))
             mid = cur.lastrowid
             r = c.execute("SELECT * FROM cm_messages WHERE id=?", (mid,)).fetchone()
@@ -307,6 +311,18 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             c.execute("UPDATE cm_messages SET body=?, edited_at=? WHERE id=?", (body, _now(), mid))
             r2 = c.execute("SELECT * FROM cm_messages WHERE id=?", (mid,)).fetchone()
         return row_to_msg(r2, w["role"] == "manager")
+
+    @router.post("/messages/{mid}/notice")
+    def set_notice(mid: int, payload: dict, user: dict = Depends(identity)):
+        # manager pins/unpins any message as an announcement (공지)
+        w = require_manager(user)
+        val = 1 if payload.get("notice", True) else 0
+        with conn() as c:
+            c.execute("UPDATE cm_messages SET notice=? WHERE id=?", (val, mid))
+            r = c.execute("SELECT * FROM cm_messages WHERE id=?", (mid,)).fetchone()
+            if not r:
+                raise HTTPException(404, "없음")
+        return row_to_msg(r, True)
 
     @router.post("/clear")
     def clear_all(user: dict = Depends(identity)):
@@ -478,7 +494,7 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         return {"surnames": _SURNAMES, "given": _GIVEN}
 
     # ── 광장(plaza / spatial) display config — manager-controlled, room-wide ──
-    _PLAZA_DEFAULTS = {"lifetime": 30, "max": 30, "per_account": 3, "show_names": True}
+    _PLAZA_DEFAULTS = {"lifetime": 30, "max": 30, "per_account": 3, "show_names": True, "bubble_scale": 1.0}
 
     def _plaza_config() -> dict:
         cfg = dict(_PLAZA_DEFAULTS)
@@ -499,12 +515,13 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
     def put_plaza_config(payload: dict, user: dict = Depends(identity)):
         require_manager(user)
         cfg = _plaza_config()
-        for k, cast in (("lifetime", int), ("max", int), ("per_account", int), ("show_names", bool)):
+        for k, cast in (("lifetime", int), ("max", int), ("per_account", int), ("show_names", bool), ("bubble_scale", float)):
             if k in payload and payload[k] is not None:
                 try:
                     cfg[k] = cast(payload[k])
                 except Exception:
                     pass
+        cfg["bubble_scale"] = min(2.5, max(0.6, float(cfg.get("bubble_scale") or 1.0)))   # clamp
         with conn() as c:
             c.execute("INSERT OR REPLACE INTO cm_config(key,value) VALUES('plaza',?)", (json.dumps(cfg, ensure_ascii=False),))
         return cfg
