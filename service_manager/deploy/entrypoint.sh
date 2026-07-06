@@ -12,10 +12,15 @@ if [ -d /app/data-seed ]; then
   for seed in /app/data-seed/*/; do
     [ -d "$seed" ] || continue
     name=$(basename "$seed")
-    if [ ! -d "$PORTAL_DATA_ROOT/$name" ]; then
-      echo "→ seeding service '$name'"
-      cp -a "${seed%/}" "$PORTAL_DATA_ROOT/$name"
+    if [ -d "$PORTAL_DATA_ROOT/$name" ]; then
+      continue                                   # already present — keep live data
     fi
+    if [ -e "$PORTAL_DATA_ROOT/_deleted/$name" ]; then
+      echo "→ skipping seed '$name' (deleted by an admin)"
+      continue                                   # tombstoned — don't resurrect it
+    fi
+    echo "→ seeding service '$name'"
+    cp -a "${seed%/}" "$PORTAL_DATA_ROOT/$name"
   done
 fi
 

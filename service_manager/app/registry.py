@@ -73,6 +73,28 @@ def manifest_path(name: str) -> Path:
     return service_dir(name) / "service.json"
 
 
+# ── Tombstones ────────────────────────────────────────────────────────────────
+# A deleted service leaves a marker under `_deleted/` (a `_`-prefixed dir, so it's
+# never listed as a service). The deploy entrypoint consults it so an image-baked
+# seed service the user intentionally deleted is NOT restored on the next redeploy.
+def _tombstone_path(name: str) -> Path:
+    return config.DATA_ROOT / "_deleted" / name
+
+
+def tombstone(name: str) -> None:
+    p = _tombstone_path(name)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.touch()
+
+
+def clear_tombstone(name: str) -> None:
+    """A (re)created service overrides any old deletion marker."""
+    try:
+        _tombstone_path(name).unlink()
+    except FileNotFoundError:
+        pass
+
+
 def default_manifest(kind: str = "elog", mode: Optional[str] = None) -> dict:
     m = dict(_BASE_DEFAULT)
     m.update(KIND_DEFAULTS.get(kind, {}))
@@ -98,7 +120,10 @@ def read_manifest(name: str) -> dict:
 
 
 def write_manifest(name: str, manifest: dict) -> None:
-    manifest_path(name).write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
+    p = manifest_path(name)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
+    clear_tombstone(name)                        # (re)creating un-deletes the name
 
 
 def list_service_names() -> list[str]:

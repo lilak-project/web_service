@@ -108,6 +108,7 @@ def api_delete(name: str):
     except Exception:
         pass
     shutil.rmtree(sdir)
+    registry.tombstone(name)                 # keep it deleted across redeploys
     return {"deleted": name}
 
 
@@ -155,4 +156,5 @@ async def api_import(file: UploadFile = File(...), name: str | None = Form(None)
             dest.write_bytes(zf.read(member))
     (sdir / "uploads").mkdir(exist_ok=True)
     (sdir / ".port").unlink(missing_ok=True)        # never import a stale port
+    registry.clear_tombstone(proj_name)             # re-importing un-deletes the name
     return {"name": proj_name}
