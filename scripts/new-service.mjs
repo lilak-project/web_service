@@ -544,7 +544,7 @@ export default function CommunityTab({ onOpenFiles }) {
   useEffect(() => { get('/api/whoami').then((u) => setRole(u.role || 'user')).catch(() => {}) }, [])
   return (
     <div style={{ height: '100%', boxSizing: 'border-box', padding: 12 }}>
-      <Community api={communityApi} role={role} onOpenFiles={onOpenFiles}
+      <Community api={communityApi} role={role} onOpenFiles={onOpenFiles} storageKey="${NAME}"
         features={{ attachments: true, questions: true, anon: true, polls: true, mentions: true, moderation: true }} />
     </div>
   )
