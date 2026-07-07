@@ -5,6 +5,7 @@ import { launcher, setExperiment } from '../api'
 import { useLang } from '../context/LangContext'
 import AccountView from './portal/AccountView'
 import FeedbackView from './portal/FeedbackView'
+import ArchivePanel from './portal/ArchivePanel'
 import ServiceManagePanel from './portal/ServiceManagePanel'
 import IconLabView from './portal/IconLabView'
 import NewServiceView from './portal/NewServiceView'
@@ -234,6 +235,7 @@ export default function ProjectsPage() {
   const [homeCfg, setHomeCfg] = useState(null)     // admin: builtin overrides + card order
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')             // name currently acting on
+  const [reloadTick, setReloadTick] = useState(0)  // bumped on refresh → re-loads the archive
 
   // Restore a saved portal session.
   useEffect(() => {
@@ -253,6 +255,8 @@ export default function ProjectsPage() {
       if (isManager) { try { setHomeCfg((await launcher.get('/admin/home')).data) } catch { /* optional */ } }
     } catch {
       setProjects([]); setError(t('projects_unreachable'))
+    } finally {
+      setReloadTick((n) => n + 1)   // let the archive panel re-fetch after any change
     }
   }
   useEffect(() => { refresh() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -469,6 +473,7 @@ export default function ProjectsPage() {
               )
             })}
           </div>
+          {isManager && <ArchivePanel signal={reloadTick} onChanged={refresh} />}
         </>
       )}
     </CoverPage>

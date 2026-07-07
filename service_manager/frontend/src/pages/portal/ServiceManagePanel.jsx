@@ -53,8 +53,15 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
     try { await launcher.put(`/admin/services/${svc.name}`, { visibility: Number(v) }); onChanged?.() }
     catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
+  async function archiveService() {
+    if (!window.confirm(L(`'${svc.name}'을(를) 보관함으로 옮길까요? 데이터는 삭제되고 서비스 정의만 보관되어 나중에 복구할 수 있습니다.`,
+      `Move '${svc.name}' to the archive? Its data is deleted; the service definition is kept so you can restore it later.`))) return
+    try { await launcher.post(`/admin/services/${svc.name}/archive`); onChanged?.() }
+    catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+  }
   async function removeService() {
-    if (!window.confirm(L(`'${svc.name}' 서비스를 삭제할까요? 데이터가 사라집니다.`, `Delete service '${svc.name}'? Its data is removed.`))) return
+    if (!window.confirm(L(`'${svc.name}' 서비스를 완전히 삭제할까요? 서비스와 데이터가 모두 사라지고 복구할 수 없습니다.`,
+      `Permanently delete '${svc.name}'? The service and its data are gone for good — no restore.`))) return
     try { await launcher.delete(`/admin/services/${svc.name}`); onChanged?.() }
     catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
@@ -90,9 +97,14 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
 
         <div style={{ flex: 1 }} />
         {!isBuiltin && (
-          <Button variant="ghost" size="sm" onClick={removeService} title={L('서비스 삭제', 'Delete service')} style={{ color: 'var(--danger-text)' }}>
-            <Icon name="trash" size={15} /> {L('삭제', 'Delete')}
-          </Button>
+          <>
+            <Button variant="ghost" size="sm" onClick={archiveService} title={L('데이터만 삭제하고 서비스는 보관함으로', 'Delete data, keep the service in the archive')}>
+              <Icon name="archive" size={15} /> {L('보관함으로', 'Archive')}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={removeService} title={L('서비스 완전 삭제', 'Delete permanently')} style={{ color: 'var(--danger-text)' }}>
+              <Icon name="trash" size={15} /> {L('완전 삭제', 'Delete')}
+            </Button>
+          </>
         )}
       </div>
 

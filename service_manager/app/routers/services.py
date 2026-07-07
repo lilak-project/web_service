@@ -546,8 +546,63 @@ def admin_remove_service(
     except Exception:
         pass
     shutil.rmtree(sdir)
+    registry.tombstone(name)                 # keep it gone across redeploys (no re-seed)
     db.query(Service).filter(Service.name == name).delete()
     db.query(ServicePermission).filter(ServicePermission.service_name == name).delete()
     db.query(AccessRequest).filter(AccessRequest.service_name == name).delete()
     db.commit()
     return {"deleted": name}
+
+
+def _drop_service_rows(db: Session, name: str) -> None:
+    db.query(Service).filter(Service.name == name).delete()
+    db.query(ServicePermission).filter(ServicePermission.service_name == name).delete()
+    db.query(AccessRequest).filter(AccessRequest.service_name == name).delete()
+    db.commit()
+
+
+@router.post("/api/admin/services/{name}/archive")
+def admin_archive_service(
+    name: str,
+    _: models.User = Depends(require_portal_admin),
+    db: Session = Depends(get_db),
+):
+    """Data-only delete: stop the service, drop its data, but keep its definition in
+    the archive (보관함) so it can be restored or permanently deleted later."""
+    if not registry.service_dir(name).exists():
+        raise HTTPException(404, f"'{name}' 없음")
+    from ..adapters import get_adapter
+    manifest = registry.read_manifest(name)
+    try:
+        get_adapter(manifest).stop(name, manifest)
+    except Exception:
+        pass
+    registry.archive_service(name)
+    _drop_service_rows(db, name)
+    return {"archived": name}
+
+
+@router.get("/api/admin/archived")
+def admin_list_archived(_: models.User = Depends(require_portal_admin)):
+    out = []
+    for n in registry.list_archived():
+        m = registry.read_archived_manifest(n)
+        out.append({"name": n, "label": m.get("label") or n, "icon": m.get("icon"),
+                    "color": m.get("color"), "kind": m.get("kind")})
+    return out
+
+
+@router.post("/api/admin/archived/{name}/restore")
+def admin_restore_service(name: str, _: models.User = Depends(require_portal_admin)):
+    if name not in registry.list_archived():
+        raise HTTPException(404, f"'{name}' 보관함에 없음")
+    registry.restore_service(name)
+    return {"restored": name}
+
+
+@router.delete("/api/admin/archived/{name}")
+def admin_purge_archived(name: str, _: models.User = Depends(require_portal_admin)):
+    if name not in registry.list_archived():
+        raise HTTPException(404, f"'{name}' 보관함에 없음")
+    registry.purge_archived(name)
+    return {"purged": name}

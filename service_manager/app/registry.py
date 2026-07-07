@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -93,6 +94,60 @@ def clear_tombstone(name: str) -> None:
         _tombstone_path(name).unlink()
     except FileNotFoundError:
         pass
+
+
+# ── Archive (보관함) ───────────────────────────────────────────────────────────
+# "Data-only delete": drop the service's data but keep its DEFINITION (manifest) in
+# `_archive/` so it can be restored later, or permanently deleted. `_archive` is a
+# `_`-prefixed dir, so it never lists as a service.
+def _archive_root() -> Path:
+    return config.DATA_ROOT / "_archive"
+
+
+def archived_manifest_path(name: str) -> Path:
+    return _archive_root() / name / "service.json"
+
+
+def list_archived() -> list[str]:
+    d = _archive_root()
+    if not d.is_dir():
+        return []
+    return sorted(x.name for x in d.iterdir() if x.is_dir())
+
+
+def read_archived_manifest(name: str) -> dict:
+    raw: dict = {}
+    f = archived_manifest_path(name)
+    if f.exists():
+        try:
+            raw = json.loads(f.read_text())
+        except Exception:
+            raw = {}
+    base = default_manifest(raw.get("kind", "elog"))
+    base.update({k: v for k, v in raw.items() if v is not None})
+    return base
+
+
+def archive_service(name: str) -> None:
+    """Move the service to the archive: keep its manifest, delete its live data."""
+    manifest = read_manifest(name)
+    dst = archived_manifest_path(name)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
+    shutil.rmtree(service_dir(name), ignore_errors=True)
+
+
+def restore_service(name: str) -> None:
+    """Bring an archived service back (as an empty service — its data was dropped)."""
+    manifest = read_archived_manifest(name)
+    write_manifest(name, manifest)               # recreates <name>/service.json (+ clears tombstone)
+    shutil.rmtree(_archive_root() / name, ignore_errors=True)
+
+
+def purge_archived(name: str) -> None:
+    """Permanently remove an archived service and keep it from being re-seeded."""
+    shutil.rmtree(_archive_root() / name, ignore_errors=True)
+    tombstone(name)
 
 
 def default_manifest(kind: str = "elog", mode: Optional[str] = None) -> dict:

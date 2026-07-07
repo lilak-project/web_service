@@ -11,9 +11,9 @@
     "multi_project": false,
     "import_export": false
   },
-  "label": "라일락 nptoy",
-  "icon": "alien",
-  "color": "#e08514",
+  "label": "nptoy",
+  "icon": "spinner",
+  "color": "#ff5900",
   "start": {
     "cmd": "uvicorn main:app",
     "cwd": "/app/nptoy/backend",
