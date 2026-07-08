@@ -57,6 +57,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const [tab, setTab] = useState('me')                 // 'me' | 'accounts' | 'groups' | 'invites'
   const [msg, setMsg] = useState('')
   const [f, setF] = useState({ code: '', cur: '', npw: '', email: '' })
+  const [uname, setUname] = useState('')               // username edit field (seeded from me)
   const [openUser, setOpenUser] = useState(null)       // accounts: expanded user id
   const [pwAsk, setPwAsk] = useState(null)             // masked password prompt: { title, resolve }
   const setField = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
@@ -74,6 +75,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     } catch (e) { setMsg(e?.response?.data?.detail || 'load failed') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (me?.username) setUname(me.username) }, [me?.username])
 
   const say = (m) => { setMsg(m) }
   async function run(p, ok) { try { const r = await p; say(ok(r)); await load(); onChanged?.() } catch (e) { say(e?.response?.data?.detail || L('실패', 'failed')) } }
@@ -88,6 +90,8 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     })
   const changePw = () => (f.cur && f.npw) && run(launcher.post('/account/password', { current_password: f.cur, new_password: f.npw }),
     () => { setF((s) => ({ ...s, cur: '', npw: '' })); return L('비밀번호 변경됨', 'password changed') })
+  const changeUsername = () => uname.trim() && uname.trim() !== me.username && run(launcher.post('/account/username', { username: uname.trim() }),
+    () => L('아이디 변경됨', 'username changed'))
   const requestEmail = () => f.email.trim() && run(launcher.post('/account/request-email', { new_email: f.email.trim() }),
     () => { setF((s) => ({ ...s, email: '' })); return L('이메일 변경 요청됨 (관리자 승인 대기)', 'email change requested (awaiting admin)') })
   const reverify = () => run(launcher.post('/account/verify'), () => L('이메일 인증됨 (임시)', 'email verified (temp)'))
@@ -152,13 +156,23 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
 
       <div style={{ marginBottom: 10 }}><ProfileEditor me={me} onSaved={load} /></div>
 
-      <div style={{ ...rowS, marginBottom: 10 }}>
-        <span style={fieldLbl}>{L('이메일 인증', 'Email verification')}</span>
-        {!me.verification_current && (
-          <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{L('인증이 만료되어 프로젝트는 보기 전용입니다.', 'Verification lapsed — projects are view-only.')}</span>
-        )}
-        <Button size="sm" variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{L('인증 요청 (임시)', 'Request verification (temp)')}</Button>
+      <div style={{ ...rowS, marginBottom: 8 }}>
+        <span style={fieldLbl}>{L('아이디 (사용자 이름)', 'Username')}</span>
+        <input value={uname} onChange={(e) => setUname(e.target.value)} placeholder={L('사용자 이름', 'username')} style={{ ...input, flex: 1 }}
+          onKeyDown={(e) => e.key === 'Enter' && changeUsername()}
+          name="portal-username" autoComplete="off" data-1p-ignore data-lpignore="true" />
+        <Button size="sm" variant="secondary" disabled={!uname.trim() || uname.trim() === me.username} onClick={changeUsername}>{L('변경', 'Update')}</Button>
       </div>
+
+      {isManager && (
+        <div style={{ ...rowS, marginBottom: 10 }}>
+          <span style={fieldLbl}>{L('이메일 인증', 'Email verification')}</span>
+          {!me.verification_current && (
+            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{L('인증이 만료되어 프로젝트는 보기 전용입니다.', 'Verification lapsed — projects are view-only.')}</span>
+          )}
+          <Button size="sm" variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{L('인증 요청 (임시)', 'Request verification (temp)')}</Button>
+        </div>
+      )}
       <div style={{ ...rowS, marginBottom: 8 }}>
         <span style={fieldLbl}>{L('초대 코드 (프로젝트/그룹)', 'Invite code (project/group)')}</span>
         <input value={f.code} onChange={setField('code')} placeholder="XXXXXXXX" style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && redeem()}
