@@ -20,6 +20,31 @@ const input = { height: 32, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', 
 const badge = { fontSize: 'var(--fs-micro, 10px)', padding: '1px 7px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }
 const fieldLbl = { minWidth: 120, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }
 const secLbl = { fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', marginBottom: 4 }   // group-style section label
+const pwOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
+const pwDialog = { background: 'var(--surface-1, #fff)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 16, width: 320, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }
+
+/**
+ * Masked password prompt — replaces window.prompt() for anything that asks for a
+ * password (window.prompt echoes input as plaintext and can't be masked).
+ */
+function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
+  const [v, setV] = useState('')
+  return (
+    <div style={pwOverlay} onClick={onCancel}>
+      <div style={pwDialog} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-primary)', marginBottom: 10 }}>{title}</div>
+        <input type="password" autoFocus value={v} onChange={(e) => setV(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSubmit(v); if (e.key === 'Escape') onCancel() }}
+          name="portal-confirm-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true"
+          style={{ ...input, width: '100%', marginBottom: 12 }} />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button size="sm" variant="secondary" onClick={onCancel}>{cancelLabel}</Button>
+          <Button size="sm" variant="primary" onClick={() => onSubmit(v)}>{confirmLabel}</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const { lang } = useLang()
@@ -33,7 +58,10 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const [msg, setMsg] = useState('')
   const [f, setF] = useState({ code: '', cur: '', npw: '', email: '' })
   const [openUser, setOpenUser] = useState(null)       // accounts: expanded user id
+  const [pwAsk, setPwAsk] = useState(null)             // masked password prompt: { title, resolve }
   const setField = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  // Promise-based replacement for window.prompt() for password entry (masked input).
+  const askPassword = (title) => new Promise((resolve) => setPwAsk({ title, resolve }))
 
   async function load() {
     try {
@@ -69,12 +97,12 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   }
 
   // ── admin actions on a user ──
-  const adminSetPw = (u) => { const p = window.prompt(L(`${u.username}의 새 비밀번호`, `New password for ${u.username}`)); if (p) run(launcher.post(`/admin/users/${u.id}/password`, { new_password: p }), () => L('비밀번호 재설정됨', 'password reset')) }
+  const adminSetPw = async (u) => { const p = await askPassword(L(`${u.username}의 새 비밀번호`, `New password for ${u.username}`)); if (p) run(launcher.post(`/admin/users/${u.id}/password`, { new_password: p }), () => L('비밀번호 재설정됨', 'password reset')) }
   const adminVerify = (u) => run(launcher.post(`/admin/users/${u.id}/verify`), () => L(`${u.username} 인증됨`, `${u.username} verified`))
   const adminRequestVerify = (u) => run(launcher.post(`/admin/users/${u.id}/request-verify`), (r) => r.data.verify_url ? L(`인증 링크(개발): ${r.data.verify_url}`, `verify link (dev): ${r.data.verify_url}`) : L('인증 메일 요청됨', 'verification requested'))
   const adminResetPwEmail = (u) => { if (!window.confirm(L(`${u.username}에게 새 임의 비밀번호를 발급할까요?`, `Issue a new random password for ${u.username}?`))) return; run(launcher.post(`/admin/users/${u.id}/reset-password-email`), (r) => r.data.password ? L(`새 비밀번호(개발): ${r.data.password}`, `new password (dev): ${r.data.password}`) : L('이메일로 발송됨', 'emailed')) }
   const adminApprove = (u, approve) => run(launcher.post(`/admin/users/${u.id}/approve-email`, { approve }), () => approve ? L('이메일 변경 승인됨', 'email approved') : L('거절됨', 'rejected'))
-  const adminDelete = (u) => { const pw = window.prompt(L(`${u.username} 삭제 — 확인을 위해 내 비밀번호를 입력하세요.`, `Delete ${u.username} — enter YOUR password to confirm.`)); if (pw == null) return; run(launcher.delete(`/admin/users/${u.id}`, { data: { password: pw } }), () => L('삭제됨', 'deleted')) }
+  const adminDelete = async (u) => { const pw = await askPassword(L(`${u.username} 삭제 — 확인을 위해 내 비밀번호를 입력하세요.`, `Delete ${u.username} — enter YOUR password to confirm.`)); if (pw == null) return; run(launcher.delete(`/admin/users/${u.id}`, { data: { password: pw } }), () => L('삭제됨', 'deleted')) }
   const adminRole = (u) => { const to = u.role === 'manager' ? 'user' : 'manager'; run(launcher.post(`/admin/users/${u.id}/role`, { role: to }), () => L(`${u.username} → ${to}`, `${u.username} → ${to}`)) }
   const adminActive = (u) => run(launcher.post(`/admin/users/${u.id}/active`, { active: u.is_active === false }), () => L(u.is_active === false ? '활성화됨' : '비활성화됨', u.is_active === false ? 'activated' : 'deactivated'))
   const removeFromGroup = (u, g) => run(launcher.delete(`/admin/groups/${g.id}/members/${u.id}`), () => L(`${g.name}에서 제외됨`, `removed from ${g.name}`))
@@ -133,18 +161,22 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
       </div>
       <div style={{ ...rowS, marginBottom: 8 }}>
         <span style={fieldLbl}>{L('초대 코드 (프로젝트/그룹)', 'Invite code (project/group)')}</span>
-        <input value={f.code} onChange={setField('code')} placeholder="XXXXXXXX" style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && redeem()} />
+        <input value={f.code} onChange={setField('code')} placeholder="XXXXXXXX" style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && redeem()}
+          name="portal-invite-code" autoComplete="off" data-1p-ignore data-lpignore="true" />
         <Button size="sm" variant="primary" disabled={!f.code.trim()} onClick={redeem}>{L('등록', 'Redeem')}</Button>
       </div>
       <div style={{ ...rowS, marginBottom: 8 }}>
         <span style={fieldLbl}>{L('비밀번호 변경', 'Change password')}</span>
-        <input type="password" value={f.cur} onChange={setField('cur')} placeholder={L('현재', 'current')} style={{ ...input, flex: 1 }} />
-        <input type="password" value={f.npw} onChange={setField('npw')} placeholder={L('새 비밀번호', 'new')} style={{ ...input, flex: 1 }} />
+        <input type="password" value={f.cur} onChange={setField('cur')} placeholder={L('현재', 'current')} style={{ ...input, flex: 1 }}
+          name="portal-cur-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
+        <input type="password" value={f.npw} onChange={setField('npw')} placeholder={L('새 비밀번호', 'new')} style={{ ...input, flex: 1 }}
+          name="portal-new-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
         <Button size="sm" variant="secondary" disabled={!f.cur || !f.npw} onClick={changePw}>{L('변경', 'Update')}</Button>
       </div>
       <div style={{ ...rowS, marginBottom: 8 }}>
         <span style={fieldLbl}>{L('이메일 변경', 'Change email')}</span>
-        <input value={f.email} onChange={setField('email')} placeholder={L('새 이메일 (관리자 승인)', 'new email (admin-approved)')} style={{ ...input, flex: 1 }} />
+        <input value={f.email} onChange={setField('email')} placeholder={L('새 이메일 (관리자 승인)', 'new email (admin-approved)')} style={{ ...input, flex: 1 }}
+          name="portal-new-email" autoComplete="off" data-1p-ignore data-lpignore="true" />
         <Button size="sm" variant="secondary" disabled={!f.email.trim()} onClick={requestEmail}>{L('요청', 'Request')}</Button>
       </div>
       <div style={{ ...rowS, marginTop: 10 }}>
@@ -266,6 +298,11 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
 
   return (
     <div>
+      {pwAsk && (
+        <PwPrompt title={pwAsk.title} confirmLabel={L('확인', 'OK')} cancelLabel={L('취소', 'Cancel')}
+          onSubmit={(v) => { pwAsk.resolve(v); setPwAsk(null) }}
+          onCancel={() => { pwAsk.resolve(null); setPwAsk(null) }} />
+      )}
       {msg && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', marginBottom: 8 }}>{msg}</div>}
       {!isManager ? MyAccount : (
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>

@@ -195,18 +195,20 @@ function AuthCard({ t, onAuthed }) {
       <form onSubmit={submit} autoComplete={mode === 'signup' ? 'off' : 'on'}
         style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <input autoFocus placeholder={t('projects_login_user')} value={f.username} onChange={set('username')} style={inputStyle}
-          name={mode === 'signup' ? 'signup_username' : 'username'}
-          autoComplete={mode === 'signup' ? 'off' : 'username'} />
+          name={mode === 'signup' ? 'su_id' : 'username'}
+          autoComplete={mode === 'signup' ? 'off' : 'username'}
+          {...(mode === 'signup' ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
         {mode === 'signup' && (
           <input placeholder={t('projects_signup_email')} value={f.email} onChange={set('email')} style={inputStyle}
-            name="signup_email" autoComplete="off" />
+            name="su_email" autoComplete="off" data-1p-ignore data-lpignore="true" />
         )}
         <input type="password" placeholder={t('projects_login_pass')} value={f.password} onChange={set('password')} style={inputStyle}
-          name={mode === 'signup' ? 'signup_password' : 'password'}
-          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} />
+          name={mode === 'signup' ? 'su_pw' : 'password'}
+          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+          {...(mode === 'signup' ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
         {mode === 'signup' && (
           <input placeholder={t('projects_signup_code')} value={f.invite_code} onChange={set('invite_code')} style={inputStyle}
-            name="signup_code" autoComplete="off" />
+            name="su_code" autoComplete="off" data-1p-ignore data-lpignore="true" />
         )}
         {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
         <Button type="submit" style={{ justifyContent: 'center', marginTop: 2 }}
