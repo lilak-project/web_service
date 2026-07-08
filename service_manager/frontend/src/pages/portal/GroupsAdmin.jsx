@@ -65,7 +65,8 @@ export default function GroupsAdmin({ users, services, onChanged }) {
   const createGroup = () => newName.trim() && run(launcher.post('/admin/groups', { name: newName.trim(), icon: rnd(ICON_CHOICES), color: rnd(AVATAR_COLORS) }), () => { setNewName(''); return L('그룹 생성됨', 'group created') })
   const delGroup = (g) => { if (window.confirm(L(`그룹 '${g.name}' 삭제?`, `Delete group '${g.name}'?`))) run(launcher.delete(`/admin/groups/${g.id}`), () => L('삭제됨', 'deleted')) }
   const deactivateGroup = (g) => { if (window.confirm(L(`'${g.name}'의 모든 멤버(관리자 제외)를 비활성화할까요?`, `Deactivate all members (except admins) of '${g.name}'?`))) run(launcher.post(`/admin/groups/${g.id}/deactivate`), (r) => L(`${r.data.deactivated}명 비활성화됨`, `${r.data.deactivated} deactivated`)) }
-  const resetGroupPerms = (g) => { if (window.confirm(L(`'${g.name}'의 모든 멤버(관리자 제외)의 서비스 권한을 초기화할까요?`, `Reset service permissions of all members (except admins) of '${g.name}'?`))) run(launcher.post(`/admin/groups/${g.id}/reset-permissions`), (r) => L(`${r.data.users}명의 권한 초기화됨`, `reset permissions for ${r.data.users} users`)) }
+  const resetGroupPerms = (g) => { if (window.confirm(L(`'${g.name}'의 모든 멤버(관리자 제외)의 '직접 부여' 서비스 권한을 지울까요?`, `Clear DIRECT service permissions of all members (except admins) of '${g.name}'?`))) run(launcher.post(`/admin/groups/${g.id}/reset-permissions`), (r) => L(`${r.data.users}명의 직접 권한 지워짐`, `cleared direct permissions for ${r.data.users} users`)) }
+  const clearGroupPerms = (g) => { if (window.confirm(L(`'${g.name}' 그룹이 부여한 상속 권한을 모두 지울까요? (멤버들이 상속받던 권한이 사라집니다)`, `Clear all grants of group '${g.name}'? (members stop inheriting them)`))) run(launcher.post(`/admin/groups/${g.id}/clear-permissions`), (r) => L(`상속 권한 ${r.data.cleared}개 지워짐`, `cleared ${r.data.cleared} inherited grants`)) }
   const addMember = (gid, uid) => uid && run(launcher.post(`/admin/groups/${gid}/members`, { user_id: Number(uid) }), () => { setAdd((s) => ({ ...s, uid: '' })); return L('멤버 추가됨', 'member added') })
   const removeMember = (gid, uid) => run(launcher.delete(`/admin/groups/${gid}/members/${uid}`), () => L('멤버 제거됨', 'member removed'))
   const grantPerm = (gid) => add.svc && run(launcher.post('/admin/group-permissions', { group_id: gid, service: add.svc, project: add.proj }), () => { setAdd((s) => ({ ...s, svc: '', proj: '' })); return L('권한 부여됨', 'granted') })
@@ -89,6 +90,30 @@ export default function GroupsAdmin({ users, services, onChanged }) {
         <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={L('새 그룹 이름 (예: cens, lab-a)', 'new group name')} style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && createGroup()} />
         <Button size="sm" variant="primary" disabled={!newName.trim()} onClick={createGroup}>{L('그룹 생성', 'Create group')}</Button>
       </div>
+
+      {/* Administrators — a virtual, always-present, read-only group: just who is a manager */}
+      {(() => {
+        const admins = users.filter((u) => u.role === 'manager')
+        const isOpen = open === 'admins'
+        return (
+          <ExpandBox open={isOpen} onToggle={() => setOpen(isOpen ? null : 'admins')}
+            icon={<GroupMark icon="key" color="#111827" size={26} />}
+            title={L('관리자', 'Administrators')}
+            subtitle={`${admins.length} ${L('명', 'members')}`}
+          >
+            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', marginBottom: 4 }}>{L('역할이 manager인 계정을 자동으로 모아 보여줍니다 (읽기 전용).', 'Auto-collected accounts with role = manager (read-only).')}</div>
+              {admins.length === 0 ? <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>—</span>
+                : admins.map((u) => (
+                  <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-small, 12px)' }}>
+                    <Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={18} />
+                    <span>{u.display_name || u.username}</span>
+                    <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>@{u.username} · {u.email}</span>
+                  </div>))}
+            </div>
+          </ExpandBox>
+        )
+      })()}
 
       {groups.length === 0 ? <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('그룹 없음', 'no groups')}</div>
         : groups.map((g) => {
@@ -161,7 +186,8 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                   {/* deactivate all members / delete group (in manage) */}
                   <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
                     <Button size="sm" variant="ghost" onClick={() => deactivateGroup(g)}>{L('멤버 전체 비활성화', 'Deactivate all members')}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => resetGroupPerms(g)}>{L('멤버 권한 초기화', 'Reset member permissions')}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => resetGroupPerms(g)}>{L('직접 부여 권한 지우기', 'Clear direct permissions')}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => clearGroupPerms(g)}>{L('그룹 상속 권한 지우기', 'Clear inherited permissions')}</Button>
                     <div style={{ flex: 1 }} />
                     <Button size="sm" variant="dangerSoft" onClick={() => delGroup(g)}><Icon name="trash" size={13} /> {L('그룹 삭제', 'Delete group')}</Button>
                   </div>

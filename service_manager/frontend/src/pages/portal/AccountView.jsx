@@ -287,14 +287,24 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
                     </div>
                   ))}
               </div>
-              {/* service permissions (direct per-user grants) */}
+              {/* service permissions — direct grants vs group-inherited, shown separately */}
               <div>
-                <div style={secLbl}>{L('서비스 권한', 'Service permissions')}</div>
+                <div style={secLbl}>{L('직접 부여 권한', 'Direct permissions')}</div>
                 {(u.permissions || []).length === 0
                   ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L('직접 부여된 권한 없음', 'no direct grants')}</span>
                   : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                       {(u.permissions || []).map((p, i) => (
                         <span key={i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}</span>
+                      ))}
+                    </div>}
+              </div>
+              <div>
+                <div style={secLbl}>{L('그룹 상속 권한', 'Inherited (group) permissions')}</div>
+                {(u.inherited_permissions || []).length === 0
+                  ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L('그룹에서 상속받은 권한 없음', 'no inherited grants')}</span>
+                  : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {(u.inherited_permissions || []).map((p, i) => (
+                        <span key={i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}{p.group ? ` · ${p.group}` : ''}</span>
                       ))}
                     </div>}
               </div>

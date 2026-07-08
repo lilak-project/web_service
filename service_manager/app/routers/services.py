@@ -245,17 +245,24 @@ def admin_list_users(
     perms: dict[int, list] = {}
     for p in db.query(ServicePermission).all():
         perms.setdefault(p.user_id, []).append({"service": p.service_name, "project": p.project or None})
+    # group grants (inherited by members), one query, indexed by group
+    gperms: dict[int, list] = {}
+    for p in db.query(models.GroupPermission).all():
+        gperms.setdefault(p.group_id, []).append({"service": p.service_name, "project": p.project or None})
     out = []
     for u in db.query(models.User).order_by(models.User.id.asc()).all():
         left = None
         if u.email_verified_at:
             left = models.VERIFY_VALID_DAYS - (_dt.utcnow() - u.email_verified_at).days
+        inherited = [{"service": pp["service"], "project": pp["project"], "group": gm.get("name")}
+                     for gm in memb.get(u.id, []) for pp in gperms.get(gm["id"], [])]
         out.append({"id": u.id, "username": u.username, "email": u.email, "role": u.role,
                     "is_active": u.is_active,
                     "display_name": u.display_name, "pending_email": u.pending_email,
                     "verification_current": permissions.verification_current(u),
                     "verify_days_left": left, "groups": memb.get(u.id, []),
                     "permissions": perms.get(u.id, []),
+                    "inherited_permissions": inherited,
                     "profile_shape": u.profile_shape,
                     "profile_color": config.MANAGER_COLOR if u.role == "manager" else u.profile_color})
     return out

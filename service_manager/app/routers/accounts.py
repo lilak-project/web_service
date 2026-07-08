@@ -560,6 +560,18 @@ def reset_group_member_permissions(gid: int, _: models.User = Depends(require_po
     return {"reset": int(n or 0), "users": len(targets)}
 
 
+@router.post("/api/admin/groups/{gid}/clear-permissions")
+def clear_group_permissions(gid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    """Remove all of this group's own grants (GroupPermission). Members immediately stop
+    inheriting them. Per-user direct grants are untouched (see reset-permissions)."""
+    if not db.query(models.Group).filter(models.Group.id == gid).first():
+        raise HTTPException(404, "그룹을 찾을 수 없습니다.")
+    n = db.query(models.GroupPermission).filter(
+        models.GroupPermission.group_id == gid).delete(synchronize_session=False)
+    db.commit()
+    return {"cleared": int(n or 0)}
+
+
 @router.delete("/api/admin/groups/{gid}")
 def delete_group(gid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
     db.query(models.GroupMembership).filter(models.GroupMembership.group_id == gid).delete()
