@@ -13,8 +13,9 @@
 # file recording the exact commit + diff hash the image was built from.
 set -euo pipefail
 
-SRC="${NPTOOL_SRC:-$HOME/Research/nptool_cens}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+SRC="${NPTOOL_SRC:-$ROOT/nptool_cens}"
 DST="$HERE/nptool-src"
 
 [ -d "$SRC" ] || { echo "✗ nptool source not found: $SRC   (set NPTOOL_SRC=…)"; exit 1; }

@@ -58,6 +58,11 @@ COPY entrypoint.sh /opt/entrypoint.sh
 COPY verify.sh /opt/verify.sh
 RUN chmod +x /opt/entrypoint.sh /opt/verify.sh
 
+# Interactive convenience: `docker exec -it … bash` (or ./sci.sh) gets the full
+# ROOT + Geant4 + nptool environment automatically — the entrypoint only sources it
+# for the API process, not for a fresh shell. Also land in the host-mounted /work.
+RUN printf '\n# nptool stack for interactive shells\nsource /opt/root/bin/thisroot.sh\nsource /opt/geant4/bin/geant4.sh\nsource /opt/nptool/nptool.sh\ncd /work 2>/dev/null || true\n' >> /root/.bashrc
+
 # All simulation output goes to a shared volume the portal also mounts.
 ENV SCI_DATA=/data \
     SCI_PORT=8100 \

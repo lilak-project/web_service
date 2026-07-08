@@ -66,6 +66,7 @@ COPY service_manager          /app/service_manager
 COPY lilak_elog               /app/lilak_elog
 COPY asset_manager            /app/asset_manager
 COPY scattering_simulation_2d /app/scattering_simulation_2d
+COPY --from=frontend /src/nptool_cens/Projects /app/nptool_cens/Projects
 COPY --from=frontend /src/service_manager/frontend/dist /app/service_manager/frontend/dist
 COPY --from=frontend /src/lilak_elog/frontend/dist      /app/lilak_elog/frontend/dist
 COPY --from=frontend /src/asset_manager/dist            /app/asset_manager/dist

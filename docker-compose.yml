@@ -23,6 +23,14 @@ services:
       - sci-data:/sci                              # shared with sci-runner: nptoy reads sim results here
     env_file:
       - .env
+    environment:
+      # nptoy delegates heavy nptool/Geant4 jobs to the internal sci-runner.
+      # Presence of SCI_RUNNER_URL switches nptoy from local mode to sci mode.
+      SCI_RUNNER_URL: http://sci-runner:8100
+      SCI_SHARED_DIR: /sci
+      SCI_TOKEN: ${SCI_TOKEN:-}
+      NPTOY_NPTOOL_ROOT: /app/nptool_cens
+      NPTOY_PROJECTS_DIR: /app/nptool_cens/Projects
     restart: unless-stopped
 
   # Heavy simulation backend (ROOT + Geant4 + nptool) shared by nptoy (and later
@@ -36,9 +44,15 @@ services:
     profiles: ["sci"]                              # opt-in: only builds/starts when asked
     volumes:
       - sci-data:/data
+      - ${PORTAL_DATA_DIR:-./portal-data}:/portal-data:ro
+      # Interactive workspace: a HOST folder you own, mounted read-write at /work, so
+      # files you make inside the container (root/geant4/nptool) land on the host and
+      # are reachable without docker. Override the host path with SCI_WORK_DIR.
+      - ${SCI_WORK_DIR:-./sci-work}:/work
     environment:
       SCI_PORT: "8100"
       SCI_TOKEN: "${SCI_TOKEN:-}"
+      PORTAL_DATA: /portal-data
     restart: unless-stopped
 
 volumes:
