@@ -287,6 +287,17 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
                     </div>
                   ))}
               </div>
+              {/* service permissions (direct per-user grants) */}
+              <div>
+                <div style={secLbl}>{L('서비스 권한', 'Service permissions')}</div>
+                {(u.permissions || []).length === 0
+                  ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L('직접 부여된 권한 없음', 'no direct grants')}</span>
+                  : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {(u.permissions || []).map((p, i) => (
+                        <span key={i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}</span>
+                      ))}
+                    </div>}
+              </div>
               {/* password */}
               <div>
                 <div style={secLbl}>{L('비밀번호', 'Password')}</div>

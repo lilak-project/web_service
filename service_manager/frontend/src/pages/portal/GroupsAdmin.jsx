@@ -65,6 +65,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
   const createGroup = () => newName.trim() && run(launcher.post('/admin/groups', { name: newName.trim(), icon: rnd(ICON_CHOICES), color: rnd(AVATAR_COLORS) }), () => { setNewName(''); return L('그룹 생성됨', 'group created') })
   const delGroup = (g) => { if (window.confirm(L(`그룹 '${g.name}' 삭제?`, `Delete group '${g.name}'?`))) run(launcher.delete(`/admin/groups/${g.id}`), () => L('삭제됨', 'deleted')) }
   const deactivateGroup = (g) => { if (window.confirm(L(`'${g.name}'의 모든 멤버(관리자 제외)를 비활성화할까요?`, `Deactivate all members (except admins) of '${g.name}'?`))) run(launcher.post(`/admin/groups/${g.id}/deactivate`), (r) => L(`${r.data.deactivated}명 비활성화됨`, `${r.data.deactivated} deactivated`)) }
+  const resetGroupPerms = (g) => { if (window.confirm(L(`'${g.name}'의 모든 멤버(관리자 제외)의 서비스 권한을 초기화할까요?`, `Reset service permissions of all members (except admins) of '${g.name}'?`))) run(launcher.post(`/admin/groups/${g.id}/reset-permissions`), (r) => L(`${r.data.users}명의 권한 초기화됨`, `reset permissions for ${r.data.users} users`)) }
   const addMember = (gid, uid) => uid && run(launcher.post(`/admin/groups/${gid}/members`, { user_id: Number(uid) }), () => { setAdd((s) => ({ ...s, uid: '' })); return L('멤버 추가됨', 'member added') })
   const removeMember = (gid, uid) => run(launcher.delete(`/admin/groups/${gid}/members/${uid}`), () => L('멤버 제거됨', 'member removed'))
   const grantPerm = (gid) => add.svc && run(launcher.post('/admin/group-permissions', { group_id: gid, service: add.svc, project: add.proj }), () => { setAdd((s) => ({ ...s, svc: '', proj: '' })); return L('권한 부여됨', 'granted') })
@@ -160,6 +161,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                   {/* deactivate all members / delete group (in manage) */}
                   <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
                     <Button size="sm" variant="ghost" onClick={() => deactivateGroup(g)}>{L('멤버 전체 비활성화', 'Deactivate all members')}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => resetGroupPerms(g)}>{L('멤버 권한 초기화', 'Reset member permissions')}</Button>
                     <div style={{ flex: 1 }} />
                     <Button size="sm" variant="dangerSoft" onClick={() => delGroup(g)}><Icon name="trash" size={13} /> {L('그룹 삭제', 'Delete group')}</Button>
                   </div>

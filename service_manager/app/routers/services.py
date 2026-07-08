@@ -241,6 +241,10 @@ def admin_list_users(
     memb: dict[int, list] = {}
     for m in db.query(models.GroupMembership).all():
         memb.setdefault(m.user_id, []).append({"id": m.group_id, "name": gnames.get(m.group_id)})
+    # direct (per-user) service permissions, one query
+    perms: dict[int, list] = {}
+    for p in db.query(ServicePermission).all():
+        perms.setdefault(p.user_id, []).append({"service": p.service_name, "project": p.project or None})
     out = []
     for u in db.query(models.User).order_by(models.User.id.asc()).all():
         left = None
@@ -251,6 +255,7 @@ def admin_list_users(
                     "display_name": u.display_name, "pending_email": u.pending_email,
                     "verification_current": permissions.verification_current(u),
                     "verify_days_left": left, "groups": memb.get(u.id, []),
+                    "permissions": perms.get(u.id, []),
                     "profile_shape": u.profile_shape,
                     "profile_color": config.MANAGER_COLOR if u.role == "manager" else u.profile_color})
     return out

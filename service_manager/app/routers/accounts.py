@@ -542,6 +542,24 @@ def deactivate_group(gid: int, _: models.User = Depends(require_portal_admin), d
     return {"deactivated": n}
 
 
+@router.post("/api/admin/groups/{gid}/reset-permissions")
+def reset_group_member_permissions(gid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    """Remove ALL direct (per-user) service permissions from every non-manager member
+    of the group at once. Group-inherited grants are left intact — only the users'
+    own grants are cleared. Admins are never touched by a group action."""
+    if not db.query(models.Group).filter(models.Group.id == gid).first():
+        raise HTTPException(404, "그룹을 찾을 수 없습니다.")
+    uids = [m.user_id for m in db.query(models.GroupMembership).filter(models.GroupMembership.group_id == gid).all()]
+    mgr = {u.id for u in db.query(models.User).filter(models.User.id.in_(uids), models.User.role == "manager").all()}
+    targets = [uid for uid in uids if uid not in mgr]
+    n = 0
+    if targets:
+        n = db.query(models.ServicePermission).filter(
+            models.ServicePermission.user_id.in_(targets)).delete(synchronize_session=False)
+    db.commit()
+    return {"reset": int(n or 0), "users": len(targets)}
+
+
 @router.delete("/api/admin/groups/{gid}")
 def delete_group(gid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
     db.query(models.GroupMembership).filter(models.GroupMembership.group_id == gid).delete()
