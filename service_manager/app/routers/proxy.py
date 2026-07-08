@@ -8,11 +8,13 @@ auth headers come from the service's adapter.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import urllib.error
 import urllib.request
 
-from fastapi import APIRouter, HTTPException, Request, Response
+import websockets
+from fastapi import APIRouter, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from starlette.concurrency import run_in_threadpool
 
 from .. import permissions, registry, security
@@ -105,3 +107,75 @@ async def service_proxy(name: str, path: str, request: Request):
     if "text/html" in (ctype or "") and status < 400:
         content = _inject_base(content, f"/p/{name}")
     return Response(content=content, status_code=status, media_type=ctype)
+
+
+@router.websocket("/p/{name}/{path:path}")
+async def service_proxy_ws(name: str, path: str, websocket: WebSocket):
+    """WebSocket sibling of `service_proxy`. HTTP-only proxying breaks any service
+    that needs a live socket under `/p/<name>/` (e.g. nptoy's RBrowser, whose JSROOT
+    UI opens `…/root.websocket`). We bridge the browser socket to the service's own
+    socket; the service proxies onward from there. Guard via the portal cookie —
+    browser WebSocket handshakes carry cookies but no Authorization header."""
+    if not registry.service_dir(name).exists():
+        await websocket.close(code=1008)
+        return
+    try:
+        _guard(websocket, name)                      # reads .headers/.cookies — WS has both
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+    manifest = registry.read_manifest(name)
+    adapter = get_adapter(manifest)
+    base = await run_in_threadpool(adapter.target_base, name, manifest)
+    if not base:
+        await websocket.close(code=1011)
+        return
+
+    # http(s)://host:port → ws(s)://host:port, keeping the path + query intact.
+    ws_base = ("wss://" + base[len("https://"):]) if base.startswith("https://") \
+        else ("ws://" + base[len("http://"):])
+    qs = websocket.url.query
+    target = f"{ws_base}/{path}" + (f"?{qs}" if qs else "")
+
+    await websocket.accept()
+    try:
+        async with websockets.connect(target, max_size=None) as upstream:
+            async def client_to_upstream():
+                try:
+                    while True:
+                        msg = await websocket.receive()
+                        if msg.get("text") is not None:
+                            await upstream.send(msg["text"])
+                        elif msg.get("bytes") is not None:
+                            await upstream.send(msg["bytes"])
+                        elif msg.get("type") == "websocket.disconnect":
+                            break
+                except WebSocketDisconnect:
+                    pass
+                finally:
+                    await upstream.close()
+
+            async def upstream_to_client():
+                try:
+                    async for m in upstream:
+                        if isinstance(m, (bytes, bytearray)):
+                            await websocket.send_bytes(m)
+                        else:
+                            await websocket.send_text(m)
+                except Exception:
+                    pass
+
+            done, pending = await asyncio.wait(
+                [asyncio.create_task(client_to_upstream()),
+                 asyncio.create_task(upstream_to_client())],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for t in pending:
+                t.cancel()
+    except Exception:
+        pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
