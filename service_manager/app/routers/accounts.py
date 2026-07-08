@@ -276,26 +276,6 @@ def update_profile(body: ProfileBody, user: models.User = Depends(require_portal
     return _account_view(db, user)
 
 
-class UsernameBody(BaseModel):
-    username: str
-
-
-@router.post("/api/account/username")
-def change_username(body: UsernameBody, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
-    """Change my login/display username. The session survives (the token's `sub` is the
-    user id, not the name); only the visible handle changes."""
-    name = (body.username or "").strip()
-    if len(name) < 2:
-        raise HTTPException(400, "아이디가 너무 짧습니다.")
-    if len(name) > 32:
-        raise HTTPException(400, "아이디가 너무 깁니다.")
-    if db.query(models.User).filter(models.User.username == name, models.User.id != user.id).first():
-        raise HTTPException(400, "이미 사용 중인 아이디입니다.")
-    user.username = name
-    db.commit()
-    return {"ok": True, **_account_view(db, user)}
-
-
 class PasswordBody(BaseModel):
     current_password: str
     new_password: str

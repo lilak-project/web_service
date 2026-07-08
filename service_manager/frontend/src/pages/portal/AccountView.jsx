@@ -57,7 +57,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const [tab, setTab] = useState('me')                 // 'me' | 'accounts' | 'groups' | 'invites'
   const [msg, setMsg] = useState('')
   const [f, setF] = useState({ code: '', cur: '', npw: '', email: '' })
-  const [uname, setUname] = useState('')               // username edit field (seeded from me)
+  const [dname, setDname] = useState('')               // display-name edit field (login id stays fixed)
   const [openUser, setOpenUser] = useState(null)       // accounts: expanded user id
   const [pwAsk, setPwAsk] = useState(null)             // masked password prompt: { title, resolve }
   const setField = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
@@ -75,7 +75,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     } catch (e) { setMsg(e?.response?.data?.detail || 'load failed') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (me?.username) setUname(me.username) }, [me?.username])
+  useEffect(() => { if (me) setDname(me.display_name || me.username || '') }, [me?.display_name, me?.username])
 
   const say = (m) => { setMsg(m) }
   async function run(p, ok) { try { const r = await p; say(ok(r)); await load(); onChanged?.() } catch (e) { say(e?.response?.data?.detail || L('실패', 'failed')) } }
@@ -90,8 +90,10 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     })
   const changePw = () => (f.cur && f.npw) && run(launcher.post('/account/password', { current_password: f.cur, new_password: f.npw }),
     () => { setF((s) => ({ ...s, cur: '', npw: '' })); return L('비밀번호 변경됨', 'password changed') })
-  const changeUsername = () => uname.trim() && uname.trim() !== me.username && run(launcher.post('/account/username', { username: uname.trim() }),
-    () => L('아이디 변경됨', 'username changed'))
+  // Change only the display name (shown in the portal, nptoy, community). The login
+  // id (username) is intentionally left fixed.
+  const changeName = () => dname.trim() !== (me.display_name || me.username || '') && run(launcher.post('/account/profile', { display_name: dname.trim() || null }),
+    () => L('표시 이름 변경됨', 'display name changed'))
   const requestEmail = () => f.email.trim() && run(launcher.post('/account/request-email', { new_email: f.email.trim() }),
     () => { setF((s) => ({ ...s, email: '' })); return L('이메일 변경 요청됨 (관리자 승인 대기)', 'email change requested (awaiting admin)') })
   const reverify = () => run(launcher.post('/account/verify'), () => L('이메일 인증됨 (임시)', 'email verified (temp)'))
@@ -146,7 +148,8 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     <div style={card}>
       <div style={{ ...rowS, marginBottom: 10 }}>
         <Avatar icon={me.profile_shape} color={me.profile_color} seed={me.username} size={26} />
-        <b style={{ fontSize: 'var(--fs-body, 13px)' }}>{me.username}</b>
+        <b style={{ fontSize: 'var(--fs-body, 13px)' }}>{me.display_name || me.username}</b>
+        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>@{me.username}</span>
         <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{me.email}</span>
         <span style={badge}>{me.role}</span>
         {verifyChip}
@@ -157,11 +160,12 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
       <div style={{ marginBottom: 10 }}><ProfileEditor me={me} onSaved={load} /></div>
 
       <div style={{ ...rowS, marginBottom: 8 }}>
-        <span style={fieldLbl}>{L('아이디 (사용자 이름)', 'Username')}</span>
-        <input value={uname} onChange={(e) => setUname(e.target.value)} placeholder={L('사용자 이름', 'username')} style={{ ...input, flex: 1 }}
-          onKeyDown={(e) => e.key === 'Enter' && changeUsername()}
-          name="portal-username" autoComplete="off" data-1p-ignore data-lpignore="true" />
-        <Button size="sm" variant="secondary" disabled={!uname.trim() || uname.trim() === me.username} onClick={changeUsername}>{L('변경', 'Update')}</Button>
+        <span style={fieldLbl}>{L('표시 이름', 'Display name')}</span>
+        <input value={dname} onChange={(e) => setDname(e.target.value)} placeholder={me.username} style={{ ...input, flex: 1 }}
+          onKeyDown={(e) => e.key === 'Enter' && changeName()}
+          name="portal-display-name" autoComplete="off" data-1p-ignore data-lpignore="true" />
+        <Button size="sm" variant="secondary" disabled={dname.trim() === (me.display_name || me.username || '')} onClick={changeName}>{L('변경', 'Update')}</Button>
+        <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', flexBasis: '100%' }}>{L(`로그인 아이디: ${me.username} (변경 불가)`, `Login ID: ${me.username} (fixed)`)}</span>
       </div>
 
       {isManager && (
