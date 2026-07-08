@@ -26,3 +26,7 @@
 	path = nptoy
 	url = git@github.com:lilak-project/nptoy.git
 	branch = main
+[submodule "nptool_cens"]
+	path = nptool_cens
+	url = git@github.com:lilak-project/nptool_cens.git
+	branch = dev-lilak
