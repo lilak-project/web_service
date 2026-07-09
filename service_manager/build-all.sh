@@ -43,6 +43,12 @@ build_front "$ELOG/frontend"
 build_front "$PORTAL/frontend"
 # Other registered managed services that ship a frontend (built to their dist/).
 [ -d "$STACK/asset_manager" ] && build_front "$STACK/asset_manager"
+# Submodule services with a <name>/frontend (nptoy, g4toy, lilak_gui, …). A dirty
+# one that fails to build shouldn't abort the whole run, so don't `set -e` these.
+for svc in nptoy g4toy lilak_gui; do
+  [ -f "$STACK/$svc/frontend/package.json" ] || continue
+  ( build_front "$STACK/$svc/frontend" ) || echo "⚠ $svc frontend build failed (skipped)"
+done
 
 echo
 echo "✓ build complete."
