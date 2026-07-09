@@ -141,6 +141,23 @@ def _write_draw_macro() -> None:
 
 _write_draw_macro()
 
+_ENTRIES_MACRO = Path("/tmp/np_entries.C")
+
+
+def _write_entries_macro() -> None:
+    _ENTRIES_MACRO.write_text(
+        '#include "TFile.h"\n#include "TTree.h"\n#include "TSystem.h"\n'
+        'void np_entries() {\n'
+        '  TFile* f = TFile::Open(gSystem->Getenv("NE_FILE"), "READ");\n'
+        '  if (!f || f->IsZombie()) { printf("NE -1\\n"); return; }\n'
+        '  TTree* t = (TTree*) f->Get(gSystem->Getenv("NE_TREE"));\n'
+        '  printf("NE %lld\\n", t ? t->GetEntries() : (Long64_t)-1);\n'
+        '}\n'
+    )
+
+
+_write_entries_macro()
+
 
 # Temp-save: same TTree::Draw as above, but instead of exporting JSON we write the
 # histogram AND a TCanvas showing it into a real .root file (so it reopens as a
@@ -236,6 +253,35 @@ def root_draw(spec: DrawSpec, authorization: str | None = Header(default=None)):
             os.unlink(outp)
         except OSError:
             pass
+
+
+class EntriesSpec(BaseModel):
+    file: str                    # path RELATIVE to SCI_DATA
+    tree: str = "SimulatedTree"
+
+
+@app.post("/entries")
+def entries(spec: EntriesSpec, authorization: str | None = Header(default=None)):
+    """Count a tree's entries (for the stop notice's event count). Returns None on any
+    problem so the caller can fall back to just the file size."""
+    _auth(authorization)
+    if not _DRAW_TREE_RE.match(spec.tree):
+        return {"entries": None}
+    base = SCI_DATA.resolve()
+    src = (SCI_DATA / spec.file).resolve()
+    if src != base and base not in src.parents:
+        raise HTTPException(403, "file escapes shared volume")
+    if not src.is_file():
+        return {"entries": None}
+    try:
+        env = {**os.environ, "NE_FILE": str(src), "NE_TREE": spec.tree}
+        proc = subprocess.run(["root", "-l", "-b", "-q", str(_ENTRIES_MACRO)],
+                              capture_output=True, text=True, timeout=30, env=env)
+        m = re.search(r"NE (-?\d+)", proc.stdout or "")
+        n = int(m.group(1)) if m else None
+        return {"entries": (n if (n is None or n >= 0) else None)}
+    except (subprocess.TimeoutExpired, ValueError):
+        return {"entries": None}
 
 
 class SaveSpec(DrawSpec):
