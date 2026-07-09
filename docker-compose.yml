@@ -31,7 +31,17 @@ services:
       SCI_TOKEN: ${SCI_TOKEN:-}
       NPTOY_NPTOOL_ROOT: /app/nptool_cens
       NPTOY_PROJECTS_DIR: /app/nptool_cens/Projects
+      # Max heavy npsimulation processes running at once (interactive sessions +
+      # batch jobs share this ceiling) — guards host RAM against OOM under load.
+      NPTOY_MAX_CONCURRENT_SIMS: ${NPTOY_MAX_CONCURRENT_SIMS:-3}
     restart: unless-stopped
+    # Memory ceiling so a runaway/overloaded portal (a single python3 has hit
+    # >11 GB) is OOM-killed INSIDE its own container instead of the kernel killing
+    # random host processes (which took down the desktop/SSH). memswap_limit is the
+    # mem+swap total, so (memswap - mem) is how much swap the container may use.
+    mem_limit: ${PORTAL_MEM_LIMIT:-3g}
+    memswap_limit: ${PORTAL_MEMSWAP_LIMIT:-4g}
+    mem_reservation: ${PORTAL_MEM_RESERVATION:-512m}
 
   # Heavy simulation backend (ROOT + Geant4 + nptool) shared by nptoy (and later
   # g4toy). NOT published — the portal reaches it internally at http://sci-runner:8100.
@@ -54,6 +64,13 @@ services:
       SCI_TOKEN: "${SCI_TOKEN:-}"
       PORTAL_DATA: /portal-data
     restart: unless-stopped
+    # This is where the actual Geant4/nptool sims run, so it gets the larger share.
+    # Bounding it keeps a heavy/leaky sim from exhausting host RAM; when the limit
+    # is hit the container's own OOM-killer stops a sim rather than the whole box.
+    # Pair with NPTOY_MAX_CONCURRENT_SIMS (portal) to cap how many run at once.
+    mem_limit: ${SCI_MEM_LIMIT:-7g}
+    memswap_limit: ${SCI_MEMSWAP_LIMIT:-9g}
+    mem_reservation: ${SCI_MEM_RESERVATION:-1g}
 
 volumes:
   sci-data:
