@@ -4,6 +4,7 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
+import SystemAdmin from './SystemAdmin'
 import ProfileEditor from './ProfileEditor'
 import GroupMark from './GroupMark'
 import ExpandBox from './ExpandBox'
@@ -129,6 +130,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
       ['accounts', 'users', L('계정', 'Accounts')],
       ['groups', 'tree', L('그룹', 'Groups')],
       ['invites', 'key', L('초대 코드', 'Invite codes')],
+      ['system', 'sliders', L('시스템', 'System')],
     ] : []),
   ]
   const menuBtn = ([key, icon, label]) => {
@@ -333,6 +335,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     : tab === 'accounts' ? Accounts
     : tab === 'groups' ? <GroupsAdmin users={users} services={services} onChanged={load} />
     : tab === 'invites' ? <InvitesAdmin services={services} onChanged={load} />
+    : tab === 'system' ? <SystemAdmin />
     : MyAccount
 
   return (

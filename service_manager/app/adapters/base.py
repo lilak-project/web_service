@@ -102,18 +102,22 @@ def reserved_ports() -> set[int]:
 
 
 def reserve_port(port_file: Path) -> int:
-    """Pick a free service port and atomically claim it by writing `port_file`."""
+    """Pick a free service port and atomically claim it by writing `port_file`.
+
+    The window is admin-editable at runtime (settings_store), falling back to the
+    config defaults — a lazy import keeps this low-level module free of a DB
+    dependency at import time."""
+    from .. import settings_store
+    start, end = settings_store.port_range()
     with _alloc_lock:
         taken = reserved_ports()
-        for port in range(config.SERVICE_PORT_START, config.SERVICE_PORT_END + 1):
+        for port in range(start, end + 1):
             if port in taken or port_alive(port):
                 continue
             port_file.parent.mkdir(parents=True, exist_ok=True)
             port_file.write_text(str(port))
             return port
-    raise RuntimeError(
-        f"No free service port ({config.SERVICE_PORT_START}-{config.SERVICE_PORT_END} all in use)"
-    )
+    raise RuntimeError(f"No free service port ({start}-{end} all in use)")
 
 
 class Adapter:

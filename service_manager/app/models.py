@@ -159,6 +159,17 @@ class InviteCode(Base):
 
 
 # ── Feedback: bug reports / recommendations / inquiries ───────────────────────
+class Setting(Base):
+    """Runtime-editable portal settings, keyed by name (e.g. the managed-service
+    port window). Admin-editable via the manage UI; falls back to config defaults
+    when a key is absent, so a fresh DB behaves exactly as before."""
+    __tablename__ = "portal_settings"
+
+    key = Column(String(64), primary_key=True)
+    value = Column(Text, nullable=False, default="")
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
 class Report(Base):
     """A message from a user to the admins. `kind` sorts the intent
     (bug | recommendation | inquiry); admins reply and mark it resolved."""
