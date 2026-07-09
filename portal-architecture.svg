@@ -71,7 +71,7 @@
   <text x="1066" y="650" font-size="12" fill="#475569">빌트인 관리자 도구</text>
   <text x="1066" y="668" font-size="12" fill="#64748b">파비콘 · 앱아이콘 · 헤더마크 편집</text>
   <text x="1052" y="704" font-size="12" fill="#16a34a">진입은 권한 + 인증 통과한 계정만 (private 면 권한자만 노출)</text>
-  <text x="1052" y="726" font-size="12" fill="#64748b">서비스 포트 8026–8044 (내부), 8025만 외부</text>
+  <text x="1052" y="726" font-size="12" fill="#64748b">서비스 포트 8026–8075 (내부), 8025만 외부</text>
   <rect x="44" y="864" width="1392" height="150" rx="16" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.8"/>
   <text x="66" y="896" font-size="18" font-weight="800" fill="#b45309">데이터  ·  PORTAL_DATA_ROOT (코드 밖 단일 폴더)</text>
   <text x="430" y="896" font-size="12.5" fill="#a16207">도커에선 호스트 폴더 bind mount → 서버마다 따로 관리</text>

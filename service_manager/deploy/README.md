@@ -74,7 +74,7 @@ Same image, switched by env — no rebuild:
 ## Notes
 
 - Single container runs the portal **and** the elog experiment subprocesses
-  (ports 8026–8044 internal, proxied via 8025). For heavy scale, split services
+  (ports 8026–8075 internal, proxied via 8025). For heavy scale, split services
   into their own containers (register them as `external`) and/or put nginx/caddy
   in front.
 - Not tested on the machine these files were written on (no Docker there) — they

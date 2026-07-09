@@ -72,7 +72,7 @@ image. Two ways to migrate:
 
 - PDF/EPS icon export works in the container (`librsvg2-bin`). The macOS `.app`
   icon rebuild (`iconutil`) is mac-only and is skipped gracefully on Linux.
-- Service ports (8026–8044) stay internal to the container; only `8025` is exposed.
+- Service ports (8026–8075) stay internal to the container; only `8025` is exposed.
 - Email verification is on by default with a dev echo (no real sender wired).
   Point the verify step at a real provider before exposing signups publicly.
 - A dev variant that bind-mounts source with `--reload` lives at

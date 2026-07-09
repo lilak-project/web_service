@@ -29,9 +29,11 @@ MANAGER_COLOR = "#111827"
 # lilak_elog launcher on :8010 (and another local service on :8020).
 PORTAL_PORT = int(os.environ.get("PORTAL_PORT", 8025))
 
-# Port window for managed (subprocess) services.
+# Port window for managed (subprocess) services. 8026..8075 = 50 slots, so up to
+# ~50 concurrent user sessions can each claim a port. Ports stay internal to the
+# container (proxied via PORTAL_PORT); widening the range needs no compose change.
 SERVICE_PORT_START = int(os.environ.get("SERVICE_PORT_START", 8026))
-SERVICE_PORT_END = int(os.environ.get("SERVICE_PORT_END", 8044))
+SERVICE_PORT_END = int(os.environ.get("SERVICE_PORT_END", 8075))
 
 # Public base URL the portal is reachable at (used when registering external
 # services / building entry links). Defaults to localhost for dev.
