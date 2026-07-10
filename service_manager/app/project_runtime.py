@@ -124,7 +124,9 @@ def start_project(svc: str, proj: str) -> dict:
     argv = shlex.split(cmd)
     if not uses_port_ph and argv and argv[0] == "uvicorn":
         argv = [sys.executable, "-m"] + argv
-        argv += ["--host", "0.0.0.0", "--port", str(port), "--workers", "1"]
+        # Bind loopback only — the proxy targets 127.0.0.1, so a LAN-exposed
+        # project port would bypass the portal's per-project permission guard.
+        argv += ["--host", "127.0.0.1", "--port", str(port), "--workers", "1"]
 
     cwd = start.get("cwd") or str(d)
 

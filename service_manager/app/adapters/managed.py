@@ -69,7 +69,10 @@ class ManagedAdapter(Adapter):
         argv = shlex.split(cmd.replace("{port}", str(port)))
         if not has_placeholder and argv and argv[0] == "uvicorn":
             argv = [sys.executable, "-m"] + argv
-            argv += ["--host", "0.0.0.0", "--port", str(port), "--workers", "1"]
+            # Bind loopback only: the portal proxy reaches services at 127.0.0.1
+            # (see target_base), so exposing the service port on the LAN would only
+            # let clients bypass the portal's per-service permission guard.
+            argv += ["--host", "127.0.0.1", "--port", str(port), "--workers", "1"]
         env = {
             **os.environ,
             "PORT": str(port),

@@ -10,12 +10,13 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
 from .. import registry
 from ..adapters import get_adapter
+from ..deps import require_portal_admin, require_portal_user
 
 router = APIRouter(tags=["services-lifecycle"])
 
@@ -49,7 +50,7 @@ def list_raw_services() -> list[dict]:
 
 
 @router.get("/api/projects")
-def api_projects():
+def api_projects(_user=Depends(require_portal_user)):
     return list_raw_services()
 
 
@@ -61,7 +62,7 @@ class NewProject(BaseModel):
 
 
 @router.post("/api/projects", status_code=201)
-def api_create(body: NewProject):
+def api_create(body: NewProject, _admin=Depends(require_portal_admin)):
     name = body.name.strip()
     if not registry.valid_name(name):
         raise HTTPException(400, "영문자·숫자·_·- 만 가능합니다 (1~64자)")
@@ -78,7 +79,9 @@ def api_create(body: NewProject):
 
 
 @router.post("/api/projects/{name}/start")
-def api_start(name: str):
+def api_start(name: str, _admin=Depends(require_portal_admin)):
+    if not registry.valid_name(name):
+        raise HTTPException(400, "잘못된 서비스 이름")
     if not registry.service_dir(name).exists():
         raise HTTPException(404, f"'{name}' 없음")
     manifest = registry.read_manifest(name)
@@ -90,7 +93,9 @@ def api_start(name: str):
 
 
 @router.post("/api/projects/{name}/stop")
-def api_stop(name: str):
+def api_stop(name: str, _admin=Depends(require_portal_admin)):
+    if not registry.valid_name(name):
+        raise HTTPException(400, "잘못된 서비스 이름")
     if not registry.service_dir(name).exists():
         raise HTTPException(404, f"'{name}' 없음")
     manifest = registry.read_manifest(name)
@@ -98,7 +103,9 @@ def api_stop(name: str):
 
 
 @router.delete("/api/projects/{name}")
-def api_delete(name: str):
+def api_delete(name: str, _admin=Depends(require_portal_admin)):
+    if not registry.valid_name(name):
+        raise HTTPException(400, "잘못된 서비스 이름")
     sdir = registry.service_dir(name)
     if not sdir.exists():
         raise HTTPException(404, f"'{name}' 없음")
@@ -114,7 +121,9 @@ def api_delete(name: str):
 
 # ── Export / Import — the whole data dir as one .zip ──────────────────────────
 @router.get("/api/projects/{name}/export")
-def api_export(name: str):
+def api_export(name: str, _admin=Depends(require_portal_admin)):
+    if not registry.valid_name(name):
+        raise HTTPException(400, "잘못된 서비스 이름")
     sdir = registry.service_dir(name)
     if not sdir.exists():
         raise HTTPException(404, f"'{name}' 없음")
@@ -131,7 +140,8 @@ def api_export(name: str):
 
 
 @router.post("/api/projects/import", status_code=201)
-async def api_import(file: UploadFile = File(...), name: str | None = Form(None)):
+async def api_import(file: UploadFile = File(...), name: str | None = Form(None),
+                     _admin=Depends(require_portal_admin)):
     raw = await file.read()
     proj_name = (name or Path(file.filename or "imported").stem).strip()
     if not registry.valid_name(proj_name):
