@@ -386,24 +386,58 @@ def _root_inbox_watcher() -> None:
 threading.Thread(target=_root_inbox_watcher, name="root-inbox", daemon=True).start()
 
 
+def _kill_job_proc(proc: subprocess.Popen | None) -> None:
+    """SIGKILL the whole process group of a running batch job (its Geant4 subtree)."""
+    if proc and proc.poll() is None:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+
 def _run(job_id: str, spec: JobSpec) -> None:
     jd = JOBS_DIR / job_id
     jd.mkdir(parents=True, exist_ok=True)
     logf = jd / "run.log"
     to = min(spec.timeout or JOB_TIMEOUT, JOB_TIMEOUT)
     with _lock:                                  # serialize: one job at a time
-        _jobs[job_id].update(status="running", started=time.time())
+        job = _jobs[job_id]
+        # Cancelled while it sat queued behind another job → never launch it.
+        if job.get("cancelled"):
+            job.update(status="cancelled", ended=time.time())
+            return
+        job.update(status="running", started=time.time())
         try:
             wd = _resolve_cwd(spec.cwd, jd)      # run in the caller's staged dir if given
+            # Popen (not run) + own process group, so /jobs/{id}/cancel can actually
+            # SIGKILL a runaway sim instead of leaving it burning CPU/RAM until the
+            # timeout — the portal's cancel/deadline now stops the REMOTE process.
             with open(logf, "w") as out:
-                proc = subprocess.run(spec.argv, cwd=wd, stdout=out, stderr=subprocess.STDOUT,
-                                      timeout=to, env=os.environ, check=False)
-            rc = proc.returncode
-            _jobs[job_id].update(status="done" if rc == 0 else "error", rc=rc, ended=time.time())
-        except subprocess.TimeoutExpired:
-            _jobs[job_id].update(status="timeout", rc=None, ended=time.time())
+                proc = subprocess.Popen(spec.argv, cwd=str(wd), stdout=out,
+                                        stderr=subprocess.STDOUT, env=os.environ,
+                                        start_new_session=True)
+                job["proc"] = proc
+                try:
+                    rc = proc.wait(timeout=to)
+                except subprocess.TimeoutExpired:
+                    _kill_job_proc(proc)
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    job.update(status="timeout", rc=None, ended=time.time())
+                    return
+                finally:
+                    job.pop("proc", None)
+            if job.get("cancelled"):
+                job.update(status="cancelled", rc=rc, ended=time.time())
+            else:
+                job.update(status="done" if rc == 0 else "error", rc=rc, ended=time.time())
         except Exception as e:                   # noqa: BLE001
-            _jobs[job_id].update(status="error", error=str(e), ended=time.time())
+            job.update(status="error", error=str(e), ended=time.time())
 
 
 @app.post("/jobs", status_code=202)
@@ -420,6 +454,22 @@ def submit(spec: JobSpec, authorization: str | None = Header(default=None)):
     return {"job_id": job_id, "queued": True}
 
 
+@app.post("/jobs/{job_id}/cancel")
+def cancel(job_id: str, authorization: str | None = Header(default=None)):
+    """Cancel a job. If it's running, SIGKILL its process tree now; if it's still
+    queued, flag it so `_run` skips it when the serial lock frees. Idempotent."""
+    _auth(authorization)
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "no such job")
+    job["cancelled"] = True
+    proc = job.get("proc")                        # set only while actually running
+    if proc is not None:
+        _kill_job_proc(proc)
+        return {"cancelled": True, "was": "running"}
+    return {"cancelled": True, "was": job.get("status", "unknown")}
+
+
 @app.get("/jobs/{job_id}")
 def status(job_id: str, authorization: str | None = Header(default=None)):
     _auth(authorization)
@@ -429,9 +479,21 @@ def status(job_id: str, authorization: str | None = Header(default=None)):
     log = ""
     lf = JOBS_DIR / job_id / "run.log"
     if lf.is_file():
-        log = lf.read_text(errors="replace")[-4000:]
+        # Read only the tail — this is polled ~1 Hz while a job runs, and a chatty
+        # Geant4 run can grow run.log to GBs; re-reading it whole every second
+        # churned GBs of allocations inside the memory-capped container.
+        try:
+            with open(lf, "rb") as fh:
+                fh.seek(0, os.SEEK_END)
+                size = fh.tell()
+                fh.seek(max(0, size - 4000))
+                log = fh.read().decode(errors="replace")
+        except OSError:
+            log = ""
     out = [f.name for f in (JOBS_DIR / job_id).glob("*") if f.name != "run.log"] if (JOBS_DIR / job_id).is_dir() else []
-    return {**job, "log_tail": log, "outputs": out}
+    # Never leak the live Popen handle (not JSON-serializable) or internal flags.
+    public = {k: v for k, v in job.items() if k not in ("proc", "cancelled")}
+    return {**public, "log_tail": log, "outputs": out}
 
 
 # ── RBrowser sessions (ROOT lives in this container) ──────────────────────────
@@ -533,6 +595,30 @@ def _kill_rb(sess: dict) -> None:
                 pass
 
 
+# Reap an RBrowser this long after its last use. Without this, every user who ever
+# opened the ROOT viewer left a full ROOT+RBrowser process (hundreds of MB, loaded
+# detector dictionaries) alive until the container restarted — a handful of users
+# and the 7g container's OOM-killer starts shooting running sims. Mirrors the
+# interactive-session reaper below.
+RB_IDLE_TIMEOUT = int(os.environ.get("SCI_RB_IDLE_TIMEOUT", "1200"))    # 20 min
+
+
+def _reap_rb_sessions() -> None:
+    while True:
+        time.sleep(60)
+        now = time.time()
+        with _rb_lock:
+            for uk, sess in list(_rb_sessions.items()):
+                dead = sess["proc"].poll() is not None
+                idle = (now - sess.get("last_used", 0)) > RB_IDLE_TIMEOUT
+                if dead or idle:
+                    _rb_sessions.pop(uk, None)
+                    _kill_rb(sess)
+
+
+threading.Thread(target=_reap_rb_sessions, name="sci-rb-reaper", daemon=True).start()
+
+
 _RB_CRASH_HINTS = ("error", "break ***", "segmentation", "violation", "traceback",
                    "abort", "fatal", "assert", "exception", "core dump", "stack trace")
 
@@ -604,6 +690,32 @@ def rbrowser_open(spec: RBrowserSpec, authorization: str | None = Header(default
         threading.Thread(target=_drain_stream, args=(proc.stdout, port),
                          name=f"rb-drain-{port}", daemon=True).start()
         return {"token": token, "key": key}
+
+
+class RBCloseSpec(BaseModel):
+    user_key: str | None = None
+    token: str | None = None
+
+
+@app.post("/rbrowser/close")
+def rbrowser_close(spec: RBCloseSpec, authorization: str | None = Header(default=None)):
+    """Explicitly tear down a user's RBrowser (nptoy calls this when the user closes
+    the viewer) so its ROOT process frees immediately instead of waiting to be reaped.
+    Idempotent — returns closed:false if there was no matching session."""
+    _auth(authorization)
+    sess = None
+    with _rb_lock:
+        if spec.user_key and spec.user_key in _rb_sessions:
+            sess = _rb_sessions.pop(spec.user_key)
+        elif spec.token:
+            for uk, s in list(_rb_sessions.items()):
+                if s.get("token") == spec.token:
+                    sess = _rb_sessions.pop(uk)
+                    break
+    if sess:
+        _kill_rb(sess)
+        return {"closed": True}
+    return {"closed": False}
 
 
 def _rb_session(token: str) -> dict:
@@ -698,6 +810,12 @@ async def rbrowser_proxy_ws(token: str, path: str, websocket: WebSocket):
 # stages the workspace on the shared volume and proxies over HTTP (see nptoy
 # backend/session.py SciSession). This mirrors nptoy's local Session state machine.
 _SESS_LOG_CAP = 4000
+# Cap concurrent interactive npsimulation processes IN THE RUNNER, where the memory
+# actually lives. A per-process semaphore in the (possibly several) portal
+# containers can't bound what one shared 7g runner spawns; this does. Batch jobs are
+# already serialized to one by `_lock`; this covers the previously-unbounded `/session`.
+SCI_MAX_SESSIONS = int(os.environ.get("SCI_MAX_SESSIONS", "3"))
+_session_gate = threading.BoundedSemaphore(SCI_MAX_SESSIONS)
 
 
 class _Session:
@@ -710,6 +828,7 @@ class _Session:
         self._io_lock = threading.Lock()
         self._geom_cmd = geom_cmd        # sent once at first Idle> (the viewer geometry dump)
         self._geom_sent = False
+        self._slot_held = True           # session_create acquired one _session_gate slot for us
         self.last_touch = time.time()    # updated on every poll; the reaper kills the idle-forgotten
         self._proc = subprocess.Popen(
             argv, cwd=str(cwd),
@@ -750,6 +869,7 @@ class _Session:
                     self._geom_sent = True
                     self._send(self._geom_cmd)
         self._set("stopped")
+        self._release_slot()      # process died on its own → free its slot now
 
     def _send(self, command: str) -> None:
         with self._io_lock:
@@ -801,6 +921,20 @@ class _Session:
                     except (ProcessLookupError, PermissionError):
                         pass
         self._set("stopped")
+        self._release_slot()
+
+    def _release_slot(self) -> None:
+        """Return this session's capacity slot exactly once. stop() (endpoint + reaper)
+        and _reader (natural process death) can all race here; the flip is done under
+        the state lock so the slot is released at most once."""
+        with self._lock:
+            if not self._slot_held:
+                return
+            self._slot_held = False
+        try:
+            _session_gate.release()
+        except ValueError:
+            pass
 
     def touch(self) -> None:
         self.last_touch = time.time()
@@ -880,9 +1014,18 @@ def session_create(spec: SessionSpec, authorization: str | None = Header(default
     # constrain it to the geometry-export command so it can't smuggle other commands.
     if spec.geom_cmd is not None and not spec.geom_cmd.startswith("/det/export_geometry "):
         raise HTTPException(400, "geom_cmd must be a /det/export_geometry command")
+    # Take a capacity slot BEFORE spawning npsimulation. Full → 429 (the caller
+    # surfaces it as "runner busy"), so the runner can never be asked to hold more
+    # live sims than its memory allows, no matter how many portals point at it.
+    if not _session_gate.acquire(blocking=False):
+        raise HTTPException(429, "sci-runner at interactive-session capacity")
     sid = uuid.uuid4().hex[:12]
     wd = _resolve_cwd(spec.cwd, JOBS_DIR / sid)
-    s = _Session(sid, spec.argv, wd, spec.geom_cmd)
+    try:
+        s = _Session(sid, spec.argv, wd, spec.geom_cmd)   # __init__ owns the slot now
+    except Exception:
+        _session_gate.release()                            # spawn failed → give it back
+        raise
     with _sessions_lock:
         _sessions[sid] = s
     return {"session_id": sid}
