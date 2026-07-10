@@ -1,7 +1,7 @@
 """Portal DB engine + session (single SQLite file under `data/_portal/`)."""
 from __future__ import annotations
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from . import config
@@ -13,6 +13,23 @@ engine = create_engine(
     f"sqlite:///{config.PORTAL_DB}",
     connect_args={"check_same_thread": False},
 )
+
+
+@event.listens_for(engine, "connect")
+def _sqlite_pragmas(dbapi_conn, _rec):
+    """Tune every SQLite connection. The portal reads on EVERY proxied request (the
+    auth guard) while admin endpoints write from many threads, and elog opens the
+    same file from a separate process — with the default rollback journal + 5 s
+    busy timeout that surfaces as `database is locked` 500s. WAL lets readers and a
+    writer coexist; busy_timeout makes a contended write wait instead of failing."""
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")
+    cur.execute("PRAGMA synchronous=NORMAL")
+    cur.execute("PRAGMA busy_timeout=10000")
+    cur.execute("PRAGMA foreign_keys=ON")
+    cur.close()
+
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 Base.metadata.create_all(bind=engine)
