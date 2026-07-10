@@ -9,17 +9,15 @@ auth headers come from the service's adapter.
 from __future__ import annotations
 
 import asyncio
-import json
-import urllib.error
-import urllib.request
 
 import websockets
-from fastapi import APIRouter, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from starlette.concurrency import run_in_threadpool
 
 from .. import permissions, registry, security
 from ..adapters import get_adapter
 from ..db import SessionLocal
+from ..proxy_util import stream_proxy
 
 router = APIRouter()
 
@@ -41,49 +39,19 @@ def _guard(request: Request, name: str) -> None:
         db.close()
 
 
-def _inject_base(html: bytes, base_path: str) -> bytes:
-    """Make a self-UI service work under the `/p/<name>/` prefix: inject a <base>
-    (relative assets resolve under the prefix) + `__PORTAL_BASE__`. See guide Q5."""
-    inject = (f'<base href="{base_path}/">'
-              f'<script>window.__PORTAL_BASE__="{base_path}";</script>').encode()
-    low = html.lower()
-    i = low.find(b"<head>")
-    if i != -1:
-        at = i + len(b"<head>")
-        return html[:at] + inject + html[at:]
-    i = low.find(b"<head")
-    if i != -1:
-        end = low.find(b">", i)
-        if end != -1:
-            return html[:end + 1] + inject + html[end + 1:]
-    return inject + html
-
-
-def _do_proxy(method: str, url: str, headers: dict, body: bytes):
-    req = urllib.request.Request(url, data=body if body else None, method=method)
-    for k, v in headers.items():
-        req.add_header(k, v)
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return r.status, r.read(), r.headers.get("Content-Type", "application/json")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read(), e.headers.get("Content-Type", "application/json")
-    except Exception as e:
-        return 502, json.dumps({"detail": f"proxy error: {e}"}).encode(), "application/json"
-
-
 @router.api_route("/p/{name}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def service_proxy(name: str, path: str, request: Request):
     if not registry.service_dir(name).exists():
         raise HTTPException(404, f"'{name}' not found")
-    _guard(request, name)
+    # The guard hits SQLite synchronously — run it off the event loop so DB
+    # contention can't freeze the whole portal's async proxy path.
+    await run_in_threadpool(_guard, request, name)
     manifest = registry.read_manifest(name)
     adapter = get_adapter(manifest)
     base = await run_in_threadpool(adapter.target_base, name, manifest)
     if not base:
         raise HTTPException(502, f"'{name}' is not reachable")
 
-    body = await request.body()
     qs = request.url.query
     target = f"{base}/{path}" + (f"?{qs}" if qs else "")
 
@@ -103,10 +71,7 @@ async def service_proxy(name: str, path: str, request: Request):
     else:
         fwd.update(adapter.proxy_headers(manifest))
 
-    status, content, ctype = await run_in_threadpool(_do_proxy, request.method, target, fwd, body)
-    if "text/html" in (ctype or "") and status < 400:
-        content = _inject_base(content, f"/p/{name}")
-    return Response(content=content, status_code=status, media_type=ctype)
+    return await stream_proxy(request, target, fwd, html_base=f"/p/{name}")
 
 
 @router.websocket("/p/{name}/{path:path}")

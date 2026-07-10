@@ -51,6 +51,13 @@ app.include_router(projects.router)
 app.include_router(proxy.router)
 
 
+@app.on_event("shutdown")
+async def _close_proxy_client():
+    """Release the pooled reverse-proxy httpx client (see proxy_util)."""
+    from .proxy_util import close_client
+    await close_client()
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True, "service": "service_manager",

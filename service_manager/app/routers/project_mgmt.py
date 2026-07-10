@@ -8,9 +8,6 @@ through `/pp/{svc}/{proj}/…` (the per-project reverse proxy). A service must b
 """
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
@@ -22,6 +19,7 @@ from .. import models, permissions, project_runtime as pr
 from .. import registry, security
 from ..db import SessionLocal, get_db
 from ..deps import require_portal_admin, require_portal_user
+from ..proxy_util import stream_proxy
 
 router = APIRouter(tags=["project-management"])
 
@@ -189,39 +187,6 @@ async def import_project(svc: str, file: UploadFile = File(...), name: str | Non
 
 
 # ── Per-project reverse proxy: /pp/{svc}/{proj}/… → that project's instance ────
-def _do_proxy(method: str, url: str, headers: dict, body: bytes):
-    req = urllib.request.Request(url, data=body if body else None, method=method)
-    for k, v in headers.items():
-        req.add_header(k, v)
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return r.status, r.read(), r.headers.get("Content-Type", "application/json")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read(), e.headers.get("Content-Type", "application/json")
-    except Exception as e:
-        return 502, json.dumps({"detail": f"proxy error: {e}"}).encode(), "application/json"
-
-
-def _inject_base(html: bytes, base_path: str) -> bytes:
-    """Make a self-UI service work under the `/pp/<svc>/<proj>/` prefix: inject a
-    <base href> (so relative assets resolve under the prefix) + `__PORTAL_BASE__`
-    (so a base-path-aware app can route its API/router through the proxy). See
-    AI_SERVICE_GUIDE Q5."""
-    inject = (f'<base href="{base_path}/">'
-              f'<script>window.__PORTAL_BASE__="{base_path}";</script>').encode()
-    low = html.lower()
-    i = low.find(b"<head>")
-    if i != -1:
-        at = i + len(b"<head>")
-        return html[:at] + inject + html[at:]
-    i = low.find(b"<head")          # <head ...>
-    if i != -1:
-        end = low.find(b">", i)
-        if end != -1:
-            return html[:end + 1] + inject + html[end + 1:]
-    return inject + html            # no <head> → prepend
-
-
 def _proxy_guard(request: Request, svc: str, proj: str) -> None:
     """Enforce enter-permission on the project proxy. A top-level navigation has
     no Authorization header, so the token is read from the `lilak_portal_token`
@@ -243,18 +208,15 @@ def _proxy_guard(request: Request, svc: str, proj: str) -> None:
 @router.api_route("/pp/{svc}/{proj}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def project_proxy(svc: str, proj: str, path: str, request: Request):
     _require_multi(svc)
-    _proxy_guard(request, svc, proj)
+    # Guard hits SQLite synchronously — run it off the event loop (see proxy.py).
+    await run_in_threadpool(_proxy_guard, request, svc, proj)
     base = await run_in_threadpool(pr.target_base, svc, proj)
     if not base:
         raise HTTPException(502, f"'{svc}/{proj}' is not reachable")
-    body = await request.body()
     qs = request.url.query
     target = f"{base}/{path}" + (f"?{qs}" if qs else "")
     fwd = {}
     for h in ("authorization", "content-type", "accept"):
         if h in request.headers:
             fwd[h] = request.headers[h]
-    status, content, ctype = await run_in_threadpool(_do_proxy, request.method, target, fwd, body)
-    if "text/html" in (ctype or "") and status < 400:
-        content = _inject_base(content, f"/pp/{svc}/{proj}")
-    return Response(content=content, status_code=status, media_type=ctype)
+    return await stream_proxy(request, target, fwd, html_base=f"/pp/{svc}/{proj}")
