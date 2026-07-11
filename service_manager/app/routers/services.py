@@ -399,6 +399,10 @@ def handshake_info(_: models.User = Depends(require_portal_admin)):
 @router.post("/api/handshake", status_code=201)
 def handshake(body: HandshakeBody, authorization: Optional[str] = Header(default=None),
              db: Session = Depends(get_db)):
+    if not config.REGISTER_ENABLED:
+        # Refuse rather than accept the public default token (which would let anyone
+        # register a service on an exposed portal). Set PORTAL_REGISTER_TOKEN to use.
+        raise HTTPException(503, "self-registration is disabled (set PORTAL_REGISTER_TOKEN)")
     if security.bearer(authorization) != config.REGISTER_TOKEN:
         raise HTTPException(401, "유효하지 않은 등록 토큰입니다.")
     name = body.name.strip()

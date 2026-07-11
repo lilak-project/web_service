@@ -35,7 +35,11 @@ def require_portal_user(
 ) -> models.User:
     token = security.bearer(authorization)
     payload = security.decode_access_token(token) if token else None
-    if not payload:
+    # Require the `portal: true` claim (every portal-minted token carries it, see
+    # portal_token). Without this, a token issued by a MANAGED service for its own
+    # local user — same HS256 secret, no `portal` claim — would authenticate here if
+    # its `sub` collided with a portal user id (token confusion across trust domains).
+    if not payload or not payload.get("portal"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="로그인이 필요합니다.")
     user = db.query(models.User).filter(models.User.id == int(payload.get("sub", 0))).first()
     if not user or not user.is_active:

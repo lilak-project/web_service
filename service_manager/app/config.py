@@ -53,7 +53,11 @@ TOKEN_EXPIRE_HOURS = int(os.environ.get("PORTAL_TOKEN_EXPIRE_HOURS", "24"))
 # to `/api/handshake` with this bearer — so registering is "set the portal URL +
 # token in the service, done" instead of an admin filling a long form. Rotate via
 # env in production.
-REGISTER_TOKEN = os.environ.get("PORTAL_REGISTER_TOKEN", "lilak-portal-register-CHANGE")
+_DEFAULT_REGISTER_TOKEN = "lilak-portal-register-CHANGE"
+REGISTER_TOKEN = os.environ.get("PORTAL_REGISTER_TOKEN", _DEFAULT_REGISTER_TOKEN)
+# Self-registration is DISABLED until an operator sets a real token, so the public
+# default value can't be used to register services on an exposed portal.
+REGISTER_ENABLED = bool(REGISTER_TOKEN) and REGISTER_TOKEN != _DEFAULT_REGISTER_TOKEN
 
 # Email verification. When DEV_ECHO is on, the verification link is returned in
 # the register response + logged, so the flow is testable locally without an
