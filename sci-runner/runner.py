@@ -14,6 +14,7 @@ import os
 import re
 import select
 import shlex
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -35,6 +36,7 @@ JOBS_DIR = SCI_DATA / "jobs"
 PORTAL_DATA = Path(os.environ.get("PORTAL_DATA", "/portal-data"))
 SCI_TOKEN = os.environ.get("SCI_TOKEN", "").strip()
 JOB_TIMEOUT = int(os.environ.get("SCI_JOB_TIMEOUT", "1800"))     # seconds, hard cap
+JOBS_TTL = int(os.environ.get("SCI_JOBS_TTL_SEC", str(7 * 24 * 3600)))   # keep job outputs 7d
 # Only these executables may be launched (they live on PATH via nptool/geant4/root).
 ALLOWED = {"npsimulation", "npanalysis", "root", "root.exe", "nptool-example"}
 
@@ -494,6 +496,40 @@ def status(job_id: str, authorization: str | None = Header(default=None)):
     # Never leak the live Popen handle (not JSON-serializable) or internal flags.
     public = {k: v for k, v in job.items() if k not in ("proc", "cancelled")}
     return {**public, "log_tail": log, "outputs": out}
+
+
+def _reap_jobs_once(now: float) -> int:
+    """Remove job output dirs (and their in-memory records) older than JOBS_TTL.
+    A running job's dir is minutes old at most, so the days-long TTL never hits one."""
+    removed = 0
+    try:
+        if JOBS_DIR.exists():
+            for d in JOBS_DIR.iterdir():
+                try:
+                    if d.is_dir() and now - d.stat().st_mtime > JOBS_TTL:
+                        shutil.rmtree(d, ignore_errors=True)
+                        _jobs.pop(d.name, None)
+                        removed += 1
+                except OSError:
+                    pass
+    except Exception:
+        pass
+    for jid, job in list(_jobs.items()):            # drop terminal records past the TTL
+        ended = job.get("ended")
+        if ended and now - ended > JOBS_TTL:
+            _jobs.pop(jid, None)
+    return removed
+
+
+def _reap_jobs() -> None:
+    """jobs/<id>/ (run.log + artifacts) and the `_jobs` map would otherwise grow
+    forever; sweep them on a timer."""
+    while True:
+        time.sleep(3600)
+        _reap_jobs_once(time.time())
+
+
+threading.Thread(target=_reap_jobs, name="sci-jobs-reaper", daemon=True).start()
 
 
 # ── RBrowser sessions (ROOT lives in this container) ──────────────────────────
