@@ -22,14 +22,30 @@ Manifest schema (all keys optional; defaults applied on read):
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import sys
 from pathlib import Path
 from typing import Optional
 
 from . import config
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write via a temp file in the same dir + os.replace (atomic rename), so a crash
+    or full disk mid-write can never leave a TRUNCATED file. A truncated service.json
+    reads back as kind-defaults (read_manifest swallows the parse error), which would
+    silently change a service's mode/start recipe and send its data to the wrong dir."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
 
 # Per-kind manifest defaults. A new managed `elog` only needs an empty dir; the
 # launcher fills in how to boot it. Add a dict here to teach the portal a new
@@ -132,8 +148,7 @@ def archive_service(name: str) -> None:
     """Move the service to the archive: keep its manifest, delete its live data."""
     manifest = read_manifest(name)
     dst = archived_manifest_path(name)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    dst.write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
+    _atomic_write_text(dst, json.dumps(manifest, ensure_ascii=False, indent=2))
     shutil.rmtree(service_dir(name), ignore_errors=True)
 
 
@@ -167,7 +182,12 @@ def read_manifest(name: str) -> dict:
     if f.exists():
         try:
             raw = json.loads(f.read_text())
-        except Exception:
+        except Exception as e:
+            # Corrupt/truncated manifest → don't silently masquerade as kind-defaults
+            # (that changes the service's mode/start recipe). Surface it loudly; the
+            # atomic writer should prevent truncation, so this means real corruption.
+            print(f"[registry] WARNING: unreadable manifest {f}: {e} — using defaults",
+                  file=sys.stderr, flush=True)
             raw = {}
     base = default_manifest(raw.get("kind", "elog"))
     base.update({k: v for k, v in raw.items() if v is not None})
@@ -176,8 +196,7 @@ def read_manifest(name: str) -> dict:
 
 def write_manifest(name: str, manifest: dict) -> None:
     p = manifest_path(name)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
+    _atomic_write_text(p, json.dumps(manifest, ensure_ascii=False, indent=2))
     clear_tombstone(name)                        # (re)creating un-deletes the name
 
 

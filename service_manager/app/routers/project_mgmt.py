@@ -151,12 +151,26 @@ def stop_project(svc: str, proj: str, user: models.User = Depends(require_portal
 
 
 @router.delete("/api/services/{svc}/projects/{proj}")
-def delete_project(svc: str, proj: str, _: models.User = Depends(require_portal_admin)):
+def delete_project(svc: str, proj: str, _: models.User = Depends(require_portal_admin),
+                   db: Session = Depends(get_db)):
     _require_multi(svc)
     try:
-        return pr.delete_project(svc, proj)
+        result = pr.delete_project(svc, proj)
     except FileNotFoundError:
         raise HTTPException(404, f"'{proj}' 없음")
+    # Drop this project's per-project grants + pending requests. Otherwise creating a
+    # NEW project with the same name later would silently re-grant everyone who had
+    # access to the old one (permissions key on the name string, not identity).
+    db.query(models.ServicePermission).filter(
+        models.ServicePermission.service_name == svc,
+        models.ServicePermission.project == proj,
+    ).delete()
+    db.query(models.AccessRequest).filter(
+        models.AccessRequest.service_name == svc,
+        models.AccessRequest.project == proj,
+    ).delete()
+    db.commit()
+    return result
 
 
 @router.get("/api/services/{svc}/projects/{proj}/export")

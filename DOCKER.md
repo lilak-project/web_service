@@ -46,8 +46,12 @@ deployment = copy that one folder to the new server's `PORTAL_DATA_DIR`.
 ```sh
 # e.g. a dedicated disk on the production server
 PORTAL_DATA_DIR=/srv/lilak/data    # in .env
-# back up / sync that server's data
-rsync -a /srv/lilak/data/  backup-host:/backups/lilak/$(hostname)/
+# Back up that server's data. Use service_manager/backup.sh — it snapshots every
+# SQLite DB with `sqlite3 .backup` (consistent even while live) and rsyncs the rest.
+# A plain `rsync` of the live tree can copy a DB and its -wal at different instants
+# → a torn restore, so prefer the script; then ship the snapshot dir offsite:
+PORTAL_DATA_ROOT=/srv/lilak/data  service_manager/backup.sh /backups/lilak/$(hostname)
+rsync -a /backups/lilak/$(hostname)/  backup-host:/backups/lilak/$(hostname)/
 ```
 
 On the **first** boot (empty folder) the seed registrations are copied in; later
