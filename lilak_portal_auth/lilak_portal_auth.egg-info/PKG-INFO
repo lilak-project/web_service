@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: lilak-portal-auth
+Version: 0.1.0
+Summary: Shared portal SSO (HS256 verify + identity + introspect) for LILAK managed services
+Requires-Python: >=3.10
+Requires-Dist: python-jose
+Requires-Dist: fastapi

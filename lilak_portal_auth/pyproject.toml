@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lilak-portal-auth"
+version = "0.1.0"
+description = "Shared portal SSO (HS256 verify + identity + introspect) for LILAK managed services"
+requires-python = ">=3.10"
+# python-jose + fastapi are already in the shared portal venv (the portal and every
+# service depend on them); declared here so a standalone install pulls them too.
+dependencies = ["python-jose", "fastapi"]
+
+[tool.setuptools]
+packages = ["lilak_portal_auth"]

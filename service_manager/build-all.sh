@@ -31,6 +31,9 @@ echo "── venv + python deps ──"
 "$VENV/bin/pip" install -q --upgrade pip
 "$VENV/bin/pip" install -q -r "$PORTAL/requirements.txt"
 [ -f "$ELOG/requirements.txt" ] && "$VENV/bin/pip" install -q -r "$ELOG/requirements.txt"
+# Shared portal-SSO package (HS256 verify + identity + introspect) that every
+# managed service imports as `lilak_portal_auth` instead of pasting its own copy.
+[ -d "$STACK/lilak_portal_auth" ] && "$VENV/bin/pip" install -q -e "$STACK/lilak_portal_auth"
 
 # 2) Frontends — both alias the kit at $UI (passed via LILAK_UI_PATH). Built dists
 #    are served by the portal (its own) and by the elog backend (elog's own).

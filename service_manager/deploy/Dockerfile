@@ -60,6 +60,11 @@ WORKDIR /app
 COPY service_manager/requirements.txt /tmp/portal-req.txt
 COPY lilak_elog/requirements.txt      /tmp/elog-req.txt
 RUN pip install --no-cache-dir -r /tmp/portal-req.txt -r /tmp/elog-req.txt
+# Shared portal-SSO package every managed service imports as `lilak_portal_auth`
+# (HS256 verify + identity + introspect) — installed into the one env that spawns
+# them, so `import lilak_portal_auth` resolves for every service.
+COPY lilak_portal_auth /app/lilak_portal_auth
+RUN pip install --no-cache-dir /app/lilak_portal_auth
 
 # Backends + static services (code). Frontends/dists come pre-built from stage 1.
 COPY service_manager          /app/service_manager
