@@ -27,7 +27,9 @@ from pathlib import Path
 from typing import Optional
 
 from . import config, registry
-from .adapters.base import port_alive, read_running_port, reserve_port, write_pid
+from .adapters.base import (clear_cooldown, cooldown_active, health_ok, port_alive,
+                            read_running_port, reserve_port, set_cooldown, start_lock,
+                            write_pid)
 
 
 def projects_root(svc: str) -> Path:
@@ -113,62 +115,89 @@ def start_project(svc: str, proj: str) -> dict:
     if port:
         return {"running": True, "port": port, "url": f"http://localhost:{port}", "already_running": True}
 
-    manifest = registry.read_manifest(svc)        # parent template
-    start = manifest.get("start") or {}
-    cmd = start.get("cmd") or "uvicorn main:app"
+    key = f"project:{svc}/{proj}"
+    # Serialize starts for this project — a burst of proxied requests to an idle
+    # project must spawn ONE instance, not N (the rest re-check read_port below).
+    with start_lock(key):
+        port = read_port(svc, proj)
+        if port:
+            return {"running": True, "port": port, "url": f"http://localhost:{port}", "already_running": True}
+        recent = cooldown_active(key)
+        if recent:                            # a very recent start failed — fail fast
+            raise RuntimeError(f"project '{proj}' failed to start recently: {recent}")
 
-    port = reserve_port(_port_file(svc, proj))    # cross-allocator-safe claim
+        manifest = registry.read_manifest(svc)        # parent template
+        start = manifest.get("start") or {}
+        cmd = start.get("cmd") or "uvicorn main:app"
+        health = (manifest.get("health") or "").strip()
 
-    uses_port_ph = "{port}" in cmd
-    cmd = cmd.replace("{port}", str(port)).replace("{project}", proj)
-    argv = shlex.split(cmd)
-    if not uses_port_ph and argv and argv[0] == "uvicorn":
-        argv = [sys.executable, "-m"] + argv
-        # Bind loopback only — the proxy targets 127.0.0.1, so a LAN-exposed
-        # project port would bypass the portal's per-project permission guard.
-        argv += ["--host", "127.0.0.1", "--port", str(port), "--workers", "1"]
+        port = reserve_port(_port_file(svc, proj))    # cross-allocator-safe claim
 
-    cwd = start.get("cwd") or str(d)
+        uses_port_ph = "{port}" in cmd
+        cmd = cmd.replace("{port}", str(port)).replace("{project}", proj)
+        argv = shlex.split(cmd)
+        if not uses_port_ph and argv and argv[0] == "uvicorn":
+            argv = [sys.executable, "-m"] + argv
+            # Bind loopback only — the proxy targets 127.0.0.1, so a LAN-exposed
+            # project port would bypass the portal's per-project permission guard.
+            argv += ["--host", "127.0.0.1", "--port", str(port), "--workers", "1"]
 
-    # Generic env mapping: a service declares how to translate the portal's
-    # project concepts into ITS env via placeholders in `start.env` values — so a
-    # service (e.g. elog) connects WITHOUT code changes. Supported placeholders:
-    #   {project} {service} {port} {project_data} {projects_root} {data_root}
-    def _sub(val: str) -> str:
-        return (str(val)
-                .replace("{project}", proj)
-                .replace("{service}", svc)
-                .replace("{port}", str(port))
-                .replace("{project_data}", str(d))
-                .replace("{projects_root}", str(projects_root(svc)))
-                .replace("{data_root}", str(config.DATA_ROOT)))
+        cwd = start.get("cwd") or str(d)
 
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "PORTAL_SERVICE_PORT": str(port),
-        "PORTAL_SERVICE": svc,
-        "PORTAL_PROJECT": proj,
-        "PORTAL_PROJECT_DATA": str(d),
-        "PORTAL_DATA_ROOT": str(config.DATA_ROOT),
-        "PORTAL_PORT": str(config.PORTAL_PORT),
-        **{k: _sub(v) for k, v in (start.get("env") or {}).items()},
-    }
-    proc = subprocess.Popen(argv, cwd=cwd, env=env,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    write_pid(_port_file(svc, proj), proc.pid)    # verify ownership on read
+        # Generic env mapping: a service declares how to translate the portal's
+        # project concepts into ITS env via placeholders in `start.env` values — so a
+        # service (e.g. elog) connects WITHOUT code changes. Supported placeholders:
+        #   {project} {service} {port} {project_data} {projects_root} {data_root}
+        def _sub(val: str) -> str:
+            return (str(val)
+                    .replace("{project}", proj)
+                    .replace("{service}", svc)
+                    .replace("{port}", str(port))
+                    .replace("{project_data}", str(d))
+                    .replace("{projects_root}", str(projects_root(svc)))
+                    .replace("{data_root}", str(config.DATA_ROOT)))
 
-    for _ in range(16):
-        time.sleep(0.5)
-        if port_alive(port):
-            return {"running": True, "port": port, "url": f"http://localhost:{port}", "started": True}
-    try:
-        proc.kill()
-    except Exception:
-        pass
-    _port_file(svc, proj).unlink(missing_ok=True)
-    (_port_file(svc, proj).parent / ".pid").unlink(missing_ok=True)
-    raise RuntimeError(f"project '{proj}' failed to start (port {port})")
+        env = {
+            **os.environ,
+            "PORT": str(port),
+            "PORTAL_SERVICE_PORT": str(port),
+            "PORTAL_SERVICE": svc,
+            "PORTAL_PROJECT": proj,
+            "PORTAL_PROJECT_DATA": str(d),
+            "PORTAL_DATA_ROOT": str(config.DATA_ROOT),
+            "PORTAL_PORT": str(config.PORTAL_PORT),
+            **{k: _sub(v) for k, v in (start.get("env") or {}).items()},
+        }
+        # Child output → the project dir's service.log (truncated each start) instead
+        # of DEVNULL, so a start failure/crash is diagnosable.
+        logf = open(d / "service.log", "w")
+        try:
+            proc = subprocess.Popen(argv, cwd=cwd, env=env,
+                                    stdout=logf, stderr=subprocess.STDOUT)
+        finally:
+            logf.close()
+        write_pid(_port_file(svc, proj), proc.pid)    # verify ownership on read
+
+        for _ in range(16):
+            time.sleep(0.5)
+            if proc.poll() is not None:               # died on its own → stop waiting
+                break
+            if health_ok(port, health):
+                clear_cooldown(key)
+                return {"running": True, "port": port, "url": f"http://localhost:{port}", "started": True}
+        try:
+            proc.terminate()
+            proc.wait(timeout=3)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        _port_file(svc, proj).unlink(missing_ok=True)
+        (_port_file(svc, proj).parent / ".pid").unlink(missing_ok=True)
+        msg = f"failed to start (port {port}); see {d / 'service.log'}"
+        set_cooldown(key, msg)
+        raise RuntimeError(f"project '{proj}' {msg}")
 
 
 def stop_project(svc: str, proj: str) -> dict:

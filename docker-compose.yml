@@ -34,6 +34,10 @@ services:
       # Max heavy npsimulation processes running at once (interactive sessions +
       # batch jobs share this ceiling) — guards host RAM against OOM under load.
       NPTOY_MAX_CONCURRENT_SIMS: ${NPTOY_MAX_CONCURRENT_SIMS:-3}
+    # PID 1 reaper: the portal spawns service backends as subprocesses, so without an
+    # init a crashed/stopped child becomes an un-reaped zombie (uvicorn as PID 1 won't
+    # reap it). `init: true` runs tini as PID 1 to reap them.
+    init: true
     restart: unless-stopped
     # Memory ceiling so a runaway/overloaded portal (a single python3 has hit
     # >11 GB) is OOM-killed INSIDE its own container instead of the kernel killing
@@ -63,6 +67,7 @@ services:
       SCI_PORT: "8100"
       SCI_TOKEN: "${SCI_TOKEN:-}"
       PORTAL_DATA: /portal-data
+    init: true                                     # reap npsimulation/ROOT subprocess zombies
     restart: unless-stopped
     # This is where the actual Geant4/nptool sims run, so it gets the larger share.
     # Bounding it keeps a heavy/leaky sim from exhausting host RAM; when the limit

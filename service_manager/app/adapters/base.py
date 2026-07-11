@@ -10,6 +10,9 @@ from __future__ import annotations
 import os
 import socket
 import threading
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +25,62 @@ def port_alive(port: int) -> bool:
             return True
     except OSError:
         return False
+
+
+def health_ok(port: int, health_path: Optional[str], timeout: float = 1.0) -> bool:
+    """Readiness check for a managed backend. With a manifest `health` path, the app
+    must actually answer an HTTP request there (any status < 500 = up and serving) —
+    stronger than a bare TCP connect, which passes the instant the socket binds even
+    if the app is still booting or has wedged. Falls back to the TCP check when no
+    health path is declared, so services without one behave exactly as before."""
+    if not health_path:
+        return port_alive(port)
+    path = health_path if health_path.startswith("/") else "/" + health_path
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status < 500
+    except urllib.error.HTTPError as e:
+        return e.code < 500                   # 404/401 etc → the app IS responding
+    except Exception:
+        return False
+
+
+# ── Start serialization + crash-loop cooldown ────────────────────────────────
+# `target_base` starts a service on demand, so a burst of proxied requests to an
+# idle service would each fire a start → N duplicate backends, N-1 leaked and
+# fighting over the data dir. A per-service lock makes "check-then-start" atomic
+# (the rest re-check read_port and reuse). If a start FAILS, a short cooldown makes
+# subsequent requests fail fast instead of fork/kill-storming the box.
+_start_locks_guard = threading.Lock()
+_start_locks: dict[str, threading.Lock] = {}
+_start_cooldown: dict[str, tuple[float, str]] = {}
+START_COOLDOWN_SEC = int(os.environ.get("PORTAL_START_COOLDOWN_SEC", "10"))
+
+
+def start_lock(key: str) -> threading.Lock:
+    with _start_locks_guard:
+        lk = _start_locks.get(key)
+        if lk is None:
+            lk = threading.Lock()
+            _start_locks[key] = lk
+        return lk
+
+
+def cooldown_active(key: str) -> Optional[str]:
+    """The failure message if `key` is in its post-failure cooldown, else None."""
+    hit = _start_cooldown.get(key)
+    if hit and hit[0] > time.monotonic():
+        return hit[1]
+    return None
+
+
+def set_cooldown(key: str, msg: str) -> None:
+    _start_cooldown[key] = (time.monotonic() + START_COOLDOWN_SEC, msg)
+
+
+def clear_cooldown(key: str) -> None:
+    _start_cooldown.pop(key, None)
 
 
 # ── PID-verified port ownership ───────────────────────────────────────────────
