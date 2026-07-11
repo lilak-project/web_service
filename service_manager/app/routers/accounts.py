@@ -246,6 +246,39 @@ def my_account(user: models.User = Depends(require_portal_user), db: Session = D
     return _account_view(db, user)
 
 
+@router.get("/api/introspect")
+def introspect(user: models.User = Depends(require_portal_user)):
+    """Canonical FRESH identity for managed services (elog/nptoy/g4toy/…) to sync a
+    portal token's live role/profile/verification on entry — the single source that
+    replaces the three divergent models the services used to have: elog synced role
+    only at creation (a demotion never propagated), nptoy read portal.db directly
+    (coupled to the private schema), g4toy trusted the ≤24 h-stale token claim.
+
+    `require_portal_user` already validates the token AND loads the live row (401 if
+    deactivated), so every field here is current. Minimal, stable shape — keep it
+    backward-compatible; services merge it over their token payload. Field names
+    mirror the token claims (`prole`, `name`, `color`, `shape`, …) so a service can
+    consume it exactly like the payload."""
+    role = user.role
+    return {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "name": user.display_name or user.username,
+        "role": role,
+        "prole": role,
+        "color": effective_color(user),
+        "shape": user.profile_shape,
+        "verified": permissions.verification_current(user),
+        "active": user.is_active,
+        # elog-style profile superset (a service provisions a full local mirror)
+        "phone": user.phone,
+        "erole": user.experiment_role,
+        "pfrom": user.participation_from,
+        "pto": user.participation_to,
+    }
+
+
 class ProfileBody(BaseModel):
     display_name: Optional[str] = None
     phone: Optional[str] = None
