@@ -270,7 +270,7 @@ const onFiles = FILES_TAB ? `() => setTab(${dq(FILES_TAB.id)})` : 'undefined'
 const pagesMap = TABS.map((t) => t === SETTINGS_TAB
   ? `    ${t.id}: <SettingsPage />,`
   : t.kind === 'community'
-    ? `    ${t.id}: <CommunityTab onOpenFiles={${onFiles}} />,`
+    ? `    ${t.id}: <CommunityTab onOpenFiles={${onFiles}} menuConfig={(layout.tabs || []).find((x) => x.id === ${dq(t.id)})?.codeMenu} />,`
     : `    ${t.id}: <Placeholder icon=${dq(t.icon)} title={t('tab_${t.id}')} note={t('placeholder_${t.id}')} />,`).join('\n')
 
 const shellJsx = `/**
@@ -429,6 +429,22 @@ export default defineConfig(({ mode }) => {
 })
 `
 
+// Built-in community dock items (ids match the kit <Community> rail). Declared as
+// the community tab's `codeMenu` so a manager can reorder / hide them in the layout
+// editor — the items stay code-owned (features), only order + visibility are config.
+const COMMUNITY_CODE_MENU = [
+  { id: 'poll', label: '투표', icon: 'chart' },
+  { id: 'questions', label: '질문', icon: 'question-mark' },
+  { id: 'completed', label: '완료', icon: 'check' },
+  { id: 'files', label: '첨부', icon: 'attach' },
+  { id: 'manage', label: '관리', icon: 'gear' },
+  { id: 'plaza', label: '광장', icon: 'beer-stein' },
+  { id: 'broadcast', label: '방송', icon: 'megaphone' },
+]
+const communityCodeMenuPy = COMMUNITY_CODE_MENU
+  .map((m) => `        {"id": ${JSON.stringify(m.id)}, "label": ${JSON.stringify(m.label)}, "icon": ${JSON.stringify(m.icon)}},`)
+  .join('\n')
+
 // ── backend ─────────────────────────────────────────────────────────────────
 const backendMain = `"""${NAME} backend — minimal FastAPI shell.
 
@@ -454,7 +470,9 @@ app.add_middleware(
 # Manage UI edit. defaults is this service's code-provided layout (single-panel
 # tabs); a tab given rail menu items in the editor renders the kit Rail.
 _LAYOUT_DEFAULT = {"tabs": [
-${TABS.map((t) => `    {"id": ${JSON.stringify(t.id)}, "icon": ${JSON.stringify(t.icon)}},`).join('\n')}
+${TABS.map((t) => t.kind === 'community'
+  ? `    {"id": ${JSON.stringify(t.id)}, "icon": ${JSON.stringify(t.icon)}, "codeMenu": [\n${communityCodeMenuPy}\n    ]},`
+  : `    {"id": ${JSON.stringify(t.id)}, "icon": ${JSON.stringify(t.icon)}},`).join('\n')}
 ]}
 app.include_router(build_layout_router(
     path=Path(__file__).resolve().parents[1] / "data" / "layout.json",
@@ -523,12 +541,12 @@ import { get } from '../api'
 import { communityApi } from '../community_api'
 
 // Built-in community/chat tab (kit <Community> + this service's backend module).
-export default function CommunityTab({ onOpenFiles }) {
+export default function CommunityTab({ onOpenFiles, menuConfig }) {
   const [role, setRole] = useState('user')
   useEffect(() => { get('/api/whoami').then((u) => setRole(u.role || 'user')).catch(() => {}) }, [])
   return (
     <div style={{ height: '100%', boxSizing: 'border-box', padding: 12 }}>
-      <Community api={communityApi} role={role} onOpenFiles={onOpenFiles} storageKey="${NAME}"
+      <Community api={communityApi} role={role} onOpenFiles={onOpenFiles} storageKey="${NAME}" menuConfig={menuConfig}
         features={{ attachments: true, questions: true, anon: true, polls: true, mentions: true, moderation: true }} />
     </div>
   )
