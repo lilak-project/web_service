@@ -13,6 +13,18 @@ export function setExperiment(name) {
 }
 export function apiBaseFor(name) { return name ? `/launcher/p/${name}/api` : '/api' }
 
+// An axios instance that talks to ONE service's backend THROUGH the portal proxy
+// (`/launcher/p/<svc>/api/…`), carrying the portal bearer. Used by the Manage UI to
+// read/edit a service's own config (e.g. /layout) without leaving the portal. The
+// proxy auto-starts the target on demand; a service that doesn't implement the
+// endpoint just 404s (handled by the caller).
+export function serviceApi(name) {
+  const inst = axios.create({ baseURL: apiBaseFor(name), timeout: 30000 })
+  const t = localStorage.getItem('lilak_portal_token')
+  if (t) inst.defaults.headers.common['Authorization'] = `Bearer ${t}`
+  return inst
+}
+
 // The portal's own API (accounts + service registry/lifecycle).
 export const launcher = axios.create({ baseURL: '/launcher/api', timeout: 30000 })
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Button, Icon, ColorPicker, AVATAR_COLORS } from 'lilak-ui'
-import { launcher } from '../../api'
+import { Button, Icon, ColorPicker, AVATAR_COLORS, LayoutEditor } from 'lilak-ui'
+import { launcher, serviceApi } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_WEIGHT, ICON_CHOICES } from './IconPick'
 
@@ -37,6 +37,39 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   const [vis, setVis] = useState(service.visibility || 2)
   const [msg, setMsg] = useState('')
   const dirty = (icon !== startIcon) || (color !== startColor) || (label !== startLabel)
+
+  // Tab/menu layout — loaded lazily from the service's own /api/layout through the
+  // proxy (so opening manage mode doesn't auto-start every service). Same editor +
+  // config the service's Settings 탭 uses.
+  const [lyOpen, setLyOpen] = useState(false)
+  const [layout, setLayout] = useState(null)
+  const [lyDirty, setLyDirty] = useState(false)
+  const [lySaving, setLySaving] = useState(false)
+  const [lyErr, setLyErr] = useState('')
+
+  async function openLayout() {
+    setLyOpen(true)
+    if (layout) return
+    setLyErr('')
+    try { const { data } = await serviceApi(svc.name).get('/layout'); setLayout(data) }
+    catch (e) {
+      const code = e?.response?.status
+      setLyErr(code === 404
+        ? L('이 서비스는 탭 구성 편집을 지원하지 않습니다.', 'This service does not support tab layout editing.')
+        : (e?.response?.data?.detail || L('불러오기 실패', 'Failed to load')))
+    }
+  }
+  async function saveLayout() {
+    setLySaving(true); setLyErr('')
+    try { const { data } = await serviceApi(svc.name).put('/layout', layout); setLayout(data); setLyDirty(false) }
+    catch (e) { setLyErr(e?.response?.data?.detail || L('저장 실패', 'Save failed')) }
+    finally { setLySaving(false) }
+  }
+  async function resetLayout() {
+    setLyErr('')
+    try { const { data } = await serviceApi(svc.name).post('/layout/reset'); setLayout(data); setLyDirty(false) }
+    catch (e) { setLyErr(e?.response?.data?.detail || L('초기화 실패', 'Reset failed')) }
+  }
 
   async function save() {
     try {
@@ -107,6 +140,27 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
           </>
         )}
       </div>
+
+      {/* tab / menu layout (services only) — lazy: only loads on open */}
+      {!isBuiltin && (
+        <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: 10 }}>
+          {!lyOpen ? (
+            <Button variant="ghost" size="sm" onClick={openLayout} title={L('탭과 왼쪽 메뉴바 구성 편집', 'Edit tabs and left menu bar')}>
+              <Icon name="browse" size={14} /> {L('탭 / 메뉴 구성', 'Tabs / menu layout')}
+            </Button>
+          ) : lyErr && !layout ? (
+            <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{lyErr}</div>
+          ) : layout ? (
+            <>
+              <LayoutEditor value={layout} onChange={(c) => { setLayout(c); setLyDirty(true) }}
+                onSave={saveLayout} onReset={resetLayout} dirty={lyDirty} saving={lySaving} />
+              {lyErr && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--danger-text)', marginTop: 6 }}>{lyErr}</div>}
+            </>
+          ) : (
+            <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('불러오는 중…', 'Loading…')}</div>
+          )}
+        </div>
+      )}
 
       {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</div>}
     </div>
