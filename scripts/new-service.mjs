@@ -464,45 +464,9 @@ python-jose[cryptography]
 ${HAS_COMMUNITY ? 'python-multipart\n' : ''}`
 
 // ── built-in community tab (frontend adapter + page) ─────────────────────────
-const communityApiJs = `// Community backend adapter → the kit <Community> talks to /api/community/* via this.
-import { apiURL, token } from './api'
-const P = '/api/community'
-const H = () => (token() ? { Authorization: \`Bearer \${token()}\` } : {})
-async function req(method, path, body) {
-  const res = await fetch(apiURL(path), { method, headers: { ...H(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
-  if (res.status === 204) return null
-  if (!res.ok) throw new Error(res.status + ' ' + await res.text())
-  return res.json()
-}
-export const communityApi = {
-  poll: () => req('GET', P + '/messages'),
-  send: (p) => req('POST', P + '/messages', p),
-  upload: async (fd) => (await fetch(apiURL(P + '/upload'), { method: 'POST', headers: H(), body: fd })).json(),
-  blobURL: async (url) => { const r = await fetch(apiURL(url), { headers: H() }); return URL.createObjectURL(await r.blob()) },
-  del: (id) => req('DELETE', P + '/messages/' + id),
-  edit: (id, body) => req('PATCH', P + '/messages/' + id, { body }),
-  setNotice: (id, on) => req('POST', P + '/messages/' + id + '/notice', { notice: on }),
-  clearAll: () => req('POST', P + '/clear'),
-  users: () => req('GET', P + '/users').then((d) => d.users),
-  ban: (k, n, b) => req('POST', P + '/ban', { user_key: k, name: n, banned: b }),
-  questions: () => req('GET', P + '/questions').then((d) => d.questions),
-  completed: () => req('GET', P + '/completed').then((d) => d.questions),
-  complete: (id) => req('POST', P + '/complete/' + id),
-  anonIdentity: () => req('GET', P + '/anon-identity'),
-  polls: () => req('GET', P + '/polls').then((d) => d.polls),
-  createPoll: (p) => req('POST', P + '/polls', p),
-  vote: (pid, oid, o) => req('POST', P + '/polls/' + pid + '/vote', { option_id: oid, ...(o || {}) }),
-  closePoll: (pid) => req('POST', P + '/polls/' + pid + '/close'),
-  pollResults: (pid) => req('GET', P + '/polls/' + pid + '/results'),
-  anonNames: () => req('GET', P + '/anon-names'),
-  saveAnonNames: (n) => req('PUT', P + '/anon-names', n),
-  plazaConfig: () => req('GET', P + '/plaza-config'),
-  savePlazaConfig: (c) => req('POST', P + '/plaza-config', c),
-  bots: () => req('GET', P + '/bots').then((d) => d.bots),
-  saveBot: (b) => req('POST', P + '/bots', b),
-  delBot: (name) => req('DELETE', P + '/bots/' + name),
-}
-`
+// The frontend adapter (community_api.js) is a service-agnostic file kept in sync
+// with nptoy's — copied verbatim from templates/community_api.js at scaffold time
+// (see the copy in the HAS_COMMUNITY block below), so it's not inlined here.
 
 const communityTabJsx = `import { useEffect, useState } from 'react'
 import { Community } from 'lilak-ui'
@@ -588,10 +552,16 @@ put('backend/requirements.txt', requirements)
 
 // built-in community tab: copy the shared backend module + write the frontend glue
 if (HAS_COMMUNITY) {
-  const cmSrc = join(dirname(fileURLToPath(import.meta.url)), 'templates', 'community.py')
+  const tmplDir = join(dirname(fileURLToPath(import.meta.url)), 'templates')
+  const cmSrc = join(tmplDir, 'community.py')
   const cmDest = join(ROOT, 'backend/community.py')
   if (existsSync(cmSrc) && (FORCE || !existsSync(cmDest))) { copyFileSync(cmSrc, cmDest); wrote++ } else if (existsSync(cmDest)) skipped++
-  put('frontend/src/community_api.js', communityApiJs)
+  // Frontend adapter is a plain (service-agnostic) file → copy the template verbatim,
+  // kept in sync with nptoy's community_api.js (the reference community). Copying
+  // avoids re-escaping backticks in an inline string.
+  const apiSrc = join(tmplDir, 'community_api.js')
+  const apiDest = join(ROOT, 'frontend/src/community_api.js')
+  if (existsSync(apiSrc) && (FORCE || !existsSync(apiDest))) { copyFileSync(apiSrc, apiDest); wrote++ } else if (existsSync(apiDest)) skipped++
   put('frontend/src/pages/CommunityTab.jsx', communityTabJsx)
   if (HAS_SETTINGS) put('frontend/src/pages/settings/AnonNames.jsx', anonNamesJsx)
 }

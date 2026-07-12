@@ -125,6 +125,14 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             name TEXT PRIMARY KEY, provider TEXT, model TEXT, api_key TEXT,
             system TEXT, enabled INTEGER DEFAULT 1
         );
+        CREATE TABLE IF NOT EXISTS cm_users (
+            key TEXT PRIMARY KEY, name TEXT, username TEXT
+        );
+        CREATE TABLE IF NOT EXISTS cm_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_key TEXT, from_name TEXT, message_id INTEGER,
+            body TEXT, created_at TEXT, read INTEGER DEFAULT 0
+        );
         """)
         # migrations for existing DBs (ignore "duplicate column" on re-run)
         for ddl in (
@@ -132,6 +140,7 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             "ALTER TABLE cm_messages ADD COLUMN author_username TEXT",   # portal username → avatar seed (profile match)
             "ALTER TABLE cm_messages ADD COLUMN edited_at TEXT",         # set when the author edits the message
             "ALTER TABLE cm_messages ADD COLUMN notice INTEGER DEFAULT 0",  # 관리자 공지 (pinned under the title)
+            "ALTER TABLE cm_messages ADD COLUMN author_role TEXT",          # poster's role at send time (방송 관리자만 필터)
             "ALTER TABLE cm_polls ADD COLUMN named INTEGER DEFAULT 1",   # 1=실명투표 · 0=익명투표
             "ALTER TABLE cm_votes ADD COLUMN name TEXT",                 # voter display identity (for 결과 보기)
             "ALTER TABLE cm_votes ADD COLUMN shape TEXT",
@@ -186,6 +195,12 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         with conn() as c:
             return c.execute("SELECT 1 FROM cm_bans WHERE user_key=?", (key,)).fetchone() is not None
 
+    def chat_locked() -> bool:
+        """Room-wide chat lock (manager toggle). Managers can still post while locked."""
+        with conn() as c:
+            row = c.execute("SELECT value FROM cm_config WHERE key='chat_locked'").fetchone()
+        return bool(row and row["value"] == "1")
+
     def row_to_msg(r: sqlite3.Row, viewer_is_manager: bool) -> dict:
         m = {
             "id": r["id"], "author_key": r["author_key"], "author_name": r["author_name"],
@@ -194,6 +209,8 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             "author_username": (None if r["anon"] else (r["author_username"] if "author_username" in r.keys() else None)),
             "anon": bool(r["anon"]), "body": r["body"], "kind": r["kind"], "done": bool(r["done"]),
             "notice": bool(r["notice"]) if "notice" in r.keys() else False,
+            "role": (r["author_role"] if "author_role" in r.keys() else None),  # 방송: 관리자만 필터
+
             "reply_to_id": r["reply_to_id"], "attachments": json.loads(r["attachments"] or "[]"),
             "poll_id": (r["poll_id"] if "poll_id" in r.keys() else None),
             "edited": bool(r["edited_at"]) if "edited_at" in r.keys() else False,
@@ -208,20 +225,62 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             m["real_name"] = r["real_name"]
         return m
 
+    # ── mentions / notifications ──────────────────────────────────────────────
+    def remember_user(w: dict) -> None:
+        """Keep a small name↔key directory so @mentions resolve to real users."""
+        if not w["key"].startswith("u:"):
+            return
+        with conn() as c:
+            c.execute("INSERT INTO cm_users(key,name,username) VALUES(?,?,?) "
+                      "ON CONFLICT(key) DO UPDATE SET name=excluded.name, username=excluded.username",
+                      (w["key"], w["name"], w["username"]))
+
+    def notify_mentions(body: str, mid: int, from_key: str, from_name: str) -> None:
+        """Parse @name mentions and drop a notification for each matched real user
+        (skipping bots and the author). Names match a username or display name."""
+        names = {m.lower() for m in _MENTION_RE.findall(body or "")}
+        if not names:
+            return
+        with conn() as c:
+            bots = {row["name"].lower() for row in c.execute("SELECT name FROM cm_bots")}
+            targets: dict[str, str] = {}
+            for nm in names:
+                if nm in bots:
+                    continue
+                for row in c.execute("SELECT key,name FROM cm_users WHERE lower(username)=? OR lower(name)=?", (nm, nm)):
+                    if row["key"] != from_key:
+                        targets[row["key"]] = row["name"]
+            for k in targets:
+                c.execute("INSERT INTO cm_notifications(user_key,from_name,message_id,body,created_at) "
+                          "VALUES(?,?,?,?,?)", (k, from_name, mid, (body or "")[:280], _now()))
+
     # ── list / poll ───────────────────────────────────────────────────────────
     @router.get("/messages")
     def list_messages(user: dict = Depends(identity)):
         w = who(user)
+        remember_user(w)
         presence[w["key"]] = {"name": w["name"], "username": w["username"], "color": w["color"], "shape": w["shape"], "ts": time.time()}
         cutoff = time.time() - 15
         online = [{"key": k, **{x: v.get(x) for x in ("name", "username", "color", "shape")}}
                   for k, v in presence.items() if v["ts"] > cutoff]
         mgr = w["role"] == "manager"
         with conn() as c:
+            c.execute(
+                """UPDATE cm_messages
+                   SET author_name=?, author_color=?, author_shape=?, author_username=?, real_name=?
+                   WHERE anon=0 AND (author_key=? OR real_key=?)""",
+                (w["name"], w["color"], w["shape"], w["username"], w["name"], w["key"], w["key"]),
+            )
+            c.execute(
+                """UPDATE cm_votes
+                   SET name=?, shape=?, color=?, real_name=?, username=?
+                   WHERE anon=0 AND user_key=?""",
+                (w["name"], w["shape"], w["color"], w["name"], w["username"], w["key"]),
+            )
             rows = c.execute("SELECT * FROM cm_messages ORDER BY id DESC LIMIT 150").fetchall()
         msgs = [row_to_msg(r, mgr) for r in reversed(rows)]
         return {"myKey": w["key"], "myRole": w["role"], "banned": is_banned(w["key"]),
-                "online": online, "messages": msgs}
+                "locked": chat_locked(), "online": online, "messages": msgs}
 
     # ── send ──────────────────────────────────────────────────────────────────
     @router.post("/messages")
@@ -229,6 +288,8 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         w = who(user)
         if is_banned(w["key"]):
             raise HTTPException(403, "이용이 제한된 계정입니다.")
+        if chat_locked() and w["role"] != "manager":
+            raise HTTPException(403, "커뮤니티 채팅이 잠겨 있습니다.")
         body = (payload.get("body") or "").strip()
         atts = payload.get("attachments") or []
         if not body and not atts:
@@ -247,15 +308,17 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
         with conn() as c:
             cur = c.execute(
                 """INSERT INTO cm_messages(author_key,author_name,author_color,author_shape,author_username,anon,
-                   real_key,real_name,body,kind,notice,reply_to_id,attachments,created_at)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   real_key,real_name,body,kind,notice,author_role,reply_to_id,attachments,created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (author_key, author_name, author_color, author_shape, author_username, int(anon),
-                 w["key"], w["name"], body, kind, notice, int(payload.get("reply_to_id") or 0),
+                 w["key"], w["name"], body, kind, notice, w["role"], int(payload.get("reply_to_id") or 0),
                  json.dumps(atts), _now()))
             mid = cur.lastrowid
             r = c.execute("SELECT * FROM cm_messages WHERE id=?", (mid,)).fetchone()
+        remember_user(w)
         if body:
             trigger_bots(body, mid)      # @bot mentions → async-ish bot replies
+            notify_mentions(body, mid, w["key"], author_name)  # @user mentions → drawer notifications
         return row_to_msg(r, w["role"] == "manager")
 
     # ── attachments ───────────────────────────────────────────────────────────
@@ -339,6 +402,41 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             bans = {r["user_key"] for r in c.execute("SELECT user_key FROM cm_bans").fetchall()}
         return {"users": [{"user_key": r["k"], "name": r["n"], "banned": r["k"] in bans} for r in keys if r["k"]]}
 
+    @router.get("/user-report")
+    def user_report(user: dict = Depends(identity)):
+        """Per-real-user report for the 관리 drawer: their assigned anon name (익명 이름
+        보기) and message/question counts (통계 보기). Grouped by real_key so a user's
+        anon-posted messages count under their real identity too."""
+        require_manager(user)
+        with conn() as c:
+            counts: dict[str, dict] = {}
+            for r in c.execute("SELECT real_key AS k, kind, COUNT(*) n FROM cm_messages "
+                               "WHERE real_key IS NOT NULL GROUP BY real_key, kind"):
+                d = counts.setdefault(r["k"], {"msgs": 0, "questions": 0})
+                if r["kind"] == "question":
+                    d["questions"] += r["n"]
+                elif r["kind"] == "msg":
+                    d["msgs"] += r["n"]
+            anon = {r["real_key"]: {"name": r["name"], "shape": r["shape"]}
+                    for r in c.execute("SELECT real_key, name, shape FROM cm_anon")}
+            users = {r["key"]: {"name": r["name"], "username": r["username"]}
+                     for r in c.execute("SELECT key, name, username FROM cm_users")}
+            for r in c.execute("SELECT DISTINCT real_key AS k, real_name AS n FROM cm_messages "
+                               "WHERE real_key IS NOT NULL"):   # posters not yet in the directory
+                users.setdefault(r["k"], {"name": r["n"], "username": None})
+            bans = {r["user_key"] for r in c.execute("SELECT user_key FROM cm_bans")}
+        out = []
+        for k in set(users) | set(counts) | set(anon):
+            if not k or not str(k).startswith("u:"):   # only real portal users
+                continue
+            u = users.get(k, {}); cnt = counts.get(k, {}); an = anon.get(k, {})
+            out.append({"key": k, "name": u.get("name") or k, "username": u.get("username"),
+                        "anon_name": an.get("name"), "anon_shape": an.get("shape"),
+                        "msgs": cnt.get("msgs", 0), "questions": cnt.get("questions", 0),
+                        "banned": k in bans})
+        out.sort(key=lambda x: (x["msgs"] + x["questions"], x["name"]), reverse=True)
+        return {"users": out}
+
     @router.post("/ban")
     def ban(payload: dict, user: dict = Depends(identity)):
         require_manager(user)
@@ -350,13 +448,24 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
                 c.execute("DELETE FROM cm_bans WHERE user_key=?", (key,))
         return {"ok": True}
 
+    @router.post("/lock")
+    def set_lock(payload: dict, user: dict = Depends(identity)):
+        """Lock/unlock the whole chat (커뮤니티 끄기/켜기). While locked only managers
+        may post; everyone still reads."""
+        require_manager(user)
+        locked = bool(payload.get("locked"))
+        with conn() as c:
+            c.execute("INSERT INTO cm_config(key,value) VALUES('chat_locked',?) "
+                      "ON CONFLICT(key) DO UPDATE SET value=excluded.value", ("1" if locked else "0",))
+        return {"locked": locked}
+
     # ── questions ─────────────────────────────────────────────────────────────
     @router.get("/questions")
     def questions(user: dict = Depends(identity)):
         w = who(user)
         with conn() as c:
-            # all questions stay listed here (completed ones too — flagged done)
-            rows = c.execute("SELECT * FROM cm_messages WHERE kind='question' ORDER BY id").fetchall()
+            # 완료된 질문은 완료 목록(/completed)에서만 — 여기서는 미완료만 보여준다
+            rows = c.execute("SELECT * FROM cm_messages WHERE kind='question' AND done=0 ORDER BY id").fetchall()
         return {"questions": [row_to_msg(r, w["role"] == "manager") for r in rows]}
 
     @router.get("/completed")
@@ -373,10 +482,126 @@ def build_community_router(*, db_path: Path, uploads_dir: Path, identity: Callab
             c.execute("UPDATE cm_messages SET done=1 WHERE id=? AND kind='question'", (mid,))
         return {"ok": True}
 
+    # ── 방송(broadcast) settings ──────────────────────────────────────────────
+    # Global, manager-editable config for the cross-tab broadcast overlay: when a user
+    # is on another tab, new community messages pop up as profile bubbles. Stored in
+    # cm_config (one JSON blob) so every client reads the same admin-set configuration.
+    BROADCAST_DEFAULTS = {
+        "enabled": False,       # master on/off
+        "scope": "all",         # "all" | "questions"  (모든 메세지 / 질문만)
+        "managers_only": False, # 관리자 메세지만 방송
+        "plaza": False,         # 광장 모드 (우측 절반에 흩뿌리기) vs 우상단 스택
+        "max": 5,               # 방송 최대 메세지 (동시 표시)
+        "lifetime": 8,          # 방송 메세지 유지시간 (초, 0=계속)
+        "show_names": True,     # 이름 표시
+        "bubble_scale": 1.0,    # 말풍선 크기
+    }
+
+    def _broadcast_get() -> dict:
+        with conn() as c:
+            row = c.execute("SELECT value FROM cm_config WHERE key='broadcast'").fetchone()
+        cfg = dict(BROADCAST_DEFAULTS)
+        if row:
+            try:
+                cfg.update({k: v for k, v in json.loads(row["value"]).items() if k in BROADCAST_DEFAULTS})
+            except Exception:
+                pass
+        return cfg
+
+    @router.get("/broadcast-settings")
+    def broadcast_settings(user: dict = Depends(identity)):
+        # every client needs the config to know what/how to broadcast
+        return _broadcast_get()
+
+    @router.put("/broadcast-settings")
+    def save_broadcast_settings(payload: dict, user: dict = Depends(identity)):
+        require_manager(user)
+        cfg = _broadcast_get()
+        for k in BROADCAST_DEFAULTS:
+            if k in payload:
+                cfg[k] = payload[k]
+        # coerce types defensively
+        cfg["enabled"] = bool(cfg["enabled"]); cfg["managers_only"] = bool(cfg["managers_only"])
+        cfg["plaza"] = bool(cfg["plaza"]); cfg["show_names"] = bool(cfg["show_names"])
+        cfg["scope"] = "questions" if cfg["scope"] == "questions" else "all"
+        cfg["max"] = max(1, int(cfg["max"] or 1)); cfg["lifetime"] = max(0, int(cfg["lifetime"] or 0))
+        try:
+            cfg["bubble_scale"] = min(2.5, max(0.6, float(cfg["bubble_scale"] or 1)))
+        except (TypeError, ValueError):
+            cfg["bubble_scale"] = 1.0
+        with conn() as c:
+            c.execute("INSERT INTO cm_config(key,value) VALUES('broadcast',?) "
+                      "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                      (json.dumps(cfg, ensure_ascii=False),))
+        return cfg
+
     # ── anonymous identity ────────────────────────────────────────────────────
     @router.get("/anon-identity")
     def anon_identity(user: dict = Depends(identity)):
         return anon_of(who(user)["key"])
+
+    @router.post("/anon-reroll")
+    def anon_reroll(user: dict = Depends(identity)):
+        """Draw a fresh random anon name/shape from the current pool for the caller,
+        replacing their stored identity, and relabel their existing anon posts so all
+        of them stay under the one (new) anon identity."""
+        key = who(user)["key"]
+        with conn() as c:
+            cur = c.execute("SELECT name FROM cm_anon WHERE real_key=?", (key,)).fetchone()
+            old = cur["name"] if cur else None
+            name = shape = None
+            for _ in range(8):   # avoid landing on the same name again when the pool allows
+                seed = key + ":" + uuid.uuid4().hex
+                nm = _pick(seed + ":s", _SURNAMES) + _pick(seed + ":g", _GIVEN)
+                if nm != old:
+                    name, shape = nm, _pick(seed + ":i", _ICONS); break
+            if name is None:     # tiny pool → accept a repeat
+                seed = key + ":" + uuid.uuid4().hex
+                name = _pick(seed + ":s", _SURNAMES) + _pick(seed + ":g", _GIVEN)
+                shape = _pick(seed + ":i", _ICONS)
+            c.execute("INSERT OR REPLACE INTO cm_anon(real_key,name,shape) VALUES(?,?,?)", (key, name, shape))
+            c.execute("UPDATE cm_messages SET author_name=?, author_shape=? WHERE anon=1 AND real_key=?",
+                      (name, shape, key))
+        return {"name": name, "shape": shape}
+
+    @router.post("/anon-reroll-all")
+    def anon_reroll_all(user: dict = Depends(identity)):
+        """Manager: re-roll EVERYONE's anon name at once (익명 이름 전체 바꾸기)."""
+        require_manager(user)
+        n = 0
+        with conn() as c:
+            keys = [r["real_key"] for r in c.execute("SELECT real_key FROM cm_anon")]
+            for key in keys:
+                seed = key + ":" + uuid.uuid4().hex
+                name = _pick(seed + ":s", _SURNAMES) + _pick(seed + ":g", _GIVEN)
+                shape = _pick(seed + ":i", _ICONS)
+                c.execute("UPDATE cm_anon SET name=?, shape=? WHERE real_key=?", (name, shape, key))
+                c.execute("UPDATE cm_messages SET author_name=?, author_shape=? WHERE anon=1 AND real_key=?",
+                          (name, shape, key))
+                n += 1
+        return {"rerolled": n}
+
+    # ── @mention notifications (shown in the \ drawer) ────────────────────────
+    @router.get("/notifications")
+    def list_notifications(user: dict = Depends(identity)):
+        w = who(user)
+        with conn() as c:
+            rows = c.execute("SELECT id,from_name,message_id,body,created_at,read "
+                             "FROM cm_notifications WHERE user_key=? ORDER BY id DESC LIMIT 50",
+                             (w["key"],)).fetchall()
+        return {"notifications": [dict(r) for r in rows]}
+
+    @router.delete("/notifications/{nid}", status_code=204)
+    def delete_notification(nid: int, user: dict = Depends(identity)):
+        w = who(user)
+        with conn() as c:
+            c.execute("DELETE FROM cm_notifications WHERE id=? AND user_key=?", (nid, w["key"]))
+
+    @router.post("/notifications/clear", status_code=204)
+    def clear_notifications(user: dict = Depends(identity)):
+        w = who(user)
+        with conn() as c:
+            c.execute("DELETE FROM cm_notifications WHERE user_key=?", (w["key"],))
 
     # ── polls ─────────────────────────────────────────────────────────────────
     def poll_out(r: sqlite3.Row, user_key: str) -> dict:
