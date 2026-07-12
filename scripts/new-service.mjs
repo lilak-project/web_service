@@ -267,11 +267,13 @@ const pagesImports = [
 ].filter(Boolean).join('\n')
 
 const onFiles = FILES_TAB ? `() => setTab(${dq(FILES_TAB.id)})` : 'undefined'
+// Keys are quoted because a tab id may start with a digit (e.g. "2d"/"3d"), which
+// isn't a valid bare object-key / identifier.
 const pagesMap = TABS.map((t) => t === SETTINGS_TAB
-  ? `    ${t.id}: <SettingsPage menuConfig={(layout.tabs || []).find((x) => x.id === ${dq(t.id)})?.codeMenu} />,`
+  ? `    ${dq(t.id)}: <SettingsPage menuConfig={(layout.tabs || []).find((x) => x.id === ${dq(t.id)})?.codeMenu} />,`
   : t.kind === 'community'
-    ? `    ${t.id}: <CommunityTab onOpenFiles={${onFiles}} menuConfig={(layout.tabs || []).find((x) => x.id === ${dq(t.id)})?.codeMenu} />,`
-    : `    ${t.id}: <Placeholder icon=${dq(t.icon)} title={t('tab_${t.id}')} note={t('placeholder_${t.id}')} />,`).join('\n')
+    ? `    ${dq(t.id)}: <CommunityTab onOpenFiles={${onFiles}} menuConfig={(layout.tabs || []).find((x) => x.id === ${dq(t.id)})?.codeMenu} />,`
+    : `    ${dq(t.id)}: <Placeholder icon=${dq(t.icon)} title={t('tab_${t.id}')} note={t('placeholder_${t.id}')} />,`).join('\n')
 
 const shellJsx = `/**
  * Shell — ${NAME} chrome: a thin config of the kit's AppShell (top bar, /command
