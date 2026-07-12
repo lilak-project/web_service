@@ -268,7 +268,7 @@ const pagesImports = [
 
 const onFiles = FILES_TAB ? `() => setTab(${dq(FILES_TAB.id)})` : 'undefined'
 const pagesMap = TABS.map((t) => t === SETTINGS_TAB
-  ? `    ${t.id}: <SettingsPage />,`
+  ? `    ${t.id}: <SettingsPage menuConfig={(layout.tabs || []).find((x) => x.id === ${dq(t.id)})?.codeMenu} />,`
   : t.kind === 'community'
     ? `    ${t.id}: <CommunityTab onOpenFiles={${onFiles}} menuConfig={(layout.tabs || []).find((x) => x.id === ${dq(t.id)})?.codeMenu} />,`
     : `    ${t.id}: <Placeholder icon=${dq(t.icon)} title={t('tab_${t.id}')} note={t('placeholder_${t.id}')} />,`).join('\n')
@@ -445,6 +445,19 @@ const communityCodeMenuPy = COMMUNITY_CODE_MENU
   .map((m) => `        {"id": ${JSON.stringify(m.id)}, "label": ${JSON.stringify(m.label)}, "icon": ${JSON.stringify(m.icon)}},`)
   .join('\n')
 
+// The settings tab's SideNav sections — also code-owned, so exposed as codeMenu the
+// same way (reorder / hide in the layout editor). `anon` only exists with community.
+const SETTINGS_CODE_MENU = [
+  { id: 'account', label: '계정', icon: 'user' },
+  { id: 'users', label: '사용자 관리', icon: 'users' },
+  ...(HAS_COMMUNITY ? [{ id: 'anon', label: '익명 이름', icon: 'eye' }] : []),
+  { id: 'tabs', label: '탭', icon: 'browse' },
+  { id: 'profiles', label: '프로필 유형', icon: 'user' },
+]
+const settingsCodeMenuPy = SETTINGS_CODE_MENU
+  .map((m) => `        {"id": ${JSON.stringify(m.id)}, "label": ${JSON.stringify(m.label)}, "icon": ${JSON.stringify(m.icon)}},`)
+  .join('\n')
+
 // ── backend ─────────────────────────────────────────────────────────────────
 const backendMain = `"""${NAME} backend — minimal FastAPI shell.
 
@@ -472,7 +485,9 @@ app.add_middleware(
 _LAYOUT_DEFAULT = {"tabs": [
 ${TABS.map((t) => t.kind === 'community'
   ? `    {"id": ${JSON.stringify(t.id)}, "icon": ${JSON.stringify(t.icon)}, "codeMenu": [\n${communityCodeMenuPy}\n    ]},`
-  : `    {"id": ${JSON.stringify(t.id)}, "icon": ${JSON.stringify(t.icon)}},`).join('\n')}
+  : t === SETTINGS_TAB
+    ? `    {"id": ${JSON.stringify(t.id)}, "icon": ${JSON.stringify(t.icon)}, "codeMenu": [\n${settingsCodeMenuPy}\n    ]},`
+    : `    {"id": ${JSON.stringify(t.id)}, "icon": ${JSON.stringify(t.icon)}},`).join('\n')}
 ]}
 app.include_router(build_layout_router(
     path=Path(__file__).resolve().parents[1] / "data" / "layout.json",
@@ -652,35 +667,46 @@ import ManageUsers from './settings/ManageUsers'
 import ServiceLocal from './settings/ServiceLocal'
 import LayoutSettings from './settings/LayoutSettings'
 ${HAS_COMMUNITY ? "import AnonNames from './settings/AnonNames'\n" : ''}
+// Reorder / hide the settings sections per the tab's codeMenu (Settings 탭 editor).
+// Sections stay code-owned; the config only carries order + hidden by id.
+function applyOrder(items, cfg) {
+  if (!Array.isArray(cfg) || !cfg.length) return items
+  const hidden = new Set(cfg.filter((m) => m.hidden).map((m) => m.id))
+  const order = cfg.map((m) => m.id)
+  const rank = (id) => { const i = order.indexOf(id); return i < 0 ? order.length : i }
+  return items.filter((s) => !hidden.has(s.id)).sort((a, b) => rank(a.id) - rank(b.id))
+}
+
 // Portal-centric Settings: account + user management come from the portal;
 // tabs / profile-types are service-local stubs to fill in.
-export default function SettingsPage() {
+export default function SettingsPage({ menuConfig }) {
   const { t } = useLang()
   const [me, setMe] = useState(null)
   useEffect(() => { get('/api/whoami').then(setMe).catch(() => setMe({ authenticated: false })) }, [])
 
   const isManager = me?.role === 'manager'
-  const sections = [
+  const sections = applyOrder([
     { id: 'account', label: t('set_account'), icon: 'user', group: 'me' },
     { id: 'users', label: t('set_users'), icon: 'users', group: 'people' },
     ...(isManager ? [
 ${HAS_COMMUNITY ? "      { id: 'anon', label: t('set_anon'), icon: 'eye', group: 'community' },\n" : ''}      { id: 'tabs', label: t('set_tabs'), icon: 'browse', group: 'appearance' },
       { id: 'profiles', label: t('set_profiles'), icon: 'user', group: 'appearance' },
     ] : []),
-  ]
+  ], menuConfig)
   const [active, setActive] = useState('account')
+  const cur = sections.some((s) => s.id === active) ? active : sections[0]?.id
 
   // Page wrapper gives the outer margin + centring (AppShell mounts pages flush);
   // SideNav supplies its own right gap, so the content column has no extra padding.
   return (
     <div style={{ maxWidth: 1180, margin: '0 auto', padding: '16px 16px 40px' }}>
       <div style={{ display: 'flex', minHeight: 500 }}>
-        <SideNav title={t('tab_${SETTINGS_TAB ? SETTINGS_TAB.id : 'set'}')} sections={sections} active={active} onSelect={setActive} />
+        <SideNav title={t('tab_${SETTINGS_TAB ? SETTINGS_TAB.id : 'set'}')} sections={sections} active={cur} onSelect={setActive} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          {active === 'account' && <AccountSection me={me} />}
-          {active === 'users' && <ManageUsers />}
-${HAS_COMMUNITY ? "          {active === 'anon' && <AnonNames />}\n" : ''}          {active === 'tabs' && <LayoutSettings />}
-          {active === 'profiles' && <ServiceLocal title={t('set_profiles')} />}
+          {cur === 'account' && <AccountSection me={me} />}
+          {cur === 'users' && <ManageUsers />}
+${HAS_COMMUNITY ? "          {cur === 'anon' && <AnonNames />}\n" : ''}          {cur === 'tabs' && <LayoutSettings />}
+          {cur === 'profiles' && <ServiceLocal title={t('set_profiles')} />}
         </div>
       </div>
     </div>
