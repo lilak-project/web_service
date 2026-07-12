@@ -14,10 +14,6 @@
 	path = scattering_simulation_2d
 	url = git@github.com:lilak-project/scattering_simulation_2d.git
 	branch = main
-[submodule "g4toy"]
-	path = g4toy
-	url = git@github.com:lilak-project/g4toy.git
-	branch = main
 [submodule "lilak_gui"]
 	path = lilak_gui
 	url = git@github.com:lilak-project/lilak_gui.git

@@ -30,7 +30,6 @@ consumers=(
   "$PORTAL/frontend"
   "$STACK/lilak_elog/frontend"
   "$STACK/nptoy/frontend"
-  "$STACK/g4toy/frontend"
   "$STACK/lilak_gui/frontend"
   "$STACK/asset_manager"
 )
