@@ -9,10 +9,12 @@ Admins (role "manager") see and enter everything.
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -562,6 +564,18 @@ def admin_remove_service(
     except Exception:
         pass
     shutil.rmtree(sdir)
+    # Default-layout scaffolded services keep their CODE at SERVICES_ROOT/<name>,
+    # separate from the data dir just removed. Drop it too so the name is fully free
+    # to recreate (the scaffold's create-check looks at BOTH dirs). Guard hard: only
+    # a plain folder directly under SERVICES_ROOT with NO .git — never a co-located
+    # repo/submodule (nptoy, elog, lilak_ui, …).
+    try:
+        services_root = Path(os.environ.get("PORTAL_SERVICES_ROOT", str(config.ROOT.parent)))
+        code_dir = services_root / name
+        if code_dir.is_dir() and code_dir.parent == services_root and not (code_dir / ".git").exists():
+            shutil.rmtree(code_dir)
+    except Exception:
+        pass
     registry.tombstone(name)                 # keep it gone across redeploys (no re-seed)
     db.query(Service).filter(Service.name == name).delete()
     db.query(ServicePermission).filter(ServicePermission.service_name == name).delete()
