@@ -140,6 +140,7 @@ ${placeholderDict(' — 준비 중')}
     notif_title: '알림', notif_empty: '알림 없음',
     set_theme: '테마', set_lang: '언어',
     cmd_help: '단축키 도움말', cmd_placeholder: '명령 입력…', shortcuts_title: '키보드 단축키',
+    placeholder_menu: '이 메뉴 항목의 내용은 아직 준비 중입니다. 코드(Shell.jsx의 PANELS)에서 연결하세요.',
 ${HAS_SETTINGS ? `    set_account: '계정', set_users: '사용자 관리', set_tabs: '탭', set_profiles: '프로필 유형', set_anon: '익명 이름',
     set_account_note: '계정과 비밀번호는 포털에서 관리합니다.', set_users_note: '사용자 관리는 포털에서 합니다.',
     set_open_portal: '포털 열기', set_service_local: '서비스 로컬 설정 (구현 예정)',\n` : ''}  },
@@ -153,6 +154,7 @@ ${placeholderDict(' — coming soon')}
     notif_title: 'Notifications', notif_empty: 'No notifications',
     set_theme: 'Theme', set_lang: 'Language',
     cmd_help: 'Shortcuts help', cmd_placeholder: 'Type a command…', shortcuts_title: 'Keyboard shortcuts',
+    placeholder_menu: 'This menu item has no content yet — wire it up in code (PANELS in Shell.jsx).',
 ${HAS_SETTINGS ? `    set_account: 'Account', set_users: 'Users', set_tabs: 'Tabs', set_profiles: 'Profile types', set_anon: 'Anon names',
     set_account_note: 'Account and password are managed in the portal.', set_users_note: 'User management lives in the portal.',
     set_open_portal: 'Open portal', set_service_local: 'Service-local setting (coming soon)',\n` : ''}  },
@@ -350,7 +352,8 @@ ${pagesMap}
       {visible.map((tb) => (
         <div key={tb.id} style={{ height: '100%', display: tab === tb.id ? 'block' : 'none' }}>
           {tb.menu && tb.menu.length
-            ? <Rail items={tb.menu} panels={PANELS} />
+            ? <Rail items={tb.menu} panels={PANELS}
+                emptyPanel={<Placeholder icon="command" title={tb.label || t('tab_' + tb.id)} note={t('placeholder_menu')} />} />
             : (PAGES[tb.id] || <Placeholder title={tb.label || t('tab_' + tb.id)} />)}
         </div>
       ))}
