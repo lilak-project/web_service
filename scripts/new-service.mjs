@@ -141,9 +141,9 @@ ${placeholderDict(' — 준비 중')}
     set_theme: '테마', set_lang: '언어',
     cmd_help: '단축키 도움말', cmd_placeholder: '명령 입력…', shortcuts_title: '키보드 단축키',
     placeholder_menu: '이 메뉴 항목의 내용은 아직 준비 중입니다. 코드(Shell.jsx의 PANELS)에서 연결하세요.',
-${HAS_SETTINGS ? `    set_account: '계정', set_users: '사용자 관리', set_tabs: '탭', set_profiles: '프로필 유형', set_anon: '익명 이름',
+${HAS_SETTINGS ? `    set_account: '계정', set_users: '사용자 관리', set_tabs: '탭', set_anon: '익명 이름',
     set_account_note: '계정과 비밀번호는 포털에서 관리합니다.', set_users_note: '사용자 관리는 포털에서 합니다.',
-    set_open_portal: '포털 열기', set_service_local: '서비스 로컬 설정 (구현 예정)',\n` : ''}  },
+    set_open_portal: '포털 열기',\n` : ''}  },
   en: {
     brand: ${dq(BRAND === '라일락' ? 'lilak' : BRAND)},
     svc_name: ${dq(SERVICE)},
@@ -155,9 +155,9 @@ ${placeholderDict(' — coming soon')}
     set_theme: 'Theme', set_lang: 'Language',
     cmd_help: 'Shortcuts help', cmd_placeholder: 'Type a command…', shortcuts_title: 'Keyboard shortcuts',
     placeholder_menu: 'This menu item has no content yet — wire it up in code (PANELS in Shell.jsx).',
-${HAS_SETTINGS ? `    set_account: 'Account', set_users: 'Users', set_tabs: 'Tabs', set_profiles: 'Profile types', set_anon: 'Anon names',
+${HAS_SETTINGS ? `    set_account: 'Account', set_users: 'Users', set_tabs: 'Tabs', set_anon: 'Anon names',
     set_account_note: 'Account and password are managed in the portal.', set_users_note: 'User management lives in the portal.',
-    set_open_portal: 'Open portal', set_service_local: 'Service-local setting (coming soon)',\n` : ''}  },
+    set_open_portal: 'Open portal',\n` : ''}  },
 }
 `
 
@@ -454,7 +454,6 @@ const SETTINGS_CODE_MENU = [
   { id: 'users', label: '사용자 관리', icon: 'users' },
   ...(HAS_COMMUNITY ? [{ id: 'anon', label: '익명 이름', icon: 'eye' }] : []),
   { id: 'tabs', label: '탭', icon: 'browse' },
-  { id: 'profiles', label: '프로필 유형', icon: 'user' },
 ]
 const settingsCodeMenuPy = SETTINGS_CODE_MENU
   .map((m) => `        {"id": ${JSON.stringify(m.id)}, "label": ${JSON.stringify(m.label)}, "icon": ${JSON.stringify(m.icon)}},`)
@@ -666,7 +665,6 @@ import { SideNav, useLang } from 'lilak-ui'
 import { get } from '../api'
 import AccountSection from './settings/AccountSection'
 import ManageUsers from './settings/ManageUsers'
-import ServiceLocal from './settings/ServiceLocal'
 import LayoutSettings from './settings/LayoutSettings'
 ${HAS_COMMUNITY ? "import AnonNames from './settings/AnonNames'\n" : ''}
 // Reorder / hide the settings sections per the tab's codeMenu (Settings 탭 editor).
@@ -692,7 +690,6 @@ export default function SettingsPage({ menuConfig }) {
     { id: 'users', label: t('set_users'), icon: 'users', group: 'people' },
     ...(isManager ? [
 ${HAS_COMMUNITY ? "      { id: 'anon', label: t('set_anon'), icon: 'eye', group: 'community' },\n" : ''}      { id: 'tabs', label: t('set_tabs'), icon: 'browse', group: 'appearance' },
-      { id: 'profiles', label: t('set_profiles'), icon: 'user', group: 'appearance' },
     ] : []),
   ], menuConfig)
   const [active, setActive] = useState('account')
@@ -708,7 +705,6 @@ ${HAS_COMMUNITY ? "      { id: 'anon', label: t('set_anon'), icon: 'eye', group:
           {cur === 'account' && <AccountSection me={me} />}
           {cur === 'users' && <ManageUsers />}
 ${HAS_COMMUNITY ? "          {cur === 'anon' && <AnonNames />}\n" : ''}          {cur === 'tabs' && <LayoutSettings />}
-          {cur === 'profiles' && <ServiceLocal title={t('set_profiles')} />}
         </div>
       </div>
     </div>
@@ -812,21 +808,6 @@ export default function ManageUsers() {
         <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{t('set_users_note')}</div>
         <Button variant="secondary" onClick={() => { window.location.href = portalHome() }} style={{ width: '100%', padding: '8px 0' }}>{t('set_open_portal')}</Button>
       </Stack>
-    </Stack>
-  )
-}
-`)
-
-  put('frontend/src/pages/settings/ServiceLocal.jsx', `import { Stack, Callout, useLang } from 'lilak-ui'
-
-// Placeholder for a service-local admin section (tabs / profile types). Replace
-// with a real editor backed by this service's own endpoints when needed.
-export default function ServiceLocal({ title }) {
-  const { t } = useLang()
-  return (
-    <Stack gap={12} style={{ maxWidth: 520 }}>
-      <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--fs-body, 13px)', color: 'var(--text-primary)' }}>{title}</p>
-      <Callout tone="info">{t('set_service_local')}</Callout>
     </Stack>
   )
 }
