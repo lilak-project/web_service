@@ -60,8 +60,10 @@ async def _close_proxy_client():
 
 @app.get("/api/health")
 def health():
+    from . import gitinfo
     return {"ok": True, "service": "service_manager",
-            "port": config.PORTAL_PORT, "data_root": str(config.DATA_ROOT)}
+            "port": config.PORTAL_PORT, "data_root": str(config.DATA_ROOT),
+            "host": gitinfo.hostname(), "version": gitinfo.portal_version()}
 
 
 # Serve the AI integration guide so it's viewable/copyable from the portal UI.

@@ -23,6 +23,7 @@ router = APIRouter(tags=["services-lifecycle"])
 
 def raw_service(name: str) -> dict:
     """One service's launcher-level view: status (via its adapter) + cosmetics."""
+    from .. import gitinfo
     manifest = registry.read_manifest(name)
     adapter = get_adapter(manifest)
     st = adapter.status(name, manifest)
@@ -40,6 +41,7 @@ def raw_service(name: str) -> dict:
         "multi_project": bool(caps.get("multi_project")),
         "import_export": bool(caps.get("import_export")),
         "order": manifest.get("order", 1000),      # admin-set display order (manage mode)
+        "version": gitinfo.service_version((manifest.get("start") or {}).get("cwd")),  # {sha,date}|null
     }
 
 

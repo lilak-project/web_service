@@ -238,6 +238,12 @@ export default function ProjectsPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')             // name currently acting on
   const [reloadTick, setReloadTick] = useState(0)  // bumped on refresh → re-loads the archive
+  const [portalInfo, setPortalInfo] = useState(null)  // { host, version } — tells servers apart
+
+  // Public host + portal git-version for the header (identifies the deployment).
+  useEffect(() => {
+    launcher.get('/health').then((r) => setPortalInfo(r.data)).catch(() => {})
+  }, [])
 
   // Restore a saved portal session.
   useEffect(() => {
@@ -388,7 +394,9 @@ export default function ProjectsPage() {
       fill
       icon={<HeaderMark />}
       title={t('projects_title')}
-      subtitle={t('projects_subtitle')}
+      subtitle={portalInfo
+        ? `${portalInfo.host || '?'}${portalInfo.version ? ` · ${portalInfo.version}` : ''}`
+        : t('projects_subtitle')}
       subheader={user ? <>{navBar}{view === 'home' && isManager && manageBar}</> : null}
     >
       {/* Login-first; then one of three logged-in screens — no popups. */}
@@ -436,7 +444,7 @@ export default function ProjectsPage() {
                   icon={<Icon name={iconFor(p.name, p.icon)} size={26} weight="fill"
                     color={p.color || 'var(--text-primary)'} />}
                   title={p.builtin === 'newservice' ? (p.label || t('newsvc_title')) : (p.label || p.name)}
-                  badges={<span style={{ fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>{p.kind || '?'}</span>}
+                  badges={p.version?.sha ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>{p.version.sha}</span> : null}
                   subtitle={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     {(!isBuiltin && !p.multi_project) && <span style={{ width: 8, height: 8, borderRadius: 999, background: p.running ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }} />}
                     {statusText}
@@ -455,6 +463,26 @@ export default function ProjectsPage() {
                     ) : null
                   }
                 >
+                  {/* Top strip: link to the service's repo + the exact commit in use. */}
+                  {p.version?.url && (
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: '8px 14px 8px 46px', borderTop: '1px solid var(--border-subtle)', fontSize: 'var(--fs-small, 12px)' }}>
+                      <a href={p.version.url} target="_blank" rel="noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--info-text)', textDecoration: 'none' }}>
+                        <Icon name="folder" size={14} /> {p.version.url.replace(/^https?:\/\//, '')} ↗
+                      </a>
+                      {p.version.pushed ? (
+                        <a href={`${p.version.url}/commit/${p.version.sha}`} target="_blank" rel="noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', color: 'var(--info-text)', textDecoration: 'none' }}>
+                          <Icon name="tag" size={14} /> {p.version.sha} ↗
+                        </a>
+                      ) : (
+                        <span title="아직 원격에 푸시되지 않은 로컬 커밋"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                          <Icon name="tag" size={14} /> {p.version.sha} · 로컬
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {/* Inline expansion: manage mode → management panel (builtins too);
                       otherwise the builtin tool / the service's own panel. */}
                   {manage && isManager ? (
