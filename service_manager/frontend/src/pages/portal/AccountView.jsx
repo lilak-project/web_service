@@ -5,6 +5,8 @@ import { useLang } from '../../context/LangContext'
 import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
 import SystemAdmin from './SystemAdmin'
+import FeedbackView from './FeedbackView'
+import GuideView from './GuideView'
 import ProfileEditor from './ProfileEditor'
 import GroupMark from './GroupMark'
 import ExpandBox from './ExpandBox'
@@ -126,11 +128,13 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
 
   const MENU = [
     ['me', 'user', L('내 계정', 'My account')],
+    ['feedback', 'chats', L('피드백', 'Feedback')],
     ...(isManager ? [
       ['accounts', 'users', L('계정', 'Accounts')],
       ['groups', 'tree', L('그룹', 'Groups')],
       ['invites', 'key', L('초대 코드', 'Invite codes')],
       ['system', 'sliders', L('시스템', 'System')],
+      ['handshake', 'plug', L('핸드셰이크', 'Handshake')],
     ] : []),
   ]
   const menuBtn = ([key, icon, label]) => {
@@ -332,10 +336,12 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   )
 
   const content = tab === 'me' ? MyAccount
+    : tab === 'feedback' ? <FeedbackView isManager={isManager} />
     : tab === 'accounts' ? Accounts
     : tab === 'groups' ? <GroupsAdmin users={users} services={services} onChanged={load} />
     : tab === 'invites' ? <InvitesAdmin services={services} onChanged={load} />
     : tab === 'system' ? <SystemAdmin />
+    : tab === 'handshake' ? <GuideView onChanged={onChanged} />
     : MyAccount
 
   return (
@@ -346,15 +352,13 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
           onCancel={() => { pwAsk.resolve(null); setPwAsk(null) }} />
       )}
       {msg && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', marginBottom: 8 }}>{msg}</div>}
-      {!isManager ? MyAccount : (
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 150, flexShrink: 0,
-            borderRight: '1px solid var(--border-subtle)', paddingRight: 8 }}>
-            {MENU.map(menuBtn)}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>{content}</div>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 150, flexShrink: 0,
+          borderRight: '1px solid var(--border-subtle)', paddingRight: 8 }}>
+          {MENU.map(menuBtn)}
         </div>
-      )}
+        <div style={{ flex: 1, minWidth: 0 }}>{content}</div>
+      </div>
     </div>
   )
 }

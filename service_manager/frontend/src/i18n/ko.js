@@ -664,6 +664,7 @@ export default {
   portal_nav_services:     '서비스',
   portal_nav_users:        '사용자',
   portal_nav_account:      '계정',
+  portal_nav_settings:     '설정',
   portal_users_accounts:   '계정',
   portal_users_allowed:    '허용된 서비스 (눌러서 허용/해제)',
   portal_proj_close:       '닫기',

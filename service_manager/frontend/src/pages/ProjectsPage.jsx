@@ -4,12 +4,10 @@ import ExpandBox from './portal/ExpandBox'
 import { launcher, setExperiment } from '../api'
 import { useLang } from '../context/LangContext'
 import AccountView from './portal/AccountView'
-import FeedbackView from './portal/FeedbackView'
 import ArchivePanel from './portal/ArchivePanel'
 import ServiceManagePanel from './portal/ServiceManagePanel'
 import IconLabView from './portal/IconLabView'
 import NewServiceView from './portal/NewServiceView'
-import GuideView from './portal/GuideView'
 import ServiceProjects from './portal/ServiceProjects'
 import ServiceSingle from './portal/ServiceSingle'
 
@@ -228,8 +226,21 @@ export default function ProjectsPage() {
   const [authReady, setAuthReady] = useState(false)
   const isManager = user?.role === 'manager'
 
+  // PWA / deep-link return: the proxies bounce an unauthenticated page navigation
+  // here as /projects?next=<original-url> (e.g. a home-screen app whose isolated
+  // webview has no cookie yet). Once a session exists — fresh login or restored
+  // token, both of which re-set the proxy cookie — go back where the user came
+  // from. Same-origin paths only (no '//'): never an open redirect.
+  const nextParam = (() => {
+    const v = new URLSearchParams(window.location.search).get('next') || ''
+    return v.startsWith('/') && !v.startsWith('//') ? v : ''
+  })()
+  useEffect(() => {
+    if (user && nextParam) window.location.replace(nextParam)
+  }, [user])  // eslint-disable-line react-hooks/exhaustive-deps
+
   // No popups: the app is a single page with logged-in screens, switched here.
-  const [view, setView] = useState('home')          // 'home' | 'account' | 'guide'
+  const [view, setView] = useState('home')          // 'home' | 'settings'
   const [expanded, setExpanded] = useState(null)         // multi-project svc expanded inline
   const [manage, setManage] = useState(false)            // admin Home "manage mode"
 
@@ -369,9 +380,7 @@ export default function ProjectsPage() {
       padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)' }}>
       {/* tabs — left */}
       {navBtn('home', 'home', t('portal_nav_home'))}
-      {navBtn('account', 'user', t('portal_nav_account'))}
-      {navBtn('feedback', 'chats', t('portal_nav_feedback'))}
-      {isManager && navBtn('guide', 'plug', t('portal_nav_handshake'))}
+      {navBtn('settings', 'settings', t('portal_nav_settings'))}
       <div style={{ flex: 1 }} />
       {/* account name + logout — right */}
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
@@ -413,12 +422,8 @@ export default function ProjectsPage() {
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
         <AuthCard t={t} onAuthed={(u) => { setUser(u); setView('home'); refresh() }} />
-      ) : view === 'account' ? (
+      ) : view === 'settings' ? (
         <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout} />
-      ) : view === 'feedback' ? (
-        <FeedbackView isManager={isManager} />
-      ) : view === 'guide' && isManager ? (
-        <GuideView onChanged={refresh} />
       ) : (
         <>
           {error && (

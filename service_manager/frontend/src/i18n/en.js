@@ -664,6 +664,7 @@ export default {
   portal_nav_services:     'Services',
   portal_nav_users:        'Users',
   portal_nav_account:      'Account',
+  portal_nav_settings:     'Settings',
   portal_users_accounts:   'Accounts',
   portal_users_allowed:    'Allowed services (toggle to grant / revoke)',
   portal_proj_close:       'Close',
