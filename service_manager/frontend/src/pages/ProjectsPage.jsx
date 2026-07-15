@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Icon, Button, CoverPage, PROJECT_ICONS, Avatar, MANAGER_COLOR } from 'lilak-ui'
+import { Icon, Button, CoverPage, PROJECT_ICONS, Avatar, MANAGER_COLOR, Modal } from 'lilak-ui'
 import ExpandBox from './portal/ExpandBox'
 import { launcher, setExperiment } from '../api'
 import { useLang } from '../context/LangContext'
@@ -239,11 +239,22 @@ export default function ProjectsPage() {
   const [busy, setBusy] = useState('')             // name currently acting on
   const [reloadTick, setReloadTick] = useState(0)  // bumped on refresh → re-loads the archive
   const [portalInfo, setPortalInfo] = useState(null)  // { host, version } — tells servers apart
+  const [logFor, setLogFor] = useState(null)          // service whose service.log modal is open
+  const [logData, setLogData] = useState(null)        // { text, path }
+  const [logBusy, setLogBusy] = useState(false)
 
   // Public host + portal git-version for the header (identifies the deployment).
   useEffect(() => {
     launcher.get('/health').then((r) => setPortalInfo(r.data)).catch(() => {})
   }, [])
+
+  // Tail a managed service's captured stdout/stderr (data/<name>/service.log).
+  async function openLog(name) {
+    setLogFor(name); setLogBusy(true)
+    try { setLogData((await launcher.get(`/admin/services/${name}/log`)).data) }
+    catch (e) { setLogData({ text: `로그를 불러오지 못했습니다: ${e?.response?.data?.detail || e.message}`, path: '' }) }
+    finally { setLogBusy(false) }
+  }
 
   // Restore a saved portal session.
   useEffect(() => {
@@ -463,14 +474,16 @@ export default function ProjectsPage() {
                     ) : null
                   }
                 >
-                  {/* Top strip: link to the service's repo + the exact commit in use. */}
-                  {p.version?.url && (
+                  {/* Top strip: repo + exact-commit links, and a manager log viewer. */}
+                  {(p.version?.url || (isManager && p.mode === 'managed' && !isBuiltin)) && (
                     <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: '8px 14px 8px 46px', borderTop: '1px solid var(--border-subtle)', fontSize: 'var(--fs-small, 12px)' }}>
-                      <a href={p.version.url} target="_blank" rel="noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--info-text)', textDecoration: 'none' }}>
-                        <Icon name="folder" size={14} /> {p.version.url.replace(/^https?:\/\//, '')} ↗
-                      </a>
-                      {p.version.pushed ? (
+                      {p.version?.url && (
+                        <a href={p.version.url} target="_blank" rel="noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--info-text)', textDecoration: 'none' }}>
+                          <Icon name="folder" size={14} /> {p.version.url.replace(/^https?:\/\//, '')} ↗
+                        </a>
+                      )}
+                      {p.version?.url && (p.version.pushed ? (
                         <a href={`${p.version.url}/commit/${p.version.sha}`} target="_blank" rel="noreferrer"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', color: 'var(--info-text)', textDecoration: 'none' }}>
                           <Icon name="tag" size={14} /> {p.version.sha} ↗
@@ -480,6 +493,12 @@ export default function ProjectsPage() {
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
                           <Icon name="tag" size={14} /> {p.version.sha} · 로컬
                         </span>
+                      ))}
+                      {isManager && p.mode === 'managed' && !isBuiltin && (
+                        <button type="button" onClick={() => openLog(p.name)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 0, padding: 0, cursor: 'pointer', font: 'inherit', fontSize: 'var(--fs-small, 12px)', color: 'var(--info-text)' }}>
+                          <Icon name="file" size={14} /> 로그
+                        </button>
                       )}
                     </div>
                   )}
@@ -505,6 +524,19 @@ export default function ProjectsPage() {
           </div>
           {isManager && <ArchivePanel signal={reloadTick} onChanged={refresh} />}
         </>
+      )}
+
+      {logFor && (
+        <Modal title={`${logFor} · service.log`} width={880}
+          onClose={() => { setLogFor(null); setLogData(null) }}
+          footer={<Button size="sm" variant="secondary" onClick={() => openLog(logFor)} disabled={logBusy}>{logBusy ? '불러오는 중…' : '새로고침'}</Button>}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {logData?.path && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{logData.path}</div>}
+            <pre style={{ margin: 0, maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)', lineHeight: 1.5, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12, color: 'var(--text-primary)' }}>
+              {logBusy ? '불러오는 중…' : (logData?.text || '(로그 없음 — 아직 시작되지 않았거나 멀티프로젝트 서비스라 프로젝트별 로그를 씁니다)')}
+            </pre>
+          </div>
+        </Modal>
       )}
     </CoverPage>
   )
