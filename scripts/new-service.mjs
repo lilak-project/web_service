@@ -66,7 +66,8 @@ const BUILD = !!args.build                              // npm install + build a
 const LILAK_UI = resolve(expand(args['lilak-ui']) || process.env.LILAK_UI_PATH || join(OUT, 'lilak_ui'))
 if (!/^#[0-9a-f]{6}$/.test(COLOR)) { console.error(`error: --color must be a #rrggbb hex (got ${COLOR})`); process.exit(1) }
 
-// tabs: "id:label:icon[:kind]" — icon optional; kind='community' → built-in chat tab
+// tabs: "id:label:icon[:kind]" — icon optional; kind='community' → built-in chat tab,
+// kind='parameter' → built-in LILAK parameter editor (needs --lilak-path / $LILAK_PATH).
 const TABS = String(args.tabs || 'home:홈:home').split(',').map((s) => {
   const [id, label, icon, kind] = s.split(':')
   const t = { id: id.trim(), label: (label || id).trim(), icon: (icon || 'circle').trim() }
@@ -82,6 +83,9 @@ const SETTINGS_TAB = TABS.find(isSettingsTab)
 const HAS_SETTINGS = !!SETTINGS_TAB          // a settings tab (flag or kind) → scaffold it
 const COMMUNITY_TABS = TABS.filter((t) => t.kind === 'community')
 const HAS_COMMUNITY = COMMUNITY_TABS.length > 0
+const PARAMETER_TABS = TABS.filter((t) => t.kind === 'parameter')   // built-in LILAK 파라미터 editor
+const HAS_PARAMETER = PARAMETER_TABS.length > 0
+const LILAK_PATH = expand(args['lilak-path']) || join(homedir(), 'Research', 'lilak')   // the LILAK framework a parameter tab edits
 const FILES_TAB = TABS.find((t) => t.id === 'files')
 
 // ── colour helpers (derive hover / tint / muted from the one main colour) ─────
@@ -264,6 +268,7 @@ export function portalHome() { return PORTAL_BASE ? PORTAL_BASE.replace(/\\/p\\/
 const pagesImports = [
   SETTINGS_TAB ? `import SettingsPage from '../pages/SettingsPage'` : null,
   HAS_COMMUNITY ? `import CommunityTab from '../pages/CommunityTab'` : null,
+  HAS_PARAMETER ? `import ParameterTab from '../pages/ParameterTab'` : null,
 ].filter(Boolean).join('\n')
 
 const onFiles = FILES_TAB ? `() => setTab(${dq(FILES_TAB.id)})` : 'undefined'
@@ -273,7 +278,9 @@ const pagesMap = TABS.map((t) => t === SETTINGS_TAB
   ? `    ${dq(t.id)}: <SettingsPage menuConfig={(layout.tabs || []).find((x) => x.id === ${dq(t.id)})?.codeMenu} />,`
   : t.kind === 'community'
     ? `    ${dq(t.id)}: <CommunityTab onOpenFiles={${onFiles}} menuConfig={(layout.tabs || []).find((x) => x.id === ${dq(t.id)})?.codeMenu} />,`
-    : `    ${dq(t.id)}: <Placeholder icon=${dq(t.icon)} title={t('tab_${t.id}')} note={t('placeholder_${t.id}')} />,`).join('\n')
+    : t.kind === 'parameter'
+      ? `    ${dq(t.id)}: <ParameterTab />,`
+      : `    ${dq(t.id)}: <Placeholder icon=${dq(t.icon)} title={t('tab_${t.id}')} note={t('placeholder_${t.id}')} />,`).join('\n')
 
 const shellJsx = `/**
  * Shell — ${NAME} chrome: a thin config of the kit's AppShell (top bar, /command
@@ -473,7 +480,7 @@ from fastapi.staticfiles import StaticFiles
 
 from portal_auth import identity
 from layout import build_layout_router
-${HAS_COMMUNITY ? 'from community import build_community_router\n' : ''}
+${HAS_COMMUNITY ? 'from community import build_community_router\n' : ''}${HAS_PARAMETER ? 'from parameter import build_parameter_router\n' : ''}
 app = FastAPI(title="${NAME}")
 
 app.add_middleware(
@@ -493,7 +500,13 @@ ${TABS.map((t) => t.kind === 'community'
 app.include_router(build_layout_router(
     path=Path(__file__).resolve().parents[1] / "data" / "layout.json",
     identity=identity, defaults=_LAYOUT_DEFAULT))
-${HAS_COMMUNITY ? `
+${HAS_PARAMETER ? `
+# Built-in LILAK 파라미터 editor — browse/edit .mac/.par files under \$LILAK_PATH
+# (set in the manifest's start.env; defaults to ~/Research/lilak).
+import os
+_LILAK_PATH = os.environ.get("LILAK_PATH") or str(Path.home() / "Research" / "lilak")
+app.include_router(build_parameter_router(lilak_path=_LILAK_PATH, identity=identity))
+` : ''}${HAS_COMMUNITY ? `
 # Built-in community/chat tab — data persists in the service's data dir.
 _CM_DATA = Path(__file__).resolve().parents[1] / "community_data"
 app.include_router(build_community_router(
@@ -609,7 +622,8 @@ const manifest = JSON.stringify({
   identity: { accepts_portal_token: true, link_by: 'email' },
   capabilities: { multi_project: false, import_export: false },
   label: (SERVICE || NAME).trim(), icon: (args.icon || 'lilak'), color: COLOR,
-  start: { cmd: 'uvicorn main:app', cwd: join(ROOT, 'backend'), env: {} },
+  start: { cmd: 'uvicorn main:app', cwd: join(ROOT, 'backend'),
+    env: HAS_PARAMETER ? { LILAK_PATH } : {} },   // parameter tab edits the LILAK tree at $LILAK_PATH
 }, null, 2) + '\n'
 
 // ── write everything ──────────────────────────────────────────────────────────
@@ -656,6 +670,19 @@ if (HAS_COMMUNITY) {
   if (existsSync(apiSrc) && (FORCE || !existsSync(apiDest))) { copyFileSync(apiSrc, apiDest); wrote++ } else if (existsSync(apiDest)) skipped++
   put('frontend/src/pages/CommunityTab.jsx', communityTabJsx)
   if (HAS_SETTINGS) put('frontend/src/pages/settings/AnonNames.jsx', anonNamesJsx)
+}
+
+// built-in LILAK 파라미터 tab: drop-in backend router + parser + the frontend editor
+if (HAS_PARAMETER) {
+  const tmplDir = join(dirname(fileURLToPath(import.meta.url)), 'templates')
+  for (const [src, dest] of [
+    ['parameter.py', 'backend/parameter.py'],
+    ['parameter_parser.py', 'backend/parameter_parser.py'],
+    ['ParameterTab.jsx', 'frontend/src/pages/ParameterTab.jsx'],
+  ]) {
+    const s = join(tmplDir, src), d = join(ROOT, dest)
+    if (existsSync(s) && (FORCE || !existsSync(d))) { copyFileSync(s, d); wrote++ } else if (existsSync(d)) skipped++
+  }
 }
 
 // settings tab (portal-centric)
