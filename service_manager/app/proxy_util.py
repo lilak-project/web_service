@@ -17,10 +17,23 @@ service is the one case we must buffer — it's small and needs `<base>` injecti
 from __future__ import annotations
 
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
+
+
+def login_redirect_or_401(request: Request) -> HTTPException:
+    """Unauthenticated request hit a gated proxy. A browser *navigating* to a page
+    (GET + Accept: text/html) is bounced to the portal login with ?next= back to
+    the original URL — this is what makes home-screen PWAs work, whose isolated
+    webview has no portal cookie on first launch. Non-HTML callers (fetch/API)
+    keep the plain 401 JSON."""
+    if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+        target = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+        return HTTPException(302, headers={"Location": f"/projects?next={quote(target, safe='')}"})
+    return HTTPException(401, "로그인이 필요합니다.")
 
 # Hop-by-hop headers must not be forwarded across a proxy (RFC 7230 §6.1).
 _HOP_BY_HOP = {

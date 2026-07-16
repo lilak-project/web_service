@@ -19,7 +19,7 @@ from .. import models, permissions, project_runtime as pr
 from .. import registry, security
 from ..db import SessionLocal, get_db
 from ..deps import require_portal_admin, require_portal_user
-from ..proxy_util import stream_proxy
+from ..proxy_util import login_redirect_or_401, stream_proxy
 
 router = APIRouter(tags=["project-management"])
 
@@ -210,7 +210,7 @@ def _proxy_guard(request: Request, svc: str, proj: str) -> None:
     try:
         user = permissions.user_from_request(db, token)
         if not user:
-            raise HTTPException(401, "로그인이 필요합니다.")
+            raise login_redirect_or_401(request)
         if not permissions.can_enter_project(db, user, svc, proj):
             if not permissions.verification_current(user):
                 raise HTTPException(403, "이메일 재인증이 필요합니다 (연 1회).")

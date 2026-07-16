@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from .. import permissions, registry, security
 from ..adapters import get_adapter
 from ..db import SessionLocal
-from ..proxy_util import stream_proxy
+from ..proxy_util import login_redirect_or_401, stream_proxy
 
 router = APIRouter()
 
@@ -30,7 +30,7 @@ def _guard(request: Request, name: str) -> None:
     try:
         user = permissions.user_from_request(db, token)
         if not user:
-            raise HTTPException(401, "로그인이 필요합니다.")
+            raise login_redirect_or_401(request)
         if not permissions.can_enter_project(db, user, name, ""):
             if not permissions.verification_current(user):
                 raise HTTPException(403, "이메일 재인증이 필요합니다 (연 1회).")
