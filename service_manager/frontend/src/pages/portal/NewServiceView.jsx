@@ -146,6 +146,7 @@ export default function NewServiceView({ onCreated }) {
               background: tb.kind ? 'var(--info-bg)' : 'transparent', borderRadius: 999, padding: '2px 0' }}>
               {tb.kind === 'community' ? t('newsvc_tab_kind_community')
                 : tb.kind === 'settings' ? t('newsvc_tab_kind_settings')
+                : tb.kind === 'parameter' ? t('newsvc_tab_kind_parameter')
                 : t('newsvc_tab_kind_basic')}
             </span>
             <Button variant="ghost" icon disabled={!!job || tabs.length <= 1} onClick={() => delTab(tb.key)} title={t('newsvc_tab_del')}>
@@ -165,6 +166,10 @@ export default function NewServiceView({ onCreated }) {
             <Button variant="secondary" disabled={tabs.some((x) => x.kind === 'settings')}
               onClick={() => setTabs((ts) => [...ts, newTab({ id: 'set', label: lang === 'ko' ? '설정' : 'Settings', icon: 'settings', kind: 'settings' })])}>
               <Icon name="settings" size={13} /> {t('newsvc_tab_add_settings')}
+            </Button>
+            <Button variant="secondary" disabled={tabs.some((x) => x.kind === 'parameter')}
+              onClick={() => setTabs((ts) => [...ts, newTab({ id: 'param', label: lang === 'ko' ? '파라미터' : 'Parameter', icon: 'sliders', kind: 'parameter' })])}>
+              <Icon name="sliders" size={13} /> {t('newsvc_tab_add_parameter')}
             </Button>
           </div>
         )}
