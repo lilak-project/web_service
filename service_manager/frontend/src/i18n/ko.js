@@ -630,7 +630,7 @@ export default {
   manage_move_up:          '위로',
   manage_move_down:        '아래로',
   iconlab_card_hint:       '아이콘 편집 도구',
-  newsvc_title:            '빈 서비스 만들기',
+  newsvc_title:            'lilak 서비스 만들기',
   newsvc_card_hint:        '새 서비스 생성 도구',
   newsvc_intro:            '이름과 탭을 입력하면 lilak_ui 기본 세트로 새 서비스를 만들어 포탈에 바로 등록합니다 (SSO·포탈 계정관리·기본 규칙 적용).',
   newsvc_name:             '서비스 이름 (id)',
