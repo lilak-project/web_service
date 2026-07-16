@@ -2,9 +2,12 @@
   "kind": "asset",
   "mode": "managed",
   "start": {
-    "cmd": "python3 -m http.server {port} --bind 0.0.0.0",
-    "cwd": "/app/asset_manager/dist",
-    "env": {}
+    "cmd": "uvicorn main:app",
+    "cwd": "/app/asset_manager/backend",
+    "env": {
+      "ASSET_DATA_DIR": "{project_data}",
+      "ASSET_DIST_DIR": "/app/asset_manager/dist"
+    }
   },
   "health": "/",
   "entry": "/",

@@ -50,6 +50,15 @@ if [ "$SCI" -eq 1 ] && [ "${NPTOOL_NO_STAGE:-0}" != "1" ]; then
   "$ROOT/sci-runner/stage-nptool.sh"
 fi
 
+# Bake the portal + per-service git SHAs into service_manager/git-versions.json.
+# Only the HOST has git and the .git dirs (the image has neither), so this must
+# run here, before the build copies service_manager/ into the image. Best-effort:
+# without it the UI's version cards just go blank.
+echo "==> Baking git version metadata"
+python3 "$ROOT/service_manager/deploy/gen-versions.py" \
+        "$ROOT/service_manager/git-versions.json" \
+  || echo "warning: could not bake git-versions.json (version cards will be blank)" >&2
+
 if ! "${DOCKER[@]}" compose version >/dev/null 2>&1; then
   DOCKER=("${SUDO:-sudo}" docker)
 fi
