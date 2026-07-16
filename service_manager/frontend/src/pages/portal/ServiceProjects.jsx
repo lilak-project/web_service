@@ -47,6 +47,14 @@ export default function ServiceProjects({ service, canManage }) {
     try { await launcher.post(`/services/${svc}/projects/${proj}/stop`); await load() }
     finally { setBusy('') }
   }
+  // manager: delete a project — stops it, drops its data dir + per-project grants.
+  async function remove(proj) {
+    if (!window.confirm(t('portal_proj_delete_confirm', proj))) return
+    setBusy(proj); setErr('')
+    try { await launcher.delete(`/services/${svc}/projects/${proj}`); await load() }
+    catch (e) { setErr(e?.response?.data?.detail || t('portal_proj_delete_fail')) }
+    finally { setBusy('') }
+  }
   async function requestAccess(proj) {
     setBusy(proj); setErr('')
     try { await launcher.post('/access-requests', { service: svc, project: proj }); await load() }
@@ -145,6 +153,7 @@ export default function ServiceProjects({ service, canManage }) {
               <Button size="sm" variant="primary" disabled>{t('portal_proj_open')}</Button>
             )}
             {canManage && p.can_enter && p.running && <Button size="sm" variant="secondary" disabled={busy === p.name} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>}
+            {canManage && <Button size="sm" variant="dangerSoft" disabled={busy === p.name} title={t('portal_proj_delete')} onClick={() => remove(p.name)}><Icon name="trash" size={14} /></Button>}
             {/* Data download (export) moved to Home "manage mode". */}
           </div>
         )

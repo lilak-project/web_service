@@ -691,6 +691,8 @@ export default {
   portal_proj_start_fail:  'Could not start the project.',
   portal_proj_import_fail: 'Import failed.',
   portal_proj_delete_confirm: (name) => `Delete project '${name}'? This cannot be undone.`,
+  portal_proj_delete:      'Delete',
+  portal_proj_delete_fail: 'Delete failed',
   portal_admin_register:   'Register service',
   portal_admin_register_manual: 'Manual registration (advanced)',
   portal_hs_title:         'Register a service — handshake',

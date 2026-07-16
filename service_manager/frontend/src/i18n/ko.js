@@ -691,6 +691,8 @@ export default {
   portal_proj_start_fail:  '프로젝트를 시작하지 못했습니다.',
   portal_proj_import_fail: '가져오기에 실패했습니다.',
   portal_proj_delete_confirm: (name) => `'${name}' 프로젝트를 삭제할까요? 되돌릴 수 없습니다.`,
+  portal_proj_delete:      '삭제',
+  portal_proj_delete_fail: '삭제 실패',
   portal_admin_register:   '서비스 등록',
   portal_admin_register_manual: '수동 등록 (고급)',
   portal_hs_title:         '서비스 등록 — 핸드셰이크',
