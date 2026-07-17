@@ -63,8 +63,14 @@ function sortByHome(cards, order) {
 const CTRL_H = 46
 const inputStyle = {
   width: '100%', height: CTRL_H, padding: '0 14px', borderRadius: 8, fontFamily: 'var(--font-mono)',
-  fontSize: 'var(--fs-body, 13px)', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
+  fontSize: 'var(--fs-medium, 14px)', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
   border: '1px solid var(--input-border)', outline: 'none',
+}
+// The card's own side padding, on top of the page Container's 16px — on a phone
+// the column is the full width, and the controls shouldn't run up to the glass.
+const cardStyle = {
+  maxWidth: 360, margin: '28px auto 0', padding: '0 12px',
+  display: 'flex', flexDirection: 'column', gap: 10,
 }
 // One step up the scale from the inputs' --fs-body: the auth buttons are the
 // card's actions, so their labels carry a bit more weight.
@@ -146,7 +152,7 @@ function AuthCard({ t, onAuthed }) {
 
   if (pending) {
     return (
-      <div style={{ maxWidth: 360, margin: '28px auto 0', display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'center' }}>
+      <div style={{ ...cardStyle, textAlign: 'center' }}>
         <div style={{ fontSize: 32 }}>✉️</div>
         <div style={{ fontWeight: 600 }}>{pending.message || '인증 메일을 확인하세요.'}</div>
         <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{pending.email}</div>
@@ -194,7 +200,7 @@ function AuthCard({ t, onAuthed }) {
   )
 
   return (
-    <div style={{ maxWidth: 360, margin: '28px auto 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={cardStyle}>
       <div style={{ display: 'flex', gap: 6 }}>
         {tabBtn('login', t('projects_login_title'))}
         {tabBtn('signup', t('projects_signup'))}
