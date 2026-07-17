@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Icon, PICKER_ICONS, PROJECT_ICONS } from 'lilak-ui'
+import { Button, Icon, PICKER_ICONS, PROJECT_ICONS, searchIcons } from 'lilak-ui'
 
 // Shared visual icon picker (used by NewServiceView + ServiceManagePanel). Icons
 // render in DUOTONE — the house style for service marks.
 export const ICON_CHOICES = Array.from(new Set(PICKER_ICONS && PICKER_ICONS.length ? PICKER_ICONS : PROJECT_ICONS))
-export const DEFAULT_ICON = (PROJECT_ICONS && PROJECT_ICONS[0]) || ICON_CHOICES[0]
+// The mark a brand-new service starts with, before anyone picks one.
+export const DEFAULT_ICON = 'baby'
 export const ICON_WEIGHT = 'fill'
 
 /**
@@ -31,8 +32,9 @@ export default function IconPick({ value, onChange, disabled, color }) {
   }
   function toggle() { if (!open) { setQ(''); place() } setOpen((o) => !o) }
 
-  const query = q.trim().toLowerCase()
-  const shown = query ? ICON_CHOICES.filter((ic) => ic.includes(query)) : ICON_CHOICES
+  // Search the way phosphoricons.com does — name OR the icon's own tags, so "nut"
+  // finds `acorn` even though the word isn't in the name.
+  const shown = searchIcons(q, ICON_CHOICES)
 
   useEffect(() => {
     if (!open) return
