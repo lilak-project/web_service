@@ -433,7 +433,9 @@ export default function ProjectsPage() {
       // Logged out there are no header controls, so the mark stands alone with the
       // title under it; signed in it goes back to leading-icon + nav row.
       center={!user}
-      icon={<HeaderMark />}
+      // Logged out the mark stands alone as the landing art, so it can be bigger;
+      // signed in it's just the leading icon of a nav row and stays put.
+      icon={<HeaderMark size={user ? 42 : 64} />}
       title={t('projects_title')}
       subtitle={portalInfo
         ? `${portalInfo.host || '?'}${portalInfo.version ? ` · ${portalInfo.version}` : ''}`
