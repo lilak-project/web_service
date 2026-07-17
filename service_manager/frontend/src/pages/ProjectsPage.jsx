@@ -66,9 +66,11 @@ const inputStyle = {
   fontSize: 'var(--fs-body, 13px)', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
   border: '1px solid var(--input-border)', outline: 'none',
 }
+// One step up the scale from the inputs' --fs-body: the auth buttons are the
+// card's actions, so their labels carry a bit more weight.
 const authBtnStyle = {
   width: '100%', height: CTRL_H, borderRadius: 8,
-  fontSize: 'var(--fs-body, 13px)', justifyContent: 'center',
+  fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center',
 }
 
 // Attach / clear the portal bearer token on the shared launcher axios.
@@ -184,7 +186,11 @@ function AuthCard({ t, onAuthed }) {
 
   const tabBtn = (m, label) => (
     <Button variant={mode === m ? 'primary' : 'ghost'} onClick={() => { setMode(m); setErr('') }}
-      style={{ ...authBtnStyle, flex: 1 }}>{label}</Button>
+      style={{ ...authBtnStyle, flex: 1,
+        // The unselected mode is a ghost (no fill), so give it a faint outline to
+        // still read as a button. The selected one keeps a transparent border of
+        // the same width, so switching modes can't nudge the layout.
+        border: mode === m ? '1px solid transparent' : '1px solid var(--border-default)' }}>{label}</Button>
   )
 
   return (
