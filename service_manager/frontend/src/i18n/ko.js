@@ -573,7 +573,7 @@ export default {
   community_hint_log:      '#123 로그 링크',
 
   // ── Projects (launcher / elog home) ───────────────────────────────────────
-  projects_title:          'LILAK Portal',
+  projects_title:          'lilak portal',
   projects_subtitle:       'LILAK 웹 서비스를 관리하세요.',
   projects_new_placeholder:'새 LILAK elog 이름 (영문·숫자·_·-)',
   projects_create:         'LILAK elog 생성',
@@ -596,10 +596,9 @@ export default {
   projects_login_submit:   '로그인',
   projects_login_fail:     '로그인 실패',
   projects_login_title:    '로그인',
-  projects_login_prompt:   'LILAK에 로그인하면 이용 가능한 서비스 목록이 보입니다.',
   projects_signup:         '가입',
   projects_signup_email:   '이메일',
-  projects_signup_code:    '프로젝트 허용 코드 (선택)',
+  projects_signup_code:    '허용 코드 (선택)',
   projects_signup_name:    '표시 이름 (선택)',
   projects_signup_submit:  '계정 만들기',
   projects_signup_admin_hint: '가장 먼저 가입한 계정이 관리자(admin)가 됩니다.',

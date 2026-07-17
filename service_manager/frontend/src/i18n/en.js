@@ -573,7 +573,7 @@ export default {
   community_hint_log:      '#123 link log',
 
   // ── Projects (launcher / elog home) ───────────────────────────────────────
-  projects_title:          'LILAK Portal',
+  projects_title:          'lilak portal',
   projects_subtitle:       'Manage your LILAK web services.',
   projects_new_placeholder:'New LILAK elog name (letters, digits, _, -)',
   projects_create:         'New LILAK elog',
@@ -596,10 +596,9 @@ export default {
   projects_login_submit:   'Log in',
   projects_login_fail:     'Login failed',
   projects_login_title:    'Sign in',
-  projects_login_prompt:   'Sign in to LILAK to see your services.',
   projects_signup:         'Sign up',
   projects_signup_email:   'Email',
-  projects_signup_code:    'Project invite code (optional)',
+  projects_signup_code:    'Invite code (optional)',
   projects_signup_name:    'Display name (optional)',
   projects_signup_submit:  'Create account',
   projects_signup_admin_hint: 'The first account to sign up becomes the admin.',

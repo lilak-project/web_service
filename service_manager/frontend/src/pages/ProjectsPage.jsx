@@ -36,7 +36,7 @@ const CREATE_SERVICE = { name: 'new-service', kind: 'tool', builtin: 'newservice
 
 // The mark next to the title. Uses the editable /lilak-header.svg (set from the
 // icon editor); falls back to the kit logo when that file isn't there yet.
-function HeaderMark({ size = 36 }) {
+function HeaderMark({ size = 42 }) {
   const [failed, setFailed] = useState(false)
   if (failed) return <Icon name="lilak" size={size} style={{ height: size, width: 'auto' }} />
   return <img src="/lilak-header.svg" alt="" height={size} style={{ height: size, width: 'auto' }} onError={() => setFailed(true)} />
@@ -57,10 +57,18 @@ function sortByHome(cards, order) {
   return [...cards].sort((a, b) => pos(a) - pos(b))
 }
 
+// Every control on the auth card — inputs, the mode tabs, the submit — is one
+// height, so the card reads as a single stack of equal rows (and stays a
+// comfortable tap target on a phone).
+const CTRL_H = 46
 const inputStyle = {
-  width: '100%', height: 36, padding: '0 12px', borderRadius: 8, fontFamily: 'var(--font-mono)',
+  width: '100%', height: CTRL_H, padding: '0 14px', borderRadius: 8, fontFamily: 'var(--font-mono)',
   fontSize: 'var(--fs-body, 13px)', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
   border: '1px solid var(--input-border)', outline: 'none',
+}
+const authBtnStyle = {
+  width: '100%', height: CTRL_H, borderRadius: 8,
+  fontSize: 'var(--fs-body, 13px)', justifyContent: 'center',
 }
 
 // Attach / clear the portal bearer token on the shared launcher axios.
@@ -169,21 +177,18 @@ function AuthCard({ t, onAuthed }) {
           </div>
         )}
         <Button onClick={() => { setPending(null); setMode('login'); setErr('') }}
-          style={{ justifyContent: 'center' }}>{t('projects_login_title')}</Button>
+          style={authBtnStyle}>{t('projects_login_title')}</Button>
       </div>
     )
   }
 
   const tabBtn = (m, label) => (
     <Button variant={mode === m ? 'primary' : 'ghost'} onClick={() => { setMode(m); setErr('') }}
-      style={{ flex: 1, justifyContent: 'center' }}>{label}</Button>
+      style={{ ...authBtnStyle, flex: 1 }}>{label}</Button>
   )
 
   return (
     <div style={{ maxWidth: 360, margin: '28px auto 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', textAlign: 'center' }}>
-        {t('projects_login_prompt')}
-      </div>
       <div style={{ display: 'flex', gap: 6 }}>
         {tabBtn('login', t('projects_login_title'))}
         {tabBtn('signup', t('projects_signup'))}
@@ -210,7 +215,7 @@ function AuthCard({ t, onAuthed }) {
             name="su_code" autoComplete="off" data-1p-ignore data-lpignore="true" />
         )}
         {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
-        <Button type="submit" style={{ justifyContent: 'center', marginTop: 2 }}
+        <Button type="submit" style={{ ...authBtnStyle, marginTop: 2 }}
           disabled={busy || !f.username.trim() || !f.password || (mode === 'signup' && !f.email.trim())}>
           {t(mode === 'login' ? 'projects_login_submit' : 'projects_signup_submit')}
         </Button>
@@ -413,6 +418,9 @@ export default function ProjectsPage() {
   return (
     <CoverPage
       fill
+      // Logged out there are no header controls, so the mark stands alone with the
+      // title under it; signed in it goes back to leading-icon + nav row.
+      center={!user}
       icon={<HeaderMark />}
       title={t('projects_title')}
       subtitle={portalInfo
