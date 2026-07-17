@@ -143,6 +143,7 @@ function AuthCard({ t, onAuthed }) {
         <form onSubmit={submitVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <input
             autoFocus
+            className="keep-font"
             inputMode="numeric"
             maxLength={6}
             placeholder="6자리 인증 코드"

@@ -817,6 +817,17 @@ html {
    into view (scrollIntoView respects scroll-margin). */
 [id^="log-card-"] { scroll-margin-top: 60px; scroll-margin-bottom: 56px; }
 
+/* ── Touch: never auto-zoom on focus ──────────────────────────────────────────
+   Mobile Safari zooms the page in whenever a focused field's font-size is under
+   16px, and it ignores `user-scalable=no`, so the size IS the fix. Only on touch
+   pointers — desktop keeps the compact --fs-body. Fields that already set 16px+
+   themselves opt out with .keep-font. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not(.keep-font),
+  select:not(.keep-font),
+  textarea:not(.keep-font) { font-size: 16px !important; }
+}
+
 /* ── Soft scrollbar: hidden until hover or active scroll (community, panels) ── */
 .scroll-soft { scrollbar-width: thin; scrollbar-color: transparent transparent; }
 .scroll-soft:hover,
