@@ -44,7 +44,14 @@ export default function ProfileEditor({ me, onSaved }) {
   async function save() {
     setBusy(true)
     try {
-      await launcher.post('/account/profile', { profile_shape: shape || null, profile_color: (locked ? lockColor : color) || null })
+      // When the colour is locked, OMIT it — the shown colour is derived from the
+      // role, so sending it would store something that outlives the role, and
+      // sending null would wipe the colour they had before the role. Leaving the
+      // field out keeps it for when they're demoted / the grant is revoked.
+      await launcher.post('/account/profile', {
+        profile_shape: shape || null,
+        ...(locked ? {} : { profile_color: color || null }),
+      })
       setMsg(L('저장됨', 'saved')); onSaved?.()
     } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
     finally { setBusy(false) }

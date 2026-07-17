@@ -17,8 +17,9 @@ def portal_token(user: models.User) -> str:
         "portal": True,
         "email": user.email,
         "name": user.display_name,
-        # admins always carry the reserved MANAGER_COLOR (elog applies the same rule)
-        "color": config.MANAGER_COLOR if user.role == "manager" else user.profile_color,
+        # admins always carry the reserved MANAGER_COLOR (elog applies the same rule);
+        # a stale reserved colour is dropped rather than mirrored into the service.
+        "color": config.avatar_color(manager=user.role == "manager", stored=user.profile_color),
         "shape": user.profile_shape,
         "prole": user.role,
         # rest of the elog-style profile, so elog provisions a full mirror

@@ -28,6 +28,28 @@ MANAGER_COLOR = "#111827"
 # a distinct dark grey so they read as "an admin, but only here".
 SCOPED_ADMIN_COLOR = "#4b5563"
 
+# The colours above are earned by a role, so nobody may keep one in their own
+# profile_color.
+RESERVED_COLORS = {MANAGER_COLOR.lower(), SCOPED_ADMIN_COLOR.lower()}
+
+
+def avatar_color(*, manager: bool, scoped_admin: bool = False, stored: str | None = None):
+    """The colour a user's avatar actually shows — the ONE place that rule lives.
+
+    A reserved colour is DERIVED from what the user is right now and is never
+    trusted from storage: promoting to manager writes MANAGER_COLOR onto the row,
+    so a later demotion would otherwise leave a plain user wearing admin black.
+    A stored reserved colour therefore falls back to None (the avatar then picks
+    its own colour from the username seed).
+    """
+    if manager:
+        return MANAGER_COLOR
+    if scoped_admin:
+        return SCOPED_ADMIN_COLOR
+    if (stored or "").lower() in RESERVED_COLORS:
+        return None
+    return stored
+
 # Portal HTTP port. Defaults to 8025 to avoid colliding with the existing
 # lilak_elog launcher on :8010 (and another local service on :8020).
 PORTAL_PORT = int(os.environ.get("PORTAL_PORT", 8025))

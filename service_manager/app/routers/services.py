@@ -260,8 +260,10 @@ def admin_list_users(
                      for gm in memb.get(u.id, []) for pp in gperms.get(gm["id"], [])]
         uperms = perms.get(u.id, [])
         scoped = any(pp.get("admin") for pp in uperms)
-        color = (config.MANAGER_COLOR if u.role == "manager"
-                 else config.SCOPED_ADMIN_COLOR if scoped else u.profile_color)
+        # Same rule as accounts.effective_color, but fed from the batched `perms`
+        # above so listing every user stays one query, not one per user.
+        color = config.avatar_color(manager=u.role == "manager", scoped_admin=scoped,
+                                    stored=u.profile_color)
         out.append({"id": u.id, "username": u.username, "email": u.email, "role": u.role,
                     "is_active": u.is_active,
                     "display_name": u.display_name, "pending_email": u.pending_email,

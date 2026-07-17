@@ -216,14 +216,16 @@ def _user_groups(db: Session, user_id: int) -> list[dict]:
             db.query(models.Group).filter(models.Group.id.in_(gids)).order_by(models.Group.name).all()]
 
 
+RESERVED_COLORS = config.RESERVED_COLORS
+
+
 def effective_color(db: Session, u: models.User) -> Optional[str]:
-    """Global managers always show MANAGER_COLOR; scoped admins (service/project
-    admins) show a distinct dark grey; everyone else keeps their own picked colour."""
-    if u.role == "manager":
-        return config.MANAGER_COLOR
-    if permissions.has_any_admin(db, u.id):
-        return config.SCOPED_ADMIN_COLOR
-    return u.profile_color
+    """The colour this user's avatar shows — see config.avatar_color for the rule."""
+    return config.avatar_color(
+        manager=u.role == "manager",
+        scoped_admin=permissions.has_any_admin(db, u.id),
+        stored=u.profile_color,
+    )
 
 
 def _direct_perms(db: Session, uid: int) -> list:
@@ -326,11 +328,13 @@ def update_profile(body: ProfileBody, user: models.User = Depends(require_portal
         if k in data:
             v = data[k]
             setattr(user, k, (v.strip() or None) if isinstance(v, str) else v)
-    # Colour is role-gated: admins always get MANAGER_COLOR; non-admins can never
-    # take it (silently dropped). elog uses the same rule.
+    # Colour is role-gated: managers always get MANAGER_COLOR; nobody else may store
+    # a reserved colour (silently dropped), so it can't outlive the role that earned
+    # it. A scoped admin's grey is derived by effective_color, not stored — that way
+    # revoking the grant gives them their own colour back. elog uses the same rule.
     if user.role == "manager":
         user.profile_color = config.MANAGER_COLOR
-    elif (user.profile_color or "").lower() == config.MANAGER_COLOR.lower():
+    elif (user.profile_color or "").lower() in RESERVED_COLORS:
         user.profile_color = None
     db.commit()
     return _account_view(db, user)
@@ -480,6 +484,8 @@ def admin_set_role(uid: int, body: RoleBody, _: models.User = Depends(require_po
     u.role = role
     if role == "manager":
         u.profile_color = config.MANAGER_COLOR      # managers always get the reserved colour
+    elif (u.profile_color or "").lower() in RESERVED_COLORS:
+        u.profile_color = None                      # demoted → hand the reserved colour back
     db.commit()
     return _account_view(db, u)
 
