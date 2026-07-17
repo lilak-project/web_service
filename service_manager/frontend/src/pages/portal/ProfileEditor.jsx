@@ -11,7 +11,6 @@ import { useLang } from '../../context/LangContext'
  */
 
 const rowS = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
-const lbl = { minWidth: 120, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }
 
 export default function ProfileEditor({ me, onSaved }) {
   const { lang } = useLang()
@@ -54,15 +53,14 @@ export default function ProfileEditor({ me, onSaved }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={rowS}>
-        <span style={lbl}>{L('프로필 아바타', 'Profile avatar')}</span>
         <Avatar icon={shape} color={effColor} seed={me.username} size={40} />
-        {shape && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-secondary)' }}>{shape}</span>}
+        {shape && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{shape}</span>}
         <Button size="sm" variant="secondary" onClick={roll}><Icon name="refresh" size={13} /> {L('랜덤', 'Random')}</Button>
         <Button size="sm" variant={open ? 'primary' : 'ghost'} onClick={() => { setQ(''); setOpen((o) => !o) }}>{open ? L('닫기', 'Close') : L('고르기', 'Pick')}</Button>
         <Button size="sm" variant="primary" disabled={!dirty || busy} onClick={save}>{L('저장', 'Save')}</Button>
-        {locked && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{isManager ? L('관리자는 검은색 고정', 'managers locked to black') : L('부분 관리자는 짙은 회색 고정', 'scoped admins locked to grey')}</span>}
-        {dirty && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{L('저장 안 됨', 'unsaved')}</span>}
-        {msg && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</span>}
+        {locked && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{isManager ? L('관리자는 검은색 고정', 'managers locked to black') : L('부분 관리자는 짙은 회색 고정', 'scoped admins locked to grey')}</span>}
+        {dirty && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('저장 안 됨', 'unsaved')}</span>}
+        {msg && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{msg}</span>}
       </div>
       {open && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, border: '1px solid var(--border-default)', borderRadius: 8 }}>
@@ -81,7 +79,7 @@ export default function ProfileEditor({ me, onSaved }) {
               placeholder={L('검색 (이름 또는 태그: nut, ufo…)', 'search (name or tag: nut, ufo…)')}
               style={{ flex: 1, height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px',
                 backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }} />
-            <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{shown.length}</span>
+            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{shown.length}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 4, maxHeight: 170, overflowY: 'auto' }}>
             {shown.map((ic) => (
@@ -93,7 +91,7 @@ export default function ProfileEditor({ me, onSaved }) {
               </button>
             ))}
             {shown.length === 0 && (
-              <span style={{ gridColumn: '1 / -1', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', padding: 4 }}>
+              <span style={{ gridColumn: '1 / -1', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', padding: 4 }}>
                 {L('결과 없음', 'no match')}
               </span>
             )}

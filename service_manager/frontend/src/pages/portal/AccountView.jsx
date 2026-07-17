@@ -4,6 +4,7 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
+import { Field, FieldActions, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT } from './Field'
 import SystemAdmin from './SystemAdmin'
 import FeedbackView from './FeedbackView'
 import GuideView from './GuideView'
@@ -20,12 +21,7 @@ import ExpandBox from './ExpandBox'
 const card = { border: '1px solid var(--border-default)', borderRadius: 8, padding: 12, marginBottom: 10 }
 const rowS = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
 const input = { height: 32, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', minWidth: 0 }
-const badge = { fontSize: 'var(--fs-micro, 10px)', padding: '1px 7px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }
-const fieldLbl = { minWidth: 120, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }
-const secLbl = { fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', marginBottom: 4 }   // group-style section label
-const line = { fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }                 // section body text (consistent)
-const actions = { display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }                         // buttons on their own left-aligned line
-const chip = { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-micro, 10px)', padding: '2px 4px 2px 8px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'var(--surface)' }
+const badge = { ...FIELD_TEXT, padding: '1px 7px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }
 const pwOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const pwDialog = { background: 'var(--surface-1, #fff)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 16, width: 320, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }
 
@@ -38,7 +34,7 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
   return (
     <div style={pwOverlay} onClick={onCancel}>
       <div style={pwDialog} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-primary)', marginBottom: 10 }}>{title}</div>
+        <div style={{ ...FIELD_TEXT, color: 'var(--text-primary)', marginBottom: 10 }}>{title}</div>
         <input type="password" autoFocus value={v} onChange={(e) => setV(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') onSubmit(v); if (e.key === 'Escape') onCancel() }}
           name="portal-confirm-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true"
@@ -157,84 +153,98 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     )
   }
 
-  const MyAccount = (
-    <div style={card}>
-      <div style={{ ...rowS, marginBottom: 10 }}>
-        <Avatar icon={me.profile_shape} color={me.profile_color} seed={me.username} size={26} />
-        <b style={{ fontSize: 'var(--fs-body, 13px)' }}>{me.display_name || me.username}</b>
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>@{me.username}</span>
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{me.email}</span>
-        <span style={badge}>{me.role}</span>
-        {verifyChip}
-        {(me.groups || []).map((g) => <span key={g.id} style={{ ...badge, display: 'inline-flex', alignItems: 'center', gap: 4 }}><GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}</span>)}
-        {me.pending_email && <span style={badge}>{L('변경대기', 'pending')}: {me.pending_email}</span>}
-      </div>
+  const permChips = (list, keyPrefix) => list.map((p, i) => (
+    <span key={keyPrefix + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>
+      {p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}{p.group ? ' · ' + p.group : ''}
+    </span>
+  ))
 
-      <div style={{ marginBottom: 10 }}><ProfileEditor me={me} onSaved={load} /></div>
+  const MyAccount = (
+    <div style={{ ...card, ...fieldGrid }}>
+      <Field label={L('계정', 'Account')}>
+        <Avatar icon={me.profile_shape} color={me.profile_color} seed={me.username} size={26} />
+        <b>{me.display_name || me.username}</b>
+        <span style={{ color: 'var(--text-muted)' }}>@{me.username}</span>
+        <span style={{ color: 'var(--text-muted)' }}>{me.email}</span>
+        <span style={fieldChip}>{me.role}</span>
+        {verifyChip}
+        {(me.groups || []).map((g) => (
+          <span key={g.id} style={fieldChip}><GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}</span>
+        ))}
+        {me.pending_email && <span style={fieldChip}>{L('변경대기', 'pending')}: {me.pending_email}</span>}
+      </Field>
+
+      <Field label={L('프로필 아바타', 'Profile avatar')} align="start">
+        <ProfileEditor me={me} onSaved={load} />
+      </Field>
 
       {/* my access + what I administer (#5) */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={secLbl}>{L('내 접근 권한', 'My access')}</div>
+      <Field label={L('내 접근 권한', 'My access')} align="start">
         {((me.permissions || []).length + (me.inherited_permissions || []).length) === 0
-          ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L('접근 가능한 서비스 없음', 'no access yet')}</span>
-          : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {(me.permissions || []).map((p, i) => <span key={'d' + i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}</span>)}
-              {(me.inherited_permissions || []).map((p, i) => <span key={'g' + i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}{p.group ? ' · ' + p.group : ''}</span>)}
-            </div>}
-      </div>
+          ? <span style={fieldMuted}>{L('접근 가능한 서비스 없음', 'no access yet')}</span>
+          : <>{permChips(me.permissions || [], 'd')}{permChips(me.inherited_permissions || [], 'g')}</>}
+      </Field>
       {(me.role === 'manager' || (me.admin_scopes || []).length > 0) && (
-        <div style={{ marginBottom: 10 }}>
-          <div style={secLbl}>{L('내 관리 범위', 'I administer')}</div>
+        <Field label={L('내 관리 범위', 'I administer')} align="start">
           {me.role === 'manager'
-            ? <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('전체 (관리자)', 'everything (manager)')}</span>
-            : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {(me.admin_scopes || []).map((p, i) => <span key={i} style={{ ...badge, fontFamily: 'var(--font-mono)', background: 'var(--surface-2)', color: 'var(--text-primary)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}</span>)}
-              </div>}
-        </div>
+            ? L('전체 (관리자)', 'everything (manager)')
+            : permChips(me.admin_scopes || [], 'a')}
+        </Field>
       )}
 
-      <div style={{ ...rowS, marginBottom: 8 }}>
-        <span style={fieldLbl}>{L('표시 이름', 'Display name')}</span>
+      <Field label={L('표시 이름', 'Display name')}>
         <input value={dname} onChange={(e) => setDname(e.target.value)} placeholder={me.username} style={{ ...input, flex: 1 }}
           onKeyDown={(e) => e.key === 'Enter' && changeName()}
           name="portal-display-name" autoComplete="off" data-1p-ignore data-lpignore="true" />
+      </Field>
+      <FieldActions>
         <Button size="sm" variant="secondary" disabled={dname.trim() === (me.display_name || me.username || '')} onClick={changeName}>{L('변경', 'Update')}</Button>
-        <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', flexBasis: '100%' }}>{L(`로그인 아이디: ${me.username} (변경 불가)`, `Login ID: ${me.username} (fixed)`)}</span>
-      </div>
+        <span style={fieldMuted}>{L(`로그인 아이디: ${me.username} (변경 불가)`, `Login ID: ${me.username} (fixed)`)}</span>
+      </FieldActions>
 
       {isManager && (
-        <div style={{ ...rowS, marginBottom: 10 }}>
-          <span style={fieldLbl}>{L('이메일 인증', 'Email verification')}</span>
-          {!me.verification_current && (
-            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{L('인증이 만료되어 프로젝트는 보기 전용입니다.', 'Verification lapsed — projects are view-only.')}</span>
-          )}
-          <Button size="sm" variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{L('인증 요청 (임시)', 'Request verification (temp)')}</Button>
-        </div>
+        <>
+          <Field label={L('이메일 인증', 'Email verification')}>
+            {me.verification_current
+              ? <span style={fieldMuted}>{L('인증됨', 'verified')}</span>
+              : <span style={{ color: 'var(--danger-text)' }}>{L('인증이 만료되어 프로젝트는 보기 전용입니다.', 'Verification lapsed — projects are view-only.')}</span>}
+          </Field>
+          <FieldActions>
+            <Button size="sm" variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{L('인증 요청 (임시)', 'Request verification (temp)')}</Button>
+          </FieldActions>
+        </>
       )}
-      <div style={{ ...rowS, marginBottom: 8 }}>
-        <span style={fieldLbl}>{L('초대 코드 (프로젝트/그룹)', 'Invite code (project/group)')}</span>
+
+      <Field label={L('초대 코드 (프로젝트/그룹)', 'Invite code (project/group)')}>
         <input value={f.code} onChange={setField('code')} placeholder="XXXXXXXX" style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && redeem()}
           name="portal-invite-code" autoComplete="off" data-1p-ignore data-lpignore="true" />
+      </Field>
+      <FieldActions>
         <Button size="sm" variant="primary" disabled={!f.code.trim()} onClick={redeem}>{L('등록', 'Redeem')}</Button>
-      </div>
-      <div style={{ ...rowS, marginBottom: 8 }}>
-        <span style={fieldLbl}>{L('비밀번호 변경', 'Change password')}</span>
+      </FieldActions>
+
+      <Field label={L('비밀번호 변경', 'Change password')}>
         <input type="password" value={f.cur} onChange={setField('cur')} placeholder={L('현재', 'current')} style={{ ...input, flex: 1 }}
           name="portal-cur-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
         <input type="password" value={f.npw} onChange={setField('npw')} placeholder={L('새 비밀번호', 'new')} style={{ ...input, flex: 1 }}
           name="portal-new-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
+      </Field>
+      <FieldActions>
         <Button size="sm" variant="secondary" disabled={!f.cur || !f.npw} onClick={changePw}>{L('변경', 'Update')}</Button>
-      </div>
-      <div style={{ ...rowS, marginBottom: 8 }}>
-        <span style={fieldLbl}>{L('이메일 변경', 'Change email')}</span>
+      </FieldActions>
+
+      <Field label={L('이메일 변경', 'Change email')}>
         <input value={f.email} onChange={setField('email')} placeholder={L('새 이메일 (관리자 승인)', 'new email (admin-approved)')} style={{ ...input, flex: 1 }}
           name="portal-new-email" autoComplete="off" data-1p-ignore data-lpignore="true" />
+      </Field>
+      <FieldActions>
         <Button size="sm" variant="secondary" disabled={!f.email.trim()} onClick={requestEmail}>{L('요청', 'Request')}</Button>
-      </div>
-      <div style={{ ...rowS, marginTop: 10 }}>
-        <div style={{ flex: 1 }} />
+      </FieldActions>
+
+      <Field label={L('계정 삭제', 'Delete account')} />
+      <FieldActions>
         <Button size="sm" variant="dangerSoft" onClick={deleteSelf}>{L('계정 삭제', 'Delete account')}</Button>
-      </div>
+      </FieldActions>
     </div>
   )
 
@@ -242,10 +252,10 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     <div>
       {requests.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 'var(--fs-small, 12px)', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 6px' }}>{L('접근 요청', 'Access requests')}</div>
+          <div style={{ ...FIELD_TEXT, fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 6px' }}>{L('접근 요청', 'Access requests')}</div>
           {requests.map((r) => (
             <div key={r.id} style={{ ...rowS, padding: '7px 12px', border: '1px solid var(--border-default)', borderRadius: 8, marginBottom: 6 }}>
-              <span style={{ fontSize: 'var(--fs-small, 12px)' }}><b>{r.username}</b> → <span style={{ fontFamily: 'var(--font-mono)' }}>{r.service}{r.project ? '/' + r.project : ''}</span></span>
+              <span style={FIELD_TEXT}><b>{r.username}</b> → <span style={{ fontFamily: 'var(--font-mono)' }}>{r.service}{r.project ? '/' + r.project : ''}</span></span>
               <div style={{ flex: 1 }} />
               <Button size="sm" variant="primary" onClick={() => resolveReq(r.id, 'approve')}>{L('승인', 'Approve')}</Button>
               <Button size="sm" variant="ghost" onClick={() => resolveReq(r.id, 'reject')}>{L('거절', 'Reject')}</Button>
@@ -254,7 +264,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
         </div>
       )}
       <div style={{ ...rowS, marginBottom: 8 }}>
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('그룹별 보기', 'By group')}</span>
+        <span style={{ ...FIELD_TEXT, color: 'var(--text-secondary)' }}>{L('그룹별 보기', 'By group')}</span>
         <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} style={{ ...input, height: 28, maxWidth: 200 }}>
           <option value="">{L('전체', 'all')}</option>
           {Array.from(new Map(users.flatMap((u) => u.groups || []).map((g) => [g.id, g])).values())
@@ -274,111 +284,90 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
             {u.is_active === false && <span style={{ ...badge, background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{L('비활성', 'inactive')}</span>}
           </>}
         >
-            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {/* verification */}
-              <div>
-                <div style={secLbl}>{L('이메일 · 인증', 'Email · verification')}</div>
-                <div style={line}>{u.email} · {u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
-                  : (u.verify_days_left != null ? L(`인증됨 · ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}</div>
-                <div style={actions}>
-                  <Button size="sm" variant="secondary" onClick={() => adminRequestVerify(u)}>{L('메일 인증 요청', 'Request verification')}</Button>
-                  <Button size="sm" variant="secondary" onClick={() => adminVerify(u)}>{L('매니저 인증', 'Verify')}</Button>
-                </div>
-              </div>
-              {/* pending email change */}
+            <div style={{ padding: '12px 14px', ...fieldGrid }}>
+              <Field label={L('이메일 · 인증', 'Email · verification')}>
+                {u.email} · {u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
+                  : (u.verify_days_left != null ? L(`인증됨 · ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}
+              </Field>
+              <FieldActions>
+                <Button size="sm" variant="secondary" onClick={() => adminRequestVerify(u)}>{L('메일 인증 요청', 'Request verification')}</Button>
+                <Button size="sm" variant="secondary" onClick={() => adminVerify(u)}>{L('매니저 인증', 'Verify')}</Button>
+              </FieldActions>
+
               {u.pending_email && (
-                <div>
-                  <div style={secLbl}>{L('이메일 변경 대기', 'Pending email change')}</div>
-                  <div style={line}>{u.pending_email}</div>
-                  <div style={actions}>
+                <>
+                  <Field label={L('이메일 변경 대기', 'Pending email change')}>{u.pending_email}</Field>
+                  <FieldActions>
                     <Button size="sm" variant="primary" onClick={() => adminApprove(u, true)}>{L('승인', 'Approve')}</Button>
                     <Button size="sm" variant="secondary" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
-                  </div>
-                </div>
+                  </FieldActions>
+                </>
               )}
-              {/* role */}
-              <div>
-                <div style={secLbl}>{L('역할', 'Role')}</div>
-                <div style={line}><b>{u.role}</b></div>
-                <div style={actions}>
-                  <Button size="sm" variant="secondary" onClick={() => adminRole(u)}>{u.role === 'manager' ? L('매니저 해제', 'Revoke manager') : L('매니저 부여', 'Grant manager')}</Button>
-                </div>
-              </div>
-              {/* groups — chips (like the groups admin) */}
-              <div>
-                <div style={secLbl}>{L('그룹', 'Groups')}</div>
+
+              <Field label={L('역할', 'Role')}><b>{u.role}</b></Field>
+              <FieldActions>
+                <Button size="sm" variant="secondary" onClick={() => adminRole(u)}>{u.role === 'manager' ? L('매니저 해제', 'Revoke manager') : L('매니저 부여', 'Grant manager')}</Button>
+              </FieldActions>
+
+              <Field label={L('그룹', 'Groups')} align="start">
                 {(u.groups || []).length === 0
-                  ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>—</span>
-                  : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {(u.groups || []).map((g) => (
-                        <span key={g.id} style={chip}>
-                          <GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}
-                          <Button size="sm" variant="ghost" icon onClick={() => removeFromGroup(u, g)} title={L('제외', 'Remove')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
-                        </span>
-                      ))}
-                    </div>}
-              </div>
+                  ? <span style={fieldMuted}>—</span>
+                  : (u.groups || []).map((g) => (
+                      <span key={g.id} style={fieldChip}>
+                        <GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}
+                        <Button size="sm" variant="ghost" icon onClick={() => removeFromGroup(u, g)} title={L('제외', 'Remove')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
+                      </span>
+                    ))}
+              </Field>
+
               {/* service permissions — direct grants vs group-inherited, shown separately */}
-              <div>
-                <div style={secLbl}>{L('직접 부여 권한', 'Direct permissions')}</div>
+              <Field label={L('직접 부여 권한', 'Direct permissions')} align="start">
                 {(u.permissions || []).length === 0
-                  ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L('직접 부여된 권한 없음', 'no direct grants')}</span>
-                  : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {(u.permissions || []).map((p, i) => (
-                        <span key={i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}</span>
-                      ))}
-                    </div>}
-              </div>
-              <div>
-                <div style={secLbl}>{L('그룹 상속 권한', 'Inherited (group) permissions')}</div>
+                  ? <span style={fieldMuted}>{L('직접 부여된 권한 없음', 'no direct grants')}</span>
+                  : permChips(u.permissions || [], 'd')}
+              </Field>
+              <Field label={L('그룹 상속 권한', 'Inherited (group) permissions')} align="start">
                 {(u.inherited_permissions || []).length === 0
-                  ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L('그룹에서 상속받은 권한 없음', 'no inherited grants')}</span>
-                  : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {(u.inherited_permissions || []).map((p, i) => (
-                        <span key={i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}{p.group ? ` · ${p.group}` : ''}</span>
-                      ))}
-                    </div>}
-              </div>
+                  ? <span style={fieldMuted}>{L('그룹에서 상속받은 권한 없음', 'no inherited grants')}</span>
+                  : permChips(u.inherited_permissions || [], 'g')}
+              </Field>
+
               {/* scoped (service/project) admin grants */}
-              <div>
-                <div style={secLbl}>{L('관리 권한 (서비스/프로젝트)', 'Admin (service / project)')}</div>
+              <Field label={L('관리 권한 (서비스/프로젝트)', 'Admin (service / project)')} align="start">
                 {(u.permissions || []).filter((p) => p.admin).length === 0
-                  ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L('부여된 관리 권한 없음', 'no admin grants')}</span>
-                  : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {(u.permissions || []).filter((p) => p.admin).map((p, i) => (
-                        <span key={i} style={{ ...chip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
-                          <Button size="sm" variant="ghost" icon onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
-                        </span>
-                      ))}
-                    </div>}
-                {openUser === u.id && (
-                  <div style={actions}>
-                    <select value={agrant.svc} onChange={(e) => setAgrant((s) => ({ ...s, svc: e.target.value }))} style={{ ...input, height: 28, maxWidth: 180 }}>
-                      <option value="">{L('서비스 선택', 'service…')}</option>
-                      {services.map((s) => <option key={s.name} value={s.name}>{s.label || s.name}</option>)}
-                    </select>
-                    <input value={agrant.proj} onChange={(e) => setAgrant((s) => ({ ...s, proj: e.target.value }))} placeholder={L('프로젝트 (비우면 전체)', 'project (blank = whole service)')} style={{ ...input, height: 28, flex: 1, minWidth: 140 }} />
-                    <Button size="sm" variant="secondary" disabled={!agrant.svc} onClick={() => grantScopedAdmin(u)}>{L('관리자 부여', 'Grant admin')}</Button>
-                  </div>
-                )}
-              </div>
-              {/* password */}
-              <div>
-                <div style={secLbl}>{L('비밀번호', 'Password')}</div>
-                <div style={actions}>
-                  <Button size="sm" variant="secondary" onClick={() => adminResetPwEmail(u)}>{L('이메일로 새 비번 발송', 'Change password via email')}</Button>
-                  <Button size="sm" variant="secondary" onClick={() => adminSetPw(u)}>{L('비밀번호 직접 설정', 'Set password')}</Button>
-                </div>
-              </div>
-              {/* deactivate / delete — own left-aligned row */}
-              <div style={{ ...actions, borderTop: '1px solid var(--border-subtle)', paddingTop: 10, marginTop: 0 }}>
+                  ? <span style={fieldMuted}>{L('부여된 관리 권한 없음', 'no admin grants')}</span>
+                  : (u.permissions || []).filter((p) => p.admin).map((p, i) => (
+                      <span key={i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
+                        <Button size="sm" variant="ghost" icon onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
+                      </span>
+                    ))}
+              </Field>
+              {openUser === u.id && (
+                <FieldActions>
+                  <select value={agrant.svc} onChange={(e) => setAgrant((s) => ({ ...s, svc: e.target.value }))} style={{ ...input, height: 28, maxWidth: 180 }}>
+                    <option value="">{L('서비스 선택', 'service…')}</option>
+                    {services.map((s) => <option key={s.name} value={s.name}>{s.label || s.name}</option>)}
+                  </select>
+                  <input value={agrant.proj} onChange={(e) => setAgrant((s) => ({ ...s, proj: e.target.value }))} placeholder={L('프로젝트 (비우면 전체)', 'project (blank = whole service)')} style={{ ...input, height: 28, flex: 1, minWidth: 140 }} />
+                  <Button size="sm" variant="secondary" disabled={!agrant.svc} onClick={() => grantScopedAdmin(u)}>{L('관리자 부여', 'Grant admin')}</Button>
+                </FieldActions>
+              )}
+
+              <Field label={L('비밀번호', 'Password')} />
+              <FieldActions>
+                <Button size="sm" variant="secondary" onClick={() => adminResetPwEmail(u)}>{L('이메일로 새 비번 발송', 'Change password via email')}</Button>
+                <Button size="sm" variant="secondary" onClick={() => adminSetPw(u)}>{L('비밀번호 직접 설정', 'Set password')}</Button>
+              </FieldActions>
+
+              <Field label={L('계정', 'Account')} />
+              <FieldActions>
                 <Button size="sm" variant="ghost" onClick={() => adminActive(u)}>{u.is_active === false ? L('활성화', 'Activate') : L('비활성화', 'Deactivate')}</Button>
                 <Button size="sm" variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('계정 삭제', 'Delete account')}</Button>
-              </div>
+              </FieldActions>
             </div>
         </ExpandBox>
       ))}
-      {users.filter((u) => u.id !== me.id).length === 0 && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('다른 계정 없음', 'no other accounts')}</div>}
+      {users.filter((u) => u.id !== me.id).length === 0 && <div style={fieldMuted}>{L('다른 계정 없음', 'no other accounts')}</div>}
     </div>
   )
 
