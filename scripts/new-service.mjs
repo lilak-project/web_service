@@ -85,7 +85,11 @@ const COMMUNITY_TABS = TABS.filter((t) => t.kind === 'community')
 const HAS_COMMUNITY = COMMUNITY_TABS.length > 0
 const PARAMETER_TABS = TABS.filter((t) => t.kind === 'parameter')   // built-in LILAK 파라미터 editor
 const HAS_PARAMETER = PARAMETER_TABS.length > 0
-const LILAK_PATH = expand(args['lilak-path']) || join(homedir(), 'Research', 'lilak')   // the LILAK framework a parameter tab edits
+// The LILAK framework a parameter tab edits. Only pinned into the manifest when
+// GIVEN explicitly (--lilak-path) — otherwise left out so it stays portable: the
+// backend falls back to $LILAK_PATH (set once per server / container) or
+// ~/Research/lilak, no per-service manifest fixup across machines.
+const LILAK_PATH = args['lilak-path'] ? expand(args['lilak-path']) : null
 const FILES_TAB = TABS.find((t) => t.id === 'files')
 
 // ── colour helpers (derive hover / tint / muted from the one main colour) ─────
@@ -623,7 +627,9 @@ const manifest = JSON.stringify({
   capabilities: { multi_project: false, import_export: false },
   label: (SERVICE || NAME).trim(), icon: (args.icon || 'lilak'), color: COLOR,
   start: { cmd: 'uvicorn main:app', cwd: join(ROOT, 'backend'),
-    env: HAS_PARAMETER ? { LILAK_PATH } : {} },   // parameter tab edits the LILAK tree at $LILAK_PATH
+    // Only pin LILAK_PATH when explicitly given; otherwise the backend resolves it
+    // per server (ambient $LILAK_PATH or ~/Research/lilak) — portable across hosts.
+    env: (HAS_PARAMETER && LILAK_PATH) ? { LILAK_PATH } : {} },
 }, null, 2) + '\n'
 
 // ── write everything ──────────────────────────────────────────────────────────
