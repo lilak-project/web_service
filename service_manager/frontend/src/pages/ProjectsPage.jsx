@@ -61,8 +61,9 @@ function sortByHome(cards, order) {
 // height, so the card reads as a single stack of equal rows (and stays a
 // comfortable tap target on a phone).
 const CTRL_H = 46
+const CTRL_R = 10
 const inputStyle = {
-  width: '100%', height: CTRL_H, padding: '0 14px', borderRadius: 8, fontFamily: 'var(--font-mono)',
+  width: '100%', height: CTRL_H, padding: '0 14px', borderRadius: CTRL_R, fontFamily: 'var(--font-mono)',
   fontSize: 'var(--fs-medium, 14px)', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
   border: '1px solid var(--input-border)', outline: 'none',
 }
@@ -72,10 +73,8 @@ const cardStyle = {
   maxWidth: 360, margin: '28px auto 0', padding: '0 12px',
   display: 'flex', flexDirection: 'column', gap: 10,
 }
-// One step up the scale from the inputs' --fs-body: the auth buttons are the
-// card's actions, so their labels carry a bit more weight.
 const authBtnStyle = {
-  width: '100%', height: CTRL_H, borderRadius: 8,
+  width: '100%', height: CTRL_H, borderRadius: CTRL_R,
   fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center',
 }
 
