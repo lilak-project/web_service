@@ -23,6 +23,9 @@ const input = { height: 32, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', 
 const badge = { fontSize: 'var(--fs-micro, 10px)', padding: '1px 7px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }
 const fieldLbl = { minWidth: 120, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }
 const secLbl = { fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', marginBottom: 4 }   // group-style section label
+const line = { fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }                 // section body text (consistent)
+const actions = { display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }                         // buttons on their own left-aligned line
+const chip = { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-micro, 10px)', padding: '2px 4px 2px 8px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'var(--surface)' }
 const pwOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const pwDialog = { background: 'var(--surface-1, #fff)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 16, width: 320, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }
 
@@ -246,15 +249,13 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
             {u.is_active === false && <span style={{ ...badge, background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{L('비활성', 'inactive')}</span>}
           </>}
         >
-            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* verification */}
               <div>
                 <div style={secLbl}>{L('이메일 · 인증', 'Email · verification')}</div>
-                <div style={{ ...rowS }}>
-                  <span style={{ color: 'var(--text-muted)' }}>{u.email}</span>
-                  <span>· {u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
-                    : (u.verify_days_left != null ? L(`인증됨 · ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}</span>
-                  <div style={{ flex: 1 }} />
+                <div style={line}>{u.email} · {u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
+                  : (u.verify_days_left != null ? L(`인증됨 · ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}</div>
+                <div style={actions}>
                   <Button size="sm" variant="secondary" onClick={() => adminRequestVerify(u)}>{L('메일 인증 요청', 'Request verification')}</Button>
                   <Button size="sm" variant="secondary" onClick={() => adminVerify(u)}>{L('매니저 인증', 'Verify')}</Button>
                 </div>
@@ -263,9 +264,8 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
               {u.pending_email && (
                 <div>
                   <div style={secLbl}>{L('이메일 변경 대기', 'Pending email change')}</div>
-                  <div style={{ ...rowS }}>
-                    <span>{u.pending_email}</span>
-                    <div style={{ flex: 1 }} />
+                  <div style={line}>{u.pending_email}</div>
+                  <div style={actions}>
                     <Button size="sm" variant="primary" onClick={() => adminApprove(u, true)}>{L('승인', 'Approve')}</Button>
                     <Button size="sm" variant="secondary" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
                   </div>
@@ -274,24 +274,24 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
               {/* role */}
               <div>
                 <div style={secLbl}>{L('역할', 'Role')}</div>
-                <div style={{ ...rowS }}>
-                  <b>{u.role}</b>
-                  <div style={{ flex: 1 }} />
+                <div style={line}><b>{u.role}</b></div>
+                <div style={actions}>
                   <Button size="sm" variant="secondary" onClick={() => adminRole(u)}>{u.role === 'manager' ? L('매니저 해제', 'Revoke manager') : L('매니저 부여', 'Grant manager')}</Button>
                 </div>
               </div>
-              {/* groups */}
+              {/* groups — chips (like the groups admin) */}
               <div>
                 <div style={secLbl}>{L('그룹', 'Groups')}</div>
                 {(u.groups || []).length === 0
                   ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>—</span>
-                  : (u.groups || []).map((g) => (
-                    <div key={g.id} style={{ ...rowS, marginTop: 4 }}>
-                      <GroupMark icon={g.icon} color={g.color} size={16} /> <span>{g.name}</span>
-                      <div style={{ flex: 1 }} />
-                      <Button size="sm" variant="ghost" onClick={() => removeFromGroup(u, g)}>{L('제외', 'Remove')}</Button>
-                    </div>
-                  ))}
+                  : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {(u.groups || []).map((g) => (
+                        <span key={g.id} style={chip}>
+                          <GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}
+                          <Button size="sm" variant="ghost" icon onClick={() => removeFromGroup(u, g)} title={L('제외', 'Remove')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
+                        </span>
+                      ))}
+                    </div>}
               </div>
               {/* service permissions — direct grants vs group-inherited, shown separately */}
               <div>
@@ -317,15 +317,14 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
               {/* password */}
               <div>
                 <div style={secLbl}>{L('비밀번호', 'Password')}</div>
-                <div style={{ ...rowS }}>
+                <div style={actions}>
                   <Button size="sm" variant="secondary" onClick={() => adminResetPwEmail(u)}>{L('이메일로 새 비번 발송', 'Change password via email')}</Button>
                   <Button size="sm" variant="secondary" onClick={() => adminSetPw(u)}>{L('비밀번호 직접 설정', 'Set password')}</Button>
                 </div>
               </div>
-              {/* deactivate / delete — bottom row (delete requires admin password) */}
-              <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
+              {/* deactivate / delete — own left-aligned row */}
+              <div style={{ ...actions, borderTop: '1px solid var(--border-subtle)', paddingTop: 10, marginTop: 0 }}>
                 <Button size="sm" variant="ghost" onClick={() => adminActive(u)}>{u.is_active === false ? L('활성화', 'Activate') : L('비활성화', 'Deactivate')}</Button>
-                <div style={{ flex: 1 }} />
                 <Button size="sm" variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('계정 삭제', 'Delete account')}</Button>
               </div>
             </div>

@@ -12,7 +12,7 @@ import { useLang } from '../../context/LangContext'
  * Managers also get: create a project, drag-and-drop (or pick) a .zip to import,
  * and export each project. Deletion lives in the admin Services screen.
  */
-export default function ServiceProjects({ service, canManage }) {
+export default function ServiceProjects({ service, canManage, manage = false, onChanged }) {
   const { t } = useLang()
   const svc = service.name
   const canIE = !!service.import_export
@@ -51,7 +51,7 @@ export default function ServiceProjects({ service, canManage }) {
   async function remove(proj) {
     if (!window.confirm(t('portal_proj_delete_confirm', proj))) return
     setBusy(proj); setErr('')
-    try { await launcher.delete(`/services/${svc}/projects/${proj}`); await load() }
+    try { await launcher.delete(`/services/${svc}/projects/${proj}`); await load(); onChanged?.() }
     catch (e) { setErr(e?.response?.data?.detail || t('portal_proj_delete_fail')) }
     finally { setBusy('') }
   }
@@ -153,7 +153,7 @@ export default function ServiceProjects({ service, canManage }) {
               <Button size="sm" variant="primary" disabled>{t('portal_proj_open')}</Button>
             )}
             {canManage && p.can_enter && p.running && <Button size="sm" variant="secondary" disabled={busy === p.name} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>}
-            {canManage && <Button size="sm" variant="dangerSoft" disabled={busy === p.name} title={t('portal_proj_delete')} onClick={() => remove(p.name)}><Icon name="trash" size={14} /></Button>}
+            {canManage && manage && <Button size="sm" variant="dangerSoft" disabled={busy === p.name} title={t('portal_proj_delete')} onClick={() => remove(p.name)}><Icon name="trash" size={14} /></Button>}
             {/* Data download (export) moved to Home "manage mode". */}
           </div>
         )

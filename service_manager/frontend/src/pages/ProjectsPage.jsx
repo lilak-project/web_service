@@ -460,7 +460,7 @@ export default function ProjectsPage() {
                   icon={<Icon name={iconFor(p.name, p.icon)} size={26} weight="fill"
                     color={p.color || 'var(--text-primary)'} />}
                   title={p.builtin === 'newservice' ? (p.label || t('newsvc_title')) : (p.label || p.name)}
-                  badges={p.version?.sha ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>{p.version.sha}</span> : null}
+                  badges={(isManager && p.version?.sha) ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>{p.version.sha}</span> : null}
                   subtitle={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     {(!isBuiltin && !p.multi_project) && <span style={{ width: 8, height: 8, borderRadius: 999, background: p.running ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }} />}
                     {statusText}
@@ -479,8 +479,8 @@ export default function ProjectsPage() {
                     ) : null
                   }
                 >
-                  {/* Top strip: repo + exact-commit links, and a manager log viewer. */}
-                  {(p.version?.url || (isManager && p.mode === 'managed' && !isBuiltin)) && (
+                  {/* Top strip (managers only): repo + exact-commit links + a log viewer. */}
+                  {isManager && (p.version?.url || (p.mode === 'managed' && !isBuiltin)) && (
                     <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: '8px 14px 8px 46px', borderTop: '1px solid var(--border-subtle)', fontSize: 'var(--fs-small, 12px)' }}>
                       {p.version?.url && (
                         <a href={p.version.url} target="_blank" rel="noreferrer"
@@ -510,10 +510,14 @@ export default function ProjectsPage() {
                   {/* Inline expansion: manage mode → management panel (builtins too);
                       otherwise the builtin tool / the service's own panel. */}
                   {manage && isManager ? (
-                    <ServiceManagePanel service={p} builtinKey={isBuiltin ? p.builtin : null}
-                      initialIcon={iconFor(p.name, p.icon)}
-                      first={i === 0} last={i === cards.length - 1}
-                      onMove={(dir) => move(key, dir)} onChanged={refresh} />
+                    <>
+                      <ServiceManagePanel service={p} builtinKey={isBuiltin ? p.builtin : null}
+                        initialIcon={iconFor(p.name, p.icon)}
+                        first={i === 0} last={i === cards.length - 1}
+                        onMove={(dir) => move(key, dir)} onChanged={refresh} />
+                      {/* manage mode: per-project management incl. delete */}
+                      {p.multi_project && !isBuiltin && <ServiceProjects service={p} canManage={isManager} manage onChanged={refresh} />}
+                    </>
                   ) : isBuiltin && p.builtin === 'iconlab' ? (
                     <div style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)' }}><IconLabView /></div>
                   ) : isBuiltin && p.builtin === 'newservice' ? (
