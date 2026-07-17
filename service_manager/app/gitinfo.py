@@ -16,6 +16,7 @@ whose code is a plain folder with no repo of its own).
 from __future__ import annotations
 
 import json
+import os
 import socket
 import subprocess
 import time
@@ -58,6 +59,12 @@ def _git(cwd, *args: str) -> str:
 
 
 def hostname() -> str:
+    """Server name shown in the UI. Inside Docker, socket.gethostname() is just the
+    container id (e.g. 0f7bea66dc97), so each server names itself via PORTAL_HOSTNAME
+    in its .env (docker compose passes .env through via env_file)."""
+    name = os.environ.get("PORTAL_HOSTNAME", "").strip()
+    if name:
+        return name
     try:
         return socket.gethostname()
     except Exception:
