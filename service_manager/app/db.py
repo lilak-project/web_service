@@ -58,6 +58,7 @@ def _migrate() -> None:
     })
     add_missing("portal_permissions", {
         "project": "ALTER TABLE portal_permissions ADD COLUMN project VARCHAR(128) NOT NULL DEFAULT ''",
+        "is_admin": "ALTER TABLE portal_permissions ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0",
     })
     if "portal_access_requests" in names:
         add_missing("portal_access_requests", {

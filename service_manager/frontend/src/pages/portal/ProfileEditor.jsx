@@ -16,29 +16,33 @@ const lbl = { minWidth: 120, fontSize: 'var(--fs-small, 12px)', color: 'var(--te
 export default function ProfileEditor({ me, onSaved }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
-  const isAdmin = me.is_admin || me.role === 'manager'
+  const isManager = me.is_admin || me.role === 'manager'
   const MC = me.manager_color || MANAGER_COLOR
+  // Global managers lock to black; scoped (service/project) admins lock to dark grey.
+  const scopedAdmin = !isManager && !!me.scoped_admin
+  const locked = isManager || scopedAdmin
+  const lockColor = isManager ? MC : (me.scoped_admin_color || '#4b5563')
 
   const initShape = me.profile_shape || ''
-  const initColor = isAdmin ? MC : (me.profile_color || '')
+  const initColor = locked ? lockColor : (me.profile_color || '')
   const [shape, setShape] = useState(initShape)
   const [color, setColor] = useState(initColor)
   const [open, setOpen] = useState(false)
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const effColor = isAdmin ? MC : color
-  const dirty = shape !== initShape || (!isAdmin && color !== initColor)
+  const effColor = locked ? lockColor : color
+  const dirty = shape !== initShape || (!locked && color !== initColor)
 
   const pick = (nextShape = shape, nextColor = color) => {
-    setShape(nextShape); setColor(isAdmin ? MC : nextColor); setMsg('')
+    setShape(nextShape); setColor(locked ? lockColor : nextColor); setMsg('')
   }
   const roll = () => { const a = randomAvatar(); pick(a.profile_shape, a.profile_color) }
 
   async function save() {
     setBusy(true)
     try {
-      await launcher.post('/account/profile', { profile_shape: shape || null, profile_color: (isAdmin ? MC : color) || null })
+      await launcher.post('/account/profile', { profile_shape: shape || null, profile_color: (locked ? lockColor : color) || null })
       setMsg(L('저장됨', 'saved')); onSaved?.()
     } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
     finally { setBusy(false) }
@@ -52,14 +56,14 @@ export default function ProfileEditor({ me, onSaved }) {
         <Button size="sm" variant="secondary" onClick={roll}><Icon name="refresh" size={13} /> {L('랜덤', 'Random')}</Button>
         <Button size="sm" variant={open ? 'primary' : 'ghost'} onClick={() => setOpen((o) => !o)}>{open ? L('닫기', 'Close') : L('고르기', 'Pick')}</Button>
         <Button size="sm" variant="primary" disabled={!dirty || busy} onClick={save}>{L('저장', 'Save')}</Button>
-        {isAdmin && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{L('관리자는 검은색 고정', 'admins locked to black')}</span>}
+        {locked && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{isManager ? L('관리자는 검은색 고정', 'managers locked to black') : L('부분 관리자는 짙은 회색 고정', 'scoped admins locked to grey')}</span>}
         {dirty && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{L('저장 안 됨', 'unsaved')}</span>}
         {msg && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</span>}
       </div>
       {open && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, border: '1px solid var(--border-default)', borderRadius: 8 }}>
           {/* colour — only non-admins choose; admins are fixed to black */}
-          {!isAdmin && (
+          {!locked && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {AVATAR_COLORS.map((c) => (
                 <button key={c} type="button" onClick={() => pick(shape, c)} title={c}

@@ -246,7 +246,7 @@ def admin_list_users(
     # direct (per-user) service permissions, one query
     perms: dict[int, list] = {}
     for p in db.query(ServicePermission).all():
-        perms.setdefault(p.user_id, []).append({"service": p.service_name, "project": p.project or None})
+        perms.setdefault(p.user_id, []).append({"service": p.service_name, "project": p.project or None, "admin": bool(p.is_admin)})
     # group grants (inherited by members), one query, indexed by group
     gperms: dict[int, list] = {}
     for p in db.query(models.GroupPermission).all():
@@ -258,15 +258,21 @@ def admin_list_users(
             left = models.VERIFY_VALID_DAYS - (_dt.utcnow() - u.email_verified_at).days
         inherited = [{"service": pp["service"], "project": pp["project"], "group": gm.get("name")}
                      for gm in memb.get(u.id, []) for pp in gperms.get(gm["id"], [])]
+        uperms = perms.get(u.id, [])
+        scoped = any(pp.get("admin") for pp in uperms)
+        color = (config.MANAGER_COLOR if u.role == "manager"
+                 else config.SCOPED_ADMIN_COLOR if scoped else u.profile_color)
         out.append({"id": u.id, "username": u.username, "email": u.email, "role": u.role,
                     "is_active": u.is_active,
                     "display_name": u.display_name, "pending_email": u.pending_email,
                     "verification_current": permissions.verification_current(u),
                     "verify_days_left": left, "groups": memb.get(u.id, []),
-                    "permissions": perms.get(u.id, []),
+                    "permissions": uperms,
                     "inherited_permissions": inherited,
+                    "admin_scopes": [pp for pp in uperms if pp.get("admin")],
+                    "scoped_admin": scoped,
                     "profile_shape": u.profile_shape,
-                    "profile_color": config.MANAGER_COLOR if u.role == "manager" else u.profile_color})
+                    "profile_color": color})
     return out
 
 
@@ -274,6 +280,7 @@ class PermissionBody(BaseModel):
     user_id: int
     service: str
     project: Optional[str] = ""   # "" = whole-service grant
+    admin: bool = False           # also make them a scoped admin of this scope
 
 
 @router.post("/api/admin/permissions", status_code=201)
@@ -288,8 +295,10 @@ def admin_grant(
         ServicePermission.service_name == body.service,
         ServicePermission.project == proj,
     ).first()
-    if not exists:
-        db.add(ServicePermission(user_id=body.user_id, service_name=body.service, project=proj))
+    if exists:
+        exists.is_admin = bool(body.admin)     # idempotent: also toggles the admin flag
+    else:
+        db.add(ServicePermission(user_id=body.user_id, service_name=body.service, project=proj, is_admin=bool(body.admin)))
     for r in db.query(AccessRequest).filter(
         AccessRequest.user_id == body.user_id,
         AccessRequest.service_name == body.service,
@@ -314,6 +323,19 @@ def admin_revoke(
     ).delete()
     db.commit()
     return {"granted": False}
+
+
+@router.get("/api/services/{svc}/admins")
+def service_admins(svc: str, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+    """Who administers this service — global managers (all projects) + scoped admins
+    (whole-service or a single project). For the manage-mode "who runs this" view."""
+    rows = db.query(ServicePermission).filter(
+        ServicePermission.service_name == svc, ServicePermission.is_admin.is_(True)).all()
+    uids = {r.user_id for r in rows}
+    unames = {u.id: u.username for u in db.query(models.User).filter(models.User.id.in_(uids)).all()} if uids else {}
+    scoped = [{"username": unames.get(r.user_id, str(r.user_id)), "project": r.project or None} for r in rows]
+    managers = [u.username for u in db.query(models.User).filter(models.User.role == "manager").all()]
+    return {"managers": managers, "scoped": scoped}
 
 
 @router.get("/api/admin/permissions")

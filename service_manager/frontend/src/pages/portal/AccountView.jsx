@@ -65,6 +65,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const [f, setF] = useState({ code: '', cur: '', npw: '', email: '' })
   const [dname, setDname] = useState('')               // display-name edit field (login id stays fixed)
   const [openUser, setOpenUser] = useState(null)       // accounts: expanded user id
+  const [agrant, setAgrant] = useState({ svc: '', proj: '' })   // scoped-admin grant form (open user)
   const [pwAsk, setPwAsk] = useState(null)             // masked password prompt: { title, resolve }
   const setField = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   // Promise-based replacement for window.prompt() for password entry (masked input).
@@ -119,6 +120,9 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const adminActive = (u) => run(launcher.post(`/admin/users/${u.id}/active`, { active: u.is_active === false }), () => L(u.is_active === false ? '활성화됨' : '비활성화됨', u.is_active === false ? 'activated' : 'deactivated'))
   const removeFromGroup = (u, g) => run(launcher.delete(`/admin/groups/${g.id}/members/${u.id}`), () => L(`${g.name}에서 제외됨`, `removed from ${g.name}`))
   const resolveReq = (rid, action) => run(launcher.post(`/admin/access-requests/${rid}`, { action }), () => action === 'approve' ? L('승인됨', 'approved') : L('거절됨', 'rejected'))
+  // scoped (service/project) admin: grant sets is_admin (also grants access); revoke drops admin, keeps access.
+  const grantScopedAdmin = (u) => agrant.svc && run(launcher.post('/admin/permissions', { user_id: u.id, service: agrant.svc, project: agrant.proj.trim(), admin: true }), () => { setAgrant({ svc: '', proj: '' }); return L('관리 권한 부여됨', 'admin granted') })
+  const revokeScopedAdmin = (u, p) => run(launcher.post('/admin/permissions', { user_id: u.id, service: p.service, project: p.project || '', admin: false }), () => L('관리 권한 해제됨', 'admin revoked'))
 
   if (!me) return <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-small,12px)' }}>{msg || '…'}</div>
 
@@ -167,6 +171,27 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
       </div>
 
       <div style={{ marginBottom: 10 }}><ProfileEditor me={me} onSaved={load} /></div>
+
+      {/* my access + what I administer (#5) */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={secLbl}>{L('내 접근 권한', 'My access')}</div>
+        {((me.permissions || []).length + (me.inherited_permissions || []).length) === 0
+          ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L('접근 가능한 서비스 없음', 'no access yet')}</span>
+          : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {(me.permissions || []).map((p, i) => <span key={'d' + i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}</span>)}
+              {(me.inherited_permissions || []).map((p, i) => <span key={'g' + i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}{p.group ? ' · ' + p.group : ''}</span>)}
+            </div>}
+      </div>
+      {(me.role === 'manager' || (me.admin_scopes || []).length > 0) && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={secLbl}>{L('내 관리 범위', 'I administer')}</div>
+          {me.role === 'manager'
+            ? <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('전체 (관리자)', 'everything (manager)')}</span>
+            : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {(me.admin_scopes || []).map((p, i) => <span key={i} style={{ ...badge, fontFamily: 'var(--font-mono)', background: 'var(--surface-2)', color: 'var(--text-primary)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}</span>)}
+              </div>}
+        </div>
+      )}
 
       <div style={{ ...rowS, marginBottom: 8 }}>
         <span style={fieldLbl}>{L('표시 이름', 'Display name')}</span>
@@ -313,6 +338,29 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
                         <span key={i} style={{ ...badge, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}{p.group ? ` · ${p.group}` : ''}</span>
                       ))}
                     </div>}
+              </div>
+              {/* scoped (service/project) admin grants */}
+              <div>
+                <div style={secLbl}>{L('관리 권한 (서비스/프로젝트)', 'Admin (service / project)')}</div>
+                {(u.permissions || []).filter((p) => p.admin).length === 0
+                  ? <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L('부여된 관리 권한 없음', 'no admin grants')}</span>
+                  : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {(u.permissions || []).filter((p) => p.admin).map((p, i) => (
+                        <span key={i} style={{ ...chip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
+                          <Button size="sm" variant="ghost" icon onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
+                        </span>
+                      ))}
+                    </div>}
+                {openUser === u.id && (
+                  <div style={actions}>
+                    <select value={agrant.svc} onChange={(e) => setAgrant((s) => ({ ...s, svc: e.target.value }))} style={{ ...input, height: 28, maxWidth: 180 }}>
+                      <option value="">{L('서비스 선택', 'service…')}</option>
+                      {services.map((s) => <option key={s.name} value={s.name}>{s.label || s.name}</option>)}
+                    </select>
+                    <input value={agrant.proj} onChange={(e) => setAgrant((s) => ({ ...s, proj: e.target.value }))} placeholder={L('프로젝트 (비우면 전체)', 'project (blank = whole service)')} style={{ ...input, height: 28, flex: 1, minWidth: 140 }} />
+                    <Button size="sm" variant="secondary" disabled={!agrant.svc} onClick={() => grantScopedAdmin(u)}>{L('관리자 부여', 'Grant admin')}</Button>
+                  </div>
+                )}
               </div>
               {/* password */}
               <div>

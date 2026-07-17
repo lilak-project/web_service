@@ -18,7 +18,50 @@ from .models import VERIFY_VALID_DAYS
 
 
 def is_admin(user: models.User) -> bool:
+    """Global manager — admin everywhere."""
     return user.role == "manager"
+
+
+def admin_scopes(db: Session, user_id: int) -> list[dict]:
+    """The service/project scopes a user is a SCOPED admin of (is_admin grants).
+    project="" = whole-service admin; non-empty = that project only."""
+    return [{"service": r.service_name, "project": r.project}
+            for r in db.query(models.ServicePermission).filter(
+                models.ServicePermission.user_id == user_id,
+                models.ServicePermission.is_admin.is_(True),
+            ).all()]
+
+
+def has_any_admin(db: Session, user_id: int) -> bool:
+    """True if the user is a scoped admin of anything (→ dark-grey avatar)."""
+    return db.query(models.ServicePermission).filter(
+        models.ServicePermission.user_id == user_id,
+        models.ServicePermission.is_admin.is_(True),
+    ).first() is not None
+
+
+def is_service_admin(db: Session, user: models.User, svc: str) -> bool:
+    """Global manager, or a whole-service scoped admin of `svc`."""
+    if is_admin(user):
+        return True
+    return db.query(models.ServicePermission).filter(
+        models.ServicePermission.user_id == user.id,
+        models.ServicePermission.service_name == svc,
+        models.ServicePermission.project == "",
+        models.ServicePermission.is_admin.is_(True),
+    ).first() is not None
+
+
+def is_project_admin(db: Session, user: models.User, svc: str, proj: str) -> bool:
+    """Global manager, whole-service admin of `svc`, or the admin of this project."""
+    if is_service_admin(db, user, svc):
+        return True
+    return db.query(models.ServicePermission).filter(
+        models.ServicePermission.user_id == user.id,
+        models.ServicePermission.service_name == svc,
+        models.ServicePermission.project == proj,
+        models.ServicePermission.is_admin.is_(True),
+    ).first() is not None
 
 
 def verification_current(user: models.User) -> bool:
@@ -88,7 +131,7 @@ def has_any_grant(db: Session, user_id: int, svc: str) -> bool:
 
 
 def can_enter_project(db: Session, user: models.User, svc: str, proj: str) -> bool:
-    if is_admin(user):
+    if is_admin(user) or is_project_admin(db, user, svc, proj):
         return True
     if not verification_current(user):
         return False

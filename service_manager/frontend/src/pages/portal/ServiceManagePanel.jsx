@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button, Icon, ColorPicker, AVATAR_COLORS, LayoutEditor } from 'lilak-ui'
 import { launcher, serviceApi } from '../../api'
 import { useLang } from '../../context/LangContext'
@@ -36,7 +36,14 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   const [label, setLabel] = useState(startLabel)
   const [vis, setVis] = useState(service.visibility || 2)
   const [msg, setMsg] = useState('')
+  const [admins, setAdmins] = useState(null)   // { managers:[names], scoped:[{username,project}] }
   const dirty = (icon !== startIcon) || (color !== startColor) || (label !== startLabel)
+
+  // Who administers this service — global managers + scoped (service/project) admins.
+  useEffect(() => {
+    if (isBuiltin) return
+    launcher.get(`/services/${svc.name}/admins`).then((r) => setAdmins(r.data)).catch(() => {})
+  }, [svc.name, isBuiltin])
 
   // Tab/menu layout — loaded lazily from the service's own /api/layout through the
   // proxy (so opening manage mode doesn't auto-start every service). Same editor +
@@ -140,6 +147,18 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
           </>
         )}
       </div>
+
+      {/* who administers this service (managers + scoped admins) */}
+      {!isBuiltin && admins && (
+        <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: 10, fontSize: 'var(--fs-small, 12px)' }}>
+          <div style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', marginBottom: 4 }}>{L('관리자', 'Administrators')}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+            {(admins.managers || []).map((n) => <span key={'m' + n} style={{ fontSize: 'var(--fs-micro, 10px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{n} · {L('전체', 'global')}</span>)}
+            {(admins.scoped || []).map((a, i) => <span key={'s' + i} style={{ fontSize: 'var(--fs-micro, 10px)', fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{a.username} · {a.project ? a.project : L('서비스 전체', 'whole service')}</span>)}
+            {(admins.managers || []).length + (admins.scoped || []).length === 0 && <span style={{ color: 'var(--text-muted)' }}>—</span>}
+          </div>
+        </div>
+      )}
 
       {/* tab / menu layout (services only) — lazy: only loads on open */}
       {!isBuiltin && (

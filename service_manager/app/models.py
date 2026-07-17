@@ -83,6 +83,9 @@ class ServicePermission(Base):
     # Per-project grant. "" (empty) means a whole-service grant covering every
     # project in it; a non-empty value grants just that one project.
     project = Column(String(128), nullable=False, default="")
+    # Also confers ADMIN over this scope (service if project=="", else that project):
+    # a scoped admin — recognised + can enter, distinct from a global manager.
+    is_admin = Column(Boolean, nullable=False, default=False)
     __table_args__ = (UniqueConstraint("user_id", "service_name", "project", name="uq_user_service_project"),)
 
 

@@ -216,9 +216,30 @@ def _user_groups(db: Session, user_id: int) -> list[dict]:
             db.query(models.Group).filter(models.Group.id.in_(gids)).order_by(models.Group.name).all()]
 
 
-def effective_color(u: models.User) -> Optional[str]:
-    """Admins/managers always show the reserved MANAGER_COLOR; others keep theirs."""
-    return config.MANAGER_COLOR if u.role == "manager" else u.profile_color
+def effective_color(db: Session, u: models.User) -> Optional[str]:
+    """Global managers always show MANAGER_COLOR; scoped admins (service/project
+    admins) show a distinct dark grey; everyone else keeps their own picked colour."""
+    if u.role == "manager":
+        return config.MANAGER_COLOR
+    if permissions.has_any_admin(db, u.id):
+        return config.SCOPED_ADMIN_COLOR
+    return u.profile_color
+
+
+def _direct_perms(db: Session, uid: int) -> list:
+    """A user's OWN service/project grants (with the scoped-admin flag)."""
+    return [{"service": p.service_name, "project": p.project or None, "admin": bool(p.is_admin)}
+            for p in db.query(models.ServicePermission).filter(models.ServicePermission.user_id == uid).all()]
+
+
+def _inherited_perms(db: Session, uid: int) -> list:
+    """Grants a user inherits from the groups they belong to."""
+    gids = permissions.user_group_ids(db, uid)
+    if not gids:
+        return []
+    gnames = {g.id: g.name for g in db.query(models.Group).filter(models.Group.id.in_(gids)).all()}
+    return [{"service": p.service_name, "project": p.project or None, "group": gnames.get(p.group_id)}
+            for p in db.query(models.GroupPermission).filter(models.GroupPermission.group_id.in_(gids)).all()]
 
 
 def _account_view(db: Session, u: models.User) -> dict:
@@ -232,8 +253,14 @@ def _account_view(db: Session, u: models.User) -> dict:
         # elog-style profile (the portal account is a superset — these flow to elog via SSO)
         "phone": u.phone, "experiment_role": u.experiment_role,
         "participation_from": u.participation_from, "participation_to": u.participation_to,
-        "profile_color": effective_color(u), "profile_shape": u.profile_shape,
+        "profile_color": effective_color(db, u), "profile_shape": u.profile_shape,
         "is_admin": u.role == "manager", "manager_color": config.MANAGER_COLOR,
+        # scoped (service/project) admin: recognised + dark-grey avatar, locked like managers'
+        "admin_scopes": permissions.admin_scopes(db, u.id),
+        "scoped_admin": permissions.has_any_admin(db, u.id),
+        "scoped_admin_color": config.SCOPED_ADMIN_COLOR,
+        # the user's own access grants (services/projects), direct + inherited
+        "permissions": _direct_perms(db, u.id), "inherited_permissions": _inherited_perms(db, u.id),
         "verification_current": permissions.verification_current(u),
         "verified_at": u.email_verified_at.isoformat() if u.email_verified_at else None,
         "verify_days_ago": days_ago, "verify_days_left": left, "pending_email": u.pending_email,
@@ -247,7 +274,7 @@ def my_account(user: models.User = Depends(require_portal_user), db: Session = D
 
 
 @router.get("/api/introspect")
-def introspect(user: models.User = Depends(require_portal_user)):
+def introspect(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
     """Canonical FRESH identity for managed services (elog/nptoy/g4toy/…) to sync a
     portal token's live role/profile/verification on entry — the single source that
     replaces the three divergent models the services used to have: elog synced role
@@ -267,7 +294,7 @@ def introspect(user: models.User = Depends(require_portal_user)):
         "name": user.display_name or user.username,
         "role": role,
         "prole": role,
-        "color": effective_color(user),
+        "color": effective_color(db, user),
         "shape": user.profile_shape,
         "verified": permissions.verification_current(user),
         "active": user.is_active,
