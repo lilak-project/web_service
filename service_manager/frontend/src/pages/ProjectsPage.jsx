@@ -10,6 +10,8 @@ import IconLabView from './portal/IconLabView'
 import NewServiceView from './portal/NewServiceView'
 import ServiceProjects from './portal/ServiceProjects'
 import ServiceSingle from './portal/ServiceSingle'
+import ScaleToggle from './portal/ScaleToggle'
+import { usePortalScale } from '../portalScale'
 
 /**
  * ProjectsPage — the LILAK portal cover page.
@@ -237,6 +239,7 @@ function AuthCard({ t, onAuthed }) {
 
 export default function ProjectsPage() {
   const { t } = useLang()
+  const { big } = usePortalScale()   // roomy UI toggle (default compact)
 
   // ── Portal auth (central accounts at the launcher) ──
   const [user, setUser] = useState(null)        // null = logged out
@@ -361,11 +364,13 @@ export default function ProjectsPage() {
     return (
       <Button variant={active ? 'secondary' : 'ghost'} onClick={() => setView(id)}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
+          display: 'inline-flex', alignItems: 'center', gap: big ? 7 : 5,
           border: active ? '1.5px solid var(--btn-primary-bg, #4c6ef5)' : '1.5px solid transparent',
           backgroundColor: active ? 'var(--surface-2)' : undefined,
+          // roomy: match the login-card buttons (CTRL_H / CTRL_R / --fs-medium)
+          ...(big ? { height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)' } : {}),
         }}>
-        <Icon name={icon} size={14} /> {label}
+        <Icon name={icon} size={big ? 17 : 14} /> {label}
       </Button>
     )
   }
@@ -404,6 +409,8 @@ export default function ProjectsPage() {
         <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
         {user.username}{isManager ? ' · admin' : ''}
       </span>
+      {/* UI-size toggle, exposed at the top for now (also in Settings › System). */}
+      <ScaleToggle />
       <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
     </div>
   ) : null
@@ -429,12 +436,12 @@ export default function ProjectsPage() {
   return (
     <CoverPage
       fill
-      // Logged out there are no header controls, so the mark stands alone with the
-      // title under it; signed in it goes back to leading-icon + nav row.
-      center={!user}
-      // Logged out the mark stands alone as the landing art, so it can be bigger;
-      // signed in it's just the leading icon of a nav row and stays put.
-      icon={<HeaderMark size={user ? 42 : 64} />}
+      // Centred brand (mark alone, title under) on the login screen — and, in the
+      // roomy theme, on the logged-in home too, so it reads like the login page.
+      center={!user || big}
+      // Big landing mark logged out; also big in the roomy theme. Only the compact
+      // logged-in header keeps the small leading-icon size.
+      icon={<HeaderMark size={(user && !big) ? 42 : 64} />}
       title={t('projects_title')}
       subtitle={portalInfo
         ? `${portalInfo.host || '?'}${portalInfo.version ? ` · ${portalInfo.version}` : ''}`

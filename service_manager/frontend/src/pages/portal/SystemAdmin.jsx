@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import ScaleToggle from './ScaleToggle'
 
 const card = { border: '1px solid var(--border)', borderRadius: 10, padding: 14, background: 'var(--card-bg, transparent)' }
 const lbl = { fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', minWidth: 76 }
@@ -38,6 +39,20 @@ export default function SystemAdmin() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* UI size — the same toggle that's in the top bar, kept here so it has a
+          settled home once it's removed from the top bar. */}
+      <div style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <Icon name="images" size={16} />
+          <b style={{ fontSize: 'var(--fs-body, 13px)' }}>{L('화면 크기', 'UI size')}</b>
+          <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
+            {L('기본(작게) ↔ 크게', 'default (compact) ↔ large')}
+          </span>
+          <span style={{ flex: 1 }} />
+          <ScaleToggle variant="secondary" />
+        </div>
+      </div>
+
       <div style={card}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <Icon name="sliders" size={16} />
