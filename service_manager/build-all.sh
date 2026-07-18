@@ -48,7 +48,7 @@ build_front "$PORTAL/frontend"
 [ -d "$STACK/asset_manager" ] && build_front "$STACK/asset_manager"
 # Submodule services with a <name>/frontend (nptoy, lilak_gui, …). A dirty
 # one that fails to build shouldn't abort the whole run, so don't `set -e` these.
-for svc in nptoy lilak_gui; do
+for svc in nptoy; do
   [ -f "$STACK/$svc/frontend/package.json" ] || continue
   ( build_front "$STACK/$svc/frontend" ) || echo "⚠ $svc frontend build failed (skipped)"
 done
