@@ -361,16 +361,29 @@ export default function ProjectsPage() {
   // you can always tell which screen you're on.
   const navBtn = (id, icon, label) => {
     const active = view === id
+    // Roomy: render exactly like the login card's Sign in / Sign up tabs — active is
+    // a filled primary with a transparent border; inactive is a ghost with a faint
+    // outline. Same height / radius / font as those buttons (CTRL_H / CTRL_R / medium).
+    if (big) {
+      return (
+        <Button variant={active ? 'primary' : 'ghost'} onClick={() => setView(id)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)',
+            border: active ? '1px solid transparent' : '1px solid var(--border-default)',
+          }}>
+          <Icon name={icon} size={17} /> {label}
+        </Button>
+      )
+    }
     return (
       <Button variant={active ? 'secondary' : 'ghost'} onClick={() => setView(id)}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: big ? 7 : 5,
+          display: 'inline-flex', alignItems: 'center', gap: 5,
           border: active ? '1.5px solid var(--btn-primary-bg, #4c6ef5)' : '1.5px solid transparent',
           backgroundColor: active ? 'var(--surface-2)' : undefined,
-          // roomy: match the login-card buttons (CTRL_H / CTRL_R / --fs-medium)
-          ...(big ? { height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)' } : {}),
         }}>
-        <Icon name={icon} size={big ? 17 : 14} /> {label}
+        <Icon name={icon} size={14} /> {label}
       </Button>
     )
   }
@@ -405,13 +418,13 @@ export default function ProjectsPage() {
       {navBtn('settings', 'settings', t('portal_nav_settings'))}
       <div style={{ flex: 1 }} />
       {/* account name + logout — right */}
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: big ? 'var(--fs-medium, 14px)' : 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={big ? 26 : 22} />
         {user.username}{isManager ? ' · admin' : ''}
       </span>
       {/* UI-size toggle, exposed at the top for now (also in Settings › System). */}
-      <ScaleToggle />
-      <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
+      <ScaleToggle style={big ? { fontSize: 'var(--fs-medium, 14px)' } : undefined} />
+      <Button variant="ghost" onClick={logout} style={big ? { fontSize: 'var(--fs-medium, 14px)' } : undefined}>{t('projects_logout')}</Button>
     </div>
   ) : null
 
