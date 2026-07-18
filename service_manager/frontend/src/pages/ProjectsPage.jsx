@@ -359,25 +359,36 @@ export default function ProjectsPage() {
 
   // Header nav button — the active tab gets a filled box with a visible border so
   // you can always tell which screen you're on.
+  // Roomy: re-pressing Home while already on it flips manage mode (managers only) —
+  // so there's no separate Manage toggle. The Home tab then shows an amber
+  // "managing" state with a wrench.
+  const homeTogglesManage = big && isManager
   const navBtn = (id, icon, label) => {
     const active = view === id
+    const managing = homeTogglesManage && id === 'home' && manage
+    const onClick = () => {
+      if (id === 'home' && view === 'home' && homeTogglesManage) { setManage((m) => !m); return }
+      setView(id)
+    }
     // Roomy: render exactly like the login card's Sign in / Sign up tabs — active is
     // a filled primary with a transparent border; inactive is a ghost with a faint
     // outline. Same height / radius / font as those buttons (CTRL_H / CTRL_R / medium).
     if (big) {
       return (
-        <Button variant={active ? 'primary' : 'ghost'} onClick={() => setView(id)}
+        <Button variant={active ? (managing ? 'warning' : 'primary') : 'ghost'} onClick={onClick}
+          title={id === 'home' && homeTogglesManage
+            ? (manage ? '관리 모드 — 다시 누르면 종료' : '홈 (다시 누르면 관리 모드)') : undefined}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7,
             height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)',
             border: active ? '1px solid transparent' : '1px solid var(--border-default)',
           }}>
-          <Icon name={icon} size={17} /> {label}
+          <Icon name={managing ? 'wrench' : icon} size={17} /> {label}
         </Button>
       )
     }
     return (
-      <Button variant={active ? 'secondary' : 'ghost'} onClick={() => setView(id)}
+      <Button variant={active ? 'secondary' : 'ghost'} onClick={onClick}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
           border: active ? '1.5px solid var(--btn-primary-bg, #4c6ef5)' : '1.5px solid transparent',
@@ -466,12 +477,15 @@ export default function ProjectsPage() {
       // Big landing mark logged out; also big in the roomy theme. Only the compact
       // logged-in header keeps the small leading-icon size.
       icon={<HeaderMark size={(user && !big) ? 42 : 64} />}
-      // Roomy logged-in: the mark stands alone — no title/subtitle text under it.
+      // Roomy logged-in: the mark stands alone — no title/subtitle text — and sits
+      // higher (less top padding) to give the service list more room.
       title={(user && big) ? null : t('projects_title')}
       subtitle={(user && big) ? null : (portalInfo
         ? `${portalInfo.host || '?'}${portalInfo.version ? ` · ${portalInfo.version}` : ''}`
         : t('projects_subtitle'))}
-      subheader={user ? <>{navBar}{view === 'home' && isManager && manageBar}</> : null}
+      headerPad={(user && big) ? '16px 0 6px' : undefined}
+      // Roomy folds manage into the Home tab (re-press), so no separate manage bar.
+      subheader={user ? <>{navBar}{view === 'home' && isManager && !big && manageBar}</> : null}
     >
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
@@ -523,11 +537,12 @@ export default function ProjectsPage() {
                     {statusText}
                   </span>}
                   right={
+                    // Roomy drops the Open/Close button — the whole row already
+                    // toggles the card. Request-only cards (no row toggle) keep theirs.
+                    (p.can_enter && big) ? null :
                     p.can_enter ? (
                       <Button variant={isOpen ? 'secondary' : 'primary'} onClick={() => setExpanded(isOpen ? null : key)}
-                        style={big
-                          ? { minWidth: 96, height: 44, borderRadius: CTRL_R, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
-                          : { minWidth: 76, justifyContent: 'center' }}>
+                        style={{ minWidth: 76, justifyContent: 'center' }}>
                         {isOpen ? t('portal_proj_close') : t('projects_open')}
                       </Button>
                     ) : p.can_request ? (
