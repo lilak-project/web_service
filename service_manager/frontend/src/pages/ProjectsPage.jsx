@@ -408,6 +408,27 @@ export default function ProjectsPage() {
     catch { await refresh() }
   }
 
+  // Roomy: Log out is a real button shaped like the nav tabs, just a different
+  // colour (secondary grey vs the tabs' blue). Compact keeps the plain ghost link.
+  const logoutBtn = big ? (
+    <Button variant="secondary" onClick={logout}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 7,
+        height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)',
+        border: '1px solid transparent' }}>
+      <Icon name="logout" size={17} /> {t('projects_logout')}
+    </Button>
+  ) : (
+    <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
+  )
+
+  // The UI-size toggle sits on its own right-aligned line ABOVE the nav bar (for
+  // now — easy to relocate/hide). Same in both modes.
+  const scaleRow = user ? (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 0 6px' }}>
+      <ScaleToggle style={big ? { fontSize: 'var(--fs-medium, 14px)' } : undefined} />
+    </div>
+  ) : null
+
   // The nav/tab bar lives in CoverPage's FIXED subheader (outside the scroll), with
   // a divider under it; only the tab CONTENT below scrolls.
   const navBar = user ? (
@@ -417,14 +438,12 @@ export default function ProjectsPage() {
       {navBtn('home', 'home', t('portal_nav_home'))}
       {navBtn('settings', 'settings', t('portal_nav_settings'))}
       <div style={{ flex: 1 }} />
-      {/* account name + logout — right */}
+      {/* account (name only — the avatar colour already carries the role) + logout */}
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: big ? 'var(--fs-medium, 14px)' : 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={big ? 26 : 22} />
-        {user.username}{isManager ? ' · admin' : ''}
+        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={big ? 32 : 22} />
+        {big ? (user.username) : `${user.username}${isManager ? ' · admin' : ''}`}
       </span>
-      {/* UI-size toggle, exposed at the top for now (also in Settings › System). */}
-      <ScaleToggle style={big ? { fontSize: 'var(--fs-medium, 14px)' } : undefined} />
-      <Button variant="ghost" onClick={logout} style={big ? { fontSize: 'var(--fs-medium, 14px)' } : undefined}>{t('projects_logout')}</Button>
+      {logoutBtn}
     </div>
   ) : null
 
@@ -459,7 +478,7 @@ export default function ProjectsPage() {
       subtitle={portalInfo
         ? `${portalInfo.host || '?'}${portalInfo.version ? ` · ${portalInfo.version}` : ''}`
         : t('projects_subtitle')}
-      subheader={user ? <>{navBar}{view === 'home' && isManager && manageBar}</> : null}
+      subheader={user ? <>{scaleRow}{navBar}{view === 'home' && isManager && manageBar}</> : null}
     >
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
