@@ -10,7 +10,7 @@ import IconLabView from './portal/IconLabView'
 import NewServiceView from './portal/NewServiceView'
 import ServiceProjects from './portal/ServiceProjects'
 import ServiceSingle from './portal/ServiceSingle'
-import ScaleToggle from './portal/ScaleToggle'
+import AccountMenu from './portal/AccountMenu'
 import { usePortalScale } from '../portalScale'
 
 /**
@@ -408,42 +408,27 @@ export default function ProjectsPage() {
     catch { await refresh() }
   }
 
-  // Roomy: Log out is a real button shaped like the nav tabs, just a different
-  // colour (secondary grey vs the tabs' blue). Compact keeps the plain ghost link.
-  const logoutBtn = big ? (
-    <Button variant="secondary" onClick={logout}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 7,
-        height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)',
-        border: '1px solid transparent' }}>
-      <Icon name="logout" size={17} /> {t('projects_logout')}
-    </Button>
-  ) : (
-    <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
-  )
-
-  // The UI-size toggle sits on its own right-aligned line ABOVE the nav bar (for
-  // now — easy to relocate/hide). Same in both modes.
-  const scaleRow = user ? (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 0 6px' }}>
-      <ScaleToggle style={big ? { fontSize: 'var(--fs-medium, 14px)' } : undefined} />
-    </div>
-  ) : null
-
   // The nav/tab bar lives in CoverPage's FIXED subheader (outside the scroll), with
-  // a divider under it; only the tab CONTENT below scrolls.
+  // a divider under it; only the tab CONTENT below scrolls. Roomy: Home/Settings on
+  // the left, and the account name on the right as a dropdown whose menu holds Log
+  // out (compact keeps the always-visible name + logout link).
   const navBar = user ? (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
       padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)' }}>
-      {/* tabs — left */}
       {navBtn('home', 'home', t('portal_nav_home'))}
       {navBtn('settings', 'settings', t('portal_nav_settings'))}
       <div style={{ flex: 1 }} />
-      {/* account (name only — the avatar colour already carries the role) + logout */}
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: big ? 'var(--fs-medium, 14px)' : 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={big ? 32 : 22} />
-        {big ? (user.username) : `${user.username}${isManager ? ' · admin' : ''}`}
-      </span>
-      {logoutBtn}
+      {big ? (
+        <AccountMenu user={user} isManager={isManager} onLogout={logout} />
+      ) : (
+        <>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+            <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
+            {user.username}{isManager ? ' · admin' : ''}
+          </span>
+          <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
+        </>
+      )}
     </div>
   ) : null
 
@@ -481,11 +466,12 @@ export default function ProjectsPage() {
       // Big landing mark logged out; also big in the roomy theme. Only the compact
       // logged-in header keeps the small leading-icon size.
       icon={<HeaderMark size={(user && !big) ? 42 : 64} />}
-      title={t('projects_title')}
-      subtitle={portalInfo
+      // Roomy logged-in: the mark stands alone — no title/subtitle text under it.
+      title={(user && big) ? null : t('projects_title')}
+      subtitle={(user && big) ? null : (portalInfo
         ? `${portalInfo.host || '?'}${portalInfo.version ? ` · ${portalInfo.version}` : ''}`
-        : t('projects_subtitle')}
-      subheader={user ? <>{scaleRow}{navBar}{view === 'home' && isManager && manageBar}</> : null}
+        : t('projects_subtitle'))}
+      subheader={user ? <>{navBar}{view === 'home' && isManager && manageBar}</> : null}
     >
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
