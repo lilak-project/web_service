@@ -451,15 +451,22 @@ export default function ProjectsPage() {
   // scroll) so it stays reachable no matter how far the service list is scrolled.
   const manageBar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0 2px' }}>
-      <span style={{ flex: 1, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
-        {manage ? t('manage_hint') : t('projects_register_hint')}
-      </span>
+      {/* Roomy drops the explanatory hint and just parks the toggle on the right;
+          compact keeps the hint text. */}
+      {big
+        ? <span style={{ flex: 1 }} />
+        : <span style={{ flex: 1, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
+            {manage ? t('manage_hint') : t('projects_register_hint')}
+          </span>}
       {/* Keep any open box open — its content switches between the normal panel
-          and the manage panel with `manage` (no close on toggle). */}
+          and the manage panel with `manage` (no close on toggle). Roomy sizes it
+          like the nav tabs above. */}
       <Button variant="ghost" onClick={() => setManage((m) => !m)}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 'var(--fs-body, 13px)',
-          padding: '8px 15px', color: manage ? 'var(--btn-primary-bg)' : undefined }}>
-        <Icon name={manage ? 'toggle-right' : 'toggle-left'} size={26} weight={manage ? 'fill' : 'regular'}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: manage ? 'var(--btn-primary-bg)' : undefined,
+          ...(big
+            ? { height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)' }
+            : { fontSize: 'var(--fs-body, 13px)', padding: '8px 15px' }) }}>
+        <Icon name={manage ? 'toggle-right' : 'toggle-left'} size={big ? 24 : 26} weight={manage ? 'fill' : 'regular'}
           color={manage ? 'var(--btn-primary-bg)' : 'var(--text-muted)'} /> {t('portal_manage')}
       </Button>
     </div>
@@ -517,24 +524,31 @@ export default function ProjectsPage() {
               return (
                 <ExpandBox key={key} open={isOpen} manage={manage && isManager}
                   toggleable={canToggle} divider={false}
+                  // Roomy: bigger cards (more padding, larger leading mark) and the
+                  // description line dropped — just the icon + name + action.
+                  padding={big ? '14px 18px' : '8px 14px'}
                   onToggle={() => setExpanded(isOpen ? null : key)}
-                  icon={<Icon name={iconFor(p.name, p.icon)} size={26} weight="fill"
+                  icon={<Icon name={iconFor(p.name, p.icon)} size={big ? 34 : 26} weight="fill"
                     color={p.color || 'var(--text-primary)'} />}
                   title={p.builtin === 'newservice' ? (p.label || t('newsvc_title')) : (p.label || p.name)}
                   badges={(isManager && p.version?.sha) ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>{p.version.sha}</span> : null}
-                  subtitle={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  subtitle={big ? undefined : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     {(!isBuiltin && !p.multi_project) && <span style={{ width: 8, height: 8, borderRadius: 999, background: p.running ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }} />}
                     {statusText}
                   </span>}
                   right={
                     p.can_enter ? (
                       <Button variant={isOpen ? 'secondary' : 'primary'} onClick={() => setExpanded(isOpen ? null : key)}
-                        style={{ minWidth: 76, justifyContent: 'center' }}>
+                        style={big
+                          ? { minWidth: 96, height: 44, borderRadius: CTRL_R, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
+                          : { minWidth: 76, justifyContent: 'center' }}>
                         {isOpen ? t('portal_proj_close') : t('projects_open')}
                       </Button>
                     ) : p.can_request ? (
                       <Button variant="secondary" disabled={p.requested || busy === p.name} onClick={() => requestAccess(p.name)}
-                        style={{ minWidth: 112, justifyContent: 'center' }}>
+                        style={big
+                          ? { minWidth: 120, height: 44, borderRadius: CTRL_R, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
+                          : { minWidth: 112, justifyContent: 'center' }}>
                         {p.requested ? t('projects_requested') : t('projects_request')}
                       </Button>
                     ) : null
