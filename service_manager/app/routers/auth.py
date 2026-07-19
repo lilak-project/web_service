@@ -44,8 +44,15 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
         user.password_hash = security.hash_password(payload.password)
         db.commit()
     if config.EMAIL_VERIFY_REQUIRED and not user.email_verified:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="이메일 인증이 필요합니다. 가입 시 받은 인증 링크를 확인하세요.")
+        # Structured 403: the password checked out, so tell the client WHO is
+        # pending — the frontend reopens the code-entry screen instead of
+        # dead-ending on a "verification required" error (the signup already
+        # exists, so re-registering is impossible).
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={
+            "code": "verify_required",
+            "username": user.username,
+            "email": user.email,
+        })
     return schemas.TokenResponse(access_token=portal_token(user), user_id=user.id,
                                  username=user.username, role=user.role)
 
@@ -151,6 +158,32 @@ def verify_code(payload: schemas.VerifyCodeRequest, db: Session = Depends(get_db
     db.commit()
     return schemas.TokenResponse(access_token=portal_token(user), user_id=user.id,
                                  username=user.username, role=user.role)
+
+
+@router.post("/api/auth/register-cancel")
+def register_cancel(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
+    """Abandon a signup stuck at email verification: delete the still-unverified
+    account so its username/email become free again. Requires the password so a
+    third party can't cancel someone's pending signup knowing only the username.
+    A verified account is never deletable this way (that's DELETE /api/account)."""
+    user = (
+        db.query(models.User)
+        .filter(models.User.username == (payload.username or "").strip())
+        .first()
+    )
+    if not user or not security.verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+    if user.email_verified:
+        raise HTTPException(status_code=400, detail="이미 인증이 완료된 계정입니다.")
+    # Same cleanup as account deletion — an invite code redeemed at signup may
+    # have granted permission/membership rows already.
+    db.query(models.ServicePermission).filter(models.ServicePermission.user_id == user.id).delete()
+    db.query(models.AccessRequest).filter(models.AccessRequest.user_id == user.id).delete()
+    db.query(models.GroupMembership).filter(models.GroupMembership.user_id == user.id).delete()
+    db.delete(user)
+    db.commit()
+    return {"deleted": True}
 
 
 def _verify_page(title: str, body: str, ok: bool, token: str | None = None) -> str:

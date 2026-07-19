@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { EnvelopeSimple } from '@phosphor-icons/react'
 import { Icon, Button, CoverPage, PROJECT_ICONS, Avatar, MANAGER_COLOR, Modal } from 'lilak-ui'
 import ExpandBox from './portal/ExpandBox'
 import { launcher, setExperiment } from '../api'
@@ -132,7 +133,16 @@ function AuthCard({ t, onAuthed }) {
         onAuthed(me.data)
       }
     } catch (e2) {
-      setErr(e2?.response?.data?.detail || t(mode === 'login' ? 'projects_login_fail' : 'projects_signup_fail'))
+      const detail = e2?.response?.data?.detail
+      if (detail && typeof detail === 'object' && detail.code === 'verify_required') {
+        // Correct password, but the email is still unverified — reopen the
+        // code-entry screen instead of dead-ending on an error message.
+        setVerifyCode('')
+        setPending(detail)
+        return
+      }
+      setErr((typeof detail === 'string' && detail) ||
+        t(mode === 'login' ? 'projects_login_fail' : 'projects_signup_fail'))
     } finally { setBusy(false) }
   }
 
@@ -147,47 +157,67 @@ function AuthCard({ t, onAuthed }) {
       setPortalToken(res.data.access_token)
       const me = await launcher.get('/auth/me')
       onAuthed(me.data)
-    } catch (e2) {
-      setErr(e2?.response?.data?.detail || '인증 코드가 올바르지 않습니다.')
+    } catch {
+      setErr('Invalid verification code.')
+    } finally { setBusy(false) }
+  }
+
+  // Give up on a pending signup: delete the unverified account (username/email
+  // become free again) and return to the sign-up form. Needs the password from
+  // the form state — present in both paths that open this screen (signup, and a
+  // login attempt that bounced with verify_required).
+  async function cancelSignup() {
+    setBusy(true); setErr('')
+    try {
+      await launcher.post('/auth/register-cancel', {
+        username: pending?.username || f.username.trim(),
+        password: f.password,
+      })
+      setPending(null); setVerifyCode(''); setMode('signup')
+    } catch {
+      setErr('Could not cancel the sign-up.')
     } finally { setBusy(false) }
   }
 
   if (pending) {
     return (
-      <div style={{ ...cardStyle, textAlign: 'center' }}>
-        <div style={{ fontSize: 32 }}>✉️</div>
-        <div style={{ fontWeight: 600 }}>{pending.message || '인증 메일을 확인하세요.'}</div>
-        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{pending.email}</div>
+      <div style={{ ...cardStyle, margin: '12px auto 0', textAlign: 'center' }}>
+        <EnvelopeSimple size={34} style={{ color: 'var(--text-muted)', alignSelf: 'center' }} />
+        <div style={{ fontWeight: 600 }}>Verify your email</div>
+        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
+          Enter the 6-digit code sent to <b>{pending.email}</b>
+          <br />The email may take a minute to arrive.
+        </div>
         <form onSubmit={submitVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <input
             autoFocus
             className="keep-font"
             inputMode="numeric"
             maxLength={6}
-            placeholder="6자리 인증 코드"
+            placeholder="6-digit code"
             value={verifyCode}
             onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
             style={{ ...inputStyle, textAlign: 'center', letterSpacing: 4, fontSize: 18 }}
           />
           {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
           <Button type="submit" disabled={busy || verifyCode.length !== 6}
-            style={{ justifyContent: 'center' }}>인증하고 로그인</Button>
+            style={authBtnStyle}>Verify &amp; log in</Button>
         </form>
         {pending.verify_code && (
           <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', wordBreak: 'break-all',
             border: '1px dashed var(--border, #ccc)', borderRadius: 8, padding: 8 }}>
-            DEV — 메일 대신 인증 코드: {pending.verify_code}
+            DEV — verification code (email not sent): {pending.verify_code}
           </div>
         )}
         {pending.verify_url && (
           <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', wordBreak: 'break-all',
             border: '1px dashed var(--border, #ccc)', borderRadius: 8, padding: 8 }}>
-            DEV — 메일 대신 인증 링크:&nbsp;
+            DEV — verification link:&nbsp;
             <a href={pending.verify_url} target="_blank" rel="noreferrer">{pending.verify_url}</a>
           </div>
         )}
-        <Button onClick={() => { setPending(null); setMode('login'); setErr('') }}
-          style={authBtnStyle}>{t('projects_login_title')}</Button>
+        <Button variant="ghost" disabled={busy} onClick={cancelSignup}
+          style={{ ...authBtnStyle, border: '1px solid var(--border-default)' }}>Cancel sign-up</Button>
       </div>
     )
   }
