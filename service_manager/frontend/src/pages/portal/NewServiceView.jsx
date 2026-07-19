@@ -88,23 +88,27 @@ export default function NewServiceView({ onCreated }) {
   }
 
   return (
-    <div style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 620 }}>
+    <div style={{ padding: 14, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 620 }}>
       <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{t('newsvc_intro')}</div>
 
-      {/* name + brand + colour */}
+      {/* name + brand — stack on narrow columns, sit side by side when wide */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 180 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 150 }}>
           <span style={lbl}>{t('newsvc_name')}</span>
           <input style={{ ...field, borderColor: name && !nameOk ? 'var(--danger-border, #e5484d)' : field.border }}
             value={name} placeholder="mysvc" disabled={!!job}
             onChange={(e) => setName(e.target.value.toLowerCase())} />
           <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{t('newsvc_name_rule')}</span>
         </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 160 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 150 }}>
           <span style={lbl}>{t('newsvc_brand')}</span>
           <input style={field} value={service} placeholder={t('newsvc_brand_ph')} disabled={!!job}
             onChange={(e) => setService(e.target.value)} />
         </label>
+      </div>
+
+      {/* icon + colour + random — the compact controls on their own row */}
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={lbl}>{t('newsvc_icon')}</span>
           <div style={{ display: 'flex', alignItems: 'center', height: 30 }}>
@@ -117,7 +121,7 @@ export default function NewServiceView({ onCreated }) {
             <ColorPicker value={color} onChange={setColor} />
           </div>
         </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 'auto' }}>
           <span style={lbl}>&nbsp;</span>
           <div style={{ display: 'flex', alignItems: 'center', height: 30 }}>
             <Button variant="secondary" disabled={!!job} onClick={() => {
@@ -134,21 +138,23 @@ export default function NewServiceView({ onCreated }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={lbl}>{t('newsvc_tabs')}</span>
         {tabs.map((tb) => (
-          <div key={tb.key} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input style={{ ...field, width: 120 }} value={tb.id} placeholder="id" disabled={!!job}
+          <div key={tb.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input style={{ ...field, width: 80, flexShrink: 0 }} value={tb.id} placeholder="id" disabled={!!job}
               onChange={(e) => setTab(tb.key, { id: e.target.value })} />
             <input style={{ ...field, flex: 1, minWidth: 0 }} value={tb.label} placeholder={t('newsvc_tab_label')} disabled={!!job}
               onChange={(e) => setTab(tb.key, { label: e.target.value })} />
             <IconPick value={tb.icon} disabled={!!job} onChange={(ic) => setTab(tb.key, { icon: ic })} />
-            {/* built-in kind badge (community / settings tabs added via the buttons below) */}
-            <span style={{ width: 72, flexShrink: 0, textAlign: 'center', fontSize: 'var(--fs-tiny, 11px)',
-              color: tb.kind ? 'var(--info-text)' : 'var(--text-muted)',
-              background: tb.kind ? 'var(--info-bg)' : 'transparent', borderRadius: 999, padding: '2px 0' }}>
-              {tb.kind === 'community' ? t('newsvc_tab_kind_community')
-                : tb.kind === 'settings' ? t('newsvc_tab_kind_settings')
-                : tb.kind === 'parameter' ? t('newsvc_tab_kind_parameter')
-                : t('newsvc_tab_kind_basic')}
-            </span>
+            {/* kind badge only for built-in tabs (community/settings/parameter); a plain
+                tab shows none, freeing the width for the label at narrow column sizes */}
+            {tb.kind && (
+              <span style={{ flexShrink: 0, textAlign: 'center', fontSize: 'var(--fs-tiny, 11px)',
+                color: 'var(--info-text)', background: 'var(--info-bg)', borderRadius: 999, padding: '2px 8px' }}>
+                {tb.kind === 'community' ? t('newsvc_tab_kind_community')
+                  : tb.kind === 'settings' ? t('newsvc_tab_kind_settings')
+                  : tb.kind === 'parameter' ? t('newsvc_tab_kind_parameter')
+                  : t('newsvc_tab_kind_basic')}
+              </span>
+            )}
             <Button variant="ghost" icon disabled={!!job || tabs.length <= 1} onClick={() => delTab(tb.key)} title={t('newsvc_tab_del')}>
               <Icon name="trash" size={14} />
             </Button>
