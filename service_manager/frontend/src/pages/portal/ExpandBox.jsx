@@ -24,19 +24,23 @@ import { Icon } from 'lilak-ui'
 export default function ExpandBox({
   open, onToggle, toggleable = true, manage = false, divider = true, caret = true,
   icon, title, badges, subtitle, right, children, style,
-  padding = '8px 14px', titleSize = 'var(--fs-medium, 14px)',
+  padding = '8px 14px', titleSize = 'var(--fs-medium, 14px)', titleWeight = 600,
 }) {
   const border = `${open ? '2px' : '1.5px'} ${manage ? 'dashed' : 'solid'} ${open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)'}`
   return (
     <div style={{ border, borderRadius: 12, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10, ...style }}>
       <div onClick={toggleable ? onToggle : undefined}
         style={{ display: 'flex', alignItems: 'center', gap: 13, padding,
-          cursor: toggleable ? 'pointer' : 'default' }}>
+          cursor: toggleable ? 'pointer' : 'default',
+          // A fast double-click on a clickable header would otherwise select the
+          // title + inner text (native double-click text selection). Not on the
+          // expanded children — only the header row is unselectable.
+          ...(toggleable ? { userSelect: 'none', WebkitUserSelect: 'none' } : {}) }}>
         {toggleable && caret && <Icon name={open ? 'caret-down' : 'caret-right'} size={15} color="var(--text-muted)" style={{ flexShrink: 0 }} />}
         {icon != null && <div style={{ flexShrink: 0, display: 'flex' }}>{icon}</div>}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: titleSize, fontWeight: 600 }}>{title}</span>
+            <span style={{ fontSize: titleSize, fontWeight: titleWeight }}>{title}</span>
             {badges}
           </div>
           {subtitle != null && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-muted)', marginTop: 0, lineHeight: 1.25 }}>{subtitle}</div>}

@@ -528,6 +528,7 @@ export default function ProjectsPage() {
                   // description line dropped; the leading caret stays.
                   padding={big ? '14px 18px' : '8px 14px'}
                   titleSize={big ? 'var(--fs-large, 16px)' : 'var(--fs-medium, 14px)'}
+                  titleWeight={big ? 400 : 600}
                   onToggle={() => setExpanded(isOpen ? null : key)}
                   icon={<Icon name={iconFor(p.name, p.icon)} size={big ? 34 : 26} weight="fill"
                     color={p.color || 'var(--text-primary)'} />}
