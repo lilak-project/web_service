@@ -361,12 +361,9 @@ export default function ProjectsPage() {
   // The icon editor wants a wide two-column layout. When its card is open, widen
   // the whole cover column so it has room; everything ELSE (nav, other cards, empty
   // state) is capped back to NARROW, so only that one card uses the extra width.
-  // The card grid uses the screen width (gains a column each ~340px) while the nav,
-  // header and empty state stay capped NARROW and centred. Other views (Settings)
-  // stay NARROW too.
+  // The whole cover stays at 760 (the original width); inside it the card grid still
+  // gains a column each ~340px, so 760 gives up to two columns.
   const NARROW = 760
-  const WIDE = 'min(1600px, 96vw)'
-  const gridWide = user && view === 'home'
   const capNarrow = { maxWidth: NARROW, marginLeft: 'auto', marginRight: 'auto', width: '100%' }
 
   // Header nav button — the active tab gets a filled box with a visible border so
@@ -483,7 +480,7 @@ export default function ProjectsPage() {
   return (
     <CoverPage
       fill
-      max={gridWide ? WIDE : NARROW}
+      max={NARROW}
       // Centred brand (mark alone, title under) on the login screen — and, in the
       // roomy theme, on the logged-in home too, so it reads like the login page.
       center={!user || big}
