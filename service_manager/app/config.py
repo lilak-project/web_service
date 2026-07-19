@@ -67,12 +67,26 @@ BASE_URL = os.environ.get("PORTAL_BASE_URL", f"http://localhost:{PORTAL_PORT}")
 # Shared JWT secret. MUST match the secret of any managed service (e.g. elog) so
 # a portal token is trusted on entry. Reads ELOG_SECRET_KEY for backward-compat
 # with the existing elog deployment.
+_DEFAULT_SECRET = "lilak-dev-secret-CHANGE-in-production"
 SECRET_KEY = (
     os.environ.get("PORTAL_SECRET_KEY")
     or os.environ.get("ELOG_SECRET_KEY")
-    or "lilak-dev-secret-CHANGE-in-production"
+    or _DEFAULT_SECRET
 )
+# True when the built-in dev secret is still in use. JWTs signed with a publicly
+# known key can be forged, so production MUST set PORTAL_SECRET_KEY. main.py warns
+# loudly at startup while this is True, and it also gates the dev-only echoes below.
+SECRET_KEY_IS_INSECURE = SECRET_KEY == _DEFAULT_SECRET
 TOKEN_EXPIRE_HOURS = int(os.environ.get("PORTAL_TOKEN_EXPIRE_HOURS", "24"))
+
+# Minimum length enforced when a password is SET (register / change / admin reset).
+# Existing shorter passwords still verify on login; only newly set ones must comply.
+PASSWORD_MIN_LENGTH = int(os.environ.get("PORTAL_PASSWORD_MIN_LENGTH", "8"))
+
+# CORS. Defaults to "*" for local dev; set PORTAL_ALLOWED_ORIGINS to a comma-separated
+# allow-list (e.g. "https://portal.example.org") to lock a production deployment down.
+_cors = os.environ.get("PORTAL_ALLOWED_ORIGINS", "").strip()
+CORS_ORIGINS = [o.strip() for o in _cors.split(",") if o.strip()] or ["*"]
 
 # Handshake registration token. A service self-registers by POSTing its descriptor
 # to `/api/handshake` with this bearer — so registering is "set the portal URL +
@@ -84,12 +98,22 @@ REGISTER_TOKEN = os.environ.get("PORTAL_REGISTER_TOKEN", _DEFAULT_REGISTER_TOKEN
 # default value can't be used to register services on an exposed portal.
 REGISTER_ENABLED = bool(REGISTER_TOKEN) and REGISTER_TOKEN != _DEFAULT_REGISTER_TOKEN
 
-# Email verification. When DEV_ECHO is on, the verification link is returned in
-# the register response + logged, so the flow is testable locally without an
-# email provider. In production, configure Resend and keep DEV_ECHO off.
-# REQUIRED gates login on verification.
+# "Local dev" = still on the built-in dev secret AND addressed as localhost. The
+# dev-only conveniences below (echoing verification codes / reset passwords in HTTP
+# responses) are gated on this so they can never accidentally ship to production.
+IS_LOCAL_DEV = SECRET_KEY_IS_INSECURE and ("localhost" in BASE_URL or "127.0.0.1" in BASE_URL)
+
+# Email verification. REQUIRED gates login on verification. DEV_ECHO returns the
+# verification code / reset password IN THE HTTP RESPONSE so the flow is testable
+# without an email provider — NEVER safe in production (anyone could read any
+# account's code). An explicit EMAIL_VERIFY_DEV_ECHO env wins; otherwise it is on
+# only for a local dev deployment and auto-OFF everywhere else, so a real
+# deployment can't leak codes even if the operator forgets to set it.
 EMAIL_VERIFY_REQUIRED = os.environ.get("EMAIL_VERIFY_REQUIRED", "1") not in ("0", "false", "False")
-EMAIL_VERIFY_DEV_ECHO = os.environ.get("EMAIL_VERIFY_DEV_ECHO", "1") not in ("0", "false", "False")
+_echo_env = os.environ.get("EMAIL_VERIFY_DEV_ECHO")
+EMAIL_VERIFY_DEV_ECHO = (
+    (_echo_env not in ("0", "false", "False")) if _echo_env is not None else IS_LOCAL_DEV
+)
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
 RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "").strip()
 RESEND_REPLY_TO = os.environ.get("RESEND_REPLY_TO", "").strip()

@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import config, models, permissions, registry, security
+from .. import config, emailer, models, permissions, registry, security
 from ..db import get_db
 from ..deps import require_portal_admin, require_portal_user
 from ..models import VERIFY_VALID_DAYS
@@ -349,8 +349,8 @@ class PasswordBody(BaseModel):
 def change_password(body: PasswordBody, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
     if not security.verify_password(body.current_password, user.password_hash):
         raise HTTPException(400, "현재 비밀번호가 올바르지 않습니다.")
-    if len(body.new_password or "") < 4:
-        raise HTTPException(400, "새 비밀번호가 너무 짧습니다.")
+    if len(body.new_password or "") < config.PASSWORD_MIN_LENGTH:
+        raise HTTPException(400, f"새 비밀번호는 최소 {config.PASSWORD_MIN_LENGTH}자 이상이어야 합니다.")
     user.password_hash = security.hash_password(body.new_password)
     db.commit()
     return {"ok": True}
@@ -409,8 +409,8 @@ class AdminPwBody(BaseModel):
 @router.post("/api/admin/users/{uid}/password")
 def admin_set_password(uid: int, body: AdminPwBody, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
     u = _get_user(db, uid)
-    if len(body.new_password or "") < 4:
-        raise HTTPException(400, "비밀번호가 너무 짧습니다.")
+    if len(body.new_password or "") < config.PASSWORD_MIN_LENGTH:
+        raise HTTPException(400, f"비밀번호는 최소 {config.PASSWORD_MIN_LENGTH}자 이상이어야 합니다.")
     u.password_hash = security.hash_password(body.new_password)
     db.commit()
     return {"ok": True}
@@ -440,10 +440,19 @@ def admin_request_verify(uid: int, _: models.User = Depends(require_portal_admin
 
 @router.post("/api/admin/users/{uid}/reset-password-email")
 def admin_reset_password_email(uid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
-    """Set a NEW random password (would be emailed to the user). No sender yet, so in
-    dev the new password is returned so the admin can pass it on."""
+    """Set a NEW random password and email it straight to the user, so an
+    admin-initiated reset never exposes the password to the admin. In local dev
+    (DEV_ECHO on) the password is also returned so the flow is testable without a
+    mail provider; in production DEV_ECHO is off and a delivery failure is an error
+    (the password is never leaked back through the API)."""
     u = _get_user(db, uid)
     newpw = secrets.token_urlsafe(9)
+    try:
+        emailer.send_password_reset_email(u.email, newpw)
+    except emailer.EmailDeliveryError as exc:
+        print(f"[password-reset] delivery failed for {u.email}: {exc}", flush=True)
+        if not config.EMAIL_VERIFY_DEV_ECHO:
+            raise HTTPException(502, "비밀번호 재설정 메일 발송에 실패했습니다. 메일 설정을 확인하세요.")
     u.password_hash = security.hash_password(newpw)
     db.commit()
     return {"ok": True, "email": u.email, "password": newpw if config.EMAIL_VERIFY_DEV_ECHO else None}

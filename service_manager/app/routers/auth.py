@@ -66,6 +66,9 @@ def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="이미 사용 중인 아이디입니다.")
     if db.query(models.User).filter(models.User.email == email).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
+    if len(payload.password or "") < config.PASSWORD_MIN_LENGTH:
+        raise HTTPException(status_code=400,
+            detail=f"비밀번호는 최소 {config.PASSWORD_MIN_LENGTH}자 이상이어야 합니다.")
 
     first = db.query(models.User).count() == 0
     # Sign-up gating: an allow-listed email domain may register freely; anyone else

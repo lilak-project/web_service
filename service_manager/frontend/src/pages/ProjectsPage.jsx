@@ -89,7 +89,10 @@ function setPortalToken(token) {
     launcher.defaults.headers.common['Authorization'] = `Bearer ${token}`
     // Also a cookie so the reverse proxies (/p, /pp) can authorize a top-level
     // navigation (which carries no Authorization header) for per-project gating.
-    document.cookie = `${PORTAL_TOKEN_KEY}=${token}; path=/; SameSite=Lax; max-age=86400`
+    // Add Secure when served over HTTPS so the token cookie never rides plain HTTP
+    // (omitted on http://localhost, where Secure cookies are rejected in dev).
+    const secure = location.protocol === 'https:' ? ' Secure;' : ''
+    document.cookie = `${PORTAL_TOKEN_KEY}=${token}; path=/; SameSite=Lax;${secure} max-age=86400`
   } else {
     localStorage.removeItem(PORTAL_TOKEN_KEY)
     delete launcher.defaults.headers.common['Authorization']

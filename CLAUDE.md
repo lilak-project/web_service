@@ -46,6 +46,12 @@ service_manager/.venv/bin/python -c "from app import main"
 Docker deploy lives in `service_manager/deploy/` (multi-stage `Dockerfile`,
 `docker-compose.yml` + `.dev.yml`, `stage.sh`, `make-mac-app.sh`).
 
+**Before running the portal officially/publicly, read `service_manager/DEPLOYMENT.md`**
+(bilingual KO/EN): how passwords + personal data are handled, and the env-var
+hardening checklist (`PORTAL_SECRET_KEY`, `EMAIL_VERIFY_DEV_ECHO`,
+`PORTAL_ALLOWED_ORIGINS`, TLS, …). The portal prints a `[SECURITY]` startup banner
+naming any dev-only setting still active.
+
 ## Architecture (the parts that span files)
 
 **The portal is generic over services via a manifest + adapters.** Each service is

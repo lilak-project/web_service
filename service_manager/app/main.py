@@ -20,8 +20,7 @@ from .routers import accounts, auth, home, iconlab, project_mgmt, projects, prox
 config.ensure_dirs()
 
 app = FastAPI(title="LILAK Service Manager")
-# TODO(Phase C): narrow allow_origins for production.
-app.add_middleware(CORSMiddleware, allow_origins=["*"],
+app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"])
 # The cover UI ships a ~1.7 MB JS bundle; served raw it dominates first paint over
 # the network (localhost hides it). gzip cuts it to ~460 KB. minimum_size skips
@@ -54,6 +53,29 @@ app.include_router(system.router)          # /api/admin/system/ports (managed-se
 app.include_router(project_mgmt.router)   # /api/services/{svc}/projects… + /pp/…
 app.include_router(projects.router)
 app.include_router(proxy.router)
+
+
+@app.on_event("startup")
+async def _security_preflight():
+    """Log a loud checklist of dev-only settings still active, so an operator who
+    exposes the portal publicly sees exactly what to lock down (see DEPLOYMENT.md).
+    Warnings only — never blocks startup — but makes an insecure deploy impossible
+    to miss in the logs."""
+    warns = []
+    if config.SECRET_KEY_IS_INSECURE:
+        warns.append("PORTAL_SECRET_KEY is unset — using the public dev secret; JWTs can be forged. Set a strong random value.")
+    if config.EMAIL_VERIFY_DEV_ECHO:
+        warns.append("EMAIL_VERIFY_DEV_ECHO is ON — verification codes / reset passwords are returned in HTTP responses. Do not expose publicly.")
+    if config.CORS_ORIGINS == ["*"]:
+        warns.append("CORS is open to any origin (*). Set PORTAL_ALLOWED_ORIGINS for production.")
+    if not config.BASE_URL.startswith("https://"):
+        warns.append(f"PORTAL_BASE_URL is not https ({config.BASE_URL}). Serve the portal over TLS in production.")
+    if warns:
+        bar = "!" * 72
+        print(f"\n{bar}\n[SECURITY] Portal is running with dev-only settings:", flush=True)
+        for w in warns:
+            print(f"[SECURITY]   • {w}", flush=True)
+        print(f"[SECURITY] See service_manager/DEPLOYMENT.md before public deployment.\n{bar}\n", flush=True)
 
 
 @app.on_event("shutdown")
