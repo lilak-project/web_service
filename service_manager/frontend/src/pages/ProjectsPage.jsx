@@ -11,6 +11,7 @@ import NewServiceView from './portal/NewServiceView'
 import ServiceProjects from './portal/ServiceProjects'
 import ServiceSingle from './portal/ServiceSingle'
 import AccountMenu from './portal/AccountMenu'
+import { MasonryGrid, MasonryItem } from './portal/MasonryGrid'
 import { usePortalScale } from '../portalScale'
 
 /**
@@ -360,11 +361,12 @@ export default function ProjectsPage() {
   // The icon editor wants a wide two-column layout. When its card is open, widen
   // the whole cover column so it has room; everything ELSE (nav, other cards, empty
   // state) is capped back to NARROW, so only that one card uses the extra width.
+  // The card grid uses the screen width (gains a column each ~340px) while the nav,
+  // header and empty state stay capped NARROW and centred. Other views (Settings)
+  // stay NARROW too.
   const NARROW = 760
-  // Never narrower than NARROW, up to 1160, with a viewport margin on huge screens —
-  // so on small screens the card just stays normal width.
-  const WIDE = 'clamp(760px, 94vw, 1160px)'
-  const iconlabOpen = expanded === '@iconlab'
+  const WIDE = 'min(1600px, 96vw)'
+  const gridWide = user && view === 'home'
   const capNarrow = { maxWidth: NARROW, marginLeft: 'auto', marginRight: 'auto', width: '100%' }
 
   // Header nav button — the active tab gets a filled box with a visible border so
@@ -481,7 +483,7 @@ export default function ProjectsPage() {
   return (
     <CoverPage
       fill
-      max={iconlabOpen ? WIDE : NARROW}
+      max={gridWide ? WIDE : NARROW}
       // Centred brand (mark alone, title under) on the login screen — and, in the
       // roomy theme, on the logged-in home too, so it reads like the login page.
       center={!user || big}
@@ -521,7 +523,7 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <MasonryGrid>
             {cards.map((p, i) => {
               const key = cardKey(p)
               const isOpen = expanded === key
@@ -533,13 +535,13 @@ export default function ProjectsPage() {
                 : p.multi_project ? t('portal_proj_open_svc')
                 : (p.running ? t('projects_running', p.port) : t('projects_stopped'))
               return (
-                <ExpandBox key={key} open={isOpen} manage={manage && isManager}
+                <MasonryItem key={key} recomputeKey={`${isOpen}:${manage}`}
+                  full={p.builtin === 'iconlab' && isOpen}>
+                <ExpandBox open={isOpen} manage={manage && isManager}
                   toggleable={canToggle} divider={false}
-                  // Cards stay centred at NARROW; only the open icon-editor card uses
-                  // the widened column (see `max` on CoverPage). Others don't stretch.
-                  style={{ maxWidth: (p.builtin === 'iconlab' && isOpen) ? WIDE : NARROW,
-                    marginLeft: 'auto', marginRight: 'auto', width: '100%',
-                    transition: 'max-width .2s ease' }}
+                  // Grid handles width/placement; drop the card's own bottom margin
+                  // (row spacing comes from the masonry span).
+                  style={{ marginBottom: 0 }}
                   // Roomy: bigger cards (more padding, larger leading mark + title),
                   // description line dropped; the leading caret stays.
                   padding={big ? '14px 18px' : '8px 14px'}
@@ -623,10 +625,11 @@ export default function ProjectsPage() {
                     <ServiceSingle service={p} canManage={isManager} onChanged={refresh} />
                   )}
                 </ExpandBox>
+                </MasonryItem>
               )
             })}
-          </div>
-          {isManager && <ArchivePanel signal={reloadTick} onChanged={refresh} />}
+          </MasonryGrid>
+          {isManager && <div style={capNarrow}><ArchivePanel signal={reloadTick} onChanged={refresh} /></div>}
         </>
       )}
 
