@@ -54,7 +54,9 @@ export default function ExpandBox({
     return () => { cancelAnimationFrame(raf); clearTimeout(t) }
   }, [open, render])
 
-  const border = `${open ? '2px' : '1.5px'} ${manage ? 'dashed' : 'solid'} ${open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)'}`
+  // Keep the border WIDTH fixed (only the colour changes on open) — a thicker open
+  // border shrank the content box and nudged the icon/title ~1px down-right.
+  const border = `1.5px ${manage ? 'dashed' : 'solid'} ${open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)'}`
   return (
     <div style={{ border, borderRadius: radius, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10, ...style }}>
       <div onClick={toggleable ? onToggle : undefined}
