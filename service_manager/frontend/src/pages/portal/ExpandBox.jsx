@@ -64,7 +64,13 @@ export default function ExpandBox({
           // title + inner text (native double-click text selection). Not on the
           // expanded children — only the header row is unselectable.
           ...(toggleable ? { userSelect: 'none', WebkitUserSelect: 'none' } : {}) }}>
-        {toggleable && caret && <Icon name={open ? 'caret-down' : 'caret-right'} size={15} color="var(--text-muted)" style={{ flexShrink: 0 }} />}
+        {toggleable && caret && (
+          // One glyph rotated 90° on open (not caret-right↔caret-down, whose slightly
+          // different shapes nudged the icon/title). Same box → nothing shifts; the
+          // rotation also animates.
+          <Icon name="caret-right" size={15} color="var(--text-muted)"
+            style={{ flexShrink: 0, transition: 'transform .2s ease', transform: open ? 'rotate(90deg)' : 'none' }} />
+        )}
         {icon != null && <div style={{ flexShrink: 0, display: 'flex' }}>{icon}</div>}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
