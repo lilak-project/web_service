@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 
 from . import config
@@ -22,6 +23,10 @@ app = FastAPI(title="LILAK Service Manager")
 # TODO(Phase C): narrow allow_origins for production.
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
+# The cover UI ships a ~1.7 MB JS bundle; served raw it dominates first paint over
+# the network (localhost hides it). gzip cuts it to ~460 KB. minimum_size skips
+# tiny JSON so we only pay compression on payloads where it wins.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 # Compat with the elog React app, which addresses the portal as `/launcher/api/*`
