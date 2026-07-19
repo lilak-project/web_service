@@ -1,4 +1,11 @@
+import { useEffect, useState } from 'react'
 import { Icon } from 'lilak-ui'
+
+// Body open/close animation, asset_manager-style: a grid-template-rows 0fr↔1fr
+// transition grows/shrinks the body to its natural height with no measuring. On
+// open the children mount first, then grow next frame; on close they shrink, then
+// unmount after the transition (so a collapsed card runs no work / makes no calls).
+const ANIM_MS = 260
 
 /**
  * ExpandBox — the one collapsible "box" shared by the three list surfaces that
@@ -26,6 +33,27 @@ export default function ExpandBox({
   icon, title, badges, subtitle, right, children, style,
   padding = '8px 14px', titleSize = 'var(--fs-medium, 14px)', titleWeight = 600,
 }) {
+  // `render` = children mounted; `grown` = grid expanded. Open: mount now, then grow
+  // once the body has mounted (a frame later, so 0fr paints first and the transition
+  // runs). Close: shrink now, unmount after the transition so a collapsed card does
+  // no work.
+  const [render, setRender] = useState(open)
+  const [grown, setGrown] = useState(open)
+  useEffect(() => {
+    if (open) { setRender(true); return }
+    setGrown(false)
+    const t = setTimeout(() => setRender(false), ANIM_MS)
+    return () => clearTimeout(t)
+  }, [open])
+  useEffect(() => {
+    if (!open || !render) return
+    // rAF grows right after the 0fr paint (smooth); a short timer is a fallback so a
+    // backgrounded tab — where rAF never fires — still opens instead of sticking shut.
+    const raf = requestAnimationFrame(() => setGrown(true))
+    const t = setTimeout(() => setGrown(true), 60)
+    return () => { cancelAnimationFrame(raf); clearTimeout(t) }
+  }, [open, render])
+
   const border = `${open ? '2px' : '1.5px'} ${manage ? 'dashed' : 'solid'} ${open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)'}`
   return (
     <div style={{ border, borderRadius: 12, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10, ...style }}>
@@ -50,7 +78,14 @@ export default function ExpandBox({
             onClick={(e) => e.stopPropagation()}>{right}</div>
         )}
       </div>
-      {open && <div style={divider ? { borderTop: '1px solid var(--border-default)' } : undefined}>{children}</div>}
+      {render && (
+        <div style={{ display: 'grid', gridTemplateRows: grown ? '1fr' : '0fr',
+          transition: `grid-template-rows ${ANIM_MS}ms ease` }}>
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            <div style={divider ? { borderTop: '1px solid var(--border-default)' } : undefined}>{children}</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
