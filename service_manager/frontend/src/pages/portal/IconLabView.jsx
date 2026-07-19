@@ -243,23 +243,25 @@ export default function IconLabView() {
       </div>
 
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
-        {/* ── left: live preview + actions ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 270 }}>
+        {/* ── left: live preview + actions (capped so the controls sit beside it
+             even in the narrow 760 card) ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 280, flexShrink: 0 }}>
           <Preview px={250} checker />
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
             <div style={{ textAlign: 'center' }}><Preview px={48} checker /><div style={{ fontSize: 'var(--fs-micro,10px)', color: 'var(--text-muted)' }}>tab 48</div></div>
             <div style={{ textAlign: 'center' }}><Preview px={24} checker /><div style={{ fontSize: 'var(--fs-micro,10px)', color: 'var(--text-muted)' }}>tab 24</div></div>
             <div style={{ textAlign: 'center' }}><Preview px={48} dark /><div style={{ fontSize: 'var(--fs-micro,10px)', color: 'var(--text-muted)' }}>dark</div></div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
-            <Button size="sm" variant="primary" disabled={busy === 'favicon'} onClick={() => act('favicon')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="images" size={14} /> {L('favicon으로 만들기', 'Set as favicon')}</Button>
-            <Button size="sm" variant="primary" disabled={busy === 'appicon'} onClick={() => act('appicon')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="images" size={14} /> {L('앱 아이콘으로 만들기', 'Set as app icon')}</Button>
-            <Button size="sm" variant="primary" disabled={busy === 'header'} onClick={() => act('header')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="images" size={14} /> {L('헤더 아이콘으로 만들기', 'Set as header icon')}</Button>
+          <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', marginTop: 2 }}>{L('아이콘으로 적용', 'Apply as')}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <Button size="sm" variant="primary" disabled={busy === 'favicon'} onClick={() => act('favicon')} title={L('favicon으로 만들기', 'Set as favicon')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="images" size={14} /> favicon</Button>
+            <Button size="sm" variant="primary" disabled={busy === 'appicon'} onClick={() => act('appicon')} title={L('앱 아이콘으로 만들기', 'Set as app icon')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="images" size={14} /> {L('앱', 'app')}</Button>
+            <Button size="sm" variant="primary" disabled={busy === 'header'} onClick={() => act('header')} title={L('헤더 아이콘으로 만들기', 'Set as header icon')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="images" size={14} /> {L('헤더', 'header')}</Button>
             <Button size="sm" variant="primary" disabled={busy === 'webicon'} onClick={() => act('webicon')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }} title={L('PWA(앱 설치) 아이콘 — 모든 OS', 'PWA install icon — all OSes')}><Icon name="images" size={14} /> {L('웹앱 아이콘으로 만들기', 'Set as web-app icon')}</Button>
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }} title={L('PWA(앱 설치) 아이콘 — 모든 OS', 'PWA install icon — all OSes')}><Icon name="images" size={14} /> {L('웹앱', 'web')}</Button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
             <Button size="sm" variant="secondary" onClick={exportSVG} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="download" size={14} /> SVG</Button>
@@ -277,7 +279,7 @@ export default function IconLabView() {
         </div>
 
         {/* ── right: controls (scrolls on its own so the preview stays in view) ── */}
-        <div style={{ flex: 1, minWidth: 300, maxHeight: 'min(72vh, 620px)', overflowY: 'auto', paddingRight: 6 }}>
+        <div style={{ flex: 1, minWidth: 260, maxHeight: 'min(72vh, 620px)', overflowY: 'auto', paddingRight: 6 }}>
           <div style={{ ...sectionHdr, marginTop: 0, cursor: 'pointer', userSelect: 'none' }} onClick={() => toggle('box')}>{caretEl('box')} {L('박스', 'Box')}</div>
           {open.box && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
