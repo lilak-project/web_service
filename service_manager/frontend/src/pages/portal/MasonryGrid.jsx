@@ -1,67 +1,43 @@
-import { useRef, useState, useLayoutEffect, useEffect } from 'react'
+import { useRef, useState, useEffect, Children } from 'react'
 
 /**
- * MasonryGrid — a row-major masonry for the home service cards.
+ * MasonryGrid — the home service cards laid out in fixed vertical columns.
  *
- * True CSS masonry isn't shipped yet, so this uses the standard grid trick: a grid
- * of small fixed row-units (ROW px), and each item spans as many rows as its
- * measured height needs. Columns are ~COL-wide and fill the width, so the grid
- * gains a column each time the area grows past another COL. `dense` flow backfills
- * the gaps a tall (opened) card leaves, so its column grows downward and the
- * neighbours reflow up into the freed space.
- *
- * A card can span the FULL width (all columns) via <MasonryItem full> — used for
- * the icon editor, which wants its wide two-column layout.
+ * Columns = floor(width / COL), so the grid gains a column every ~COL of width.
+ * Cards are dealt round-robin into the columns (card i → column i % n), which
+ * reads left-to-right, top-to-bottom. Each column is a plain flex stack, so
+ * opening a card (it animates taller) simply pushes the cards BELOW it in the same
+ * column straight down — no sideways shuffling, no reflow into other columns. The
+ * push is smooth for free: it's just normal flow following the opening card's
+ * animated height.
  */
-const ROW = 8    // px per grid row unit (smaller = finer height fit)
-const GAP = 12   // px gap between cards (both axes)
-const COL = 340  // min column width; columns = floor(area / COL)
+const GAP = 12
+const COL = 340   // min column width
 
 export function MasonryGrid({ children }) {
-  return (
-    <div style={{
-      display: 'grid',
-      // min(COL, 100%) so a screen narrower than one column doesn't overflow.
-      gridTemplateColumns: `repeat(auto-fill, minmax(min(${COL}px, 100%), 1fr))`,
-      gridAutoRows: `${ROW}px`,
-      gridAutoFlow: 'row dense',
-      alignItems: 'start',
-      columnGap: `${GAP}px`,
-      rowGap: 0,               // vertical spacing comes from the per-item row span
-    }}>{children}</div>
-  )
-}
-
-/**
- * One grid cell. Measures its child's height and claims that many row-units, so the
- * grid packs cards of any height. `recomputeKey` forces a re-measure (e.g. on
- * open/close) in case ResizeObserver is throttled. `full` spans every column.
- */
-export function MasonryItem({ full = false, recomputeKey, children }) {
   const ref = useRef(null)
-  const [span, setSpan] = useState(8)
+  const [cols, setCols] = useState(1)
 
-  const measure = () => {
-    const el = ref.current
-    if (!el) return
-    const h = el.getBoundingClientRect().height
-    // rows to cover height H, then + GAP so cards don't touch vertically
-    setSpan(Math.max(1, Math.ceil((h + GAP) / ROW)))
-  }
-
-  useLayoutEffect(() => { measure() })            // every render (cheap; height is cached)
-  useEffect(() => { measure() }, [recomputeKey])  // and explicitly on open/close
   useEffect(() => {
     const el = ref.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(measure)
+    if (!el) return
+    const update = () => setCols(Math.max(1, Math.floor((el.clientWidth + GAP) / (COL + GAP))))
+    update()
+    const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
 
+  const kids = Children.toArray(children)
+  const columns = Array.from({ length: cols }, (_, c) => kids.filter((_, i) => i % cols === c))
+
   return (
-    <div style={{ gridRow: `span ${span}`, gridColumn: full ? '1 / -1' : undefined, minWidth: 0 }}>
-      <div ref={ref}>{children}</div>
+    <div ref={ref} style={{ display: 'flex', gap: GAP, alignItems: 'flex-start' }}>
+      {columns.map((col, c) => (
+        <div key={c} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
+          {col}
+        </div>
+      ))}
     </div>
   )
 }

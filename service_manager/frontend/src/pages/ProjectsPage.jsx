@@ -11,7 +11,7 @@ import NewServiceView from './portal/NewServiceView'
 import ServiceProjects from './portal/ServiceProjects'
 import ServiceSingle from './portal/ServiceSingle'
 import AccountMenu from './portal/AccountMenu'
-import { MasonryGrid, MasonryItem } from './portal/MasonryGrid'
+import { MasonryGrid } from './portal/MasonryGrid'
 import { usePortalScale } from '../portalScale'
 
 /**
@@ -366,6 +366,18 @@ export default function ProjectsPage() {
   const NARROW = 760
   const capNarrow = { maxWidth: NARROW, marginLeft: 'auto', marginRight: 'auto', width: '100%' }
 
+  // Open/close a card. When another card is already open, close it FIRST — the
+  // cards settle back to their places — and only then open the new one, instead of
+  // the new card expanding while the old is still collapsing. Matches the card
+  // open/close animation length.
+  const REFLOW_MS = 560
+  function toggleCard(key) {
+    if (expanded === key) { setExpanded(null); return }
+    if (expanded == null) { setExpanded(key); return }
+    setExpanded(null)
+    setTimeout(() => setExpanded(key), REFLOW_MS)
+  }
+
   // Header nav button — the active tab gets a filled box with a visible border so
   // you can always tell which screen you're on.
   // Roomy: re-pressing Home while already on it flips manage mode (managers only) —
@@ -502,6 +514,14 @@ export default function ProjectsPage() {
         <AuthCard t={t} onAuthed={(u) => { setUser(u); setView('home'); refresh() }} />
       ) : view === 'settings' ? (
         <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout} />
+      ) : view === 'iconlab' ? (
+        <div style={capNarrow}>
+          <button type="button" onClick={() => setView('home')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 0, padding: '2px 0 12px', cursor: 'pointer', font: 'inherit', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+            <Icon name="caret-left" size={14} /> {t('portal_nav_home')}
+          </button>
+          <IconLabView />
+        </div>
       ) : (
         <>
           {error && (
@@ -532,12 +552,9 @@ export default function ProjectsPage() {
                 : p.multi_project ? t('portal_proj_open_svc')
                 : (p.running ? t('projects_running', p.port) : t('projects_stopped'))
               return (
-                <MasonryItem key={key} recomputeKey={`${isOpen}:${manage}`}
-                  full={p.builtin === 'iconlab' && isOpen}>
-                <ExpandBox open={isOpen} manage={manage && isManager}
+                <ExpandBox key={key} open={isOpen} manage={manage && isManager}
                   toggleable={canToggle} divider={false}
-                  // Grid handles width/placement; drop the card's own bottom margin
-                  // (row spacing comes from the masonry span).
+                  // The grid's column gap spaces the cards; drop the card's own margin.
                   style={{ marginBottom: 0 }}
                   // Roomy: bigger cards (more padding, larger leading mark + title),
                   // description line dropped; the leading caret stays.
@@ -545,7 +562,7 @@ export default function ProjectsPage() {
                   titleSize={big ? 'var(--fs-large, 16px)' : 'var(--fs-medium, 14px)'}
                   titleWeight={big ? 400 : 600}
                   radius={16}
-                  onToggle={() => setExpanded(isOpen ? null : key)}
+                  onToggle={() => toggleCard(key)}
                   icon={<Icon name={iconFor(p.name, p.icon)} size={big ? 34 : 26} weight="fill"
                     color={p.color || 'var(--text-primary)'} />}
                   title={p.builtin === 'newservice' ? (p.label || t('newsvc_title')) : (p.label || p.name)}
@@ -559,7 +576,7 @@ export default function ProjectsPage() {
                     // toggles the card. Request-only cards (no row toggle) keep theirs.
                     (p.can_enter && big) ? null :
                     p.can_enter ? (
-                      <Button variant={isOpen ? 'secondary' : 'primary'} onClick={() => setExpanded(isOpen ? null : key)}
+                      <Button variant={isOpen ? 'secondary' : 'primary'} onClick={() => toggleCard(key)}
                         style={{ minWidth: 76, justifyContent: 'center' }}>
                         {isOpen ? t('portal_proj_close') : t('projects_open')}
                       </Button>
@@ -613,7 +630,10 @@ export default function ProjectsPage() {
                       {p.multi_project && !isBuiltin && <ServiceProjects service={p} canManage={isManager} manage onChanged={refresh} />}
                     </>
                   ) : isBuiltin && p.builtin === 'iconlab' ? (
-                    <div style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)' }}><IconLabView /></div>
+                    <div style={{ padding: '12px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', flex: 1, minWidth: 160 }}>{t('iconlab_card_hint')}</span>
+                      <Button size="sm" variant="primary" onClick={() => setView('iconlab')}>{t('projects_open')}</Button>
+                    </div>
                   ) : isBuiltin && p.builtin === 'newservice' ? (
                     <NewServiceView onCreated={refresh} />
                   ) : p.multi_project ? (
@@ -622,7 +642,6 @@ export default function ProjectsPage() {
                     <ServiceSingle service={p} canManage={isManager} onChanged={refresh} />
                   )}
                 </ExpandBox>
-                </MasonryItem>
               )
             })}
           </MasonryGrid>
