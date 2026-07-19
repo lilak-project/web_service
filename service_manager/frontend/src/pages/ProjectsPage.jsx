@@ -357,6 +357,16 @@ export default function ProjectsPage() {
     a.download = `${name}.zip`; document.body.appendChild(a); a.click(); a.remove()
   }
 
+  // The icon editor wants a wide two-column layout. When its card is open, widen
+  // the whole cover column so it has room; everything ELSE (nav, other cards, empty
+  // state) is capped back to NARROW, so only that one card uses the extra width.
+  const NARROW = 760
+  // Never narrower than NARROW, up to 1160, with a viewport margin on huge screens —
+  // so on small screens the card just stays normal width.
+  const WIDE = 'clamp(760px, 94vw, 1160px)'
+  const iconlabOpen = expanded === '@iconlab'
+  const capNarrow = { maxWidth: NARROW, marginLeft: 'auto', marginRight: 'auto', width: '100%' }
+
   // Header nav button — the active tab gets a filled box with a visible border so
   // you can always tell which screen you're on.
   // Roomy: re-pressing Home while already on it flips manage mode (managers only) —
@@ -425,7 +435,7 @@ export default function ProjectsPage() {
   // out (compact keeps the always-visible name + logout link).
   const navBar = user ? (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-      padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)' }}>
+      padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)', ...capNarrow }}>
       {navBtn('home', 'home', t('portal_nav_home'))}
       {navBtn('settings', 'settings', t('portal_nav_settings'))}
       <div style={{ flex: 1 }} />
@@ -446,7 +456,7 @@ export default function ProjectsPage() {
   // The Home "manage mode" toggle. Lives in the FIXED subheader (outside the
   // scroll) so it stays reachable no matter how far the service list is scrolled.
   const manageBar = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0 2px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0 2px', ...capNarrow }}>
       {/* Roomy drops the explanatory hint and just parks the toggle on the right;
           compact keeps the hint text. */}
       {big
@@ -471,6 +481,7 @@ export default function ProjectsPage() {
   return (
     <CoverPage
       fill
+      max={iconlabOpen ? WIDE : NARROW}
       // Centred brand (mark alone, title under) on the login screen — and, in the
       // roomy theme, on the logged-in home too, so it reads like the login page.
       center={!user || big}
@@ -495,17 +506,17 @@ export default function ProjectsPage() {
       ) : (
         <>
           {error && (
-            <div style={{ margin: '8px 0', padding: '10px 12px', borderRadius: 8, fontSize: 'var(--fs-small, 12px)',
+            <div style={{ ...capNarrow, margin: '8px auto', padding: '10px 12px', borderRadius: 8, fontSize: 'var(--fs-small, 12px)',
               backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', border: '1px solid var(--danger-border, transparent)' }}>
               {error}
             </div>
           )}
 
           {projects === null && (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>{t('home_loading')}</div>
+            <div style={{ ...capNarrow, textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>{t('home_loading')}</div>
           )}
           {projects && projects.length === 0 && !error && (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
+            <div style={{ ...capNarrow, textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
               {t('projects_empty')}
             </div>
           )}
@@ -524,6 +535,11 @@ export default function ProjectsPage() {
               return (
                 <ExpandBox key={key} open={isOpen} manage={manage && isManager}
                   toggleable={canToggle} divider={false}
+                  // Cards stay centred at NARROW; only the open icon-editor card uses
+                  // the widened column (see `max` on CoverPage). Others don't stretch.
+                  style={{ maxWidth: (p.builtin === 'iconlab' && isOpen) ? WIDE : NARROW,
+                    marginLeft: 'auto', marginRight: 'auto', width: '100%',
+                    transition: 'max-width .2s ease' }}
                   // Roomy: bigger cards (more padding, larger leading mark + title),
                   // description line dropped; the leading caret stays.
                   padding={big ? '14px 18px' : '8px 14px'}
