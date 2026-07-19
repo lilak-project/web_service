@@ -370,7 +370,7 @@ export default function ProjectsPage() {
   // cards settle back to their places — and only then open the new one, instead of
   // the new card expanding while the old is still collapsing. Matches the card
   // open/close animation length.
-  const REFLOW_MS = 560
+  const REFLOW_MS = 300
   function toggleCard(key) {
     if (expanded === key) { setExpanded(null); return }
     if (expanded == null) { setExpanded(key); return }

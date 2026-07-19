@@ -5,7 +5,7 @@ import { Icon } from 'lilak-ui'
 // transition grows/shrinks the body to its natural height with no measuring. On
 // open the children mount first, then grow next frame; on close they shrink, then
 // unmount after the transition (so a collapsed card runs no work / makes no calls).
-const ANIM_MS = 520
+const ANIM_MS = 260
 
 /**
  * ExpandBox — the one collapsible "box" shared by the three list surfaces that
