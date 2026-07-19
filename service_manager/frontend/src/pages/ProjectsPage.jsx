@@ -524,9 +524,11 @@ export default function ProjectsPage() {
               return (
                 <ExpandBox key={key} open={isOpen} manage={manage && isManager}
                   toggleable={canToggle} divider={false}
-                  // Roomy: bigger cards (more padding, larger leading mark) and the
-                  // description line dropped — just the icon + name + action.
+                  // Roomy: bigger cards (more padding, larger leading mark + title),
+                  // no leading caret, and the description line dropped.
                   padding={big ? '14px 18px' : '8px 14px'}
+                  caret={!big}
+                  titleSize={big ? 'var(--fs-large, 16px)' : 'var(--fs-medium, 14px)'}
                   onToggle={() => setExpanded(isOpen ? null : key)}
                   icon={<Icon name={iconFor(p.name, p.icon)} size={big ? 34 : 26} weight="fill"
                     color={p.color || 'var(--text-primary)'} />}

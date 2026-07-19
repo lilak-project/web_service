@@ -22,7 +22,7 @@ import { Icon } from 'lilak-ui'
  *   compact Accounts/Groups rows).
  */
 export default function ExpandBox({
-  open, onToggle, toggleable = true, manage = false, divider = true,
+  open, onToggle, toggleable = true, manage = false, divider = true, caret = true,
   icon, title, badges, subtitle, right, children, style,
   padding = '8px 14px', titleSize = 'var(--fs-medium, 14px)',
 }) {
@@ -32,7 +32,7 @@ export default function ExpandBox({
       <div onClick={toggleable ? onToggle : undefined}
         style={{ display: 'flex', alignItems: 'center', gap: 13, padding,
           cursor: toggleable ? 'pointer' : 'default' }}>
-        {toggleable && <Icon name={open ? 'caret-down' : 'caret-right'} size={15} color="var(--text-muted)" style={{ flexShrink: 0 }} />}
+        {toggleable && caret && <Icon name={open ? 'caret-down' : 'caret-right'} size={15} color="var(--text-muted)" style={{ flexShrink: 0 }} />}
         {icon != null && <div style={{ flexShrink: 0, display: 'flex' }}>{icon}</div>}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

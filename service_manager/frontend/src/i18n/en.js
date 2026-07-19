@@ -629,7 +629,7 @@ export default {
   manage_move_up:          'Move up',
   manage_move_down:        'Move down',
   iconlab_card_hint:       'Icon editor tool',
-  newsvc_title:            'Create lilak service',
+  newsvc_title:            'Create service',
   newsvc_card_hint:        'New-service tool',
   newsvc_intro:            'Enter a name + tabs to scaffold a new lilak_ui service and register it with the portal right away (SSO, portal-managed accounts, default rules).',
   newsvc_name:             'Service name (id)',
