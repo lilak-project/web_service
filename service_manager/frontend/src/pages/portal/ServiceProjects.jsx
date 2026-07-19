@@ -92,7 +92,11 @@ export default function ServiceProjects({ service, canManage, manage = false, on
     },
   } : {}
 
-  const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: '1px solid var(--border-subtle)' }
+  const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }
+  // Bigger, touch-friendly action buttons (matching the single-service card). The row
+  // wraps so several buttons never overflow the card on a narrow screen.
+  const btn = { height: 40, borderRadius: 10, padding: '0 16px', minWidth: 84, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
+  const btnIcon = { height: 40, minWidth: 40, borderRadius: 10, justifyContent: 'center' }
   const inputStyle = { height: 32, flex: 1, minWidth: 0, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 10px', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
 
   return (
@@ -131,29 +135,29 @@ export default function ServiceProjects({ service, canManage, manage = false, on
         const viewOnly = p.view_only && !p.can_enter
         return (
           <div key={p.name} style={row}>
-            <span style={{ width: 9, height: 9, borderRadius: '50%', background: (p.can_enter && p.running) ? 'var(--ok-text, #2f9e44)' : 'var(--border-strong, #bbb)' }} />
-            <span title={p.label ? p.name : undefined} style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 'var(--fs-small, 13px)', color: 'var(--text-primary)' }}>{p.label || p.name}</span>
-            <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>
+            <span style={{ flexShrink: 0, width: 11, height: 11, borderRadius: '50%', background: (p.can_enter && p.running) ? 'var(--ok-text, #2f9e44)' : 'var(--border-strong, #bbb)' }} />
+            <span title={p.label ? p.name : undefined} style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)' }}>{p.label || p.name}</span>
+            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
               {viewOnly ? t('portal_proj_view_only')
                 : p.can_enter ? (p.running ? t('projects_running', p.port) : t('projects_stopped'))
                 : ''}
             </span>
-            <div style={{ flex: 1 }} />
+            <div style={{ flex: 1, minWidth: 8 }} />
             {p.can_enter ? (
-              <Button size="sm" variant="primary" disabled={busy === p.name}
+              <Button variant="primary" disabled={busy === p.name} style={btn}
                 onClick={() => (p.running ? enter(p.name) : start(p.name))}>
                 {p.running ? t('portal_proj_open') : t('portal_proj_start')}
               </Button>
             ) : p.can_request ? (
-              <Button size="sm" variant="secondary" disabled={busy === p.name || p.requested}
-                onClick={() => requestAccess(p.name)} style={{ minWidth: 96, justifyContent: 'center' }}>
+              <Button variant="secondary" disabled={busy === p.name || p.requested}
+                onClick={() => requestAccess(p.name)} style={{ ...btn, minWidth: 96 }}>
                 {p.requested ? t('projects_requested') : t('projects_request')}
               </Button>
             ) : (
-              <Button size="sm" variant="primary" disabled>{t('portal_proj_open')}</Button>
+              <Button variant="primary" disabled style={btn}>{t('portal_proj_open')}</Button>
             )}
-            {canManage && p.can_enter && p.running && <Button size="sm" variant="secondary" disabled={busy === p.name} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>}
-            {canManage && manage && <Button size="sm" variant="dangerSoft" disabled={busy === p.name} title={t('portal_proj_delete')} onClick={() => remove(p.name)}><Icon name="trash" size={14} /></Button>}
+            {canManage && p.can_enter && p.running && <Button variant="secondary" disabled={busy === p.name} style={btn} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>}
+            {canManage && manage && <Button variant="dangerSoft" disabled={busy === p.name} style={btnIcon} title={t('portal_proj_delete')} onClick={() => remove(p.name)}><Icon name="trash" size={16} /></Button>}
             {/* Data download (export) moved to Home "manage mode". */}
           </div>
         )

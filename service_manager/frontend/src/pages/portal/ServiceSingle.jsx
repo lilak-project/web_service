@@ -35,24 +35,27 @@ export default function ServiceSingle({ service, canManage, onChanged }) {
     finally { setBusy(false) }
   }
 
-  const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0' }
+  const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0' }
+  // Enter / Stop sized up to match the larger status line (touch-friendly on mobile).
+  const btn = { height: 40, borderRadius: 10, padding: '0 18px', minWidth: 88,
+    fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
 
   return (
     <div style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)' }}>
       {err && <div style={{ color: 'var(--danger-text)', fontSize: 'var(--fs-small, 12px)', marginBottom: 6 }}>{err}</div>}
       <div style={row}>
-        <span style={{ width: 9, height: 9, borderRadius: '50%', background: service.running ? 'var(--ok-text, #2f9e44)' : 'var(--border-strong, #bbb)' }} />
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
+        <span style={{ flexShrink: 0, width: 11, height: 11, borderRadius: '50%', background: service.running ? 'var(--ok-text, #2f9e44)' : 'var(--border-strong, #bbb)' }} />
+        <span style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-secondary)' }}>
           {viewOnly ? t('portal_proj_view_only')
             : service.running ? t('projects_running', service.port) : t('projects_stopped')}
         </span>
         <div style={{ flex: 1 }} />
-        <Button size="sm" variant="primary" disabled={busy || viewOnly}
+        <Button variant="primary" disabled={busy || viewOnly} style={btn}
           onClick={() => (service.running ? enter() : start())}>
           {service.running ? t('portal_proj_open') : t('portal_proj_start')}
         </Button>
         {canManage && service.running && (
-          <Button size="sm" variant="secondary" disabled={busy} onClick={stop}>{t('projects_stop')}</Button>
+          <Button variant="secondary" disabled={busy} style={btn} onClick={stop}>{t('projects_stop')}</Button>
         )}
       </div>
     </div>

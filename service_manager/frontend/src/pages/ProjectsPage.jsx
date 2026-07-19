@@ -433,7 +433,7 @@ export default function ProjectsPage() {
           title={id === 'home' && homeTogglesManage
             ? (manage ? '관리 모드 — 다시 누르면 종료' : '홈 (다시 누르면 관리 모드)') : undefined}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%',
             height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)',
             border: active ? '1px solid transparent' : '1px solid var(--border-default)',
           }}>
@@ -444,7 +444,7 @@ export default function ProjectsPage() {
     return (
       <Button variant={active ? 'secondary' : 'ghost'} onClick={onClick}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%',
           border: active ? '1.5px solid var(--btn-primary-bg, #4c6ef5)' : '1.5px solid transparent',
           backgroundColor: active ? 'var(--surface-2)' : undefined,
         }}>
@@ -477,21 +477,28 @@ export default function ProjectsPage() {
   // a divider under it; only the tab CONTENT below scrolls. Roomy: Home/Settings on
   // the left, and the account name on the right as a dropdown whose menu holds Log
   // out (compact keeps the always-visible name + logout link).
+  // nowrap keeps the account on the SAME row as the tabs always; the account is the
+  // only shrinkable item, so on a narrow screen its username truncates (down to just
+  // the avatar) instead of wrapping below. Home/Settings share one equal-width grid.
   const navBar = user ? (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', minWidth: 0,
       padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)', ...capNarrow }}>
-      {navBtn('home', 'home', t('portal_nav_home'))}
-      {navBtn('settings', 'settings', t('portal_nav_settings'))}
-      <div style={{ flex: 1 }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, flexShrink: 0 }}>
+        {navBtn('home', 'home', t('portal_nav_home'))}
+        {navBtn('settings', 'settings', t('portal_nav_settings'))}
+      </div>
+      <div style={{ flex: 1, minWidth: 8 }} />
       {big ? (
         <AccountMenu user={user} isManager={isManager} onLogout={logout} />
       ) : (
         <>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-            <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
-            {user.username}{isManager ? ' · admin' : ''}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+            <span style={{ flexShrink: 0, display: 'inline-flex' }}>
+              <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
+            </span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{user.username}{isManager ? ' · admin' : ''}</span>
           </span>
-          <Button variant="ghost" onClick={logout}>{t('projects_logout')}</Button>
+          <Button variant="ghost" onClick={logout} style={{ flexShrink: 0 }}>{t('projects_logout')}</Button>
         </>
       )}
     </div>
