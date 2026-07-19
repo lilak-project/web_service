@@ -31,7 +31,7 @@ const ANIM_MS = 260
 export default function ExpandBox({
   open, onToggle, toggleable = true, manage = false, divider = true, caret = true,
   icon, title, badges, subtitle, right, children, style,
-  padding = '8px 14px', titleSize = 'var(--fs-medium, 14px)', titleWeight = 600,
+  padding = '8px 14px', titleSize = 'var(--fs-medium, 14px)', titleWeight = 600, radius = 12,
 }) {
   // `render` = children mounted; `grown` = grid expanded. Open: mount now, then grow
   // once the body has mounted (a frame later, so 0fr paints first and the transition
@@ -56,7 +56,7 @@ export default function ExpandBox({
 
   const border = `${open ? '2px' : '1.5px'} ${manage ? 'dashed' : 'solid'} ${open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)'}`
   return (
-    <div style={{ border, borderRadius: 12, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10, ...style }}>
+    <div style={{ border, borderRadius: radius, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10, ...style }}>
       <div onClick={toggleable ? onToggle : undefined}
         style={{ display: 'flex', alignItems: 'center', gap: 13, padding,
           cursor: toggleable ? 'pointer' : 'default',
