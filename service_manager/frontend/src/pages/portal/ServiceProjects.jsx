@@ -95,7 +95,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }
   // Bigger, touch-friendly action buttons (matching the single-service card). The row
   // wraps so several buttons never overflow the card on a narrow screen.
-  const btn = { height: 40, borderRadius: 10, padding: '0 16px', minWidth: 84, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
+  const btn = { height: 40, borderRadius: 10, padding: '0 16px', minWidth: 84, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }
   const btnIcon = { height: 40, minWidth: 40, borderRadius: 10, justifyContent: 'center' }
   const inputStyle = { height: 32, flex: 1, minWidth: 0, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 10px', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
 

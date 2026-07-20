@@ -46,8 +46,8 @@ export default function ServiceSingle({ service, canManage, manage = false, onRe
 
   const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0' }
   // Enter / Stop sized up to match the larger status line (touch-friendly on mobile).
-  const btn = { height: 40, borderRadius: 10, padding: '0 18px', minWidth: 88,
-    fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
+  const btn = { height: 40, borderRadius: 10, padding: '0 16px', minWidth: 88,
+    fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }
 
   return (
     <div style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)' }}>
