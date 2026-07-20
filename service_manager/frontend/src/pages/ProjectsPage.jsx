@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { EnvelopeSimple } from '@phosphor-icons/react'
 import { Icon, Button, CoverPage, PROJECT_ICONS, Avatar, MANAGER_COLOR, Modal } from 'lilak-ui'
 import ExpandBox from './portal/ExpandBox'
 import { launcher, setExperiment } from '../api'
 import { useLang } from '../context/LangContext'
-import AccountView from './portal/AccountView'
+import AccountView, { settingsMenu } from './portal/AccountView'
 import ArchivePanel from './portal/ArchivePanel'
 import ServiceManagePanel from './portal/ServiceManagePanel'
 import IconLabView from './portal/IconLabView'
@@ -14,6 +14,64 @@ import ServiceSingle from './portal/ServiceSingle'
 import AccountMenu from './portal/AccountMenu'
 import { MasonryGrid } from './portal/MasonryGrid'
 import { usePortalScale } from '../portalScale'
+
+// True when the viewport is phone-narrow — drives the compact stacked header and
+// the settings dropdown (the desktop settings sidebar is unusable at this width).
+function useIsNarrow(bp = 640) {
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < bp)
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < bp)
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [bp])
+  return narrow
+}
+
+// Header "settings menu" control (narrow only): a button showing the current
+// settings section; opening it drops the full menu, and picking one navigates there.
+function SettingsMenuButton({ items, current, onPick, style }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc) }
+  }, [open])
+  const cur = items.find(([k]) => k === current) || items[0]
+  return (
+    <div ref={ref} style={{ position: 'relative', ...style }}>
+      <Button variant="primary" onClick={() => setOpen((o) => !o)}
+        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, width: '100%',
+          height: CTRL_H, borderRadius: CTRL_R, padding: '0 14px', fontSize: 'var(--fs-medium, 14px)' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+          <Icon name={cur[1]} size={17} /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cur[2]}</span>
+        </span>
+        <Icon name={open ? 'caret-up' : 'caret-down'} size={14} />
+      </Button>
+      {open && (
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 'calc(100% + 6px)', zIndex: 1000,
+          background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 10,
+          boxShadow: '0 6px 22px rgba(0,0,0,.16)', padding: 6 }}>
+          {items.map(([key, icon, label]) => (
+            <button key={key} type="button" onClick={() => { onPick(key); setOpen(false) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                background: key === current ? 'var(--surface-2)' : 'transparent', border: 'none', borderRadius: 8,
+                padding: '9px 12px', cursor: 'pointer', font: 'inherit', fontSize: 'var(--fs-medium, 14px)',
+                color: 'var(--text-primary)', fontWeight: key === current ? 600 : 400 }}
+              onMouseEnter={(e) => { if (key !== current) e.currentTarget.style.background = 'var(--surface-2)' }}
+              onMouseLeave={(e) => { if (key !== current) e.currentTarget.style.background = 'transparent' }}>
+              <Icon name={icon} size={16} /> {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 /**
  * ProjectsPage — the LILAK portal cover page.
@@ -276,13 +334,15 @@ function AuthCard({ t, onAuthed }) {
 }
 
 export default function ProjectsPage() {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const { big } = usePortalScale()   // roomy UI toggle (default compact)
 
   // ── Portal auth (central accounts at the launcher) ──
   const [user, setUser] = useState(null)        // null = logged out
   const [authReady, setAuthReady] = useState(false)
   const isManager = user?.role === 'manager'
+  const narrow = useIsNarrow()                          // phone-width → compact header + settings dropdown
+  const [settingsTab, setSettingsTab] = useState('me')  // active Settings sub-page (driven from the header on narrow)
 
   // PWA / deep-link return: the proxies bounce an unauthenticated page navigation
   // here as /projects?next=<original-url> (e.g. a home-screen app whose isolated
@@ -429,6 +489,7 @@ export default function ProjectsPage() {
     const managing = homeTogglesManage && id === 'home' && manage
     const onClick = () => {
       if (id === 'home' && view === 'home' && homeTogglesManage) { setManage((m) => !m); return }
+      if (id === 'settings' && view !== 'settings') setSettingsTab('me')   // open on My account first
       setView(id)
     }
     // Roomy: render exactly like the login card's Sign in / Sign up tabs — active is
@@ -488,27 +549,46 @@ export default function ProjectsPage() {
   // only shrinkable item, so on a narrow screen its username truncates (down to just
   // the avatar) instead of wrapping below. Home/Settings share one equal-width grid.
   const navBar = user ? (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', minWidth: 0,
-      padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)', ...capNarrow }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, flexShrink: 0 }}>
-        {navBtn('home', 'home', t('portal_nav_home'))}
-        {navBtn('settings', 'settings', t('portal_nav_settings'))}
-      </div>
-      <div style={{ flex: 1, minWidth: 8 }} />
-      {big ? (
+    narrow ? (
+      // Narrow: Home/Settings stacked on the left, the brand mark centred between
+      // them and the profile on the right. In Settings, the Settings button becomes
+      // a dropdown of the settings menu (the sidebar is hidden — see AccountView).
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0,
+        padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)', ...capNarrow }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 136, flexShrink: 0 }}>
+          {navBtn('home', 'home', t('portal_nav_home'))}
+          {view === 'settings'
+            ? <SettingsMenuButton items={settingsMenu(isManager, lang)} current={settingsTab} onPick={setSettingsTab} />
+            : navBtn('settings', 'settings', t('portal_nav_settings'))}
+        </div>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
+          <HeaderMark size={44} />
+        </div>
         <AccountMenu user={user} isManager={isManager} onLogout={logout} />
-      ) : (
-        <>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-            <span style={{ flexShrink: 0, display: 'inline-flex' }}>
-              <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
+      </div>
+    ) : (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', minWidth: 0,
+        padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)', ...capNarrow }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, flexShrink: 0 }}>
+          {navBtn('home', 'home', t('portal_nav_home'))}
+          {navBtn('settings', 'settings', t('portal_nav_settings'))}
+        </div>
+        <div style={{ flex: 1, minWidth: 8 }} />
+        {big ? (
+          <AccountMenu user={user} isManager={isManager} onLogout={logout} />
+        ) : (
+          <>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+              <span style={{ flexShrink: 0, display: 'inline-flex' }}>
+                <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
+              </span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{user.username}{isManager ? ' · admin' : ''}</span>
             </span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{user.username}{isManager ? ' · admin' : ''}</span>
-          </span>
-          <Button variant="ghost" onClick={logout} style={{ flexShrink: 0 }}>{t('projects_logout')}</Button>
-        </>
-      )}
-    </div>
+            <Button variant="ghost" onClick={logout} style={{ flexShrink: 0 }}>{t('projects_logout')}</Button>
+          </>
+        )}
+      </div>
+    )
   ) : null
 
   // The Home "manage mode" toggle. Lives in the FIXED subheader (outside the
@@ -543,17 +623,17 @@ export default function ProjectsPage() {
       // Centred brand (mark alone, title under) on the login screen — and, in the
       // roomy theme, on the logged-in home too, so it reads like the login page.
       center={!user || big}
-      // Big landing mark logged out; also big in the roomy theme. Only the compact
-      // logged-in header keeps the small leading-icon size.
-      icon={<HeaderMark size={(user && !big) ? 42 : 64} />}
-      // Roomy logged-in: the mark stands alone — no title/subtitle text — and sits
-      // higher (less top padding) to give the service list more room.
-      title={(user && big) ? null : t('projects_title')}
-      subtitle={(user && big) ? null : (portalInfo
+      // Narrow logged-in moves the mark INTO the nav row (centred), so the cover
+      // header carries no mark/title here. Otherwise: big mark logged out / roomy,
+      // small leading mark only in the compact logged-in header.
+      icon={(narrow && user) ? null : <HeaderMark size={(user && !big) ? 42 : 64} />}
+      // Roomy (or narrow) logged-in: the mark stands alone — no title/subtitle text.
+      title={(user && (big || narrow)) ? null : t('projects_title')}
+      subtitle={(user && (big || narrow)) ? null : (portalInfo
         ? `${portalInfo.host || '?'}${portalInfo.version ? ` · ${portalInfo.version}` : ''}`
         : t('projects_subtitle'))}
-      headerPad={(user && big) ? '16px 0 6px' : undefined}
-      headerTransition={animateHeader ? 'padding 0.6s cubic-bezier(0.22, 1, 0.36, 1)' : undefined}
+      headerPad={(narrow && user) ? '4px 0 0' : (user && big) ? '16px 0 6px' : undefined}
+      headerTransition={(!narrow && animateHeader) ? 'padding 0.6s cubic-bezier(0.22, 1, 0.36, 1)' : undefined}
       // Roomy folds manage into the Home tab (re-press), so no separate manage bar.
       subheader={user ? <>{navBar}{view === 'home' && isManager && !big && manageBar}</> : null}
     >
@@ -561,7 +641,8 @@ export default function ProjectsPage() {
       {!authReady ? null : !user ? (
         <AuthCard t={t} onAuthed={(u) => { setAnimateHeader(true); setUser(u); setView('home'); refresh() }} />
       ) : view === 'settings' ? (
-        <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout} />
+        <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout}
+          tab={settingsTab} onTab={setSettingsTab} hideMenu={narrow} />
       ) : view === 'iconlab' ? (
         <div style={capNarrow}>
           <button type="button" onClick={() => setView('home')}

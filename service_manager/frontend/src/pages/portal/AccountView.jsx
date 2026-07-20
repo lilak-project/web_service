@@ -48,7 +48,25 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
   )
 }
 
-export default function AccountView({ isManager, onChanged, onAccountGone }) {
+// The settings sub-menu, shared so the header can drive it on narrow screens.
+export function settingsMenu(isManager, lang) {
+  const L = (ko, en) => (lang === 'ko' ? ko : en)
+  return [
+    ['me', 'user', L('내 계정', 'My account')],
+    ['feedback', 'chats', L('피드백', 'Feedback')],
+    ...(isManager ? [
+      ['accounts', 'users', L('계정', 'Accounts')],
+      ['groups', 'tree', L('그룹', 'Groups')],
+      ['invites', 'key', L('초대 코드', 'Invite codes')],
+      ['system', 'sliders', L('시스템', 'System')],
+      ['handshake', 'plug', L('핸드셰이크', 'Handshake')],
+    ] : []),
+  ]
+}
+
+// tab/onTab make the active sub-tab controllable from the header; hideMenu drops
+// the left sidebar (the header dropdown navigates instead) on narrow screens.
+export default function AccountView({ isManager, onChanged, onAccountGone, tab: tabProp, onTab, hideMenu = false }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [me, setMe] = useState(null)
@@ -56,7 +74,9 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
   const [services, setServices] = useState([])
   const [requests, setRequests] = useState([])
   const [groupFilter, setGroupFilter] = useState('')
-  const [tab, setTab] = useState('me')                 // 'me' | 'accounts' | 'groups' | 'invites'
+  const [tabInner, setTabInner] = useState('me')       // uncontrolled fallback
+  const tab = tabProp ?? tabInner                      // 'me' | 'feedback' | 'accounts' | …
+  const setTab = onTab ?? setTabInner
   const [msg, setMsg] = useState('')
   const [f, setF] = useState({ code: '', cur: '', npw: '', email: '' })
   const [dname, setDname] = useState('')               // display-name edit field (login id stays fixed)
@@ -129,17 +149,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
     : <span style={{ ...badge, background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}{me.verify_days_ago != null ? ` (${me.verify_days_ago}d)` : ''}</span>
   const grpBadge = { ...badge, background: 'var(--btn-primary-bg)', color: '#fff' }
 
-  const MENU = [
-    ['me', 'user', L('내 계정', 'My account')],
-    ['feedback', 'chats', L('피드백', 'Feedback')],
-    ...(isManager ? [
-      ['accounts', 'users', L('계정', 'Accounts')],
-      ['groups', 'tree', L('그룹', 'Groups')],
-      ['invites', 'key', L('초대 코드', 'Invite codes')],
-      ['system', 'sliders', L('시스템', 'System')],
-      ['handshake', 'plug', L('핸드셰이크', 'Handshake')],
-    ] : []),
-  ]
+  const MENU = settingsMenu(isManager, lang)
   const menuBtn = ([key, icon, label]) => {
     const on = tab === key
     return (
@@ -389,10 +399,13 @@ export default function AccountView({ isManager, onChanged, onAccountGone }) {
       )}
       {msg && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', marginBottom: 8 }}>{msg}</div>}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 150, flexShrink: 0,
-          borderRight: '1px solid var(--border-subtle)', paddingRight: 8 }}>
-          {MENU.map(menuBtn)}
-        </div>
+        {/* Narrow screens drop the sidebar — the header's settings dropdown navigates. */}
+        {!hideMenu && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 150, flexShrink: 0,
+            borderRight: '1px solid var(--border-subtle)', paddingRight: 8 }}>
+            {MENU.map(menuBtn)}
+          </div>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>{content}</div>
       </div>
     </div>
