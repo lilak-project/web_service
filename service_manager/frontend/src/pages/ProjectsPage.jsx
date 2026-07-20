@@ -555,7 +555,7 @@ export default function ProjectsPage() {
       // a dropdown of the settings menu (the sidebar is hidden — see AccountView).
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0,
         padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)', ...capNarrow }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 136, flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 118, flexShrink: 0 }}>
           {navBtn('home', 'home', t('portal_nav_home'))}
           {view === 'settings'
             ? <SettingsMenuButton items={settingsMenu(isManager, lang)} current={settingsTab} onPick={setSettingsTab} />
