@@ -56,14 +56,26 @@ def _tool_env() -> dict:
 
 
 def _favicon_targets() -> list[Path]:
-    """Every served favicon file that exists (portal + elog, public + dist)."""
-    cands = [
-        SM / "frontend" / "public" / "lilak.svg",
-        SM / "frontend" / "dist" / "lilak.svg",
-        STACK / "lilak_elog" / "frontend" / "public" / "lilak.svg",
-        STACK / "lilak_elog" / "frontend" / "dist" / "lilak.svg",
-    ]
-    return [p for p in cands if p.parent.is_dir()]
+    """Every served favicon (lilak.svg) across the portal AND all sibling services,
+    so one apply updates every browser-tab icon — not just the portal + elog.
+
+    We only touch a service that ALREADY ships a lilak.svg (in frontend/public or
+    frontend/dist), so we never scatter stray favicons into services that don't use
+    one. Both locations are written: `public` survives a rebuild, `dist` is live now.
+    Services that reference the portal's `/lilak.svg` absolutely (e.g. nptoy) follow
+    the portal's icon automatically and need no own file."""
+    out: list[Path] = []
+    for svc_dir in sorted(STACK.iterdir()):
+        fe = svc_dir / "frontend"
+        if not fe.is_dir():
+            continue
+        pub, dist = fe / "public" / "lilak.svg", fe / "dist" / "lilak.svg"
+        if not (pub.exists() or dist.exists()):
+            continue                                  # this service doesn't use lilak.svg
+        for p in (pub, dist):
+            if p.parent.is_dir():
+                out.append(p)
+    return out
 
 
 def _check_svg(svg: str) -> str:
