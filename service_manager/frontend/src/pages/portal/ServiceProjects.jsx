@@ -156,7 +156,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
             ) : (
               <Button variant="primary" disabled style={btn}>{t('portal_proj_open')}</Button>
             )}
-            {canManage && p.can_enter && p.running && <Button variant="secondary" disabled={busy === p.name} style={btn} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>}
+            {manage && p.can_enter && p.running && <Button variant="secondary" disabled={busy === p.name} style={btn} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>}
             {canManage && manage && <Button variant="dangerSoft" disabled={busy === p.name} style={btnIcon} title={t('portal_proj_delete')} onClick={() => remove(p.name)}><Icon name="trash" size={16} /></Button>}
             {/* Data download (export) moved to Home "manage mode". */}
           </div>

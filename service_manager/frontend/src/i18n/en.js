@@ -604,6 +604,7 @@ export default {
   projects_signup_admin_hint: 'The first account to sign up becomes the admin.',
   projects_signup_fail:    'Sign up failed.',
   projects_request:        'Request access',
+  projects_request_hint:   'You need access to use this service.',
   projects_requested:      'Requested',
   projects_request_fail:   'Could not send the request.',
   service_kind_elog:       'elog',

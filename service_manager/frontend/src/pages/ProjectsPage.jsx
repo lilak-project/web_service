@@ -66,6 +66,10 @@ function sortByHome(cards, order) {
 // comfortable tap target on a phone).
 const CTRL_H = 46
 const CTRL_R = 10
+// The in-card primary action (Enter / Open a tool). Sized to match the enlarged
+// service-card Enter/Start/Stop buttons (see ServiceSingle) so every card's main
+// action looks the same.
+const ENTER_BTN = { height: 40, borderRadius: 10, padding: '0 18px', minWidth: 88, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
 const inputStyle = {
   width: '100%', height: CTRL_H, padding: '0 14px', borderRadius: CTRL_R, fontFamily: 'var(--font-mono)',
   fontSize: 'var(--fs-medium, 14px)', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
@@ -297,6 +301,9 @@ export default function ProjectsPage() {
   const [view, setView] = useState('home')          // 'home' | 'settings'
   const [expanded, setExpanded] = useState(null)         // multi-project svc expanded inline
   const [manage, setManage] = useState(false)            // admin Home "manage mode"
+  // Animate the brand mark rising into place ONLY on an actual login (not on a
+  // restored session / reload), so the header doesn't slide on every page load.
+  const [animateHeader, setAnimateHeader] = useState(false)
 
   const [projects, setProjects] = useState(null)   // null = loading
   const [homeCfg, setHomeCfg] = useState(null)     // admin: builtin overrides + card order
@@ -546,12 +553,13 @@ export default function ProjectsPage() {
         ? `${portalInfo.host || '?'}${portalInfo.version ? ` · ${portalInfo.version}` : ''}`
         : t('projects_subtitle'))}
       headerPad={(user && big) ? '16px 0 6px' : undefined}
+      headerTransition={animateHeader ? 'padding 0.6s cubic-bezier(0.22, 1, 0.36, 1)' : undefined}
       // Roomy folds manage into the Home tab (re-press), so no separate manage bar.
       subheader={user ? <>{navBar}{view === 'home' && isManager && !big && manageBar}</> : null}
     >
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
-        <AuthCard t={t} onAuthed={(u) => { setUser(u); setView('home'); refresh() }} />
+        <AuthCard t={t} onAuthed={(u) => { setAnimateHeader(true); setUser(u); setView('home'); refresh() }} />
       ) : view === 'settings' ? (
         <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout} />
       ) : view === 'iconlab' ? (
@@ -587,7 +595,9 @@ export default function ProjectsPage() {
               const isBuiltin = !!p.builtin
               // In manage mode admins can open every card (to manage it); otherwise
               // only enterable services toggle — request-only cards stay inert.
-              const canToggle = (manage && isManager) || !!p.can_enter
+              // Single (non-project) services also open when the user only has a
+              // request option, so "Request access" happens inside the card body.
+              const canToggle = (manage && isManager) || !!p.can_enter || (!p.multi_project && !isBuiltin && !!p.can_request)
               const statusText = isBuiltin ? (p.builtin === 'newservice' ? t('newsvc_card_hint') : t('iconlab_card_hint'))
                 : p.multi_project ? t('portal_proj_open_svc')
                 : (p.running ? t('projects_running', p.port) : t('projects_stopped'))
@@ -620,7 +630,7 @@ export default function ProjectsPage() {
                         style={{ minWidth: 76, justifyContent: 'center' }}>
                         {isOpen ? t('portal_proj_close') : t('projects_open')}
                       </Button>
-                    ) : p.can_request ? (
+                    ) : (p.can_request && p.multi_project) ? (
                       <Button variant="secondary" disabled={p.requested || busy === p.name} onClick={() => requestAccess(p.name)}
                         style={big
                           ? { minWidth: 120, height: 44, borderRadius: CTRL_R, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
@@ -668,18 +678,20 @@ export default function ProjectsPage() {
                         onMove={(dir) => move(key, dir)} onChanged={refresh} />
                       {/* manage mode: per-project management incl. delete */}
                       {p.multi_project && !isBuiltin && <ServiceProjects service={p} canManage={isManager} manage onChanged={refresh} />}
+                      {/* single service: keep the Enter/Stop row (Stop lives here, in manage mode only) */}
+                      {!p.multi_project && !isBuiltin && <ServiceSingle service={p} canManage={isManager} manage onChanged={refresh} />}
                     </>
                   ) : isBuiltin && p.builtin === 'iconlab' ? (
                     <div style={{ padding: '12px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', flex: 1, minWidth: 160 }}>{t('iconlab_card_hint')}</span>
-                      <Button size="sm" variant="primary" onClick={() => setView('iconlab')}>{t('projects_open')}</Button>
+                      <Button variant="primary" onClick={() => setView('iconlab')} style={ENTER_BTN}>{t('portal_proj_open')}</Button>
                     </div>
                   ) : isBuiltin && p.builtin === 'newservice' ? (
                     <NewServiceView onCreated={refresh} />
                   ) : p.multi_project ? (
                     <ServiceProjects service={p} canManage={isManager} />
                   ) : (
-                    <ServiceSingle service={p} canManage={isManager} onChanged={refresh} />
+                    <ServiceSingle service={p} canManage={isManager} onRequest={() => requestAccess(p.name)} onChanged={refresh} />
                   )}
                 </ExpandBox>
               )

@@ -604,6 +604,7 @@ export default {
   projects_signup_admin_hint: '가장 먼저 가입한 계정이 관리자(admin)가 됩니다.',
   projects_signup_fail:    '가입에 실패했습니다.',
   projects_request:        '권한 요청',
+  projects_request_hint:   '이 서비스를 사용하려면 접근 권한이 필요합니다.',
   projects_requested:      '요청됨',
   projects_request_fail:   '요청을 보내지 못했습니다.',
   service_kind_elog:       'elog',
