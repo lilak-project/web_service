@@ -7,8 +7,8 @@ import { useEffect, useState } from 'react'
  * data-size/data-density rules: it's a single flag so the whole experiment can be
  * hidden later by removing the two <ScaleToggle/> placements, and deleted by
  * removing this file. Two values only:
- *   compact — today's UI, the default. Nothing changes unless you opt in.
- *   roomy   — the bigger look (centred brand, login-sized nav buttons, …).
+ *   roomy   — the bigger look (centred brand, login-sized nav buttons, …). Default.
+ *   compact — the older, denser UI. Opt in via the toggle.
  *
  * State lives in localStorage and is mirrored to <html data-portal-scale> for any
  * future CSS; components subscribe via usePortalScale(). Changes broadcast on a
@@ -22,11 +22,11 @@ export const SCALES = ['compact', 'roomy']
 
 export function getScale() {
   const v = typeof localStorage !== 'undefined' ? localStorage.getItem(KEY) : null
-  return SCALES.includes(v) ? v : 'compact'
+  return SCALES.includes(v) ? v : 'roomy'
 }
 
 export function setScale(v) {
-  const next = SCALES.includes(v) ? v : 'compact'
+  const next = SCALES.includes(v) ? v : 'roomy'
   if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, next)
   if (typeof document !== 'undefined') document.documentElement.dataset.portalScale = next
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(EVENT, { detail: next }))
