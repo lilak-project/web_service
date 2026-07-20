@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 
@@ -115,15 +115,13 @@ export default function InvitesAdmin({ services, onChanged }) {
         <input type="number" min={1} max={100} value={f.count} onChange={setF1('count')} style={{ ...input, width: 80 }} />
 
         <span />
-        <div><Button size="sm" variant="primary" onClick={create}>{L('코드 생성', 'Generate')}</Button></div>
+        <div><Button variant="primary" style={codeBtn} onClick={create}>{L('코드 생성', 'Generate')}</Button></div>
       </div>
 
       {/* list header + bulk actions */}
       {codes.some((c) => c.status === 'expired') && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
-          <Button size="sm" variant="dangerSoft" onClick={pruneExpired}>
-            <Icon name="trash" size={13} /> {L('만료 코드 일괄 삭제', 'Delete expired')}
-          </Button>
+          <Button variant="dangerSoft" style={codeBtn} onClick={pruneExpired}>{L('만료 코드 일괄 삭제', 'Delete expired')}</Button>
         </div>
       )}
 
