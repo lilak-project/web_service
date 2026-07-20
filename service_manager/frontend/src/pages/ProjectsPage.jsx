@@ -562,7 +562,7 @@ export default function ProjectsPage() {
             : navBtn('settings', 'settings', t('portal_nav_settings'))}
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
-          <HeaderMark size={44} />
+          <HeaderMark size={60} />
         </div>
         <AccountMenu user={user} isManager={isManager} onLogout={logout} />
       </div>
