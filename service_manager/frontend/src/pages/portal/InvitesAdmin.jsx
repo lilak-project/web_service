@@ -130,20 +130,23 @@ export default function InvitesAdmin({ services, onChanged }) {
       {/* list — one card per issued code */}
       {codes.length === 0 ? <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('코드 없음', 'no codes')}</div>
         : codes.map((c) => (
-          <div key={c.id} style={{ border: '1px solid var(--border-default)', borderRadius: 8, padding: '10px 12px', marginBottom: 8,
-            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <code style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: 1 }}>{c.code}</code>
-            <span style={{ fontSize: 'var(--fs-micro, 10px)', padding: '1px 6px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
-              {c.kind === 'group' ? `${L('그룹', 'group')}: ${c.group}` : `${c.service}${c.project ? '/' + c.project : ''}`}
-            </span>
-            {c.no_verify && <span style={{ fontSize: 'var(--fs-micro, 10px)', padding: '1px 6px', borderRadius: 999, background: 'var(--info-bg, var(--surface-2))', color: 'var(--info-text, var(--text-secondary))' }}>{L('인증생략', 'no-verify')}</span>}
-            <span style={{ fontSize: 'var(--fs-micro, 10px)', color: c.status === 'active' ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }}>
-              {c.status} · {c.uses}/{c.max_uses ? c.max_uses : '∞'}{L('회', 'x')}{c.max_uses === 1 ? L(' (일회용)', ' (single)') : ''} · ~{fmt(c.expires_at)}
-            </span>
-            <div style={{ flex: 1, minWidth: 8 }} />
-            <Button variant="secondary" style={codeBtn} onClick={() => copy(c.code)}>{L('복사', 'Copy')}</Button>
-            <Button variant="secondary" style={codeBtn} onClick={() => extend(c)}>{L('연장', 'Extend')}</Button>
-            <Button variant="dangerSoft" style={codeBtn} onClick={() => del(c)}>{L('삭제', 'Remove')}</Button>
+          <div key={c.id} style={{ border: '1px solid var(--border-strong, #94a3b8)', borderRadius: 8, padding: '10px 12px', marginBottom: 8, background: 'var(--surface)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <code style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: 1 }}>{c.code}</code>
+              <span style={{ fontSize: 'var(--fs-small, 12px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                {c.kind === 'group' ? `${L('그룹', 'group')}: ${c.group}` : `${c.service}${c.project ? '/' + c.project : ''}`}
+              </span>
+              {c.no_verify && <span style={{ fontSize: 'var(--fs-small, 12px)', padding: '2px 8px', borderRadius: 999, background: 'var(--info-bg, var(--surface-2))', color: 'var(--info-text, var(--text-secondary))' }}>{L('인증생략', 'no-verify')}</span>}
+              <span style={{ fontSize: 'var(--fs-small, 12px)', color: c.status === 'active' ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }}>
+                {c.status} · {c.uses}/{c.max_uses ? c.max_uses : '∞'}{L('회', 'x')}{c.max_uses === 1 ? L(' (일회용)', ' (single)') : ''} · ~{fmt(c.expires_at)}
+              </span>
+            </div>
+            {/* actions on their own line */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+              <Button variant="secondary" style={codeBtn} onClick={() => copy(c.code)}>{L('복사', 'Copy')}</Button>
+              <Button variant="secondary" style={codeBtn} onClick={() => extend(c)}>{L('연장', 'Extend')}</Button>
+              <Button variant="dangerSoft" style={codeBtn} onClick={() => del(c)}>{L('삭제', 'Remove')}</Button>
+            </div>
           </div>
         ))}
     </div>
