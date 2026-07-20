@@ -8,7 +8,7 @@ import { useLang } from '../../context/LangContext'
  * logout action is one click away instead of always on screen. Closes on
  * outside-click or Escape.
  */
-export default function AccountMenu({ user, isManager, onLogout }) {
+export default function AccountMenu({ user, isManager, onLogout, width }) {
   const { t } = useLang()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -31,16 +31,19 @@ export default function AccountMenu({ user, isManager, onLogout }) {
   return (
     // The trigger shows the profile mark only (no username) — the name lives in the
     // dropdown. flexShrink:0 keeps it whole; its 46px height matches the nav buttons.
-    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0, width }}>
       <button type="button" onClick={() => setOpen((o) => !o)} title={user.username}
         style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, cursor: 'pointer', font: 'inherit',
-          height: 46, padding: '0 10px', color: 'var(--text-secondary)',
+          height: 46, width: width ? '100%' : undefined, padding: '0 10px', color: 'var(--text-secondary)', position: 'relative',
           background: open ? 'var(--surface-2)' : 'transparent',
           border: '1px solid transparent', borderRadius: 12 }}
         onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = 'var(--surface-2)' }}
         onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = 'transparent' }}>
         <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={38} />
-        <Icon name={open ? 'caret-up' : 'caret-down'} size={15} color="var(--text-muted)" />
+        {/* When the button is given a fixed width (narrow header) the caret is parked
+            at the right edge so the avatar sits dead-centre. */}
+        <Icon name={open ? 'caret-up' : 'caret-down'} size={15} color="var(--text-muted)"
+          style={width ? { position: 'absolute', right: 8 } : undefined} />
       </button>
       {open && (
         <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', minWidth: 184, maxWidth: 260, zIndex: 1000,

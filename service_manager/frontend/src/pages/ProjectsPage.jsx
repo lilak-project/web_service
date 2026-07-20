@@ -564,7 +564,7 @@ export default function ProjectsPage() {
         <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
           <HeaderMark size={60} />
         </div>
-        <AccountMenu user={user} isManager={isManager} onLogout={logout} />
+        <AccountMenu user={user} isManager={isManager} onLogout={logout} width={118} />
       </div>
     ) : (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', minWidth: 0,
