@@ -44,7 +44,8 @@ function SettingsMenuButton({ items, current, onPick, style }) {
   const cur = items.find(([k]) => k === current) || items[0]
   return (
     <div ref={ref} style={{ position: 'relative', ...style }}>
-      <Button variant="primary" onClick={() => setOpen((o) => !o)}
+      {/* 'warning' = the same amber the Home tab turns when it enters manage mode. */}
+      <Button variant="warning" onClick={() => setOpen((o) => !o)}
         style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, width: '100%',
           height: CTRL_H, borderRadius: CTRL_R, padding: '0 14px', fontSize: 'var(--fs-medium, 14px)' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0 }}>

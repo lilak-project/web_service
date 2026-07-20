@@ -52,7 +52,7 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
 export function settingsMenu(isManager, lang) {
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   return [
-    ['me', 'user', L('내 계정', 'My account')],
+    ['me', 'user', L('내 계정', 'Account')],
     ['feedback', 'chats', L('피드백', 'Feedback')],
     ...(isManager ? [
       ['accounts', 'users', L('계정', 'Accounts')],
