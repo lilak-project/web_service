@@ -52,7 +52,7 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
 export function settingsMenu(isManager, lang) {
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   return [
-    ['me', 'user', L('내 계정', 'Account')],
+    ['me', 'user', L('내 계정', 'My account')],
     ['feedback', 'chats', L('피드백', 'Feedback')],
     ...(isManager ? [
       ['accounts', 'users', L('계정', 'Accounts')],
@@ -171,17 +171,13 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
 
   const MyAccount = (
     <div style={{ ...card, ...fieldGrid }}>
+      {/* Identity only — avatar/email/role/verified live in their own fields below. */}
       <Field label={L('계정', 'Account')}>
-        <Avatar icon={me.profile_shape} color={me.profile_color} seed={me.username} size={26} />
         <b>{me.display_name || me.username}</b>
         <span style={{ color: 'var(--text-muted)' }}>@{me.username}</span>
-        <span style={{ color: 'var(--text-muted)' }}>{me.email}</span>
-        <span style={fieldChip}>{me.role}</span>
-        {verifyChip}
         {(me.groups || []).map((g) => (
           <span key={g.id} style={fieldChip}><GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}</span>
         ))}
-        {me.pending_email && <span style={fieldChip}>{L('변경대기', 'pending')}: {me.pending_email}</span>}
       </Field>
 
       <Field label={L('프로필 아바타', 'Profile avatar')} align="start">
@@ -242,6 +238,12 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
       <FieldActions>
         <Button size="sm" variant="secondary" disabled={!f.cur || !f.npw} onClick={changePw}>{L('변경', 'Update')}</Button>
       </FieldActions>
+
+      <Field label={L('이메일', 'Email')}>
+        <span style={{ color: 'var(--text-muted)' }}>{me.email}</span>
+        {verifyChip}
+        {me.pending_email && <span style={fieldChip}>{L('변경대기', 'pending')}: {me.pending_email}</span>}
+      </Field>
 
       <Field label={L('이메일 변경', 'Change email')}>
         <input value={f.email} onChange={setField('email')} placeholder={L('새 이메일 (관리자 승인)', 'new email (admin-approved)')} style={{ ...input, flex: 1 }}
