@@ -44,13 +44,12 @@ function SettingsMenuButton({ items, current, onPick, style }) {
   const cur = items.find(([k]) => k === current) || items[0]
   return (
     <div ref={ref} style={{ position: 'relative', ...style }}>
-      {/* 'warning' = the same amber the Home tab turns when it enters manage mode. */}
-      <Button variant="warning" onClick={() => setOpen((o) => !o)}
-        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, width: '100%',
+      {/* Icon-only (the section NAME is written above the content box, in AccountView).
+          'warning' = the same amber the Home tab turns when it enters manage mode. */}
+      <Button variant="warning" onClick={() => setOpen((o) => !o)} title={cur[2]}
+        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%',
           height: CTRL_H, borderRadius: CTRL_R, padding: '0 14px', fontSize: 'var(--fs-medium, 14px)' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-          <Icon name={cur[1]} size={17} /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cur[2]}</span>
-        </span>
+        <Icon name={cur[1]} size={18} />
         <Icon name={open ? 'caret-up' : 'caret-down'} size={14} />
       </Button>
       {open && (

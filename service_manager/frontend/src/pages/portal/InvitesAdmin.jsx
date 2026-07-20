@@ -12,6 +12,8 @@ import { useLang } from '../../context/LangContext'
  */
 const input = { height: 28, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
 const gl = { fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }
+// One uniform, text-only action button for each issued-code card.
+const codeBtn = { height: 32, borderRadius: 8, padding: '0 14px', fontSize: 'var(--fs-small, 12px)', justifyContent: 'center' }
 
 export default function InvitesAdmin({ services, onChanged }) {
   const { lang } = useLang()
@@ -125,10 +127,11 @@ export default function InvitesAdmin({ services, onChanged }) {
         </div>
       )}
 
-      {/* list */}
+      {/* list — one card per issued code */}
       {codes.length === 0 ? <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('코드 없음', 'no codes')}</div>
         : codes.map((c) => (
-          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+          <div key={c.id} style={{ border: '1px solid var(--border-default)', borderRadius: 8, padding: '10px 12px', marginBottom: 8,
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <code style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: 1 }}>{c.code}</code>
             <span style={{ fontSize: 'var(--fs-micro, 10px)', padding: '1px 6px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
               {c.kind === 'group' ? `${L('그룹', 'group')}: ${c.group}` : `${c.service}${c.project ? '/' + c.project : ''}`}
@@ -137,10 +140,10 @@ export default function InvitesAdmin({ services, onChanged }) {
             <span style={{ fontSize: 'var(--fs-micro, 10px)', color: c.status === 'active' ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }}>
               {c.status} · {c.uses}/{c.max_uses ? c.max_uses : '∞'}{L('회', 'x')}{c.max_uses === 1 ? L(' (일회용)', ' (single)') : ''} · ~{fmt(c.expires_at)}
             </span>
-            <div style={{ flex: 1 }} />
-            <Button size="sm" variant="ghost" icon title={L('복사', 'copy')} onClick={() => copy(c.code)}><Icon name="copy" size={13} /></Button>
-            <Button size="sm" variant="ghost" onClick={() => extend(c)}>{L('연장', 'Extend')}</Button>
-            <Button size="sm" variant="ghost" icon title={L('삭제', 'delete')} onClick={() => del(c)}><Icon name="trash" size={13} /></Button>
+            <div style={{ flex: 1, minWidth: 8 }} />
+            <Button variant="secondary" style={codeBtn} onClick={() => copy(c.code)}>{L('복사', 'Copy')}</Button>
+            <Button variant="secondary" style={codeBtn} onClick={() => extend(c)}>{L('연장', 'Extend')}</Button>
+            <Button variant="dangerSoft" style={codeBtn} onClick={() => del(c)}>{L('삭제', 'Remove')}</Button>
           </div>
         ))}
     </div>

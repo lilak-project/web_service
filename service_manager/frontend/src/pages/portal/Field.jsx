@@ -20,7 +20,7 @@
 export const FIELD_TEXT = { fontSize: 'var(--fs-small, 12px)' }
 
 export const fieldGrid = {
-  display: 'grid', gridTemplateColumns: '132px 1fr', gap: '8px 10px', alignItems: 'center',
+  display: 'grid', gridTemplateColumns: '100px 1fr', gap: '8px 10px', alignItems: 'center',
 }
 
 /** Label cell + value cell. `align="start"` for a tall value (a wrapping chip list). */

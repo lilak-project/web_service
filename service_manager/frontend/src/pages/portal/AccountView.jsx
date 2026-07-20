@@ -400,6 +400,16 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
           onCancel={() => { pwAsk.resolve(null); setPwAsk(null) }} />
       )}
       {msg && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', marginBottom: 8 }}>{msg}</div>}
+      {/* Narrow: the header button is icon-only, so name the current section here. */}
+      {hideMenu && (() => {
+        const cur = MENU.find(([k]) => k === tab) || MENU[0]
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, margin: '0 0 10px',
+            fontSize: 'var(--fs-medium, 14px)', fontWeight: 600, color: 'var(--text-primary)' }}>
+            <Icon name={cur[1]} size={16} /> {cur[2]}
+          </div>
+        )
+      })()}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         {/* Narrow screens drop the sidebar — the header's settings dropdown navigates. */}
         {!hideMenu && (
