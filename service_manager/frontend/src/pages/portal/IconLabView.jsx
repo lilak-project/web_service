@@ -31,7 +31,16 @@ const FIXED_PRESETS = [
   { id: '_fav', fixed: true, name_ko: '현재 favicon', name_en: 'Current favicon', config: FAVICON_CFG },
 ]
 
-function normLine(ln) { return { color: '#111827', width: 28, on: true, rot: 0, ...ln } }
+function normLine(ln) { return { color: '#111827', width: 28, on: true, rot: 0, dx: 0, dy: 0, ...ln } }
+
+// Per-line transform in logo space: nudge by (dx,dy) then rotate about the logo
+// centre. Empty when the line is untouched (keeps the SVG clean).
+function lineTransform(ln) {
+  const t = []
+  if (ln.dx || ln.dy) t.push(`translate(${ln.dx || 0} ${ln.dy || 0})`)
+  if (ln.rot) t.push(`rotate(${ln.rot} ${LX} ${LY})`)
+  return t.join(' ')
+}
 function normCfg(c) {
   return {
     ...DEFAULT_CFG, ...c,
@@ -51,9 +60,11 @@ function buildSVG(c, { px, dark } = {}) {
     : `<rect width="${VB}" height="${VB}" rx="${(c.radius / 100 * VB).toFixed(1)}" fill="${c.bg}"/>`
   const style = (dark && c.darkInvert)
     ? '<style>@media (prefers-color-scheme:dark){.lk path{fill:#fff;stroke:#fff}}</style>' : ''
-  const paths = c.lines.map((ln, i) => (ln.on
-    ? `<path d="${LOGO_PATHS[i].d}"${ln.rot ? ` transform="rotate(${ln.rot} ${LX} ${LY})"` : ''} fill="${ln.color}" stroke="${ln.color}" stroke-width="${ln.width}" stroke-linejoin="round" stroke-linecap="round"/>`
-    : '')).join('')
+  const paths = c.lines.map((ln, i) => {
+    if (!ln.on) return ''
+    const tf = lineTransform(ln)
+    return `<path d="${LOGO_PATHS[i].d}"${tf ? ` transform="${tf}"` : ''} fill="${ln.color}" stroke="${ln.color}" stroke-width="${ln.width}" stroke-linejoin="round" stroke-linecap="round"/>`
+  }).join('')
   const dim = px ? ` width="${px}" height="${px}"` : ''
   return `<svg xmlns="http://www.w3.org/2000/svg"${dim} viewBox="0 0 ${VB} ${VB}">${style}${rect}<g class="lk" transform="${transformStr(c)}">${paths}</g></svg>`
 }
@@ -88,7 +99,7 @@ function MiniIcon({ cfg, px = 30 }) {
         {!c.bgTransparent && <rect width={VB} height={VB} rx={c.radius / 100 * VB} fill={c.bg} />}
         <g transform={transformStr(c)}>
           {c.lines.map((ln, i) => ln.on && (
-            <path key={i} d={LOGO_PATHS[i].d} transform={ln.rot ? `rotate(${ln.rot} ${LX} ${LY})` : undefined}
+            <path key={i} d={LOGO_PATHS[i].d} transform={lineTransform(ln) || undefined}
               fill={ln.color} stroke={ln.color} strokeWidth={ln.width} strokeLinejoin="round" strokeLinecap="round" />
           ))}
         </g>
@@ -198,7 +209,7 @@ export default function IconLabView() {
         {!c.bgTransparent && <rect width={VB} height={VB} rx={c.radius / 100 * VB} fill={c.bg} />}
         <g transform={transformStr(c)}>
           {c.lines.map((ln, i) => ln.on && (
-            <path key={i} d={LOGO_PATHS[i].d} transform={ln.rot ? `rotate(${ln.rot} ${LX} ${LY})` : undefined}
+            <path key={i} d={LOGO_PATHS[i].d} transform={lineTransform(ln) || undefined}
               fill={dark && c.darkInvert ? '#fff' : ln.color} stroke={dark && c.darkInvert ? '#fff' : ln.color}
               strokeWidth={ln.width} strokeLinejoin="round" strokeLinecap="round"
               opacity={hover == null || hover === i ? 1 : 0.16} />
@@ -213,8 +224,8 @@ export default function IconLabView() {
   return (
     <div>
       <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', marginBottom: 12 }}>
-        {L('각 선의 굵기·색상·회전과 박스 안 위치·크기·회전을 편집해 favicon·앱 아이콘으로 적용하거나 SVG·PNG로 내보냅니다. 설정은 프리셋으로 최대 10개 저장됩니다.',
-          'Edit each line’s width/color/rotation and the logo’s position/size/rotation, then apply as favicon/app icon or export SVG/PNG. Save up to 10 presets.')}
+        {L('각 선의 굵기·색상·회전·위치(x/y)와 박스 안 위치·크기·회전을 편집해 favicon·앱 아이콘으로 적용하거나 SVG·PNG로 내보냅니다. 설정은 프리셋으로 최대 10개 저장됩니다.',
+          'Edit each line’s width/color/rotation/position (x/y) and the logo’s position/size/rotation, then apply as favicon/app icon or export SVG/PNG. Save up to 10 presets.')}
       </div>
 
       {/* ── presets strip ── */}
@@ -278,8 +289,8 @@ export default function IconLabView() {
           {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{msg}</div>}
         </div>
 
-        {/* ── right: controls (scrolls on its own so the preview stays in view) ── */}
-        <div style={{ flex: 1, minWidth: 260, maxHeight: 'min(72vh, 620px)', overflowY: 'auto', paddingRight: 6 }}>
+        {/* ── right: controls (flow in the page — one scrollbar for the whole view) ── */}
+        <div style={{ flex: 1, minWidth: 260 }}>
           <div style={{ ...sectionHdr, marginTop: 0, cursor: 'pointer', userSelect: 'none' }} onClick={() => toggle('box')}>{caretEl('box')} {L('박스', 'Box')}</div>
           {open.box && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -312,27 +323,33 @@ export default function IconLabView() {
           </div>
           )}
 
-          <div style={{ ...sectionHdr, cursor: 'pointer', userSelect: 'none' }} onClick={() => toggle('lines')}>{caretEl('lines')} {L('선 (굵기 · 색상 · 회전)', 'Lines (width · color · rotation)')}</div>
+          <div style={{ ...sectionHdr, cursor: 'pointer', userSelect: 'none' }} onClick={() => toggle('lines')}>{caretEl('lines')} {L('선 (굵기 · 색상 · 회전 · 위치)', 'Lines (width · color · rot · x/y)')}</div>
           {open.lines && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {/* per-line column header */}
             <div style={{ ...rowS, fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>
-              <span style={{ width: 18 }} /><span style={{ minWidth: 76 }} /><span style={{ width: 22 }} />
-              <span style={{ flex: 1, minWidth: 60 }}>{L('굵기', 'width')}</span>
-              <span style={{ width: 56, textAlign: 'right' }}>{L('굵기', 'width')}</span>
-              <span style={{ width: 56, textAlign: 'right' }}>{L('회전°', 'rot°')}</span>
+              <span style={{ width: 18 }} /><span style={{ minWidth: 64 }} /><span style={{ width: 22 }} />
+              <span style={{ flex: 1, minWidth: 40 }}>{L('굵기', 'width')}</span>
+              <span style={{ width: 46, textAlign: 'right' }}>{L('굵기', 'w')}</span>
+              <span style={{ width: 46, textAlign: 'right' }}>{L('회전°', 'rot°')}</span>
+              <span style={{ width: 46, textAlign: 'right' }}>X</span>
+              <span style={{ width: 46, textAlign: 'right' }}>Y</span>
             </div>
-            {c.lines.map((ln, i) => (
+            {c.lines.map((ln, i) => {
+              const numS = { ...numStyle, width: 46 }
+              return (
               <div key={i} style={{ ...rowS, padding: '3px 6px', borderRadius: 6, background: hover === i ? 'var(--surface-2)' : 'transparent' }}
                 onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
                 <input type="checkbox" checked={ln.on} onChange={(e) => updLine(i, { on: e.target.checked })} />
-                <span style={{ ...lblS, minWidth: 76, opacity: ln.on ? 1 : 0.4 }}>{L(LOGO_PATHS[i].ko, LOGO_PATHS[i].en)}</span>
+                <span style={{ ...lblS, minWidth: 64, opacity: ln.on ? 1 : 0.4 }}>{L(LOGO_PATHS[i].ko, LOGO_PATHS[i].en)}</span>
                 <ColorPicker value={ln.color} onChange={(v) => updLine(i, { color: v })} size={22} title={L(LOGO_PATHS[i].ko, LOGO_PATHS[i].en)} />
-                <input type="range" min={0} max={70} value={ln.width} onChange={(e) => updLine(i, { width: Number(e.target.value) })} style={{ flex: 1, minWidth: 60 }} />
-                <input type="number" min={0} max={70} value={ln.width} onChange={(e) => updLine(i, { width: e.target.value === '' ? 0 : Number(e.target.value) })} style={numStyle} />
-                <input type="number" min={-180} max={180} value={ln.rot} onChange={(e) => updLine(i, { rot: e.target.value === '' ? 0 : Number(e.target.value) })} style={numStyle} />
+                <input type="range" min={0} max={70} value={ln.width} onChange={(e) => updLine(i, { width: Number(e.target.value) })} style={{ flex: 1, minWidth: 40 }} />
+                <input type="number" min={0} max={70} value={ln.width} onChange={(e) => updLine(i, { width: e.target.value === '' ? 0 : Number(e.target.value) })} style={numS} title={L('굵기', 'width')} />
+                <input type="number" min={-180} max={180} value={ln.rot} onChange={(e) => updLine(i, { rot: e.target.value === '' ? 0 : Number(e.target.value) })} style={numS} title={L('회전', 'rotation')} />
+                <input type="number" min={-400} max={400} value={ln.dx} onChange={(e) => updLine(i, { dx: e.target.value === '' ? 0 : Number(e.target.value) })} style={numS} title={L('가로 위치', 'x offset')} />
+                <input type="number" min={-400} max={400} value={ln.dy} onChange={(e) => updLine(i, { dy: e.target.value === '' ? 0 : Number(e.target.value) })} style={numS} title={L('세로 위치', 'y offset')} />
               </div>
-            ))}
+            )})}
           </div>
           )}
 
