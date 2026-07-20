@@ -39,7 +39,7 @@ export default function AccountMenu({ user, isManager, onLogout }) {
           border: '1px solid transparent', borderRadius: 12 }}
         onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = 'var(--surface-2)' }}
         onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = 'transparent' }}>
-        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={34} />
+        <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={38} />
         <Icon name={open ? 'caret-up' : 'caret-down'} size={15} color="var(--text-muted)" />
       </button>
       {open && (
