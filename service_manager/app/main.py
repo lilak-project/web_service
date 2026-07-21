@@ -9,10 +9,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+import html as _html
+
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from . import config
 from .routers import accounts, auth, home, iconlab, project_mgmt, projects, proxy, reports, scaffold, services, system
@@ -39,6 +42,40 @@ async def _strip_launcher_prefix(request: Request, call_next):
         request.scope["path"] = new
         request.scope["raw_path"] = new.encode("utf-8")
     return await call_next(request)
+
+
+# A browser NAVIGATING into a proxied service (/p, /pp) that errors used to get a
+# bare JSON body — which standalone PWAs render as an unstyled (and, without a
+# charset, mojibake) dead end. Serve a tiny UTF-8 HTML page with a retry button
+# instead; API/fetch callers and auth redirects (3xx with Location) keep the
+# default JSON behaviour.
+@app.exception_handler(HTTPException)
+async def _proxy_error_page(request: Request, exc: HTTPException):
+    path = request.scope.get("path", "")
+    wants_page = (
+        request.method == "GET"
+        and (path.startswith("/p/") or path.startswith("/pp/"))
+        and "text/html" in request.headers.get("accept", "")
+        and not (exc.headers or {}).get("Location")
+    )
+    if not wants_page:
+        return await http_exception_handler(request, exc)
+    msg = _html.escape(str(exc.detail or "요청을 처리할 수 없습니다."))
+    body = f"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LILAK</title></head>
+<body style="margin:0;display:grid;place-items:center;height:100dvh;background:#f5f7f8;
+  font-family:ui-sans-serif,system-ui,sans-serif;color:#182026">
+<div style="text-align:center;padding:24px;max-width:420px">
+  <p style="font-size:15px;line-height:1.5">{msg}</p>
+  <p style="display:flex;gap:8px;justify-content:center">
+    <a href="javascript:location.reload()" style="padding:10px 18px;border-radius:8px;
+      background:#3d5a80;color:#fff;text-decoration:none">다시 시도</a>
+    <a href="/projects" style="padding:10px 18px;border-radius:8px;
+      border:1px solid #3d5a80;color:#3d5a80;text-decoration:none">포털로</a>
+  </p>
+</div></body></html>"""
+    return HTMLResponse(body, status_code=exc.status_code)
 
 
 # Order matters: auth + specific service routes, then lifecycle, then proxy.
