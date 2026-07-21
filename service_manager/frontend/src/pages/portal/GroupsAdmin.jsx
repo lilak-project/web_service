@@ -51,7 +51,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
   const [open, setOpen] = useState(null)            // expanded group id
   const [newName, setNewName] = useState('')
   const [projCache, setProjCache] = useState({})    // svc -> [projects]
-  const [add, setAdd] = useState({ uid: '', svc: '', proj: '' })
+  const [add, setAdd] = useState({ uid: '', svc: '', proj: '', admin: false })
   const [mSearch, setMSearch] = useState('')          // member add: search accounts by text
   const [msg, setMsg] = useState('')
 
@@ -69,7 +69,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
   const clearGroupPerms = (g) => { if (window.confirm(L(`'${g.name}' 그룹이 부여한 상속 권한을 모두 지울까요? (멤버들이 상속받던 권한이 사라집니다)`, `Clear all grants of group '${g.name}'? (members stop inheriting them)`))) run(launcher.post(`/admin/groups/${g.id}/clear-permissions`), (r) => L(`상속 권한 ${r.data.cleared}개 지워짐`, `cleared ${r.data.cleared} inherited grants`)) }
   const addMember = (gid, uid) => uid && run(launcher.post(`/admin/groups/${gid}/members`, { user_id: Number(uid) }), () => { setAdd((s) => ({ ...s, uid: '' })); return L('멤버 추가됨', 'member added') })
   const removeMember = (gid, uid) => run(launcher.delete(`/admin/groups/${gid}/members/${uid}`), () => L('멤버 제거됨', 'member removed'))
-  const grantPerm = (gid) => add.svc && run(launcher.post('/admin/group-permissions', { group_id: gid, service: add.svc, project: add.proj }), () => { setAdd((s) => ({ ...s, svc: '', proj: '' })); return L('권한 부여됨', 'granted') })
+  const grantPerm = (gid) => add.svc && run(launcher.post('/admin/group-permissions', { group_id: gid, service: add.svc, project: add.proj, admin: add.admin }), () => { setAdd((s) => ({ ...s, svc: '', proj: '', admin: false })); return L('권한 부여됨', 'granted') })
   const revokePerm = (gid, p) => run(launcher.delete('/admin/group-permissions', { data: { group_id: gid, service: p.service, project: p.project || '' } }), () => L('권한 해제됨', 'revoked'))
 
   async function pickSvc(svc) {
@@ -167,6 +167,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                     {g.permissions.length === 0 ? <span style={fieldMuted}>—</span>
                       : g.permissions.map((p, i) => (
                         <span key={i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
+                          {p.admin && <span style={{ fontWeight: 700, color: 'var(--warning-text, #b45309)' }} title={L('멤버 전원이 이 범위의 관리자가 됩니다', 'every member administers this scope')}>· admin</span>}
                           <button onClick={() => revokePerm(g.id, p)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger-text)', padding: 0, display: 'inline-flex' }}>×</button>
                         </span>))}
                   </Field>
@@ -179,6 +180,11 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                       <option value="">{L('전체 (서비스 전체)', 'all (whole service)')}</option>
                       {(projCache[add.svc] || []).map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
                     </select>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                      title={L('멤버 전원이 이 범위의 관리자가 됩니다', 'every member administers this scope')}>
+                      <input type="checkbox" checked={add.admin} onChange={(e) => setAdd((s) => ({ ...s, admin: e.target.checked }))} />
+                      {L('관리자로', 'as admin')}
+                    </label>
                     <Button size="sm" variant="primary" disabled={!add.svc} onClick={() => grantPerm(g.id)}>{L('권한 부여', 'Grant')}</Button>
                   </FieldActions>
 

@@ -130,6 +130,8 @@ class GroupPermission(Base):
     group_id = Column(Integer, nullable=False, index=True)
     service_name = Column(String(128), nullable=False, index=True)
     project = Column(String(128), nullable=False, default="")   # "" = whole service
+    # Every member is also a scoped ADMIN of this scope (mirrors ServicePermission.is_admin).
+    is_admin = Column(Boolean, nullable=False, default=False)
     __table_args__ = (UniqueConstraint("group_id", "service_name", "project", name="uq_group_service_project"),)
 
 

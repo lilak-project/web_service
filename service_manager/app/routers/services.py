@@ -336,6 +336,20 @@ def service_admins(svc: str, _: models.User = Depends(require_portal_admin), db:
     uids = {r.user_id for r in rows}
     unames = {u.id: u.username for u in db.query(models.User).filter(models.User.id.in_(uids)).all()} if uids else {}
     scoped = [{"username": unames.get(r.user_id, str(r.user_id)), "project": r.project or None} for r in rows]
+    # Group-inherited admins: an is_admin group grant makes every member a scoped admin.
+    grows = db.query(models.GroupPermission).filter(
+        models.GroupPermission.service_name == svc, models.GroupPermission.is_admin.is_(True)).all()
+    if grows:
+        gnames = {g.id: g.name for g in db.query(models.Group).filter(
+            models.Group.id.in_({r.group_id for r in grows})).all()}
+        for r in grows:
+            members = db.query(models.GroupMembership).filter(
+                models.GroupMembership.group_id == r.group_id).all()
+            mnames = {u.id: u.username for u in db.query(models.User).filter(
+                models.User.id.in_({m.user_id for m in members})).all()}
+            for m in members:
+                scoped.append({"username": mnames.get(m.user_id, str(m.user_id)),
+                               "project": r.project or None, "group": gnames.get(r.group_id)})
     managers = [u.username for u in db.query(models.User).filter(models.User.role == "manager").all()]
     return {"managers": managers, "scoped": scoped}
 

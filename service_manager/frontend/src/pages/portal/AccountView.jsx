@@ -82,6 +82,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   const [dname, setDname] = useState('')               // display-name edit field (login id stays fixed)
   const [openUser, setOpenUser] = useState(null)       // accounts: expanded user id
   const [agrant, setAgrant] = useState({ svc: '', proj: '' })   // scoped-admin grant form (open user)
+  const [projCache, setProjCache] = useState({})                // svc -> [projects] for the grant dropdown
   const [pwAsk, setPwAsk] = useState(null)             // masked password prompt: { title, resolve }
   const setField = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   // Promise-based replacement for window.prompt() for password entry (masked input).
@@ -132,13 +133,29 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   const adminResetPwEmail = (u) => { if (!window.confirm(L(`${u.username}에게 새 임의 비밀번호를 발급할까요?`, `Issue a new random password for ${u.username}?`))) return; run(launcher.post(`/admin/users/${u.id}/reset-password-email`), (r) => r.data.password ? L(`새 비밀번호(개발): ${r.data.password}`, `new password (dev): ${r.data.password}`) : L('이메일로 발송됨', 'emailed')) }
   const adminApprove = (u, approve) => run(launcher.post(`/admin/users/${u.id}/approve-email`, { approve }), () => approve ? L('이메일 변경 승인됨', 'email approved') : L('거절됨', 'rejected'))
   const adminDelete = async (u) => { const pw = await askPassword(L(`${u.username} 삭제 — 확인을 위해 내 비밀번호를 입력하세요.`, `Delete ${u.username} — enter YOUR password to confirm.`)); if (pw == null) return; run(launcher.delete(`/admin/users/${u.id}`, { data: { password: pw } }), () => L('삭제됨', 'deleted')) }
-  const adminRole = (u) => { const to = u.role === 'manager' ? 'user' : 'manager'; run(launcher.post(`/admin/users/${u.id}/role`, { role: to }), () => L(`${u.username} → ${to}`, `${u.username} → ${to}`)) }
+  const adminRole = (u) => {
+    const to = u.role === 'manager' ? 'user' : 'manager'
+    // Promoting to manager = GLOBAL admin over every service and project — warn first.
+    if (to === 'manager' && !window.confirm(L(
+      `${u.username}을(를) 전체 관리자(매니저)로 승격할까요?\n\n매니저는 모든 서비스·프로젝트·계정에 대한 관리 권한을 갖습니다. 특정 서비스만 맡기려면 아래의 "관리 권한 (서비스/프로젝트)"를 사용하세요.`,
+      `Promote ${u.username} to GLOBAL manager?\n\nA manager can administer every service, project and account. To delegate just one service, use "Admin (service / project)" below instead.`))) return
+    run(launcher.post(`/admin/users/${u.id}/role`, { role: to }), () => L(`${u.username} → ${to}`, `${u.username} → ${to}`))
+  }
   const adminActive = (u) => run(launcher.post(`/admin/users/${u.id}/active`, { active: u.is_active === false }), () => L(u.is_active === false ? '활성화됨' : '비활성화됨', u.is_active === false ? 'activated' : 'deactivated'))
   const removeFromGroup = (u, g) => run(launcher.delete(`/admin/groups/${g.id}/members/${u.id}`), () => L(`${g.name}에서 제외됨`, `removed from ${g.name}`))
   const resolveReq = (rid, action) => run(launcher.post(`/admin/access-requests/${rid}`, { action }), () => action === 'approve' ? L('승인됨', 'approved') : L('거절됨', 'rejected'))
   // scoped (service/project) admin: grant sets is_admin (also grants access); revoke drops admin, keeps access.
   const grantScopedAdmin = (u) => agrant.svc && run(launcher.post('/admin/permissions', { user_id: u.id, service: agrant.svc, project: agrant.proj.trim(), admin: true }), () => { setAgrant({ svc: '', proj: '' }); return L('관리 권한 부여됨', 'admin granted') })
   const revokeScopedAdmin = (u, p) => run(launcher.post('/admin/permissions', { user_id: u.id, service: p.service, project: p.project || '', admin: false }), () => L('관리 권한 해제됨', 'admin revoked'))
+  // Selecting a service loads its project list once, for the project dropdown
+  // (a single-project service 404s → empty list → only "whole service" remains).
+  async function agrantPickSvc(svc) {
+    setAgrant({ svc, proj: '' })
+    if (svc && !projCache[svc]) {
+      try { const r = await launcher.get(`/services/${svc}/projects`); setProjCache((c) => ({ ...c, [svc]: r.data })) }
+      catch { setProjCache((c) => ({ ...c, [svc]: [] })) }
+    }
+  }
 
   if (!me) return <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-small,12px)' }}>{msg || '…'}</div>
 
@@ -346,21 +363,32 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
 
               {/* scoped (service/project) admin grants */}
               <Field label={L('관리 권한 (서비스/프로젝트)', 'Admin (service / project)')} align="start">
-                {(u.permissions || []).filter((p) => p.admin).length === 0
+                {(u.permissions || []).filter((p) => p.admin).length === 0 && (u.inherited_permissions || []).filter((p) => p.admin).length === 0
                   ? <span style={fieldMuted}>{L('부여된 관리 권한 없음', 'no admin grants')}</span>
-                  : (u.permissions || []).filter((p) => p.admin).map((p, i) => (
-                      <span key={i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
-                        <Button size="sm" variant="ghost" icon onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
-                      </span>
-                    ))}
+                  : <>
+                      {(u.permissions || []).filter((p) => p.admin).map((p, i) => (
+                        <span key={'d' + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
+                          <Button size="sm" variant="ghost" icon onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
+                        </span>
+                      ))}
+                      {/* group-inherited admin: revoked from the group, not per-user — no ✕ here */}
+                      {(u.inherited_permissions || []).filter((p) => p.admin).map((p, i) => (
+                        <span key={'g' + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }} title={L('그룹에서 상속됨', 'inherited from group')}>
+                          {p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'} · {p.group}
+                        </span>
+                      ))}
+                    </>}
               </Field>
               {openUser === u.id && (
                 <FieldActions>
-                  <select value={agrant.svc} onChange={(e) => setAgrant((s) => ({ ...s, svc: e.target.value }))} style={{ ...input, height: 28, maxWidth: 180 }}>
+                  <select value={agrant.svc} onChange={(e) => agrantPickSvc(e.target.value)} style={{ ...input, height: 28, maxWidth: 180 }}>
                     <option value="">{L('서비스 선택', 'service…')}</option>
                     {services.map((s) => <option key={s.name} value={s.name}>{s.label || s.name}</option>)}
                   </select>
-                  <input value={agrant.proj} onChange={(e) => setAgrant((s) => ({ ...s, proj: e.target.value }))} placeholder={L('프로젝트 (비우면 전체)', 'project (blank = whole service)')} style={{ ...input, height: 28, flex: 1, minWidth: 140 }} />
+                  <select value={agrant.proj} onChange={(e) => setAgrant((s) => ({ ...s, proj: e.target.value }))} disabled={!agrant.svc} style={{ ...input, height: 28, flex: 1, minWidth: 140 }}>
+                    <option value="">{L('전체 (서비스 전체)', 'all (whole service)')}</option>
+                    {(projCache[agrant.svc] || []).map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
+                  </select>
                   <Button size="sm" variant="secondary" disabled={!agrant.svc} onClick={() => grantScopedAdmin(u)}>{L('관리자 부여', 'Grant admin')}</Button>
                 </FieldActions>
               )}

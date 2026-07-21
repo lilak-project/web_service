@@ -154,7 +154,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
           <div style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', marginBottom: 4 }}>{L('관리자', 'Administrators')}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
             {(admins.managers || []).map((n) => <span key={'m' + n} style={{ fontSize: 'var(--fs-micro, 10px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{n} · {L('전체', 'global')}</span>)}
-            {(admins.scoped || []).map((a, i) => <span key={'s' + i} style={{ fontSize: 'var(--fs-micro, 10px)', fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{a.username} · {a.project ? a.project : L('서비스 전체', 'whole service')}</span>)}
+            {(admins.scoped || []).map((a, i) => <span key={'s' + i} style={{ fontSize: 'var(--fs-micro, 10px)', fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{a.username} · {a.project ? a.project : L('서비스 전체', 'whole service')}{a.group ? ` (${a.group})` : ''}</span>)}
             {(admins.managers || []).length + (admins.scoped || []).length === 0 && <span style={{ color: 'var(--text-muted)' }}>—</span>}
           </div>
         </div>

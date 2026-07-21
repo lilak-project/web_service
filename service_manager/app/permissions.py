@@ -23,45 +23,76 @@ def is_admin(user: models.User) -> bool:
 
 
 def admin_scopes(db: Session, user_id: int) -> list[dict]:
-    """The service/project scopes a user is a SCOPED admin of (is_admin grants).
-    project="" = whole-service admin; non-empty = that project only."""
-    return [{"service": r.service_name, "project": r.project}
-            for r in db.query(models.ServicePermission).filter(
-                models.ServicePermission.user_id == user_id,
-                models.ServicePermission.is_admin.is_(True),
-            ).all()]
+    """The service/project scopes a user is a SCOPED admin of — their own is_admin
+    grants plus ones inherited from groups. project="" = whole-service admin;
+    non-empty = that project only."""
+    seen = set()
+    out = []
+    rows = db.query(models.ServicePermission).filter(
+        models.ServicePermission.user_id == user_id,
+        models.ServicePermission.is_admin.is_(True)).all()
+    gids = user_group_ids(db, user_id)
+    if gids:
+        rows += db.query(models.GroupPermission).filter(
+            models.GroupPermission.group_id.in_(gids),
+            models.GroupPermission.is_admin.is_(True)).all()
+    for r in rows:
+        key = (r.service_name, r.project)
+        if key not in seen:
+            seen.add(key)
+            out.append({"service": r.service_name, "project": r.project})
+    return out
 
 
 def has_any_admin(db: Session, user_id: int) -> bool:
-    """True if the user is a scoped admin of anything (→ dark-grey avatar)."""
-    return db.query(models.ServicePermission).filter(
+    """True if the user is a scoped admin of anything, directly or via a group
+    (→ dark-grey avatar)."""
+    if db.query(models.ServicePermission).filter(
         models.ServicePermission.user_id == user_id,
         models.ServicePermission.is_admin.is_(True),
+    ).first() is not None:
+        return True
+    gids = user_group_ids(db, user_id)
+    if not gids:
+        return False
+    return db.query(models.GroupPermission).filter(
+        models.GroupPermission.group_id.in_(gids),
+        models.GroupPermission.is_admin.is_(True),
+    ).first() is not None
+
+
+def _scoped_admin(db: Session, user_id: int, svc: str, proj: str) -> bool:
+    """An is_admin grant for exactly (svc, proj) — direct or group-inherited."""
+    if db.query(models.ServicePermission).filter(
+        models.ServicePermission.user_id == user_id,
+        models.ServicePermission.service_name == svc,
+        models.ServicePermission.project == proj,
+        models.ServicePermission.is_admin.is_(True),
+    ).first() is not None:
+        return True
+    gids = user_group_ids(db, user_id)
+    if not gids:
+        return False
+    return db.query(models.GroupPermission).filter(
+        models.GroupPermission.group_id.in_(gids),
+        models.GroupPermission.service_name == svc,
+        models.GroupPermission.project == proj,
+        models.GroupPermission.is_admin.is_(True),
     ).first() is not None
 
 
 def is_service_admin(db: Session, user: models.User, svc: str) -> bool:
-    """Global manager, or a whole-service scoped admin of `svc`."""
+    """Global manager, or a whole-service scoped admin of `svc` (direct or group)."""
     if is_admin(user):
         return True
-    return db.query(models.ServicePermission).filter(
-        models.ServicePermission.user_id == user.id,
-        models.ServicePermission.service_name == svc,
-        models.ServicePermission.project == "",
-        models.ServicePermission.is_admin.is_(True),
-    ).first() is not None
+    return _scoped_admin(db, user.id, svc, "")
 
 
 def is_project_admin(db: Session, user: models.User, svc: str, proj: str) -> bool:
     """Global manager, whole-service admin of `svc`, or the admin of this project."""
     if is_service_admin(db, user, svc):
         return True
-    return db.query(models.ServicePermission).filter(
-        models.ServicePermission.user_id == user.id,
-        models.ServicePermission.service_name == svc,
-        models.ServicePermission.project == proj,
-        models.ServicePermission.is_admin.is_(True),
-    ).first() is not None
+    return _scoped_admin(db, user.id, svc, proj)
 
 
 def verification_current(user: models.User) -> bool:

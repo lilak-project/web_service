@@ -240,7 +240,8 @@ def _inherited_perms(db: Session, uid: int) -> list:
     if not gids:
         return []
     gnames = {g.id: g.name for g in db.query(models.Group).filter(models.Group.id.in_(gids)).all()}
-    return [{"service": p.service_name, "project": p.project or None, "group": gnames.get(p.group_id)}
+    return [{"service": p.service_name, "project": p.project or None, "group": gnames.get(p.group_id),
+             "admin": bool(p.is_admin)}
             for p in db.query(models.GroupPermission).filter(models.GroupPermission.group_id.in_(gids)).all()]
 
 
@@ -536,7 +537,7 @@ def admin_delete_user(uid: int, body: ConfirmPwBody, admin: models.User = Depend
 # ── Groups (admin) ────────────────────────────────────────────────────────────
 def _group_view(db: Session, g: models.Group) -> dict:
     members = db.query(models.GroupMembership).filter(models.GroupMembership.group_id == g.id).count()
-    perms = [{"service": p.service_name, "project": p.project or None}
+    perms = [{"service": p.service_name, "project": p.project or None, "admin": bool(p.is_admin)}
              for p in db.query(models.GroupPermission).filter(models.GroupPermission.group_id == g.id).all()]
     return {"id": g.id, "name": g.name, "description": g.description,
             "icon": g.icon, "color": g.color, "members": members, "permissions": perms}
@@ -683,17 +684,22 @@ class GroupPermBody(BaseModel):
     group_id: int
     service: str
     project: Optional[str] = ""
+    admin: bool = False           # every member becomes a scoped admin of this scope
 
 
 @router.post("/api/admin/group-permissions", status_code=201)
 def grant_group_perm(body: GroupPermBody, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
     proj = (body.project or "").strip()
-    if not db.query(models.GroupPermission).filter(
+    exists = db.query(models.GroupPermission).filter(
         models.GroupPermission.group_id == body.group_id,
         models.GroupPermission.service_name == body.service,
-        models.GroupPermission.project == proj).first():
-        db.add(models.GroupPermission(group_id=body.group_id, service_name=body.service, project=proj))
-        db.commit()
+        models.GroupPermission.project == proj).first()
+    if exists:
+        exists.is_admin = bool(body.admin)   # idempotent: also toggles the admin flag
+    else:
+        db.add(models.GroupPermission(group_id=body.group_id, service_name=body.service,
+                                      project=proj, is_admin=bool(body.admin)))
+    db.commit()
     return {"granted": True}
 
 

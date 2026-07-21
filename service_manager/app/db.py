@@ -69,6 +69,10 @@ def _migrate() -> None:
             "icon": "ALTER TABLE portal_groups ADD COLUMN icon VARCHAR(64)",
             "color": "ALTER TABLE portal_groups ADD COLUMN color VARCHAR(16)",
         })
+    if "portal_group_permissions" in names:
+        add_missing("portal_group_permissions", {
+            "is_admin": "ALTER TABLE portal_group_permissions ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0",
+        })
     if "portal_invite_codes" in names:
         add_missing("portal_invite_codes", {
             "kind": "ALTER TABLE portal_invite_codes ADD COLUMN kind VARCHAR(16) NOT NULL DEFAULT 'project'",
