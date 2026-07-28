@@ -569,13 +569,14 @@ export default function ProjectsPage() {
     ) : (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', minWidth: 0,
         padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)', ...capNarrow }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '118px 118px', gap: 8, flexShrink: 0 }}>
           {navBtn('home', 'home', t('portal_nav_home'))}
           {navBtn('settings', 'settings', t('portal_nav_settings'))}
         </div>
         <div style={{ flex: 1, minWidth: 8 }} />
         {big ? (
-          <AccountMenu user={user} isManager={isManager} onLogout={logout} />
+          // Same 118px hit-box as Home/Settings (and as the narrow header's account).
+          <AccountMenu user={user} isManager={isManager} onLogout={logout} width={118} />
         ) : (
           <>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>

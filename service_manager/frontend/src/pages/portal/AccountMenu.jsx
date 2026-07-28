@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Avatar, Icon, MANAGER_COLOR } from 'lilak-ui'
 import { useLang } from '../../context/LangContext'
+import { useHomeCols } from '../../homeCols'
 
 /**
  * AccountMenu — the top-right account control: avatar + name as a button that
@@ -9,7 +10,8 @@ import { useLang } from '../../context/LangContext'
  * outside-click or Escape.
  */
 export default function AccountMenu({ user, isManager, onLogout, width }) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
+  const { single, toggle } = useHomeCols()   // Home grid: always 1 column vs responsive
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -56,6 +58,17 @@ export default function AccountMenu({ user, isManager, onLogout, width }) {
             </div>
             {user.email && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>}
           </div>
+          {/* Home layout: force single column, or allow the responsive single/multi. */}
+          <button type="button" style={item}
+            title={lang === 'ko' ? '켜면 홈 카드가 넓은 화면에서도 항상 1열' : 'On = Home cards stay 1 column even on wide screens'}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            onClick={() => toggle()}>
+            <Icon name={single ? 'toggle-right' : 'toggle-left'} size={18}
+              color={single ? 'var(--btn-primary-bg)' : 'var(--text-muted)'} />
+            {lang === 'ko' ? '홈 1열 고정' : 'Home: single column'}
+          </button>
+          <div style={{ height: 1, background: 'var(--border-subtle)', margin: '6px 4px' }} />
           <button type="button" style={item}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)' }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}

@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, Children } from 'react'
+import { useHomeCols } from '../../homeCols'
 
 /**
  * MasonryGrid — the home service cards laid out in fixed vertical columns.
@@ -25,6 +26,7 @@ export const SINGLE_MAX_W = TWO_COL_MIN_W - 1
 export function MasonryGrid({ children }) {
   const ref = useRef(null)
   const [cols, setCols] = useState(1)
+  const { single } = useHomeCols()   // user pref: 'single' forces one column at any width
 
   useEffect(() => {
     const el = ref.current
@@ -36,11 +38,12 @@ export function MasonryGrid({ children }) {
     return () => ro.disconnect()
   }, [])
 
+  const effCols = single ? 1 : cols
   const kids = Children.toArray(children)
-  const columns = Array.from({ length: cols }, (_, c) => kids.filter((_, i) => i % cols === c))
+  const columns = Array.from({ length: effCols }, (_, c) => kids.filter((_, i) => i % effCols === c))
 
   // Name the two states so they're easy to refer to (and style) from the DOM.
-  const layout = cols <= 1 ? 'single' : 'multi'
+  const layout = effCols <= 1 ? 'single' : 'multi'
   return (
     <div ref={ref} data-layout={layout} style={{ display: 'flex', gap: GAP, alignItems: 'flex-start' }}>
       {columns.map((col, c) => (
