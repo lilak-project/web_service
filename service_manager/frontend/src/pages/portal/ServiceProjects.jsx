@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import { useNarrowRef } from './useNarrowRef'
 
 /**
  * ServiceProjects — INLINE project panel for a multi-project service, expanded
@@ -22,6 +23,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   const [err, setErr] = useState('')
   const [drag, setDrag] = useState(false)
   const fileRef = useRef(null)
+  const [wrapRef, narrow] = useNarrowRef(460)   // narrow (multi-col) card → buttons on their own line
 
   async function load() {
     try { setProjects((await launcher.get(`/services/${svc}/projects`)).data) }
@@ -100,7 +102,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   const inputStyle = { height: 32, flex: 1, minWidth: 0, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 10px', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
 
   return (
-    <div {...dropProps}
+    <div {...dropProps} ref={wrapRef}
       style={{ padding: '16px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)',
         outline: drag ? '2px dashed var(--btn-primary-bg, #4c6ef5)' : 'none', outlineOffset: -4, borderRadius: 6 }}>
       {err && <div style={{ color: 'var(--danger-text)', fontSize: 'var(--fs-small, 12px)', marginBottom: 6 }}>{err}</div>}
@@ -142,7 +144,8 @@ export default function ServiceProjects({ service, canManage, manage = false, on
                 : p.can_enter ? (p.running ? t('projects_running', p.port) : t('projects_stopped'))
                 : ''}
             </span>
-            <div style={{ flex: 1, minWidth: 8 }} />
+            {/* narrow (multi-col) card: name + status on line 1, buttons on the next line */}
+            {narrow ? <div style={{ flexBasis: '100%', height: 0 }} aria-hidden="true" /> : <div style={{ flex: 1, minWidth: 8 }} />}
             {p.can_enter ? (
               <Button variant="primary" disabled={busy === p.name} style={btn}
                 onClick={() => (p.running ? enter(p.name) : start(p.name))}>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import { useNarrowRef } from './useNarrowRef'
 
 /**
  * ServiceSingle — inline panel for a single (non-multi-project) service, shown
@@ -44,13 +45,15 @@ export default function ServiceSingle({ service, canManage, manage = false, onRe
     finally { setBusy(false) }
   }
 
-  const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0' }
+  // Narrow (multi-column) card → status on line 1, the button(s) on the next line.
+  const [wrapRef, narrow] = useNarrowRef(460)
+  const row = { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '12px 0' }
   // Enter / Stop sized up to match the larger status line (touch-friendly on mobile).
   const btn = { height: 40, borderRadius: 10, padding: '0 16px', minWidth: 88,
     fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }
 
   return (
-    <div style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)' }}>
+    <div ref={wrapRef} style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)' }}>
       {err && <div style={{ color: 'var(--danger-text)', fontSize: 'var(--fs-small, 12px)', marginBottom: 6 }}>{err}</div>}
       <div style={row}>
         <span style={{ flexShrink: 0, width: 11, height: 11, borderRadius: '50%',
@@ -60,7 +63,7 @@ export default function ServiceSingle({ service, canManage, manage = false, onRe
             : canRequest ? t('projects_request_hint')
             : service.running ? t('projects_running', service.port) : t('projects_stopped')}
         </span>
-        <div style={{ flex: 1 }} />
+        {narrow ? <div style={{ flexBasis: '100%', height: 0 }} aria-hidden="true" /> : <div style={{ flex: 1 }} />}
         {canRequest ? (
           <Button variant="secondary" disabled={busy || service.requested} style={btn} onClick={request}>
             {service.requested ? t('projects_requested') : t('projects_request')}

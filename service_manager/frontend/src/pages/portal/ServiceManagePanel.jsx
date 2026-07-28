@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Button, Icon, ColorPicker, AVATAR_COLORS, LayoutEditor } from 'lilak-ui'
 import { launcher, serviceApi } from '../../api'
 import { useLang } from '../../context/LangContext'
@@ -38,20 +38,6 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   const [msg, setMsg] = useState('')
   const [admins, setAdmins] = useState(null)   // { managers:[names], scoped:[{username,project}] }
   const dirty = (icon !== startIcon) || (color !== startColor) || (label !== startLabel)
-
-  // On a narrow card the name row can't hold icon+name AND the icon/colour/save
-  // controls on one line, so it wraps at an ugly spot. Measure the panel width and,
-  // when it's tight, force a clean break right after the name input: [icon][name]
-  // on top, the editors below. Wide cards keep everything on one line.
-  const rowRef = useRef(null)
-  const [narrowRow, setNarrowRow] = useState(false)
-  useEffect(() => {
-    const el = rowRef.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(([e]) => setNarrowRow(e.contentRect.width < 460))
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
 
   // Who administers this service — global managers + scoped (service/project) admins.
   useEffect(() => {
@@ -122,14 +108,15 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
 
   return (
     <div style={{ padding: '14px 14px 16px 46px', borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* name + icon + colour */}
-      <div ref={rowRef} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      {/* name on line 1; the icon/colour/random/save editors always drop to their
+          own line, left-aligned (the name input grows, so keeping them inline would
+          push them to the right edge). */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, border: '1px solid var(--border-default)' }}>
           <Icon name={icon} size={22} weight={ICON_WEIGHT} color={color} />
         </span>
         <input style={field} value={label} placeholder={svc.name} onChange={(e) => setLabel(e.target.value)} />
-        {/* narrow card: break here so the editors drop to their own line */}
-        {narrowRow && <div style={{ flexBasis: '100%', height: 0 }} aria-hidden="true" />}
+        <div style={{ flexBasis: '100%', height: 0 }} aria-hidden="true" />
         <IconPick value={icon} onChange={setIcon} color={color} />
         <ColorPicker value={color} onChange={setColor} />
         <Button variant="secondary" size="sm" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'Random')}><Icon name="refresh" size={13} /></Button>
