@@ -12,7 +12,15 @@ import { useRef, useState, useEffect, Children } from 'react'
  * animated height.
  */
 const GAP = 12
-const COL = 340   // min column width
+const COL = 340   // min column width; a new column appears every (COL + GAP)px
+
+// Breakpoints, in terms of the GRID's own width (not the viewport):
+//   < SINGLE_MAX_W      → 1 column  (data-layout="single")
+//   ≥ TWO_COL_MIN_W     → 2 columns (data-layout="multi"), etc.
+// TWO_COL_MIN_W = 2*COL + GAP = 692px. The grid = viewport − 32px page padding
+// (16px each side, no scrollbar), so 2 columns kick in at ≈ 724px of window width.
+export const TWO_COL_MIN_W = 2 * COL + GAP   // 692 (grid px); ≈ 724px viewport
+export const SINGLE_MAX_W = TWO_COL_MIN_W - 1
 
 export function MasonryGrid({ children }) {
   const ref = useRef(null)
@@ -31,8 +39,10 @@ export function MasonryGrid({ children }) {
   const kids = Children.toArray(children)
   const columns = Array.from({ length: cols }, (_, c) => kids.filter((_, i) => i % cols === c))
 
+  // Name the two states so they're easy to refer to (and style) from the DOM.
+  const layout = cols <= 1 ? 'single' : 'multi'
   return (
-    <div ref={ref} style={{ display: 'flex', gap: GAP, alignItems: 'flex-start' }}>
+    <div ref={ref} data-layout={layout} style={{ display: 'flex', gap: GAP, alignItems: 'flex-start' }}>
       {columns.map((col, c) => (
         <div key={c} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
           {col}
