@@ -1,0 +1,64 @@
+{
+  "_comment": "Installable-service catalog for the Service Manager card. `name` = registered service name (matches deploy/seed/<name>/service.json); `dir` = checkout directory under the stack root; `repo` = public clone URL. `needs_kit` = frontend build aliases lilak_ui via LILAK_UI_PATH. Install jobs skip missing frontend/requirements gracefully, so entries stay small.",
+  "kit": {
+    "dir": "lilak_ui",
+    "repo": "https://github.com/lilak-project/lilak_ui.git"
+  },
+  "services": [
+    {
+      "name": "elog",
+      "dir": "lilak_elog",
+      "repo": "https://github.com/lilak-project/lilak_elog.git",
+      "label": "LILAK elog",
+      "icon": "pen",
+      "color": "#00a3cc",
+      "needs_kit": true,
+      "ko": "실험 전자 로그북 (멀티프로젝트)",
+      "en": "Experiment e-logbook (multi-project)"
+    },
+    {
+      "name": "asset_manager",
+      "dir": "asset_manager",
+      "repo": "https://github.com/ejungwoo/cens-assets-tracker.git",
+      "label": "Asset Manager",
+      "icon": "scroll",
+      "color": "#00b3a7",
+      "needs_kit": true,
+      "ko": "실험 장비/자산 관리 (멀티프로젝트)",
+      "en": "Equipment / asset tracker (multi-project)"
+    },
+    {
+      "name": "nptoy",
+      "dir": "nptoy",
+      "repo": "https://github.com/lilak-project/nptoy.git",
+      "label": "nptoy",
+      "icon": "spinner",
+      "color": "#ff5900",
+      "needs_kit": true,
+      "ko": "핵물리 시뮬레이션 도구 (Geant4 toy)",
+      "en": "Nuclear-physics simulation toys (Geant4)"
+    },
+    {
+      "name": "analysis",
+      "dir": "analysis",
+      "repo": "https://github.com/lilak-project/lilak-analysis.git",
+      "label": "analysis",
+      "icon": "chart-pie",
+      "color": "#003180",
+      "needs_kit": true,
+      "ko": "분석 노트/파일 공유",
+      "en": "Analysis notes / file sharing"
+    },
+    {
+      "name": "scattering_simulation_2d",
+      "dir": "scattering_simulation_2d",
+      "repo": "https://github.com/lilak-project/scattering_simulation_2d.git",
+      "label": "2D scattering",
+      "icon": "flask",
+      "color": "#7048e8",
+      "needs_kit": false,
+      "ko": "2차원 산란 몬테카를로 시뮬레이션 (정적)",
+      "en": "2-D scattering Monte-Carlo simulation (static)"
+    }
+  ]
+}
