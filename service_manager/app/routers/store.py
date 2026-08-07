@@ -88,6 +88,36 @@ def _stream(job_id: str, argv: list[str], cwd: Optional[Path] = None,
         return -1
 
 
+# git must never block a job thread on a credential prompt.
+NO_PROMPT = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": ""}
+
+
+def _ensure_kit(job_id: str) -> bool:
+    """Make the shared UI kit usable: clone it if missing AND install its own
+    node_modules. The kit is source-aliased, so imports *inside kit files*
+    (react-markdown, …) resolve against the KIT's node_modules — a consumer listing
+    the same dependency does not help. A fresh clone has none (gitignored)."""
+    kit = _catalog().get("kit") or {}
+    if not LILAK_UI_PATH.exists():
+        git = _tool("git")
+        if not git:
+            _log(job_id, "! git을 찾을 수 없습니다")
+            return False
+        _log(job_id, "· lilak_ui (공용 UI 킷) 클론")
+        if _stream(job_id, [git, "clone", "--depth", "1", kit.get("repo", ""), str(LILAK_UI_PATH)],
+                   env_extra=NO_PROMPT) != 0:
+            return False
+    if (LILAK_UI_PATH / "package.json").exists() and not (LILAK_UI_PATH / "node_modules").exists():
+        npm = _tool("npm")
+        if not npm:
+            _log(job_id, "! npm을 찾을 수 없습니다 (Node 설치 필요)")
+            return False
+        _log(job_id, "· lilak_ui 의존성 설치")
+        if _stream(job_id, [npm, "install", "--no-audit", "--no-fund"], cwd=LILAK_UI_PATH) != 0:
+            return False
+    return True
+
+
 def _build_frontend(job_id: str, repo_dir: Path, needs_kit: bool) -> bool:
     """npm install + build the first frontend found (frontend/ then repo root).
     Returns False only on a FAILED build; no frontend at all is fine (backend-only)."""
@@ -159,11 +189,8 @@ def _run_install(job_id: str, entry: dict) -> None:
     _set(job_id, status="running")
 
     # The shared UI kit first — service frontends are built against its source.
-    if entry.get("needs_kit") and not LILAK_UI_PATH.exists():
-        kit = _catalog().get("kit") or {}
-        _log(job_id, "· lilak_ui (공용 UI 킷) 클론")
-        if _stream(job_id, [git, "clone", "--depth", "1", kit.get("repo", ""), str(LILAK_UI_PATH)]) != 0:
-            return _set(job_id, status="error", error="lilak_ui 클론 실패")
+    if entry.get("needs_kit") and not _ensure_kit(job_id):
+        return _set(job_id, status="error", error="lilak_ui (공용 UI 킷) 준비 실패")
 
     repo_dir = SERVICES_ROOT / entry["dir"]
     if not repo_dir.exists():
@@ -173,10 +200,7 @@ def _run_install(job_id: str, entry: dict) -> None:
         argv = [git, "clone", "--depth", "1"]
         if entry.get("branch"):
             argv += ["--branch", entry["branch"]]
-        # Never let git block the job thread on a credential prompt (a private repo
-        # over https would otherwise hang forever with no output).
-        no_prompt = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": ""}
-        if _stream(job_id, argv + [entry["repo"], str(repo_dir)], env_extra=no_prompt) != 0:
+        if _stream(job_id, argv + [entry["repo"], str(repo_dir)], env_extra=NO_PROMPT) != 0:
             hint = ("비공개 레포입니다 — 이 서버에 GitHub 접근 권한(SSH 키)이 필요합니다."
                     if entry.get("private") else "레포 주소/브랜치/네트워크를 확인하세요.")
             return _set(job_id, status="error", error=f"git clone 실패 — {hint}")
@@ -202,6 +226,9 @@ def _run_build_portal(job_id: str, pull: bool) -> None:
         if _stream(job_id, [git, "-C", str(SERVICES_ROOT), "pull", "--ff-only"]) != 0:
             return _set(job_id, status="error",
                         error="git pull 실패 (로컬 변경/분기 확인 — 수동으로 정리 후 다시 시도)")
+    # The portal's own frontend is built against the kit source too.
+    if not _ensure_kit(job_id):
+        return _set(job_id, status="error", error="lilak_ui (공용 UI 킷) 준비 실패")
     fe = config.ROOT / "frontend"
     npm = _tool("npm")
     if not npm:
