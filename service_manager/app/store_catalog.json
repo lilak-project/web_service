@@ -1,5 +1,5 @@
 {
-  "_comment": "Installable-service catalog for the Service Manager card. `name` = registered service name (matches deploy/seed/<name>/service.json); `dir` = checkout directory under the stack root; `repo` = public clone URL. `needs_kit` = frontend build aliases lilak_ui via LILAK_UI_PATH. Install jobs skip missing frontend/requirements gracefully, so entries stay small.",
+  "_comment": "Installable-service catalog for the Service Manager card. `name` = registered service name (matches deploy/seed/<name>/service.json); `dir` = checkout directory under the stack root; `repo` = public clone URL; `branch` (optional) = clone this branch instead of the repo default. `needs_kit` = frontend build aliases lilak_ui via LILAK_UI_PATH. Install jobs skip missing frontend/requirements gracefully, so entries stay small.",
   "kit": {
     "dir": "lilak_ui",
     "repo": "https://github.com/lilak-project/lilak_ui.git"
@@ -20,6 +20,7 @@
       "name": "asset_manager",
       "dir": "asset_manager",
       "repo": "https://github.com/ejungwoo/cens-assets-tracker.git",
+      "branch": "lilak-ui-frontend",
       "label": "Asset Manager",
       "icon": "scroll",
       "color": "#00b3a7",
@@ -30,7 +31,8 @@
     {
       "name": "nptoy",
       "dir": "nptoy",
-      "repo": "https://github.com/lilak-project/nptoy.git",
+      "repo": "git@github.com:lilak-project/nptoy.git",
+      "private": true,
       "label": "nptoy",
       "icon": "spinner",
       "color": "#ff5900",

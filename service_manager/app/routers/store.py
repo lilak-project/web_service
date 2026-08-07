@@ -125,10 +125,15 @@ def _register(job_id: str, name: str, entry: dict) -> bool:
         return False
     m = json.loads(seed.read_text(encoding="utf-8"))
     st = m.get("start") or {}
+
+    def _reroot(v):
+        """Container path (/app/<dir>) → this host's stack dir. Seeds are written for
+        the Docker image, so cwd/cmd AND env values (e.g. ASSET_DIST_DIR) carry /app."""
+        return v.replace("/app/", f"{SERVICES_ROOT}/") if isinstance(v, str) and "/app/" in v else v
+
     for k in ("cwd", "cmd"):
-        v = st.get(k)
-        if isinstance(v, str) and "/app/" in v:
-            st[k] = v.replace("/app/", f"{SERVICES_ROOT}/")
+        st[k] = _reroot(st.get(k))
+    st["env"] = {k: _reroot(v) for k, v in (st.get("env") or {}).items()}
     m["start"] = st
     # Seeds may omit display fields (or carry explicit nulls) — fill from the
     # catalog so the card looks right.
@@ -162,8 +167,19 @@ def _run_install(job_id: str, entry: dict) -> None:
 
     repo_dir = SERVICES_ROOT / entry["dir"]
     if not repo_dir.exists():
-        if _stream(job_id, [git, "clone", "--depth", "1", entry["repo"], str(repo_dir)]) != 0:
-            return _set(job_id, status="error", error="git clone 실패 (레포 주소/네트워크 확인)")
+        # `branch` matters: a service's portal-ready code may live off the default
+        # branch (asset_manager's LILAK port is on `lilak-ui-frontend`, while its
+        # main is still the pre-portal app).
+        argv = [git, "clone", "--depth", "1"]
+        if entry.get("branch"):
+            argv += ["--branch", entry["branch"]]
+        # Never let git block the job thread on a credential prompt (a private repo
+        # over https would otherwise hang forever with no output).
+        no_prompt = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": ""}
+        if _stream(job_id, argv + [entry["repo"], str(repo_dir)], env_extra=no_prompt) != 0:
+            hint = ("비공개 레포입니다 — 이 서버에 GitHub 접근 권한(SSH 키)이 필요합니다."
+                    if entry.get("private") else "레포 주소/브랜치/네트워크를 확인하세요.")
+            return _set(job_id, status="error", error=f"git clone 실패 — {hint}")
     else:
         _log(job_id, f"· 코드 이미 존재: {repo_dir} — 클론 생략")
 
@@ -218,6 +234,7 @@ def store_list(_: models.User = Depends(require_portal_admin)):
         out.append({
             "name": e["name"], "dir": e["dir"], "repo": e["repo"], "label": e.get("label"),
             "icon": e.get("icon"), "color": e.get("color"), "ko": e.get("ko"), "en": e.get("en"),
+            "private": bool(e.get("private")),
             "code_present": (SERVICES_ROOT / e["dir"]).exists(),
             "registered": registry.manifest_path(e["name"]).exists(),
         })

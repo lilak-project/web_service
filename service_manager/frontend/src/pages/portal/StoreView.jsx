@@ -89,6 +89,12 @@ export default function StoreView({ onChanged }) {
             <Icon name={s.icon || 'circle'} size={20} weight="fill" color={s.color || 'var(--text-primary)'} style={{ flexShrink: 0 }} />
             <span style={{ fontWeight: 600, fontSize: 'var(--fs-medium, 14px)' }}>{s.label || s.name}</span>
             {stateBadge(s)}
+            {s.private && (
+              <span style={{ ...badge, background: 'var(--surface-2)', color: 'var(--text-muted)' }}
+                title={L('비공개 레포 — 서버에 SSH 키 필요', 'private repo — needs an SSH key on the server')}>
+                {L('비공개', 'private')}
+              </span>
+            )}
             <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L(s.ko, s.en)}</span>
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
