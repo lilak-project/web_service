@@ -31,8 +31,7 @@
     {
       "name": "nptoy",
       "dir": "nptoy",
-      "repo": "git@github.com:lilak-project/nptoy.git",
-      "private": true,
+      "repo": "https://github.com/lilak-project/nptoy.git",
       "label": "nptoy",
       "icon": "spinner",
       "color": "#ff5900",
