@@ -9,6 +9,7 @@ import ArchivePanel from './portal/ArchivePanel'
 import ServiceManagePanel from './portal/ServiceManagePanel'
 import IconLabView from './portal/IconLabView'
 import NewServiceView from './portal/NewServiceView'
+import StoreView from './portal/StoreView'
 import ServiceProjects from './portal/ServiceProjects'
 import ServiceSingle from './portal/ServiceSingle'
 import AccountMenu from './portal/AccountMenu'
@@ -95,6 +96,9 @@ const ICON_SERVICE = { name: 'lilak icon', kind: 'tool', builtin: 'iconlab', ico
 // Admin-only builtin: opening it expands a form that scaffolds + builds + registers
 // a new lilak_ui-based service (see NewServiceView).
 const CREATE_SERVICE = { name: 'new-service', kind: 'tool', builtin: 'newservice', icon: 'plus', can_enter: true }
+// Admin-only builtin: install catalog services from git + rebuild the portal
+// (see StoreView). This is what makes a portal-only install self-sufficient.
+const STORE_SERVICE = { name: 'service manager', kind: 'tool', builtin: 'store', icon: 'download', can_enter: true }
 
 // The mark next to the title. Uses the editable /lilak-header.svg (set from the
 // icon editor); falls back to the kit logo when that file isn't there yet.
@@ -525,9 +529,10 @@ export default function ProjectsPage() {
   const bi = homeCfg?.builtins || {}
   const iconCard = { ...ICON_SERVICE, label: bi.iconlab?.label || ICON_SERVICE.name, icon: bi.iconlab?.icon || ICON_SERVICE.icon, color: bi.iconlab?.color }
   const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label || t('newsvc_title'), icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color }
+  const storeCard = { ...STORE_SERVICE, label: bi.store?.label || t('store_title'), icon: bi.store?.icon || STORE_SERVICE.icon, color: bi.store?.color }
   // The full home card list (builtins + services), ordered by the admin's saved order.
   const cards = isManager
-    ? sortByHome([iconCard, ...(projects || []), createCard], homeCfg?.order || [])
+    ? sortByHome([iconCard, ...(projects || []), storeCard, createCard], homeCfg?.order || [])
     : (projects || [])
 
   // Manage mode: move any card (builtin or service) up/down; persist the unified order.
@@ -680,7 +685,9 @@ export default function ProjectsPage() {
               // Single (non-project) services also open when the user only has a
               // request option, so "Request access" happens inside the card body.
               const canToggle = (manage && isManager) || !!p.can_enter || (!p.multi_project && !isBuiltin && !!p.can_request)
-              const statusText = isBuiltin ? (p.builtin === 'newservice' ? t('newsvc_card_hint') : t('iconlab_card_hint'))
+              const statusText = isBuiltin
+                ? (p.builtin === 'newservice' ? t('newsvc_card_hint')
+                  : p.builtin === 'store' ? t('store_card_hint') : t('iconlab_card_hint'))
                 : p.multi_project ? t('portal_proj_open_svc')
                 : (p.running ? t('projects_running', p.port) : t('projects_stopped'))
               return (
@@ -768,6 +775,8 @@ export default function ProjectsPage() {
                       <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', flex: 1, minWidth: 160 }}>{t('iconlab_card_hint')}</span>
                       <Button variant="primary" onClick={() => setView('iconlab')} style={ENTER_BTN}>{t('portal_proj_open')}</Button>
                     </div>
+                  ) : isBuiltin && p.builtin === 'store' ? (
+                    <StoreView onChanged={refresh} />
                   ) : isBuiltin && p.builtin === 'newservice' ? (
                     <NewServiceView onCreated={refresh} />
                   ) : p.multi_project ? (

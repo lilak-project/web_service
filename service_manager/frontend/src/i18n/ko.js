@@ -632,6 +632,8 @@ export default {
   iconlab_card_hint:       '아이콘 편집 도구',
   newsvc_title:            '서비스 만들기',
   newsvc_card_hint:        '새 서비스 생성 도구',
+  store_title:             '서비스 매니저',
+  store_card_hint:         '서비스 설치 · 포털 빌드 도구',
   newsvc_intro:            '이름과 탭을 입력하면 lilak_ui 기본 세트로 새 서비스를 만들어 포탈에 바로 등록합니다 (SSO·포탈 계정관리·기본 규칙 적용).',
   newsvc_name:             '서비스 이름 (id)',
   newsvc_name_rule:        '소문자로 시작 · [a-z0-9_] 만 · 폴더/URL 이름이 됩니다',
