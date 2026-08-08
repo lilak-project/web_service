@@ -167,3 +167,54 @@ cd service_manager && ./run.sh   # check the startup logs show NO [SECURITY] war
 Serve behind a TLS-terminating reverse proxy (nginx/Caddy). Confirm the startup log
 prints **no** `[SECURITY]` warnings.
 TLS 종단 리버스 프록시(nginx/Caddy) 뒤에 두고, 기동 로그에 `[SECURITY]` 경고가 **없는지** 확인하세요.
+
+---
+
+## 8. Portal-only install / 포털만 설치하기
+
+**한국어** — 서비스를 전부 미리 받을 필요는 없습니다. **포털만 설치**하고, 나중에 홈의
+**서비스 매니저** 카드에서 필요한 것만 골라 설치할 수 있습니다.
+
+```sh
+git clone https://github.com/lilak-project/web_service.git   # --recursive 없이
+```
+
+그다음 관리자로 로그인 → 홈의 **서비스 매니저** 카드를 열면:
+
+- **설치** — 카탈로그의 서비스를 `git clone` → 빌드 → 등록합니다. 진행 로그가 실시간으로
+  보이고, 끝나면 홈에 그 서비스 카드가 나타납니다. 공용 UI 킷(`lilak_ui`)이 없으면 먼저
+  자동으로 받습니다.
+- **포털 빌드** — 포털 프론트엔드를 다시 빌드합니다(`git pull --ff-only` 옵션). 빌드 후
+  새로고침하면 반영됩니다.
+
+카탈로그는 `service_manager/app/store_catalog.json` 입니다. 항목마다 `repo`, 선택적으로
+`branch`(기본 브랜치가 아닌 경우), `private`(비공개 레포 — 서버에 SSH 키 필요)를 둡니다.
+매니페스트는 `deploy/seed/<name>/service.json` 을 그대로 쓰되 컨테이너 경로(`/app/...`)를
+이 서버 경로로 바꿔 기록하므로, `start.cwd` 를 손으로 고칠 필요가 없습니다.
+
+**필요한 것**: 서버에 `git` + Node(`npm`). 현재 카탈로그는 전부 공개 레포라 GitHub 자격증명
+없이 설치됩니다.
+
+**English** — you do not need to fetch every service up front. Install the **portal
+alone** (clone without `--recursive`), then pick services later from the **Service
+Manager** card on Home:
+
+- **Install** — `git clone` → build → register a catalog service, with a live log;
+  its card appears on Home when the job finishes. The shared UI kit (`lilak_ui`) is
+  fetched automatically if absent.
+- **Build portal** — rebuild the portal frontend (optionally `git pull --ff-only`
+  first); refresh the page afterwards.
+
+The catalog is `service_manager/app/store_catalog.json`: each entry has a `repo`,
+optionally `branch` (when the portal-ready code is not on the default branch) and
+`private` (needs an SSH key on the server). Manifests come from
+`deploy/seed/<name>/service.json` with container paths (`/app/...`) re-rooted at this
+server's stack directory, so there is no `start.cwd` to fix up by hand.
+
+**Requires** `git` + Node (`npm`) on the server. Every current catalog entry is a
+public repo, so no GitHub credentials are needed.
+
+> **Create service** (the other admin card) also works on a portal-only checkout —
+> it fetches the kit the same way.
+> **Create service**(서비스 만들기) 카드도 포털만 받은 상태에서 동작합니다 — 킷을 같은
+> 방식으로 받아옵니다.

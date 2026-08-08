@@ -45,6 +45,10 @@
 
 ## 1. 최초 설치 (서버에서 1회)
 
+> 서비스를 전부 미리 받지 않고 **포털만 설치한 뒤 나중에 골라서 설치**할 수도 있습니다
+> (`--recursive` 생략 → 홈의 **서비스 매니저** 카드에서 설치).
+> 자세한 내용: `service_manager/DEPLOYMENT.md` §8
+
 ```sh
 # 1) 코드 받기 (--recursive 로 서브모듈까지 한 번에)
 sudo mkdir -p /opt/web_service && sudo chown "$USER" /opt/web_service
