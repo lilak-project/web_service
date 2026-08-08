@@ -45,7 +45,7 @@ const expand = (p) => (p && p.startsWith('~') ? join(homedir(), p.slice(1)) : p)
 
 const NAME = args.name || args._[0]
 if (!NAME || !/^[a-z][a-z0-9_]*$/.test(NAME)) {
-  console.error('error: --name is required and must be a lowercase identifier (e.g. lilak_gui)')
+  console.error('error: --name is required and must be a lowercase identifier (e.g. my_service)')
   process.exit(1)
 }
 const OUT = resolve(expand(args.out) || join(homedir(), 'web_service'))
@@ -62,6 +62,10 @@ const FORCE = !!args.force
 // service persists in the data volume (survives image rebuilds). Default layout
 // (code under OUT/<name>, manifest under OUT/data/<name>) is used otherwise.
 const DATA_SERVICE = !!args['data-service']
+// Where the portal reads manifests from. Defaults to OUT/data, which is only right
+// when the portal's data dir sits inside the stack; pass --data-root when
+// PORTAL_DATA_ROOT points elsewhere, or the new service is invisible to the portal.
+const DATA_ROOT = resolve(expand(args['data-root']) || join(OUT, 'data'))
 const BUILD = !!args.build                              // npm install + build after scaffolding
 const LILAK_UI = resolve(expand(args['lilak-ui']) || process.env.LILAK_UI_PATH || join(OUT, 'lilak_ui'))
 if (!/^#[0-9a-f]{6}$/.test(COLOR)) { console.error(`error: --color must be a #rrggbb hex (got ${COLOR})`); process.exit(1) }
@@ -391,7 +395,10 @@ export default function Placeholder({ icon, title, note }) {
 }
 `
 
-const indexCss = `html, body, #root { height: 100%; margin: 0; }
+const indexCss = `/* Kit components size themselves assuming border-box. */
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
 body { background: var(--app-bg); color: var(--text-primary); font-family: var(--font-sans); }
 `
 
@@ -872,7 +879,7 @@ per host if you move the checkout.
 
 // In --data-service mode the manifest sits INSIDE the service dir (self-contained
 // under the data volume); otherwise under OUT/data/<name>/ as before.
-putAbs(DATA_SERVICE ? join(ROOT, 'service.json') : join(OUT, 'data', NAME, 'service.json'), manifest)
+putAbs(DATA_SERVICE ? join(ROOT, 'service.json') : join(DATA_ROOT, NAME, 'service.json'), manifest)
 
 // ── optional: build the frontend so the portal can serve it immediately ───────
 // --shared-modules <dir>: reuse a prebuilt node_modules (all generated services
@@ -937,7 +944,7 @@ if (args.register) {
 // ── report ──────────────────────────────────────────────────────────────────
 console.log(`\n✓ scaffolded ${NAME}  (${wrote} files written${skipped ? `, ${skipped} skipped — use --force to overwrite` : ''})`)
 console.log(`  root:     ${ROOT}`)
-console.log(`  manifest: ${DATA_SERVICE ? join(ROOT, 'service.json') : join(OUT, 'data', NAME, 'service.json')}`)
+console.log(`  manifest: ${DATA_SERVICE ? join(ROOT, 'service.json') : join(DATA_ROOT, NAME, 'service.json')}`)
 console.log(`  tabs:     ${TABS.map((t) => t.id).join(', ')}${HAS_SETTINGS ? '   (+ portal-centric Settings)' : ''}`)
 console.log(`  colour:   ${COLOR}  (nav ${PRESET['nav-bg']} · hover ${PRESET['btn-primary-hover']})`)
 console.log(`\nnext:`)

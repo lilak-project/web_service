@@ -30,7 +30,7 @@ from pydantic import BaseModel
 from .. import config, models, registry
 from ..db import SessionLocal
 from ..deps import require_portal_admin
-from .scaffold import LILAK_UI_PATH, SEED_ROOT, SERVICES_ROOT
+from .scaffold import LILAK_UI_PATH, SEED_ROOT, SERVICES_ROOT, ensure_kit
 from .services import get_or_create_service
 
 router = APIRouter(tags=["portal-store"])
@@ -93,29 +93,8 @@ NO_PROMPT = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": ""}
 
 
 def _ensure_kit(job_id: str) -> bool:
-    """Make the shared UI kit usable: clone it if missing AND install its own
-    node_modules. The kit is source-aliased, so imports *inside kit files*
-    (react-markdown, …) resolve against the KIT's node_modules — a consumer listing
-    the same dependency does not help. A fresh clone has none (gitignored)."""
-    kit = _catalog().get("kit") or {}
-    if not LILAK_UI_PATH.exists():
-        git = _tool("git")
-        if not git:
-            _log(job_id, "! git을 찾을 수 없습니다")
-            return False
-        _log(job_id, "· lilak_ui (공용 UI 킷) 클론")
-        if _stream(job_id, [git, "clone", "--depth", "1", kit.get("repo", ""), str(LILAK_UI_PATH)],
-                   env_extra=NO_PROMPT) != 0:
-            return False
-    if (LILAK_UI_PATH / "package.json").exists() and not (LILAK_UI_PATH / "node_modules").exists():
-        npm = _tool("npm")
-        if not npm:
-            _log(job_id, "! npm을 찾을 수 없습니다 (Node 설치 필요)")
-            return False
-        _log(job_id, "· lilak_ui 의존성 설치")
-        if _stream(job_id, [npm, "install", "--no-audit", "--no-fund"], cwd=LILAK_UI_PATH) != 0:
-            return False
-    return True
+    """Clone the shared UI kit + install its node_modules — see scaffold.ensure_kit."""
+    return ensure_kit(lambda m: _log(job_id, m))
 
 
 def _build_frontend(job_id: str, repo_dir: Path, needs_kit: bool) -> bool:

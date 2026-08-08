@@ -89,6 +89,43 @@ def _tabs_arg(tabs: list[TabSpec]) -> str:
     return ",".join(parts) or "home:home:home"
 
 
+def ensure_kit(log) -> bool:
+    """Make the shared UI kit usable, cloning it if absent and installing ITS OWN
+    node_modules. The kit is source-aliased, so imports inside kit files resolve
+    against the kit's node_modules — a consumer declaring the same dependency does
+    not help. "Absent" is judged by package.json, not the directory: a fresh
+    web_service clone leaves `lilak_ui/` as an EMPTY submodule placeholder.
+    Shared with the store router (see store._ensure_kit)."""
+    if not (LILAK_UI_PATH / "package.json").exists():
+        repo = ""
+        try:
+            repo = (json.loads((Path(__file__).resolve().parent.parent / "store_catalog.json")
+                               .read_text(encoding="utf-8")).get("kit") or {}).get("repo", "")
+        except Exception:                        # noqa: BLE001
+            pass
+        git = which("git")
+        if not (git and repo):
+            log("! lilak_ui를 받을 수 없습니다 (git 또는 카탈로그 확인)")
+            return False
+        log(f"· lilak_ui (공용 UI 킷) 클론 → {LILAK_UI_PATH}")
+        LILAK_UI_PATH.mkdir(parents=True, exist_ok=True)   # empty submodule dir is fine
+        r = subprocess.run([git, "clone", "--depth", "1", repo, str(LILAK_UI_PATH)],
+                           capture_output=True, text=True,
+                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": ""})
+        if r.returncode != 0:
+            log(f"! lilak_ui 클론 실패: {r.stderr.strip()[:200]}")
+            return False
+    if not (LILAK_UI_PATH / "node_modules").exists():
+        npm = which("npm") or "/opt/homebrew/bin/npm"
+        log("· lilak_ui 의존성 설치")
+        r = subprocess.run([npm, "install", "--no-audit", "--no-fund"], cwd=str(LILAK_UI_PATH),
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            log(f"! lilak_ui 의존성 설치 실패: {r.stderr.strip()[:200]}")
+            return False
+    return True
+
+
 def _node() -> Optional[str]:
     for c in ("node", "/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"):
         p = which(c) if "/" not in c else (c if Path(c).exists() else None)
@@ -113,6 +150,10 @@ def _run_job(job_id: str, body: ScaffoldBody) -> None:
         return _set(job_id, status="error", error="node 실행 파일을 찾을 수 없습니다 (서버에 Node 필요).")
     if not SCAFFOLD_SCRIPT.exists():
         return _set(job_id, status="error", error=f"스캐폴드 스크립트 없음: {SCAFFOLD_SCRIPT}")
+    # The generated frontend is built against the kit source; a portal-only checkout
+    # has none (empty submodule dir), so fetch it before running the generator.
+    if not ensure_kit(lambda m: _log(job_id, m)):
+        return _set(job_id, status="error", error="lilak_ui (공용 UI 킷) 준비 실패")
 
     argv = [
         node, str(SCAFFOLD_SCRIPT),
@@ -123,6 +164,7 @@ def _run_job(job_id: str, body: ScaffoldBody) -> None:
         "--tabs", _tabs_arg(body.tabs),
         "--color", (body.color or "#000000").lower(),
         "--out", str(SERVICES_ROOT),        # code → web_service/<name>/ (standard layout)
+        "--data-root", str(config.DATA_ROOT),   # manifest → where THIS portal reads it
         "--lilak-ui", str(LILAK_UI_PATH),
         "--build",
     ]
