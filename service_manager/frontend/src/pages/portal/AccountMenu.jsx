@@ -11,7 +11,7 @@ import { useHomeCols } from '../../homeCols'
  */
 export default function AccountMenu({ user, isManager, onLogout, width }) {
   const { t, lang } = useLang()
-  const { single, toggle } = useHomeCols()   // Home grid: always 1 column vs responsive
+  const { mode, setHomeCols } = useHomeCols()   // Home grid: '1열' fixed vs responsive
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -58,16 +58,27 @@ export default function AccountMenu({ user, isManager, onLogout, width }) {
             </div>
             {user.email && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>}
           </div>
-          {/* Home layout: force single column, or allow the responsive single/multi. */}
-          <button type="button" style={item}
-            title={lang === 'ko' ? '켜면 홈 카드가 넓은 화면에서도 항상 1열' : 'On = Home cards stay 1 column even on wide screens'}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-            onClick={() => toggle()}>
-            <Icon name={single ? 'toggle-right' : 'toggle-left'} size={18}
-              color={single ? 'var(--btn-primary-bg)' : 'var(--text-muted)'} />
-            {lang === 'ko' ? '홈 1열 고정' : 'Home: single column'}
-          </button>
+          {/* Home card layout: 1열 = always one per row; 2열 = responsive (2 when wide). */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
+            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+              {lang === 'ko' ? '홈 보기' : 'Home'}
+            </span>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+              {[['single', '1열', '1 col'], ['auto', '2열', '2 cols']].map(([v, ko, en]) => {
+                const on = mode === v
+                return (
+                  <button key={v} type="button" onClick={() => setHomeCols(v)}
+                    style={{ font: 'inherit', fontSize: 'var(--fs-small, 12px)', cursor: 'pointer',
+                      padding: '4px 10px', borderRadius: 8, whiteSpace: 'nowrap',
+                      border: `1px solid ${on ? 'var(--btn-primary-bg)' : 'var(--border-default)'}`,
+                      background: on ? 'var(--btn-primary-bg)' : 'transparent',
+                      color: on ? '#fff' : 'var(--text-secondary)' }}>
+                    {lang === 'ko' ? ko : en}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           <div style={{ height: 1, background: 'var(--border-subtle)', margin: '6px 4px' }} />
           <button type="button" style={item}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)' }}
