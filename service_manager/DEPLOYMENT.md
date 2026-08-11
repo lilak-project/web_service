@@ -184,8 +184,14 @@ git clone https://github.com/lilak-project/web_service.git   # --recursive 없�
 - **설치** — 카탈로그의 서비스를 `git clone` → 빌드 → 등록합니다. 진행 로그가 실시간으로
   보이고, 끝나면 홈에 그 서비스 카드가 나타납니다. 공용 UI 킷(`lilak_ui`)이 없으면 먼저
   자동으로 받습니다.
+- **업데이트** — 이미 설치된 서비스를 `git pull --ff-only` 후 다시 빌드합니다. ff-only라
+  로컬 변경이나 분기가 있으면 덮어쓰지 않고 실패합니다(직접 정리 후 재시도). 실행 중인
+  서비스는 반영을 위해 재시작하세요.
 - **포털 빌드** — 포털 프론트엔드를 다시 빌드합니다(`git pull --ff-only` 옵션). 빌드 후
   새로고침하면 반영됩니다.
+
+설치가 도중에 실패하면 **이번에 받은** 코드 디렉터리는 지워지므로 그대로 다시 시도할 수
+있습니다. 원래 있던 체크아웃은 건드리지 않습니다.
 
 카탈로그는 `service_manager/app/store_catalog.json` 입니다. 항목마다 `repo`, 선택적으로
 `branch`(기본 브랜치가 아닌 경우), `private`(비공개 레포 — 서버에 SSH 키 필요)를 둡니다.
@@ -202,8 +208,14 @@ Manager** card on Home:
 - **Install** — `git clone` → build → register a catalog service, with a live log;
   its card appears on Home when the job finishes. The shared UI kit (`lilak_ui`) is
   fetched automatically if absent.
+- **Update** — `git pull --ff-only` an installed service, then rebuild. ff-only, so
+  local edits or a diverged branch fail the job rather than being overwritten;
+  restart the service to pick the update up.
 - **Build portal** — rebuild the portal frontend (optionally `git pull --ff-only`
   first); refresh the page afterwards.
+
+A failed install deletes the checkout **it** created, so you can just retry; a
+checkout that was already there is left alone.
 
 The catalog is `service_manager/app/store_catalog.json`: each entry has a `repo`,
 optionally `branch` (when the portal-ready code is not on the default branch) and

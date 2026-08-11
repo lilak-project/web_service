@@ -21,7 +21,7 @@ import sys
 import threading
 import uuid
 from pathlib import Path
-from shutil import which
+from shutil import rmtree, which
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -161,6 +161,16 @@ def _register(job_id: str, name: str, entry: dict) -> bool:
     return True
 
 
+def _rollback(job_id: str, repo_dir: Path) -> None:
+    """Delete a checkout this job created, so a failed install can be retried instead
+    of being skipped as "코드 이미 존재" on the next attempt."""
+    try:
+        rmtree(repo_dir, ignore_errors=True)
+        _log(job_id, f"· 실패 — 받다 만 {repo_dir.name}/ 를 정리했습니다")
+    except Exception as e:                       # noqa: BLE001
+        _log(job_id, f"⚠ 정리 실패: {e}")
+
+
 def _run_install(job_id: str, entry: dict) -> None:
     git = _tool("git")
     if not git:
@@ -172,6 +182,7 @@ def _run_install(job_id: str, entry: dict) -> None:
         return _set(job_id, status="error", error="lilak_ui (공용 UI 킷) 준비 실패")
 
     repo_dir = SERVICES_ROOT / entry["dir"]
+    cloned_here = False
     if not repo_dir.exists():
         # `branch` matters: a service's portal-ready code may live off the default
         # branch (asset_manager's LILAK port is on `lilak-ui-frontend`, while its
@@ -180,18 +191,51 @@ def _run_install(job_id: str, entry: dict) -> None:
         if entry.get("branch"):
             argv += ["--branch", entry["branch"]]
         if _stream(job_id, argv + [entry["repo"], str(repo_dir)], env_extra=NO_PROMPT) != 0:
+            _rollback(job_id, repo_dir)
             hint = ("비공개 레포입니다 — 이 서버에 GitHub 접근 권한(SSH 키)이 필요합니다."
                     if entry.get("private") else "레포 주소/브랜치/네트워크를 확인하세요.")
             return _set(job_id, status="error", error=f"git clone 실패 — {hint}")
+        cloned_here = True
     else:
         _log(job_id, f"· 코드 이미 존재: {repo_dir} — 클론 생략")
 
+    def fail(msg: str):
+        # Only undo what THIS job created: a checkout that was already there (or the
+        # user's own working copy) must survive a failed install.
+        if cloned_here:
+            _rollback(job_id, repo_dir)
+        return _set(job_id, status="error", error=msg)
+
+    if not _build_frontend(job_id, repo_dir, bool(entry.get("needs_kit"))):
+        return fail("프론트엔드 빌드 실패")
+    if not _pip_install(job_id, repo_dir):
+        return fail("백엔드 의존성 설치 실패")
+    if not _register(job_id, entry["name"], entry):
+        return fail("서비스 등록 실패")
+    _set(job_id, status="done")
+
+
+def _run_update(job_id: str, entry: dict) -> None:
+    """Refresh an installed service: git pull --ff-only, then rebuild + reinstall deps.
+    ff-only so local edits/divergence are never rewritten — the operator sorts those
+    out by hand. The manifest is left alone (it may carry admin edits)."""
+    git = _tool("git")
+    repo_dir = SERVICES_ROOT / entry["dir"]
+    if not git:
+        return _set(job_id, status="error", error="git을 찾을 수 없습니다.")
+    if not (repo_dir / ".git").exists():
+        return _set(job_id, status="error", error=f"git 체크아웃이 아닙니다: {repo_dir}")
+    _set(job_id, status="running")
+    if entry.get("needs_kit") and not _ensure_kit(job_id):
+        return _set(job_id, status="error", error="lilak_ui (공용 UI 킷) 준비 실패")
+    if _stream(job_id, [git, "-C", str(repo_dir), "pull", "--ff-only"], env_extra=NO_PROMPT) != 0:
+        return _set(job_id, status="error",
+                    error="git pull 실패 — 로컬 변경/분기 여부를 확인하세요 (ff-only).")
     if not _build_frontend(job_id, repo_dir, bool(entry.get("needs_kit"))):
         return _set(job_id, status="error", error="프론트엔드 빌드 실패")
     if not _pip_install(job_id, repo_dir):
         return _set(job_id, status="error", error="백엔드 의존성 설치 실패")
-    if not _register(job_id, entry["name"], entry):
-        return _set(job_id, status="error", error="서비스 등록 실패")
+    _log(job_id, "✓ 업데이트 완료 — 실행 중이면 서비스를 재시작하세요")
     _set(job_id, status="done")
 
 
@@ -259,6 +303,17 @@ def store_install(body: InstallBody, _: models.User = Depends(require_portal_adm
     if (config.DATA_ROOT / entry["name"] / "service.json").exists():
         raise HTTPException(409, f"'{entry['name']}' 이(가) 이미 등록되어 있습니다.")
     job_id = _spawn(_run_install, entry, name=entry["name"])
+    return {"job_id": job_id, "name": entry["name"]}
+
+
+@router.post("/api/admin/store/update", status_code=202)
+def store_update(body: InstallBody, _: models.User = Depends(require_portal_admin)):
+    entry = _entry((body.name or "").strip())
+    if not entry:
+        raise HTTPException(404, "카탈로그에 없는 서비스입니다.")
+    if not (SERVICES_ROOT / entry["dir"]).exists():
+        raise HTTPException(409, f"'{entry['name']}' 코드가 없습니다 — 먼저 설치하세요.")
+    job_id = _spawn(_run_update, entry, name=entry["name"])
     return {"job_id": job_id, "name": entry["name"]}
 
 

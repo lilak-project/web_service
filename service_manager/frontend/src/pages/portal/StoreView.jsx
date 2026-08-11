@@ -50,13 +50,15 @@ export default function StoreView({ onChanged }) {
     }, 1200)
   }
 
-  async function install(name) {
+  async function run(path, name, failMsg) {
     setErr('')
     try {
-      const { data } = await launcher.post('/admin/store/install', { name })
+      const { data } = await launcher.post(`/admin/store/${path}`, { name })
       watch(data.job_id, name)
-    } catch (e) { setErr(e?.response?.data?.detail || L('설치를 시작하지 못했습니다.', 'failed to start install')) }
+    } catch (e) { setErr(e?.response?.data?.detail || failMsg) }
   }
+  const install = (name) => run('install', name, L('설치를 시작하지 못했습니다.', 'failed to start install'))
+  const update = (name) => run('update', name, L('업데이트를 시작하지 못했습니다.', 'failed to start update'))
 
   async function buildPortal() {
     setErr('')
@@ -98,10 +100,16 @@ export default function StoreView({ onChanged }) {
             <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L(s.ko, s.en)}</span>
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Button variant={s.registered ? 'secondary' : 'primary'} style={btn}
-              disabled={running || s.registered} onClick={() => install(s.name)}>
-              {s.registered ? L('설치됨', 'Installed') : L('설치', 'Install')}
-            </Button>
+            {s.registered ? (
+              <Button variant="secondary" style={btn} disabled={running} onClick={() => update(s.name)}
+                title={L('git pull 후 다시 빌드', 'git pull, then rebuild')}>
+                {L('업데이트', 'Update')}
+              </Button>
+            ) : (
+              <Button variant="primary" style={btn} disabled={running} onClick={() => install(s.name)}>
+                {L('설치', 'Install')}
+              </Button>
+            )}
             <span style={{ fontSize: 'var(--fs-micro, 10px)', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {s.repo.replace(/^https?:\/\//, '')}
             </span>
