@@ -13,6 +13,7 @@ from html import escape
 
 from fastapi import APIRouter, Depends, Form, HTTPException, status
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .. import config, emailer, models, schemas, security
@@ -53,6 +54,38 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
             "username": user.username,
             "email": user.email,
         })
+    return schemas.TokenResponse(access_token=portal_token(user), user_id=user.id,
+                                 username=user.username, role=user.role)
+
+
+SUPERUSER = "admin"
+
+
+class SetupBody(BaseModel):
+    password: str
+
+
+@router.post("/api/auth/setup", response_model=schemas.TokenResponse)
+def setup_superuser(body: SetupBody, db: Session = Depends(get_db)):
+    """First run: set the built-in superuser's password and sign in.
+
+    A brand-new portal has no accounts, so instead of "create an account" the cover
+    asks for a password for the fixed `admin` superuser (verified, manager). Only
+    possible while the portal has ZERO users — afterwards it's an ordinary account
+    (change its password in My account)."""
+    if db.query(models.User).count() > 0:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="이미 설정된 포털입니다. 로그인하세요.")
+    if len(body.password or "") < config.PASSWORD_MIN_LENGTH:
+        raise HTTPException(status_code=400,
+                            detail=f"비밀번호는 최소 {config.PASSWORD_MIN_LENGTH}자 이상이어야 합니다.")
+    from datetime import datetime as _dt
+    user = models.User(
+        username=SUPERUSER, display_name=SUPERUSER, email=None, role="manager",
+        is_active=True, email_verified=True, email_verified_at=_dt.utcnow(),
+        password_hash=security.hash_password(body.password),
+    )
+    db.add(user); db.commit(); db.refresh(user)
     return schemas.TokenResponse(access_token=portal_token(user), user_id=user.id,
                                  username=user.username, role=user.role)
 

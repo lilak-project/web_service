@@ -167,7 +167,7 @@ function setPortalToken(token) {
 }
 
 // ── Login / Sign-up card (shown when logged out) ──────────────────────────────
-function AuthCard({ t, onAuthed }) {
+function AuthCard({ t, onAuthed, needsSetup }) {
   const [mode, setMode] = useState('login')   // 'login' | 'signup'
   const [f, setF] = useState({ username: '', password: '', email: '', invite_code: '' })
   const [err, setErr] = useState('')
@@ -187,6 +187,14 @@ function AuthCard({ t, onAuthed }) {
     e?.preventDefault()
     setBusy(true); setErr('')
     try {
+      if (needsSetup) {
+        // First run: no accounts yet — set the built-in superuser's password.
+        const res = await launcher.post('/auth/setup', { password: f.password })
+        setPortalToken(res.data.access_token)
+        const me = await launcher.get('/auth/me')
+        onAuthed(me.data)
+        return
+      }
       if (mode === 'login') { await login(); return }
       // display_name is left unset → the backend defaults it to username.
       const res = await launcher.post('/auth/register', {
@@ -299,6 +307,27 @@ function AuthCard({ t, onAuthed }) {
         // the same width, so switching modes can't nudge the layout.
         border: mode === m ? '1px solid transparent' : '1px solid var(--border-default)' }}>{label}</Button>
   )
+
+  // First run: no accounts exist yet, so there is nothing to sign in to and no
+  // point offering sign-up — just set the built-in superuser's password.
+  if (needsSetup) {
+    return (
+      <div style={cardStyle}>
+        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', textAlign: 'center' }}>
+          {t('setup_hint')}
+        </div>
+        <form onSubmit={submit} autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input value="admin" readOnly style={{ ...inputStyle, opacity: 0.7 }} aria-label="admin" />
+          <input type="password" autoFocus placeholder={t('setup_pw')} value={f.password} onChange={set('password')}
+            style={inputStyle} name="su_pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
+          {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
+          <Button type="submit" style={{ ...authBtnStyle, marginTop: 2 }} disabled={busy || !f.password}>
+            {t('setup_submit')}
+          </Button>
+        </form>
+      </div>
+    )
+  }
 
   return (
     <div style={cardStyle}>
@@ -645,7 +674,8 @@ export default function ProjectsPage() {
     >
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
-        <AuthCard t={t} onAuthed={(u) => { setAnimateHeader(true); setUser(u); setView('home'); refresh() }} />
+        <AuthCard t={t} needsSetup={!!portalInfo?.needs_setup}
+          onAuthed={(u) => { setAnimateHeader(true); setUser(u); setView('home'); refresh() }} />
       ) : view === 'settings' ? (
         <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout}
           tab={settingsTab} onTab={setSettingsTab} hideMenu={narrow} />

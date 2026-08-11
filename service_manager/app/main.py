@@ -125,10 +125,22 @@ async def _close_proxy_client():
 
 @app.get("/api/health")
 def health():
-    from . import gitinfo
+    from . import gitinfo, models
+    from .db import SessionLocal
+    # needs_setup: a portal with no accounts yet — the cover asks for the superuser's
+    # password instead of offering sign in / sign up. Piggybacks on the call the
+    # frontend already makes at load, so first run costs no extra round trip.
+    db = SessionLocal()
+    try:
+        needs_setup = db.query(models.User).count() == 0
+    except Exception:                            # noqa: BLE001 — never fail liveness
+        needs_setup = False
+    finally:
+        db.close()
     return {"ok": True, "service": "service_manager",
             "port": config.PORTAL_PORT, "data_root": str(config.DATA_ROOT),
-            "host": gitinfo.hostname(), "version": gitinfo.portal_version()}
+            "host": gitinfo.hostname(), "version": gitinfo.portal_version(),
+            "needs_setup": needs_setup}
 
 
 # Serve the AI integration guide so it's viewable/copyable from the portal UI.
