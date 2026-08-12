@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from typing import Optional
@@ -56,6 +57,25 @@ def _require_sync_token(svc: str, authorization: Optional[str]) -> None:
 def sync_projects(svc: str, authorization: Optional[str] = Header(default=None)):
     _require_sync_token(svc, authorization)
     return {"service": svc, "projects": [p["name"] for p in pr.list_projects(svc)]}
+
+
+@router.get("/api/sync/{svc}/projects/{proj}/manifest")
+def sync_manifest(svc: str, proj: str, authorization: Optional[str] = Header(default=None)):
+    _require_sync_token(svc, authorization)
+    try:
+        return pr.project_manifest(svc, proj)
+    except FileNotFoundError:
+        raise HTTPException(404, f"'{proj}' 없음")
+
+
+@router.get("/api/sync/{svc}/projects/{proj}/file")
+def sync_file(svc: str, proj: str, path: str, authorization: Optional[str] = Header(default=None)):
+    _require_sync_token(svc, authorization)
+    try:
+        return Response(content=pr.project_file(svc, proj, path),
+                        media_type="application/octet-stream")
+    except FileNotFoundError:
+        raise HTTPException(404, f"'{path}' 없음")
 
 
 @router.get("/api/sync/{svc}/projects/{proj}/export")
@@ -132,6 +152,49 @@ def _get(url: str, token: str, timeout: int = 60) -> bytes:
         return r.read()
 
 
+def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> int:
+    """Bring ONE project in line with main, transferring only what differs.
+    Returns the bytes moved. Compares main's manifest against a manifest of the
+    local copy built the exact same way, so identical files cost nothing."""
+    import json as _json
+    remote = _json.loads(_get(f"{base}/api/sync/{svc}/projects/{proj}/manifest", token))["files"]
+    try:
+        localm = pr.project_manifest(svc, proj)["files"]
+    except FileNotFoundError:
+        localm = {}                              # not here yet → everything is new
+
+    changed = [p for p, m in remote.items()
+               if localm.get(p, {}).get("sha256") != m["sha256"]]
+    stale = [p for p in localm if p not in remote]
+    if not changed and not stale:
+        _log(job_id, f"  · {proj} 변경 없음")
+        return 0
+
+    d = pr.project_dir(svc, proj)
+    pr.stop_project(svc, proj)                   # release the DB before writing it
+    d.mkdir(parents=True, exist_ok=True)
+    moved = 0
+    for rel in changed:
+        raw = _get(f"{base}/api/sync/{svc}/projects/{proj}/file?path={urllib.parse.quote(rel)}",
+                   token, timeout=600)
+        dest = (d / rel).resolve()
+        if not str(dest).startswith(str(d.resolve())):
+            continue                             # path-traversal guard
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(raw)
+        moved += len(raw)
+    for rel in stale:                            # file removed on main → remove here
+        p = (d / rel).resolve()
+        if str(p).startswith(str(d.resolve())) and p.is_file():
+            p.unlink(missing_ok=True)
+    # The snapshot folds the WAL in; leftover siblings would resurrect old pages.
+    for w in list(d.rglob("*-wal")) + list(d.rglob("*-shm")):
+        w.unlink(missing_ok=True)
+    _log(job_id, f"  ✓ {proj} — 파일 {len(changed)}개 {moved // 1024} KB"
+                 + (f", 삭제 {len(stale)}개" if stale else ""))
+    return moved
+
+
 def _run_pull(job_id: str, svc: str) -> None:
     import json as _json
     cfg = sync.read(svc)
@@ -148,15 +211,11 @@ def _run_pull(job_id: str, svc: str) -> None:
 
     _log(job_id, f"· main 프로젝트 {len(names)}개: {', '.join(names) or '(없음)'}")
     local = {p["name"] for p in pr.list_projects(svc)}
-    ok = 0
+    ok, moved = 0, 0
     for n in names:
         try:
-            _log(job_id, f"· {n} 내려받는 중…")
-            raw = _get(f"{base}/api/sync/{svc}/projects/{n}/export", token, timeout=600)
-            pr.stop_project(svc, n)              # release the DB before replacing it
-            pr.import_project(svc, raw, n, replace=True)
+            moved += _pull_project(job_id, base, token, svc, n)
             ok += 1
-            _log(job_id, f"  ✓ {n} ({len(raw) // 1024} KB)")
         except Exception as e:                   # noqa: BLE001
             _log(job_id, f"  ! {n} 실패: {e}")
     extra = sorted(local - set(names))
@@ -168,7 +227,7 @@ def _run_pull(job_id: str, svc: str) -> None:
     cfg["last_sync"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     cfg["last_error"] = None if ok == len(names) else f"{len(names) - ok}개 실패"
     sync.write(svc, cfg)
-    _log(job_id, f"✓ 동기화 완료 — {ok}/{len(names)}")
+    _log(job_id, f"✓ 동기화 완료 — {ok}/{len(names)} 프로젝트, 전송 {moved // 1024} KB")
     _set(job_id, status="done" if ok == len(names) else "error",
          error=None if ok == len(names) else f"{len(names) - ok}개 프로젝트 실패")
 

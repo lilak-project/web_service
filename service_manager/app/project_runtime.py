@@ -267,23 +267,61 @@ def _sqlite_snapshot(f: Path) -> Optional[bytes]:
         return None
 
 
+def _syncable_files(d: Path) -> list[Path]:
+    """Files that represent a project's state. Runtime scratch (.port, .pid) and the
+    WAL siblings are excluded — the latter are folded into the .db snapshot."""
+    out = []
+    for f in sorted(d.rglob("*")):
+        if not f.is_file() or f.name in (".port", ".pid"):
+            continue
+        if f.name.endswith(("-wal", "-shm")):
+            continue
+        out.append(f)
+    return out
+
+
+def file_bytes(f: Path) -> bytes:
+    """The bytes that represent this file for export/sync — a consistent snapshot
+    for SQLite, the file itself otherwise. ONE definition, so a manifest hash and a
+    later download can never disagree."""
+    if f.suffix == ".db":
+        snap = _sqlite_snapshot(f)
+        if snap is not None:
+            return snap
+    return f.read_bytes()
+
+
+def project_manifest(svc: str, proj: str) -> dict:
+    """{relpath: {size, sha256}} over the syncable files — lets a mirror fetch only
+    what actually differs instead of the whole project."""
+    import hashlib
+    d = project_dir(svc, proj)
+    if not d.exists():
+        raise FileNotFoundError(proj)
+    files = {}
+    for f in _syncable_files(d):
+        b = file_bytes(f)
+        files[str(f.relative_to(d))] = {"size": len(b), "sha256": hashlib.sha256(b).hexdigest()}
+    return {"project": proj, "files": files}
+
+
+def project_file(svc: str, proj: str, rel: str) -> bytes:
+    """One file's transfer bytes. `rel` is confined to the project dir."""
+    d = project_dir(svc, proj).resolve()
+    p = (d / rel).resolve()
+    if not str(p).startswith(str(d)) or not p.is_file():
+        raise FileNotFoundError(rel)
+    return file_bytes(p)
+
+
 def export_project(svc: str, proj: str) -> bytes:
     d = project_dir(svc, proj)
     if not d.exists():
         raise FileNotFoundError(proj)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for f in sorted(d.rglob("*")):
-            if not f.is_file() or f.name == ".port":
-                continue
-            if f.name.endswith(("-wal", "-shm")):
-                continue                          # folded into the snapshot below
-            rel = str(f.relative_to(d))
-            snap = _sqlite_snapshot(f) if f.suffix == ".db" else None
-            if snap is not None:
-                z.writestr(rel, snap)
-            else:
-                z.write(f, rel)
+        for f in _syncable_files(d):
+            z.writestr(str(f.relative_to(d)), file_bytes(f))
     return buf.getvalue()
 
 
