@@ -22,9 +22,22 @@ from ..proxy_util import login_redirect_or_401, stream_proxy
 router = APIRouter()
 
 
+def _block_if_mirror(request: Request, svc: str) -> None:
+    """A synced sub holds a MIRROR: anything written here is silently discarded by
+    the next pull, so refuse writes outright rather than lose the user's work.
+    Method-based because the portal proxies opaque services — GET/HEAD/OPTIONS read,
+    everything else writes."""
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    from .. import sync
+    if sync.is_read_only(svc):
+        raise HTTPException(403, "이 서비스는 다른 서버(main)를 미러링 중이라 읽기 전용입니다.")
+
+
 def _guard(request: Request, name: str) -> None:
     """Enter-permission on a single service (project=''). Token from header or the
     `lilak_portal_token` cookie (top-level navigations carry no auth header)."""
+    _block_if_mirror(request, name)
     token = security.bearer(request.headers.get("authorization")) or request.cookies.get("lilak_portal_token")
     db = SessionLocal()
     try:

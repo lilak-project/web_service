@@ -3,6 +3,7 @@ import { Button, Icon, ColorPicker, AVATAR_COLORS, LayoutEditor } from 'lilak-ui
 import { launcher, serviceApi } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_WEIGHT, ICON_CHOICES } from './IconPick'
+import SyncPanel from './SyncPanel'
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
@@ -183,6 +184,9 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
           )}
         </div>
       )}
+
+      {/* cross-portal mirroring (services only) */}
+      {!isBuiltin && <SyncPanel service={svc} />}
 
       {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</div>}
     </div>

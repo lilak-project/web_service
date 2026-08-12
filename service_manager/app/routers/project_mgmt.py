@@ -205,6 +205,8 @@ def _proxy_guard(request: Request, svc: str, proj: str) -> None:
     """Enforce enter-permission on the project proxy. A top-level navigation has
     no Authorization header, so the token is read from the `lilak_portal_token`
     cookie (set by the frontend on login) or the header when present."""
+    from .proxy import _block_if_mirror
+    _block_if_mirror(request, svc)               # mirrored copy → reads only
     token = security.bearer(request.headers.get("authorization")) or request.cookies.get("lilak_portal_token")
     db = SessionLocal()
     try:

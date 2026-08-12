@@ -242,6 +242,31 @@ def delete_project(svc: str, proj: str) -> dict:
     return {"deleted": proj}
 
 
+def _sqlite_snapshot(f: Path) -> Optional[bytes]:
+    """A consistent copy of a live SQLite file, or None if it isn't one.
+
+    Copying `x.db` alongside `x.db-wal` while the service is writing can capture a
+    torn state; the backup API takes a proper snapshot instead (and folds the WAL
+    in, so the -wal/-shm siblings are not needed in the archive)."""
+    import sqlite3
+    import tempfile
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "snap.db"
+            src = sqlite3.connect(f"file:{f}?mode=ro", uri=True)
+            try:
+                dst = sqlite3.connect(str(out))
+                try:
+                    src.backup(dst)
+                finally:
+                    dst.close()
+            finally:
+                src.close()
+            return out.read_bytes()
+    except Exception:                            # noqa: BLE001 — not SQLite / unreadable
+        return None
+
+
 def export_project(svc: str, proj: str) -> bytes:
     d = project_dir(svc, proj)
     if not d.exists():
@@ -249,17 +274,30 @@ def export_project(svc: str, proj: str) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for f in sorted(d.rglob("*")):
-            if f.is_file() and f.name != ".port":
-                z.write(f, f.relative_to(d))
+            if not f.is_file() or f.name == ".port":
+                continue
+            if f.name.endswith(("-wal", "-shm")):
+                continue                          # folded into the snapshot below
+            rel = str(f.relative_to(d))
+            snap = _sqlite_snapshot(f) if f.suffix == ".db" else None
+            if snap is not None:
+                z.writestr(rel, snap)
+            else:
+                z.write(f, rel)
     return buf.getvalue()
 
 
-def import_project(svc: str, raw: bytes, name: str) -> dict:
+def import_project(svc: str, raw: bytes, name: str, replace: bool = False) -> dict:
     if not registry.valid_name(name):
         raise ValueError("이름은 영문자·숫자·_·- 만 가능합니다 (1~64자)")
     d = project_dir(svc, name)
     if d.exists():
-        raise FileExistsError(name)
+        # replace=True is the mirror path (sync): the sub's copy is authoritative
+        # only until the next pull, so it is discarded wholesale. Interactive
+        # imports keep refusing, so nobody clobbers a project by accident.
+        if not replace:
+            raise FileExistsError(name)
+        shutil.rmtree(d, ignore_errors=True)
     try:
         zf = zipfile.ZipFile(io.BytesIO(raw))
     except zipfile.BadZipFile:
