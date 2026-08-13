@@ -109,6 +109,10 @@ async def _security_preflight():
         warns.append("CORS is open to any origin (*). Set PORTAL_ALLOWED_ORIGINS for production.")
     if not config.BASE_URL.startswith("https://"):
         warns.append(f"PORTAL_BASE_URL is not https ({config.BASE_URL}). Serve the portal over TLS in production.")
+    # Start the cross-portal sync poller (no-op unless a service is a 'sub' with an
+    # interval set).
+    sync_router.start_scheduler()
+
     if warns:
         bar = "!" * 72
         print(f"\n{bar}\n[SECURITY] Portal is running with dev-only settings:", flush=True)

@@ -1,5 +1,5 @@
 """
-Cross-portal service sync — stage 1: manual mirror (main → sub).
+Cross-portal service sync — mirror a service's project data (main → sub).
 
 main side  (token-authed, no portal account involved):
   GET /api/sync/{svc}/projects            → project list + service label
@@ -8,6 +8,8 @@ main side  (token-authed, no portal account involved):
 sub side (portal admin):
   GET/PUT /api/admin/services/{svc}/sync  → read/write the local sync config
   POST    /api/admin/services/{svc}/sync/run → pull every project from main
+
+A sub with interval_min > 0 is also pulled automatically by a background poller.
 
 The sub PULLS: main never needs to reach the sub, so only the sub has to know a
 URL + token and only main has to be reachable. Projects that exist on the sub but
@@ -33,6 +35,8 @@ router = APIRouter(tags=["portal-sync"])
 
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
+_busy: set[str] = set()          # services with a pull in flight
+_scheduler_started = False
 
 
 def _set(job_id: str, **kw) -> None:
@@ -94,6 +98,7 @@ class SyncCfg(BaseModel):
     main_url: Optional[str] = None  # sub: the MAIN portal's base URL
     token: Optional[str] = None     # main: issued here; sub: pasted from main
     read_only: bool = True          # sub: refuse writes through the proxy
+    interval_min: int = 0           # sub: auto-pull every N minutes (0 = manual only)
 
 
 def _public(svc: str) -> dict:
@@ -101,6 +106,7 @@ def _public(svc: str) -> dict:
     return {"role": cfg.get("role", ""), "main_url": cfg.get("main_url"),
             "token": cfg.get("token"), "read_only": cfg.get("read_only", True),
             "last_sync": cfg.get("last_sync"), "last_error": cfg.get("last_error"),
+            "interval_min": int(cfg.get("interval_min") or 0),
             # what a sub operator must paste into their portal
             "pair_url": config.BASE_URL if cfg.get("role") == "main" else None}
 
@@ -127,6 +133,7 @@ def put_sync(svc: str, body: SyncCfg, _: models.User = Depends(require_portal_ad
         cfg["main_url"] = url
         cfg["token"] = (body.token or "").strip()
         cfg["read_only"] = bool(body.read_only)
+        cfg["interval_min"] = max(0, min(1440, int(body.interval_min or 0)))
         if not cfg["token"]:
             raise HTTPException(400, "main 에서 발급한 토큰을 붙여넣으세요.")
     else:
@@ -232,6 +239,28 @@ def _run_pull(job_id: str, svc: str) -> None:
          error=None if ok == len(names) else f"{len(names) - ok}개 프로젝트 실패")
 
 
+def _start_pull(svc: str) -> Optional[str]:
+    """Kick off a pull unless one is already running for this service. Returns the
+    job id, or None when a sync is in flight (a slow pull must never stack up
+    behind the scheduler's ticks)."""
+    with _lock:
+        if svc in _busy:
+            return None
+        _busy.add(svc)
+        job_id = uuid.uuid4().hex[:12]
+        _jobs[job_id] = {"status": "queued", "log": [], "error": None, "name": svc}
+
+    def run():
+        try:
+            _run_pull(job_id, svc)
+        finally:
+            with _lock:
+                _busy.discard(svc)
+
+    threading.Thread(target=run, daemon=True).start()
+    return job_id
+
+
 @router.post("/api/admin/services/{svc}/sync/run", status_code=202)
 def run_sync(svc: str, _: models.User = Depends(require_portal_admin)):
     cfg = sync.read(svc)
@@ -239,11 +268,55 @@ def run_sync(svc: str, _: models.User = Depends(require_portal_admin)):
         raise HTTPException(409, "sub 로 설정된 서비스만 동기화를 받습니다.")
     if not cfg.get("main_url") or not cfg.get("token"):
         raise HTTPException(400, "main 주소와 토큰을 먼저 설정하세요.")
-    job_id = uuid.uuid4().hex[:12]
-    with _lock:
-        _jobs[job_id] = {"status": "queued", "log": [], "error": None, "name": svc}
-    threading.Thread(target=_run_pull, args=(job_id, svc), daemon=True).start()
+    job_id = _start_pull(svc)
+    if not job_id:
+        raise HTTPException(409, "이미 동기화가 진행 중입니다.")
     return {"job_id": job_id, "name": svc}
+
+
+# ── periodic auto-pull ────────────────────────────────────────────────────────
+TICK_S = 20                      # how often the scheduler re-checks what is due
+
+
+def _due(svc: str) -> bool:
+    cfg = sync.read(svc)
+    if cfg.get("role") != "sub" or not (cfg.get("main_url") and cfg.get("token")):
+        return False
+    iv = int(cfg.get("interval_min") or 0)
+    if iv <= 0:
+        return False                              # manual only
+    last = cfg.get("last_sync")
+    if not last:
+        return True
+    from datetime import datetime, timedelta
+    try:
+        prev = datetime.fromisoformat(str(last).rstrip("Z"))
+    except ValueError:
+        return True
+    return datetime.utcnow() - prev >= timedelta(minutes=iv)
+
+
+def _scheduler() -> None:
+    import time
+    while True:
+        time.sleep(TICK_S)
+        try:
+            for svc in registry.list_service_names():
+                if _due(svc):
+                    _start_pull(svc)              # None if one is still running
+        except Exception as e:                    # noqa: BLE001 — a bad service must not kill the loop
+            print(f"[sync] scheduler tick failed: {e}", flush=True)
+
+
+def start_scheduler() -> None:
+    """One background poller for the whole portal (single-worker by design — see
+    scaffold.py). Daemon, so it dies with the process and never blocks shutdown."""
+    global _scheduler_started
+    with _lock:
+        if _scheduler_started:
+            return
+        _scheduler_started = True
+    threading.Thread(target=_scheduler, daemon=True, name="sync-scheduler").start()
 
 
 @router.get("/api/admin/services/{svc}/sync/jobs/{job_id}")

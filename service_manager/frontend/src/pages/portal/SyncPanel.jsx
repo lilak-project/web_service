@@ -24,7 +24,7 @@ export default function SyncPanel({ service }) {
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const svc = service.name
   const [cfg, setCfg] = useState(null)
-  const [form, setForm] = useState({ main_url: '', token: '', read_only: true })
+  const [form, setForm] = useState({ main_url: '', token: '', read_only: true, interval_min: 0 })
   const [msg, setMsg] = useState('')
   const [job, setJob] = useState(null)
   const poll = useRef(null)
@@ -34,7 +34,7 @@ export default function SyncPanel({ service }) {
       const { data } = await launcher.get(`/admin/services/${svc}/sync`)
       setCfg(data)
       setForm((f) => ({ main_url: data.main_url || f.main_url, token: data.token || f.token,
-        read_only: data.read_only !== false }))
+        read_only: data.read_only !== false, interval_min: data.interval_min ?? 0 }))
     } catch { /* not configured yet */ }
   }
   useEffect(() => { load(); return () => clearInterval(poll.current) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -45,7 +45,8 @@ export default function SyncPanel({ service }) {
     setMsg('')
     try {
       const body = role === 'sub'
-        ? { role, main_url: form.main_url.trim(), token: form.token.trim(), read_only: form.read_only }
+        ? { role, main_url: form.main_url.trim(), token: form.token.trim(),
+            read_only: form.read_only, interval_min: Number(form.interval_min) || 0 }
         : { role }
       const { data } = await launcher.put(`/admin/services/${svc}/sync`, body)
       setCfg(data)
@@ -131,6 +132,20 @@ export default function SyncPanel({ service }) {
                 onChange={(e) => setForm((f) => ({ ...f, read_only: e.target.checked }))} />
               {L('읽기 전용으로 잠그기 (권장)', 'lock read-only (recommended)')}
             </label>
+          </div>
+          <div style={row}>
+            <span style={lbl}>{L('자동', 'Auto')}</span>
+            <select value={form.interval_min}
+              onChange={(e) => setForm((f) => ({ ...f, interval_min: Number(e.target.value) }))} style={sel}>
+              <option value={0}>{L('수동만', 'manual only')}</option>
+              <option value={1}>{L('1분마다', 'every 1 min')}</option>
+              <option value={5}>{L('5분마다', 'every 5 min')}</option>
+              <option value={15}>{L('15분마다', 'every 15 min')}</option>
+              <option value={60}>{L('1시간마다', 'hourly')}</option>
+            </select>
+            <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
+              {L('저장해야 적용됩니다', 'takes effect on save')}
+            </span>
           </div>
           <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
             {L('동기화하면 main 에 있는 프로젝트가 이 서버 것을 덮어씁니다. main 에 없는 프로젝트는 그대로 둡니다.',
