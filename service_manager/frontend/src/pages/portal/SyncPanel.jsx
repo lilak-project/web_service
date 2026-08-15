@@ -27,6 +27,7 @@ export default function SyncPanel({ service }) {
   const [form, setForm] = useState({ main_url: '', token: '', read_only: true, interval_min: 0 })
   const [msg, setMsg] = useState('')
   const [job, setJob] = useState(null)
+  const [grants, setGrants] = useState(null)   // permission-transfer preview
   const poll = useRef(null)
 
   async function load() {
@@ -73,6 +74,15 @@ export default function SyncPanel({ service }) {
         } catch { /* keep polling */ }
       }, 1200)
     } catch (e) { setMsg(e?.response?.data?.detail || L('동기화를 시작하지 못했습니다', 'failed to start sync')) }
+  }
+
+  async function loadGrants(apply) {
+    setMsg('')
+    try {
+      const { data } = await launcher.post(`/admin/services/${svc}/sync/grants?apply=${apply ? 'true' : 'false'}`)
+      setGrants(data)
+      if (apply) setMsg(L(`권한 ${data.applied}건 적용됨`, `${data.applied} grant(s) applied`))
+    } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
 
   const copy = (v) => { try { navigator.clipboard.writeText(v) } catch { /* ignore */ } setMsg(L('복사됨', 'copied')) }
@@ -158,6 +168,37 @@ export default function SyncPanel({ service }) {
               {running ? L('동기화 중…', 'syncing…') : L('지금 동기화', 'Sync now')}
             </Button>
           </div>
+          <div style={{ ...row, paddingTop: 4, borderTop: '1px dashed var(--border-subtle)' }}>
+            <span style={lbl}>{L('권한', 'Grants')}</span>
+            <Button variant="secondary" style={btn} onClick={() => loadGrants(false)}>
+              {L('main 권한 확인', 'Check main')}
+            </Button>
+            {grants && grants.matched.length > 0 && (
+              <Button variant="primary" style={btn} onClick={() => loadGrants(true)}>
+                {L('이 서버 계정에 적용', 'Apply here')}
+              </Button>
+            )}
+          </div>
+          {grants && (
+            <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)',
+              background: 'var(--surface-2)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {grants.matched.length === 0 && grants.skipped.length === 0 && <span>{L('main 에 권한이 없습니다.', 'no grants on main')}</span>}
+              {grants.matched.map((m, i) => (
+                <span key={'m' + i}>
+                  ✓ {m.local_user} · {m.project || L('서비스 전체', 'whole service')}
+                  {m.is_admin ? L(' · 관리', ' · admin') : ''}
+                  {m.already ? L(' (이미 있음)', ' (already)') : ''}
+                  {m.matched_by === 'email' ? L(' [이메일로 매칭]', ' [matched by email]') : ''}
+                  {m.email_differs ? L(' [이메일 다름]', ' [email differs]') : ''}
+                </span>
+              ))}
+              {grants.skipped.map((s2, i) => (
+                <span key={'s' + i} style={{ opacity: 0.75 }}>
+                  – {s2.username} · {L('이 서버에 계정 없음 — 건너뜀', 'no local account — skipped')}
+                </span>
+              ))}
+            </div>
+          )}
           {job && (
             <pre style={{ margin: 0, maxHeight: 160, overflow: 'auto', fontSize: 'var(--fs-micro, 10px)', lineHeight: 1.5,
               backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)', borderRadius: 8, padding: 10, whiteSpace: 'pre-wrap' }}>

@@ -29,6 +29,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from .. import config, models, project_runtime as pr, registry, security, sync
+from ..db import get_db
 from ..deps import require_portal_admin
 
 router = APIRouter(tags=["portal-sync"])
@@ -80,6 +81,22 @@ def sync_file(svc: str, proj: str, path: str, authorization: Optional[str] = Hea
                         media_type="application/octet-stream")
     except FileNotFoundError:
         raise HTTPException(404, f"'{path}' 없음")
+
+
+@router.get("/api/sync/{svc}/grants")
+def sync_grants(svc: str, authorization: Optional[str] = Header(default=None),
+                db=Depends(get_db)):
+    """Who may use this service on MAIN, described by account identity rather than
+    row ids — the sub has its own users table, so grants only travel as
+    (username, email) pairs it can match locally."""
+    _require_sync_token(svc, authorization)
+    rows = (db.query(models.ServicePermission, models.User)
+            .filter(models.ServicePermission.service_name == svc,
+                    models.User.id == models.ServicePermission.user_id)
+            .all())
+    return {"service": svc, "grants": [
+        {"username": u.username, "email": u.email, "project": p.project or "",
+         "is_admin": bool(p.is_admin)} for p, u in rows]}
 
 
 @router.get("/api/sync/{svc}/projects/{proj}/export")
@@ -272,6 +289,63 @@ def run_sync(svc: str, _: models.User = Depends(require_portal_admin)):
     if not job_id:
         raise HTTPException(409, "이미 동기화가 진행 중입니다.")
     return {"job_id": job_id, "name": svc}
+
+
+# ── permission transfer (explicit, never part of a data sync) ─────────────────
+@router.post("/api/admin/services/{svc}/sync/grants")
+def import_grants(svc: str, apply: bool = False,
+                  _: models.User = Depends(require_portal_admin), db=Depends(get_db)):
+    """Copy MAIN's grants for this service onto LOCAL accounts of the same person.
+
+    Identity is matched by username, else by email — the two servers keep separate
+    user tables, so a grant can only land on someone who already has an account
+    here. Anyone without a local account is reported, never created: this must not
+    become a way to mint accounts on another server.
+
+    Runs only when an admin asks (and defaults to a preview) — access must never
+    spread across servers as a side effect of a data sync.
+    """
+    import json as _json
+    cfg = sync.read(svc)
+    if cfg.get("role") != "sub" or not (cfg.get("main_url") and cfg.get("token")):
+        raise HTTPException(409, "sub 로 연결된 서비스에서만 권한을 가져올 수 있습니다.")
+    try:
+        remote = _json.loads(_get(f"{cfg['main_url'].rstrip('/')}/api/sync/{svc}/grants",
+                                  cfg["token"]))["grants"]
+    except urllib.error.HTTPError as e:
+        raise HTTPException(502, f"main 연결 실패 (HTTP {e.code}) — 주소/토큰을 확인하세요.")
+    except Exception as e:                       # noqa: BLE001
+        raise HTTPException(502, f"main 연결 실패: {e}")
+
+    matched, skipped, applied = [], [], 0
+    for g in remote:
+        uname, email = (g.get("username") or "").strip(), (g.get("email") or "").strip()
+        user = db.query(models.User).filter(models.User.username == uname).first()
+        how = "username"
+        if not user and email:
+            user = db.query(models.User).filter(models.User.email == email).first()
+            how = "email"
+        if not user:
+            skipped.append({**g, "reason": "no_local_account"})
+            continue
+        proj, is_admin = g.get("project") or "", bool(g.get("is_admin"))
+        exists = (db.query(models.ServicePermission)
+                  .filter(models.ServicePermission.user_id == user.id,
+                          models.ServicePermission.service_name == svc,
+                          models.ServicePermission.project == proj).first())
+        matched.append({"username": uname, "local_user": user.username, "matched_by": how,
+                        "email_differs": bool(email and user.email and email != user.email),
+                        "project": proj, "is_admin": is_admin,
+                        "already": bool(exists)})
+        if not apply or exists:
+            continue
+        db.add(models.ServicePermission(user_id=user.id, service_name=svc,
+                                        project=proj, is_admin=is_admin))
+        applied += 1
+    if apply:
+        db.commit()
+    return {"applied": applied, "preview": not apply,
+            "matched": matched, "skipped": skipped}
 
 
 # ── periodic auto-pull ────────────────────────────────────────────────────────
