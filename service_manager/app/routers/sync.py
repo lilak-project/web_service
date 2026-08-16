@@ -2,12 +2,21 @@
 Cross-portal service sync — mirror a service's project data (main → sub).
 
 main side  (token-authed, no portal account involved):
-  GET /api/sync/{svc}/projects            → project list + service label
-  GET /api/sync/{svc}/projects/{p}/export → consistent snapshot .zip
+  GET /api/sync/{svc}/projects              → project list
+  GET /api/sync/{svc}/projects/{p}/manifest → {relpath: {size, sha256}}
+  GET /api/sync/{svc}/projects/{p}/file     → one file's transfer bytes
+  GET /api/sync/{svc}/projects/{p}/export   → the whole project as a .zip
+  GET /api/sync/{svc}/grants                → who may use it, by (username, email)
 
 sub side (portal admin):
-  GET/PUT /api/admin/services/{svc}/sync  → read/write the local sync config
+  GET/PUT /api/admin/services/{svc}/sync     → read/write the local sync config
   POST    /api/admin/services/{svc}/sync/run → pull every project from main
+  POST    /api/admin/services/{svc}/sync/grants[?apply] → preview/apply main's grants
+  POST    /api/admin/services/{svc}/sync/rotate → new token (main only)
+
+Only the files whose hash differs are fetched, so an unchanged project costs
+nothing. Permissions move ONLY via the explicit grants call — never as a side
+effect of a data sync.
 
 A sub with interval_min > 0 is also pulled automatically by a background poller.
 

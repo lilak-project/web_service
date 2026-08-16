@@ -230,3 +230,79 @@ public repo, so no GitHub credentials are needed.
 > it fetches the kit the same way.
 > **Create service**(서비스 만들기) 카드도 포털만 받은 상태에서 동작합니다 — 킷을 같은
 > 방식으로 받아옵니다.
+
+---
+
+## 9. Mirroring a service across servers / 서버 간 서비스 동기화
+
+**한국어** — 서로 다른 서버의 포털끼리 **서비스 단위로** 데이터를 미러링할 수 있습니다.
+예: `s2`의 elog를 원본으로 두고 `s1`이 사본을 유지, 동시에 `s3`의 asset_manager를
+`s1`이 미러링. 설정은 **관리 모드 → 서비스 카드 → 동기화** 에 있습니다.
+
+**설정 순서**
+
+1. **원본 서버(main)** — 해당 서비스에서 역할을 `main (원본)`으로 바꾸면 **주소 + 토큰**이
+   나옵니다. (토큰이 새면 데이터가 통째로 읽히므로 채팅 등으로 흘리지 마세요. 유출 시
+   `재발급` — 연결된 sub는 다시 연결해야 합니다.)
+2. **사본 서버(sub)** — 같은 이름의 서비스에서 역할을 `sub (미러)`로 바꾸고 주소·토큰을
+   붙여넣습니다. `읽기 전용으로 잠그기`는 켜 두는 것을 권합니다.
+3. `자동`에서 주기를 고르고(수동만 / 1 / 5 / 15 / 60분) **연결 저장**. `지금 동기화`로
+   즉시 한 번 받을 수도 있습니다.
+
+**동작 방식**
+
+- **sub가 가져갑니다(pull).** main은 sub 주소를 몰라도 되고, sub만 main에 닿으면 됩니다.
+- **바뀐 파일만** 전송합니다(파일별 SHA-256 비교). 변경이 없으면 0바이트입니다.
+- SQLite는 **일관 스냅샷**(backup API)으로 뜹니다 — 서비스가 쓰는 중이어도 안전합니다.
+- main에서 지워진 파일은 sub에서도 지워집니다. 다만 **main에 없는 프로젝트는 그대로 둡니다** —
+  미러는 추가·갱신만 하고 프로젝트를 통째로 삭제하지 않습니다.
+- **sub의 수정은 다음 동기화 때 사라집니다.** 그래서 읽기 전용 잠금이 기본이며, 켜져 있으면
+  프록시가 쓰기 요청(GET/HEAD 외)을 403으로 막습니다.
+
+**계정과 권한**
+
+계정은 **서버마다 독립**입니다. 동기화되는 것은 프로젝트 데이터뿐이고, 매니저 권한도 각
+서버에서 따로 관리합니다. 미러를 처음 받으면 sub에는 그 서비스를 쓸 수 있는 사람이
+없으므로, **동기화 → 권한** 에서:
+
+- `main 권한 확인` — main의 권한을 이 서버 계정과 대조해 **미리보기**만 합니다
+  (아이디 우선, 없으면 이메일로 매칭. 이메일로만 맞거나 이메일이 다르면 표시됩니다).
+- `이 서버 계정에 적용` — 확인 후 실제로 부여합니다. 이 서버에 계정이 없는 사람은
+  **건너뜁니다(계정을 만들지 않습니다)**. 여러 번 눌러도 중복되지 않습니다.
+
+권한 이전은 **관리자가 직접 누를 때만** 일어납니다 — 데이터 동기화가 권한을 옮기는 일은
+없습니다.
+
+**한계** — 지금은 단방향(main → sub)입니다. 양쪽에서 수정한 내용을 합치는 머지는 각
+서비스의 스키마에 전역 고유 ID가 필요해 아직 없습니다. 양쪽에서 쓰고 싶다면 서비스(또는
+프로젝트)마다 주인을 나누고 서로 반대 방향으로 미러링하세요.
+
+**English** — portals on different servers can mirror a service's project data:
+`s2`'s elog as the source with `s1` keeping a copy, while `s1` also mirrors
+`s3`'s asset_manager. Configure it under **manage mode → service card → Sync**.
+
+1. On the **source**, set the role to `main` — it shows a **URL + token** (treat the
+   token as a secret: it grants a full read of that service's data; `Rotate` if it
+   leaks, then re-pair every sub).
+2. On the **mirror**, set the role to `sub`, paste both, and keep `lock read-only` on.
+3. Choose an `Auto` interval (manual / 1 / 5 / 15 / 60 min) and **Save link**;
+   `Sync now` pulls immediately.
+
+How it behaves: the **sub pulls** (main never needs to reach it); only files whose
+SHA-256 differs are transferred (an unchanged project costs zero bytes); SQLite is
+copied as a consistent snapshot, safe while the service is running; files deleted on
+main are deleted on the sub, but **projects absent on main are left alone**; and
+edits made on a sub are discarded by the next pull — hence the read-only lock, which
+makes the proxy refuse anything other than GET/HEAD.
+
+Accounts are **per-server** and never synced, so a fresh mirror has nobody able to
+use it. Under **Sync → Grants**, `Check main` previews main's grants matched against
+local accounts (by username, else email — email-only and mismatched-email matches are
+flagged), and `Apply here` grants them. People without a local account are skipped —
+this never creates accounts — and re-applying is a no-op. It runs only when an admin
+asks; a data sync never moves permissions.
+
+**Limitation** — one-way (main → sub) only. Merging edits made on both sides needs a
+globally unique id in each service's schema and does not exist yet; to write on both
+servers, split ownership per service (or per project) and mirror in opposite
+directions.

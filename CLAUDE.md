@@ -78,6 +78,14 @@ forwards the user's JWT only to services with `identity.accepts_portal_token`. T
 portal mints tokens carrying the account profile so a service can provision a local
 user by email on entry.
 
+**Cross-portal sync (`app/sync.py` + `routers/sync.py`).** A service can mirror the
+same service on another server: the source is `main` (issues a URL + token), the copy
+is `sub` (pulls, on demand or on a timer). Only files whose SHA-256 differs move, and
+SQLite travels as a backup-API snapshot. A sub is served read-only (the proxy refuses
+non-GET), because the next pull overwrites local edits. Accounts never sync — main's
+grants are copied onto matching local accounts only when an admin asks. See
+`DEPLOYMENT.md` §9.
+
 **Permissions are per-project.** `ServicePermission.project` (`""` = whole-service
 grant covering all projects). Helpers in `app/permissions.py`. Invite codes
 (`InviteCode`) let users self-grant. Email verification expires yearly
@@ -101,9 +109,13 @@ served by their own backends through the proxy.
   building frontends or the venv writes thousands of files that would otherwise crash
   the reloader.
 - The repos are independent; `~/web_service/` is the assembly point, not a monorepo.
-  A managed service's manifest `start.cwd` is an **absolute host path** that must be
-  fixed up per machine (e.g. elog → `lilak_elog/backend`).
-- **First signup becomes the admin** (`role = "manager"`).
+  A managed service's manifest `start.cwd` is an **absolute host path**; hand-cloned
+  services need it fixed up per machine (e.g. elog → `lilak_elog/backend`), while the
+  Service Manager re-roots it automatically on install.
+- **First run sets up the `admin` superuser**: a portal with zero accounts asks for
+  its password instead of offering sign-up (`/api/auth/setup`, gated on the user
+  count; `needs_setup` rides along on `/api/health`). Later signups are ordinary
+  users.
 - Adding a service = write `data/<name>/service.json` + a `Service` DB row (via the
   admin Services UI, the `/api/handshake` self-registration, or directly). Set
   `capabilities.multi_project` for elog-style services.
