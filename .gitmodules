@@ -10,10 +10,6 @@
 	path = asset_manager
 	url = git@github.com:ejungwoo/cens-assets-tracker.git
 	branch = lilak-ui-frontend
-[submodule "scattering_simulation_2d"]
-	path = scattering_simulation_2d
-	url = git@github.com:lilak-project/scattering_simulation_2d.git
-	branch = main
 [submodule "nptoy"]
 	path = nptoy
 	url = git@github.com:lilak-project/nptoy.git

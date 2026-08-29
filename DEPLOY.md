@@ -2,7 +2,7 @@
 
 The stack is one git **superrepo** (`web_service`): the portal (`service_manager`)
 + the docker files are tracked directly; `lilak_elog`, `lilak_ui`, `asset_manager`,
-`scattering_simulation_2d`, `g4toy`, `lilak_gui` are **git submodules** pointing at
+`g4toy`, `lilak_gui` are **git submodules** pointing at
 their own GitHub repos.
 
 Code lives in git; **data lives only on the server** (a host folder bind-mounted at

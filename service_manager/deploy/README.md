@@ -35,9 +35,10 @@ STACK_DIR=~/web_service/_stack \
 
 - Portal at `http://<host>:8025` (the single front door; service ports stay
   internal). First signup = admin.
-- On first run the volume is **seeded** from `deploy/seed/` — the **elog** service
-  comes pre-registered (paths point at `/app/lilak_elog/backend` inside the image).
-  Add more services to `deploy/seed/<name>/service.json` to ship them pre-registered.
+- A fresh install starts with **no services**. An admin installs them from the
+  **Service Manager** card (git clone → build → register). `deploy/seed/<name>/`
+  holds the manifest TEMPLATE that installer uses (`PORTAL_SEED_ROOT`); its
+  container paths are re-rooted for the host on install. Nothing is auto-registered.
 - To carry over existing data instead of seeding, load your `PORTAL_DATA_ROOT`
   contents into the `portal-data` volume before first start.
 

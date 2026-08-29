@@ -1,7 +1,7 @@
 # Running the whole stack with Docker
 
 One image bakes the entire `web_service/` stack — the portal plus every service
-(elog, asset_manager, scattering_simulation_2d, g4toy) and the shared UI kit. All
+(elog, asset_manager, …) and the shared UI kit. All
 runtime state lives in **one host folder** (bind-mounted at `/app/data`), so it
 sits OUTSIDE the container and is managed per server.
 

@@ -2,7 +2,7 @@
 #
 # One image baking the WHOLE web_service stack. The BUILD CONTEXT is the
 # `web_service/` dir itself (it already holds the repos as siblings):
-#   lilak_ui/  lilak_elog/  service_manager/  asset_manager/  scattering_simulation_2d/
+#   lilak_ui/  lilak_elog/  service_manager/  asset_manager/
 #
 # Build it (from web_service/):
 #   docker compose up -d --build                         # uses ./docker-compose.yml
@@ -24,7 +24,6 @@ RUN cd lilak_ui                  && npm install --no-audit --no-fund
 RUN cd lilak_elog/frontend       && npm install --no-audit --no-fund && npm run build
 RUN cd service_manager/frontend  && npm install --no-audit --no-fund && npm run build
 RUN cd asset_manager             && npm install --no-audit --no-fund && npm run build
-RUN cd scattering_simulation_2d  && npm install --no-audit --no-fund && npm run build
 
 # Scaffolded services (admin "create empty service"): build EVERY deploy/seed/<name>
 # that ships uniform code (web_service/<name>/frontend on the kit, <name>/backend on
@@ -33,7 +32,7 @@ RUN cd scattering_simulation_2d  && npm install --no-audit --no-fund && npm run 
 RUN set -e; mkdir -p /out; \
     for seed in service_manager/deploy/seed/*/; do \
       name=$(basename "$seed"); \
-      case "$name" in elog|asset_manager|scattering_simulation_2d) continue ;; esac; \
+      case "$name" in elog|asset_manager) continue ;; esac; \
       [ -d "$name/backend" ] || continue; \
       echo "→ scaffolded service: $name"; \
       if [ -f "$name/frontend/package.json" ]; then \
@@ -70,12 +69,10 @@ RUN pip install --no-cache-dir /app/lilak_portal_auth
 COPY service_manager          /app/service_manager
 COPY lilak_elog               /app/lilak_elog
 COPY asset_manager            /app/asset_manager
-COPY scattering_simulation_2d /app/scattering_simulation_2d
 COPY --from=frontend /src/nptool_cens/Projects /app/nptool_cens/Projects
 COPY --from=frontend /src/service_manager/frontend/dist /app/service_manager/frontend/dist
 COPY --from=frontend /src/lilak_elog/frontend/dist      /app/lilak_elog/frontend/dist
 COPY --from=frontend /src/asset_manager/dist            /app/asset_manager/dist
-COPY --from=frontend /src/scattering_simulation_2d/dist /app/scattering_simulation_2d/dist
 # Scaffolded services (uniform layout): backend + built dist, assembled in stage 1.
 # cwd in each seed manifest points at /app/<name>/backend.
 COPY --from=frontend /out /app
@@ -93,12 +90,14 @@ COPY --from=frontend /src/lilak_ui                      /app/lilak_ui
 # by walking up from the realpath looking for a `node_modules` ancestor.
 COPY --from=frontend /tmp/tmpl/svctmpl/frontend/node_modules /app/svc-modules/node_modules
 
-# Seed (services pre-registered on first run) + entrypoint.
+# Manifest templates for the Service Manager installer (NOT auto-registered)
+# + entrypoint.
 COPY service_manager/deploy/seed          /app/data-seed
 COPY service_manager/deploy/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 ENV PORTAL_DATA_ROOT=/app/data \
+    PORTAL_SEED_ROOT=/app/data-seed \
     PORTAL_PORT=8025 \
     PORTAL_PYTHON=python3 \
     EMAIL_VERIFY_DEV_ECHO=1 \

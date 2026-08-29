@@ -1,0 +1,22 @@
+{
+  "kind": "generic",
+  "mode": "managed",
+  "health": "/api/health",
+  "entry": "/",
+  "identity": {
+    "accepts_portal_token": true,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": false,
+    "import_export": false
+  },
+  "label": "analysis",
+  "icon": "chart-pie",
+  "color": "#003180",
+  "start": {
+    "cmd": "uvicorn main:app",
+    "cwd": "/app/analysis/backend",
+    "env": {}
+  }
+}

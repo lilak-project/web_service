@@ -6,8 +6,8 @@
 
 구조: 슈퍼레포 `lilak-project/web_service`
 - 직접 추적: `service_manager`(포탈) + docker 파일
-- 서브모듈 6개: `lilak_elog`, `lilak_ui`, `asset_manager`, `scattering_simulation_2d`,
-  `g4toy`, `lilak_gui` (각자 GitHub repo)
+- 서브모듈: `lilak_elog`, `lilak_ui`, `asset_manager`, `nptoy` 등 (각자 GitHub repo)
+  — 서비스는 설치 후 **서비스 매니저**에서 골라 받을 수도 있습니다
 
 ---
 
@@ -88,7 +88,7 @@ PORTAL_BASE_URL=https://portal.example.org      # 실제 공개 URL (없으면 h
 # 4) 데이터 폴더 만들기 (PORTAL_DATA_DIR 로 지정한 경로)
 sudo mkdir -p /srv/lilak/data && sudo chown "$USER" /srv/lilak/data
 
-# 5) 빌드 + 기동 (첫 부팅에서 서비스 자동 시드, DB 자동 생성/마이그레이션)
+# 5) 빌드 + 기동 (DB 자동 생성/마이그레이션. 서비스는 자동 등록되지 않음)
 docker compose up -d --build
 
 # 6) 확인
@@ -98,12 +98,15 @@ docker compose logs -f portal                                       # 로그 보
 ```
 
 브라우저로 `http://<서버IP>:8025` (또는 `PORTAL_BASE_URL`) 접속 →
-**맨 처음 가입하는 계정이 자동으로 관리자(admin)** 가 되고, 가입 도메인/초대코드 제한도
-면제됩니다. 이후 계정은 관리자가 Account 탭에서 관리합니다.
+계정이 하나도 없으므로 **관리자 계정 `admin` 의 비밀번호를 정하는 화면**이 뜹니다
+(기본 비밀번호는 없습니다). 설정하면 바로 관리자로 로그인됩니다. 이후 계정은
+Settings → Accounts 에서 관리합니다.
 
-> 위 `docker compose up` 은 **가벼운 포탈 이미지만** 빌드합니다(elog/asset/scattering/
-> nptoy/g4toy/lilak_gui 는 managed 서비스로 포함). ROOT+Geant4+nptool 이 필요한
-> 무거운 `sci-runner` 는 아래처럼 **따로(opt-in)** 빌드합니다.
+처음에는 **서비스가 하나도 없습니다.** 홈의 **서비스 매니저** 카드에서 필요한 것만
+골라 설치하세요(git clone → 빌드 → 등록). 자세한 내용: `service_manager/DEPLOYMENT.md` §8~9.
+
+> 위 `docker compose up` 은 **가벼운 포탈 이미지만** 빌드합니다. ROOT+Geant4+nptool 이
+> 필요한 무거운 `sci-runner` 는 아래처럼 **따로(opt-in)** 빌드합니다.
 
 ## sci-runner (nptoy 시뮬 백엔드 — ROOT + Geant4 + nptool)
 
@@ -189,7 +192,7 @@ portal.example.org {
 | 포트 충돌(8025 사용 중) | `.env` 의 `PORTAL_PORT` 변경 후 `docker compose up -d` |
 | 빌드는 됐는데 `/` 가 안 열림 | `docker compose logs portal` 확인. 대개 `.env` 시크릿 누락 |
 | 데이터 폴더 권한 오류 | `PORTAL_DATA_DIR` 을 `chown "$USER"` 했는지 확인 |
-| 가입이 막힘("초대코드 필요") | 첫 계정이 이미 만들어진 상태. 관리자로 로그인해 Account 탭에서 초대코드 발급/도메인 허용 |
+| 가입이 막힘("초대코드 필요") | admin 계정이 이미 설정된 상태. 관리자로 로그인해 Settings → Invite codes 에서 초대코드 발급/도메인 허용 |
 
 > 참고: `g4toy`, `lilak_gui` 는 현재 스켈레톤이라 Docker 이미지에 빌드되지 않습니다(서브모듈로
 > 받아만 둠). 실제 구현되면 `service_manager/deploy/Dockerfile` 에 빌드 단계를 추가하세요.

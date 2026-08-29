@@ -13,8 +13,6 @@ can share a build/deploy context and the shared UI kit:
 - **`lilak_elog/`** — the elog service, a managed multi-project app the portal
   *spawns and proxies* (its backend runs on the shared venv).
 - **`asset_manager/`** — a managed multi-project static PWA service.
-- **`scattering_simulation_2d/`** — a single static service (Vite + vanilla TS), a
-  Monte Carlo 2D scattering sim; build to `dist/`, served statically.
 - **`lilak_ui/`** — the shared React component kit. **Source-aliased** (not npm
   published) by every frontend via Vite. Editing it affects all of them.
 - **`data/`** — all runtime data, kept **outside** the code repos (see below).

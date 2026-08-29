@@ -49,17 +49,6 @@
       "needs_kit": true,
       "ko": "분석 노트/파일 공유",
       "en": "Analysis notes / file sharing"
-    },
-    {
-      "name": "scattering_simulation_2d",
-      "dir": "scattering_simulation_2d",
-      "repo": "https://github.com/lilak-project/scattering_simulation_2d.git",
-      "label": "2D scattering",
-      "icon": "flask",
-      "color": "#7048e8",
-      "needs_kit": false,
-      "ko": "2차원 산란 몬테카를로 시뮬레이션 (정적)",
-      "en": "2-D scattering Monte-Carlo simulation (static)"
     }
   ]
 }
