@@ -88,7 +88,12 @@ export default function StoreView({ onChanged }) {
       ) : items.map((s) => (
         <div key={s.name} style={{ border: '1px solid var(--border-default)', borderRadius: 8, padding: '10px 12px', background: 'var(--surface)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Icon name={s.icon || 'circle'} size={20} weight="fill" color={s.color || 'var(--text-primary)'} style={{ flexShrink: 0 }} />
+            {/* The icon is the service's identity — it belongs to something that
+                exists on this portal. Until it is installed the row keeps the slot
+                (so the labels stay aligned) but shows nothing. */}
+            {s.registered
+              ? <Icon name={s.icon || 'circle'} size={20} weight="fill" color={s.color || 'var(--text-primary)'} style={{ flexShrink: 0 }} />
+              : <span style={{ width: 20, height: 20, flexShrink: 0 }} aria-hidden="true" />}
             <span style={{ fontWeight: 600, fontSize: 'var(--fs-medium, 14px)' }}>{s.label || s.name}</span>
             {stateBadge(s)}
             {s.private && (

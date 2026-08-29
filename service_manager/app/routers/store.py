@@ -97,10 +97,31 @@ def _ensure_kit(job_id: str) -> bool:
     return ensure_kit(lambda m: _log(job_id, m))
 
 
+def _frontend_dir(repo_dir: Path) -> Optional[Path]:
+    """The service's frontend: `frontend/` if it has a package.json, else the repo
+    root (asset_manager keeps its app at the root). None = backend-only service."""
+    return next((d for d in (repo_dir / "frontend", repo_dir) if (d / "package.json").exists()), None)
+
+
+def _is_vendored(repo_dir: Path) -> bool:
+    """True when repo_dir holds code we did NOT clone and must not try to manage as a
+    checkout — i.e. the copy the Docker image bakes in (COPY lilak_elog /app/... ;
+    .dockerignore strips **/.git, so a baked service has code but no .git). A dev
+    machine's stack dir is a real checkout and keeps the git path below."""
+    return repo_dir.exists() and not (repo_dir / ".git").exists()
+
+
+def _prebuilt(repo_dir: Path) -> bool:
+    """True when the frontend dist is already there (the image builds every dist in
+    stage 1), or the service has no frontend at all."""
+    fe = _frontend_dir(repo_dir)
+    return fe is None or (fe / "dist").is_dir()
+
+
 def _build_frontend(job_id: str, repo_dir: Path, needs_kit: bool) -> bool:
     """npm install + build the first frontend found (frontend/ then repo root).
     Returns False only on a FAILED build; no frontend at all is fine (backend-only)."""
-    fe = next((d for d in (repo_dir / "frontend", repo_dir) if (d / "package.json").exists()), None)
+    fe = _frontend_dir(repo_dir)
     if fe is None:
         _log(job_id, "· 프론트엔드 없음 — 빌드 생략")
         return True
@@ -172,6 +193,23 @@ def _rollback(job_id: str, repo_dir: Path) -> None:
 
 
 def _run_install(job_id: str, entry: dict) -> None:
+    repo_dir = SERVICES_ROOT / entry["dir"]
+
+    # In the container the code is ALREADY here — the image bakes every catalog
+    # service and its built dist — so installing is purely REGISTERING. Taking the
+    # git path here would be worse than useless: SERVICES_ROOT (/app) is an image
+    # layer, not the data volume, so a clone/npm/pip would be thrown away by the next
+    # `docker compose up --build` while the manifest in /app/data survived — leaving a
+    # registered service whose code is gone. Register-only needs no git, no network,
+    # and writes solely to the volume, so it survives a rebuild.
+    if _is_vendored(repo_dir) and _prebuilt(repo_dir):
+        _set(job_id, status="running")
+        _log(job_id, f"· 코드가 이미 있습니다 ({repo_dir}) — 내려받기/빌드 없이 등록만 합니다")
+        if not _register(job_id, entry["name"], entry):
+            return _set(job_id, status="error", error="서비스 등록 실패")
+        return _set(job_id, status="done")
+
+    # Source install (dev machine, or a service the image does not carry).
     git = _tool("git")
     if not git:
         return _set(job_id, status="error", error="git을 찾을 수 없습니다.")
@@ -181,7 +219,6 @@ def _run_install(job_id: str, entry: dict) -> None:
     if entry.get("needs_kit") and not _ensure_kit(job_id):
         return _set(job_id, status="error", error="lilak_ui (공용 UI 킷) 준비 실패")
 
-    repo_dir = SERVICES_ROOT / entry["dir"]
     cloned_here = False
     if not repo_dir.exists():
         # `branch` matters: a service's portal-ready code may live off the default

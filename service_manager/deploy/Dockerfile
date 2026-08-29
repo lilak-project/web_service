@@ -51,7 +51,9 @@ RUN node scripts/new-service.mjs --name svctmpl --out /tmp/tmpl --data-service -
 FROM python:3.12-slim AS runtime
 # lsof: elog stop() finds the port owner. librsvg2-bin: the icon editor's PDF/EPS
 # export (rsvg-convert). (.icns rebuild needs macOS iconutil → degrades gracefully.)
-RUN apt-get update && apt-get install -y --no-install-recommends lsof librsvg2-bin \
+# git: the store installs baked-in services without it, but a catalog entry the image
+# does NOT carry still has to be cloned, and ensure_kit() falls back to cloning the kit.
+RUN apt-get update && apt-get install -y --no-install-recommends git lsof librsvg2-bin \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
