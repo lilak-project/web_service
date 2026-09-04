@@ -26,8 +26,15 @@ def _block_if_mirror(request: Request, svc: str) -> None:
     """A synced sub holds a MIRROR: anything written here is silently discarded by
     the next pull, so refuse writes outright rather than lose the user's work.
     Method-based because the portal proxies opaque services — GET/HEAD/OPTIONS read,
-    everything else writes."""
-    if request.method in ("GET", "HEAD", "OPTIONS"):
+    everything else writes.
+
+    Also called for a WebSocket, which Starlette gives NO `.method` (that lives on
+    Request alone) — reading it unguarded raised AttributeError, which `except
+    HTTPException` in the ws handler does not catch, so every socket through the
+    proxy died as a 500 before it ever reached the service. A socket is not a read
+    either: it carries writes in both directions once open. So it takes the mirror
+    check below — passing on a normal service, refused on a mirror."""
+    if getattr(request, "method", None) in ("GET", "HEAD", "OPTIONS"):
         return
     from .. import sync
     if sync.is_read_only(svc):

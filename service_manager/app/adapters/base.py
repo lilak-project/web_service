@@ -8,6 +8,7 @@ health-check, listing, and proxy code stay unchanged.
 from __future__ import annotations
 
 import os
+import pathlib
 import socket
 import threading
 import time
@@ -98,17 +99,59 @@ def _pid_alive(pid: int) -> bool:
         return True                       # exists but not signalable by us → alive
     except OSError:
         return False
-    return True
+    # A ZOMBIE answers signal 0 — the process is dead, but its entry lingers until
+    # the parent reaps it, and the portal spawns with Popen and never wait()s. So a
+    # service killed out from under the portal kept a PID that looked alive, the
+    # .port file stayed "valid", and start() refused to restart it: the service was
+    # stuck "running" while nothing listened. Treat defunct as dead, and reap it
+    # here when it is our own child so the entry does not pile up.
+    try:
+        state = (pathlib.Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2]).split()[0]
+    except (OSError, IndexError):
+        return True                       # no procfs / raced away → trust the signal
+    if state != "Z":
+        return True
+    try:
+        os.waitpid(pid, os.WNOHANG)       # ours → reaped; not ours → ChildProcessError
+    except (ChildProcessError, OSError):
+        pass
+    return False
 
 
 def write_pid(port_file: Path, pid: int) -> None:
     (port_file.parent / ".pid").write_text(str(pid))
 
 
+#: How long a `.port` with no `.pid` beside it is taken to be a start in
+#: progress rather than an abandoned reservation. The real gap between the two
+#: writes is milliseconds; this is generous so a loaded host cannot fall
+#: through it, and short enough that a genuinely abandoned claim frees its port
+#: without anyone intervening.
+RESERVATION_GRACE_SEC = 30.0
+
+
 def read_running_port(port_file: Path) -> Optional[int]:
     """The port a service is CURRENTLY serving on, or None. Trusts the recorded
     PID: a dead process whose port got reused is treated as stale (and cleared),
-    which prevents cross-wiring one service's `/p/…` to another."""
+    which prevents cross-wiring one service's `/p/…` to another.
+
+    The PID is the authority, and a live PID is never cleared -- not even when
+    nothing is listening on the port yet. A service takes a moment to bind, and
+    during that moment this function is what every concurrent request consults.
+    Clearing there would DELETE the reservation of a service that is starting
+    normally: the in-flight `start()` still holds the start lock, so the next
+    waiter finds no reservation, reserves a second port and spawns a DUPLICATE.
+    A browser opening a page fires several requests at once, so that produced
+    one duplicate per request -- and for a service that owns hardware (a gauge
+    on a serial port) only the first copy can open the device, while the one
+    the portal goes on tracking is the one that cannot.
+
+    So a live PID means the port is ours whether or not it answers yet. A
+    caller that needs "is it actually serving" asks health_ok/port_alive; this
+    answers "whose port is this". A process that is alive but never binds stays
+    claimed until someone stops it, which is the recoverable failure -- the old
+    behaviour silently multiplied processes instead.
+    """
     if not port_file.exists():
         return None
     pid_file = port_file.parent / ".pid"
@@ -130,6 +173,27 @@ def read_running_port(port_file: Path) -> Optional[int]:
         except Exception:
             _clear()
             return None
+        return port                       # ours, whether or not it is up yet
+
+    # No `.pid` yet. Two very different situations look identical here, and the
+    # file's age is what tells them apart.
+    #
+    # `start()` writes `.port` (reserve_port) and only writes `.pid` once the
+    # child exists -- building the argv, opening the log and forking sit between
+    # the two. A reader landing in that gap must NOT treat the reservation as
+    # junk: clearing it there is the same duplicate-spawn bug described above,
+    # just through a narrower window.
+    #
+    # So a reservation younger than RESERVATION_GRACE_SEC is a start in
+    # progress and is left alone. An older one really is abandoned -- a
+    # reservation written by a portal that died mid-start, or by a version that
+    # kept no pid -- and is cleared if nothing is answering on it.
+    try:
+        age = time.time() - port_file.stat().st_mtime
+    except OSError:
+        return None
+    if age < RESERVATION_GRACE_SEC:
+        return port
     if not port_alive(port):
         _clear()
         return None

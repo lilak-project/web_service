@@ -637,6 +637,8 @@ export default {
   newsvc_card_hint:        'New-service tool',
   store_title:             'Service Manager',
   store_card_hint:         'Install services · build the portal',
+  links_title:             'Links',
+  links_card_hint:         (n) => (n ? `${n} external link${n > 1 ? 's' : ''}` : 'External links (empty)'),
   newsvc_intro:            'Enter a name + tabs to scaffold a new lilak_ui service and register it with the portal right away (SSO, portal-managed accounts, default rules).',
   newsvc_name:             'Service name (id)',
   newsvc_name_rule:        'lowercase start · [a-z0-9_] only · becomes the folder/URL name',

@@ -37,6 +37,9 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   const [label, setLabel] = useState(startLabel)
   const [vis, setVis] = useState(service.visibility || 2)
   const [msg, setMsg] = useState('')
+  // Builtins only: take the card off THIS portal's cover. Stored in the data
+  // volume (data/_portal/home.json), so it is a per-server choice, not a build.
+  const [hidden, setHidden] = useState(!!service.hidden)
   const [admins, setAdmins] = useState(null)   // { managers:[names], scoped:[{username,project}] }
   const dirty = (icon !== startIcon) || (color !== startColor) || (label !== startLabel)
 
@@ -89,6 +92,12 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
       setMsg(L('저장됨', 'saved')); onChanged?.()
     } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
+  async function toggleHidden() {
+    const next = !hidden
+    setHidden(next)                                     // optimistic
+    try { await launcher.put('/admin/home-builtin', { key: builtinKey, hidden: next }); onChanged?.() }
+    catch (e) { setHidden(!next); setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+  }
   async function changeVis(v) {
     setVis(Number(v))
     try { await launcher.put(`/admin/services/${svc.name}`, { visibility: Number(v) }); onChanged?.() }
@@ -140,6 +149,16 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
         <Button variant="ghost" size="sm" icon disabled={last} title={t('manage_move_down')} onClick={() => onMove(1)}><Icon name="caret-down" size={15} /></Button>
 
         <div style={{ flex: 1 }} />
+        {isBuiltin && (
+          <Button variant="ghost" size="sm" onClick={toggleHidden}
+            title={hidden
+              ? L('이 서버의 홈 화면에 다시 표시합니다.', 'Show on this server\u2019s home screen again.')
+              : L('이 서버의 홈 화면에서만 숨깁니다. 관리 모드에서는 계속 보입니다.',
+                  'Hide from this server\u2019s home screen. Still shown in manage mode.')}>
+            <Icon name={hidden ? 'eye' : 'eye-slash'} size={15} />
+            {hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
+          </Button>
+        )}
         {!isBuiltin && (
           <>
             <Button variant="ghost" size="sm" onClick={archiveService} title={L('데이터만 삭제하고 서비스는 보관함으로', 'Delete data, keep the service in the archive')}>

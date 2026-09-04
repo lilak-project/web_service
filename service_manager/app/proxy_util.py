@@ -29,8 +29,9 @@ def login_redirect_or_401(request: Request) -> HTTPException:
     (GET + Accept: text/html) is bounced to the portal login with ?next= back to
     the original URL — this is what makes home-screen PWAs work, whose isolated
     webview has no portal cookie on first launch. Non-HTML callers (fetch/API)
-    keep the plain 401 JSON."""
-    if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+    keep the plain 401 JSON. A WebSocket has no `.method` at all, so it also takes
+    the plain 401 — which the ws handler turns into a 1008 close."""
+    if getattr(request, "method", None) == "GET" and "text/html" in request.headers.get("accept", ""):
         target = request.url.path + (f"?{request.url.query}" if request.url.query else "")
         return HTTPException(302, headers={"Location": f"/projects?next={quote(target, safe='')}"})
     return HTTPException(401, "로그인이 필요합니다.")

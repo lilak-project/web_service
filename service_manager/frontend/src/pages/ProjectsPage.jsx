@@ -8,6 +8,7 @@ import AccountView, { settingsMenu } from './portal/AccountView'
 import ArchivePanel from './portal/ArchivePanel'
 import ServiceManagePanel from './portal/ServiceManagePanel'
 import IconLabView from './portal/IconLabView'
+import LinksView from './portal/LinksView'
 import NewServiceView from './portal/NewServiceView'
 import StoreView from './portal/StoreView'
 import ServiceProjects from './portal/ServiceProjects'
@@ -99,6 +100,10 @@ const CREATE_SERVICE = { name: 'new-service', kind: 'tool', builtin: 'newservice
 // Admin-only builtin: install catalog services from git + rebuild the portal
 // (see StoreView). This is what makes a portal-only install self-sufficient.
 const STORE_SERVICE = { name: 'service manager', kind: 'tool', builtin: 'store', icon: 'download', can_enter: true }
+// The only builtin everyone sees: a bookmark list for things the portal does NOT
+// run (an instrument's own page, a wiki, a PDF elsewhere). Admins edit it in
+// manage mode; the list itself lives in data/_portal/links.json.
+const LINKS_SERVICE = { name: 'links', kind: 'tool', builtin: 'links', icon: 'link', can_enter: true }
 
 // The mark next to the title. Uses the editable /lilak-header.svg (set from the
 // icon editor); falls back to the kit logo when that file isn't there yet.
@@ -394,6 +399,7 @@ export default function ProjectsPage() {
   const [view, setView] = useState('home')          // 'home' | 'settings'
   const [expanded, setExpanded] = useState(null)         // multi-project svc expanded inline
   const [manage, setManage] = useState(false)            // admin Home "manage mode"
+  const [links, setLinks] = useState(null)               // home bookmark card contents
   // Animate the brand mark rising into place ONLY on an actual login (not on a
   // restored session / reload), so the header doesn't slide on every page load.
   const [animateHeader, setAnimateHeader] = useState(false)
@@ -436,6 +442,9 @@ export default function ProjectsPage() {
     try {
       const r = await launcher.get('/services')   // auth-aware filtered + flagged list
       setProjects(r.data); setError('')
+      // Every role: the links card and its appearance come from one call, because
+      // /admin/home (which holds the appearance) is admin-only.
+      try { setLinks((await launcher.get('/links')).data) } catch { /* optional */ }
       if (isManager) { try { setHomeCfg((await launcher.get('/admin/home')).data) } catch { /* optional */ } }
     } catch {
       setProjects([]); setError(t('projects_unreachable'))
@@ -556,13 +565,21 @@ export default function ProjectsPage() {
 
   // Built-in cards, with the admin's saved label/icon/colour overrides applied.
   const bi = homeCfg?.builtins || {}
-  const iconCard = { ...ICON_SERVICE, label: bi.iconlab?.label || ICON_SERVICE.name, icon: bi.iconlab?.icon || ICON_SERVICE.icon, color: bi.iconlab?.color }
-  const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label || t('newsvc_title'), icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color }
-  const storeCard = { ...STORE_SERVICE, label: bi.store?.label || t('store_title'), icon: bi.store?.icon || STORE_SERVICE.icon, color: bi.store?.color }
+  const iconCard = { ...ICON_SERVICE, label: bi.iconlab?.label || ICON_SERVICE.name, icon: bi.iconlab?.icon || ICON_SERVICE.icon, color: bi.iconlab?.color, hidden: !!bi.iconlab?.hidden }
+  const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label || t('newsvc_title'), icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color, hidden: !!bi.newservice?.hidden }
+  const storeCard = { ...STORE_SERVICE, label: bi.store?.label || t('store_title'), icon: bi.store?.icon || STORE_SERVICE.icon, color: bi.store?.color, hidden: !!bi.store?.hidden }
+  const linkCfg = links?.card || {}
+  const linksCard = { ...LINKS_SERVICE, label: linkCfg.label || t('links_title'), icon: linkCfg.icon || LINKS_SERVICE.icon, color: linkCfg.color, hidden: !!linkCfg.hidden, count: (links?.links || []).length }
   // The full home card list (builtins + services), ordered by the admin's saved order.
+  // A builtin marked `hidden` is dropped from the normal cover but KEPT in manage
+  // mode (dimmed) — hiding it there too would leave no way to bring it back short
+  // of editing data/_portal/home.json by hand.
+  // Non-admins get the links card too — but only once it has something in it, so
+  // an empty portal doesn't show a card that only an admin can ever fill.
   const cards = isManager
-    ? sortByHome([iconCard, ...(projects || []), storeCard, createCard], homeCfg?.order || [])
-    : (projects || [])
+    ? sortByHome([iconCard, linksCard, ...(projects || []), storeCard, createCard], homeCfg?.order || [])
+        .filter((c) => !c.hidden || manage)
+    : sortByHome([...(linksCard.hidden || !linksCard.count ? [] : [linksCard]), ...(projects || [])], homeCfg?.order || [])
 
   // Manage mode: move any card (builtin or service) up/down; persist the unified order.
   async function move(key, dir) {
@@ -717,14 +734,17 @@ export default function ProjectsPage() {
               const canToggle = (manage && isManager) || !!p.can_enter || (!p.multi_project && !isBuiltin && !!p.can_request)
               const statusText = isBuiltin
                 ? (p.builtin === 'newservice' ? t('newsvc_card_hint')
-                  : p.builtin === 'store' ? t('store_card_hint') : t('iconlab_card_hint'))
+                  : p.builtin === 'store' ? t('store_card_hint')
+                  : p.builtin === 'links' ? t('links_card_hint', p.count || 0) : t('iconlab_card_hint'))
                 : p.multi_project ? t('portal_proj_open_svc')
                 : (p.running ? t('projects_running', p.port) : t('projects_stopped'))
               return (
                 <ExpandBox key={key} open={isOpen} manage={manage && isManager}
                   toggleable={canToggle} divider={false}
                   // The grid's column gap spaces the cards; drop the card's own margin.
-                  style={{ marginBottom: 0 }}
+                  // A hidden builtin only reaches here in manage mode — dim it so it
+                  // reads as "not on the cover" rather than as a normal card.
+                  style={{ marginBottom: 0, opacity: p.hidden ? 0.45 : undefined }}
                   // Roomy: bigger cards (more padding, larger leading mark + title),
                   // description line dropped; the leading caret stays.
                   padding={big ? '14px 18px' : '8px 14px'}
@@ -795,6 +815,7 @@ export default function ProjectsPage() {
                         initialIcon={iconFor(p.name, p.icon)}
                         first={i === 0} last={i === cards.length - 1}
                         onMove={(dir) => move(key, dir)} onChanged={refresh} />
+                      {isBuiltin && p.builtin === 'links' && <LinksView links={links?.links || []} manage onChanged={refresh} />}
                       {/* manage mode: per-project management incl. delete */}
                       {p.multi_project && !isBuiltin && <ServiceProjects service={p} canManage={isManager} manage onChanged={refresh} />}
                       {/* single service: keep the Enter/Stop row (Stop lives here, in manage mode only) */}
@@ -805,6 +826,8 @@ export default function ProjectsPage() {
                       <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', flex: 1, minWidth: 160 }}>{t('iconlab_card_hint')}</span>
                       <Button variant="primary" onClick={() => setView('iconlab')} style={ENTER_BTN}>{t('portal_proj_open')}</Button>
                     </div>
+                  ) : isBuiltin && p.builtin === 'links' ? (
+                    <LinksView links={links?.links || []} onChanged={refresh} />
                   ) : isBuiltin && p.builtin === 'store' ? (
                     <StoreView onChanged={refresh} />
                   ) : isBuiltin && p.builtin === 'newservice' ? (

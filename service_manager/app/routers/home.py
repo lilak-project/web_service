@@ -23,7 +23,7 @@ from ..deps import require_portal_admin
 router = APIRouter(tags=["portal-home"])
 
 _FILE = config.DATA_ROOT / "_portal" / "home.json"
-_BUILTINS = ("iconlab", "newservice", "store")
+_BUILTINS = ("iconlab", "newservice", "store", "links")
 
 
 def _read() -> dict:
@@ -75,6 +75,11 @@ class BuiltinBody(BaseModel):
     label: Optional[str] = None
     icon: Optional[str] = None
     color: Optional[str] = None
+    # Take the card off this portal's home screen. Per-SERVER, not per-build: it
+    # lives in the data volume beside the label/colour overrides, so a site that
+    # has no use for the icon editor or the scaffolder drops them without forking
+    # the code, and a redeploy of the same image keeps the choice.
+    hidden: Optional[bool] = None
 
 
 @router.put("/api/admin/home-builtin")
@@ -92,5 +97,7 @@ def set_builtin(body: BuiltinBody, _: models.User = Depends(require_portal_admin
         if color and not re.match(r"^#[0-9a-fA-F]{6}$", color):
             raise HTTPException(400, "color는 #rrggbb 형식이어야 합니다.")
         b["color"] = color or None
+    if body.hidden is not None:
+        b["hidden"] = bool(body.hidden)
     _write(d)
     return {"ok": True, "builtins": d["builtins"]}

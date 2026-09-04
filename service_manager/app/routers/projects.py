@@ -14,8 +14,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from .. import registry
+from sqlalchemy.orm import Session
+
+from .. import models, permissions, registry
 from ..adapters import get_adapter
+from ..db import get_db
 from ..deps import require_portal_admin, require_portal_user
 
 router = APIRouter(tags=["services-lifecycle"])
@@ -80,12 +83,31 @@ def api_create(body: NewProject, _admin=Depends(require_portal_admin)):
     return {"name": name, "kind": body.kind, "icon": body.icon, "color": body.color}
 
 
+
+def _require_enter(db: Session, user: models.User, name: str) -> None:
+    """403 unless the caller may enter this service (project="" = whole service).
+
+    Deliberately NOT admin-only. A permitted user can already cause a start just
+    by opening `/p/<name>/` — the proxy's target_base boots an idle service on
+    demand and gates only on this same permission — so requiring `manager` here
+    made the button fail for exactly the people the proxy lets through, and made a
+    single service behave unlike a project (project_mgmt.start_project has always
+    used this check).
+    """
+    if not permissions.can_enter_project(db, user, name, ""):
+        if not permissions.verification_current(user):
+            raise HTTPException(403, "이메일 재인증이 필요합니다 (연 1회). 인증 후 입장할 수 있습니다.")
+        raise HTTPException(403, "이 서비스에 대한 권한이 없습니다.")
+
+
 @router.post("/api/projects/{name}/start")
-def api_start(name: str, _admin=Depends(require_portal_admin)):
+def api_start(name: str, user: models.User = Depends(require_portal_user),
+              db: Session = Depends(get_db)):
     if not registry.valid_name(name):
         raise HTTPException(400, "잘못된 서비스 이름")
     if not registry.service_dir(name).exists():
         raise HTTPException(404, f"'{name}' 없음")
+    _require_enter(db, user, name)
     manifest = registry.read_manifest(name)
     try:
         st = get_adapter(manifest).start(name, manifest)
@@ -95,11 +117,14 @@ def api_start(name: str, _admin=Depends(require_portal_admin)):
 
 
 @router.post("/api/projects/{name}/stop")
-def api_stop(name: str, _admin=Depends(require_portal_admin)):
+def api_stop(name: str, user: models.User = Depends(require_portal_user),
+             db: Session = Depends(get_db)):
+    # Same rule as start, and the same rule a project's stop already uses.
     if not registry.valid_name(name):
         raise HTTPException(400, "잘못된 서비스 이름")
     if not registry.service_dir(name).exists():
         raise HTTPException(404, f"'{name}' 없음")
+    _require_enter(db, user, name)
     manifest = registry.read_manifest(name)
     return get_adapter(manifest).stop(name, manifest)
 

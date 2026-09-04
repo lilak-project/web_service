@@ -1,0 +1,46 @@
+# LILAK Web Portal — native (no Docker) systemd unit.
+#
+# Install:
+#   sudo install -m644 service_manager/deploy/lilak-portal.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now lilak-portal
+[Unit]
+Description=LILAK Web Portal (native)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=cens-alpha-00
+Group=cens-alpha-00
+# The portal SPAWNS the hardware services as children; vacuum_monitoring opens
+# /dev/ttyUSB* which is group `dialout`. Listed explicitly rather than relying on
+# the login session's groups, which a systemd unit does not inherit.
+SupplementaryGroups=dialout
+WorkingDirectory=/home/cens-alpha-00/ko2520/service/web_service
+ExecStart=/home/cens-alpha-00/ko2520/service/web_service/run-native.sh
+Restart=always
+RestartSec=3
+
+# The ceiling Docker used to provide (compose mem_limit 3g / memswap 4g). A single
+# portal python once passed 11 GB and took the desktop and SSH down with it; this
+# is the replacement, and it is the reason not to run run-native.sh bare.
+# The limit covers the whole cgroup — portal PLUS every service it spawns — which
+# is exactly what the container limit covered.
+MemoryMax=3G
+MemorySwapMax=1G
+# A child hitting the ceiling gets OOM-killed on its own; that must not take the
+# portal down with it (matches how the container behaved).
+OOMPolicy=continue
+
+# KillMode is left at the default (control-group) ON PURPOSE: stopping the portal
+# must also stop the services it spawned. A surviving vacuum process would keep
+# /dev/ttyUSB0 open and the next start would fail to reopen it — the exact hold
+# that blocked the last cutover. Their .port files go stale and are cleaned up on
+# read, so the portal restarts them on demand.
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lilak-portal
+
+[Install]
+WantedBy=multi-user.target
