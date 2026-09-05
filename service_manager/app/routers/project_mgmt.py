@@ -205,13 +205,17 @@ def _proxy_guard(request: Request, svc: str, proj: str) -> None:
     """Enforce enter-permission on the project proxy. A top-level navigation has
     no Authorization header, so the token is read from the `lilak_portal_token`
     cookie (set by the frontend on login) or the header when present."""
-    from .proxy import _block_if_mirror
+    from .proxy import _block_if_mirror, machine_caller
     _block_if_mirror(request, svc)               # mirrored copy → reads only
     token = security.bearer(request.headers.get("authorization")) or request.cookies.get("lilak_portal_token")
     db = SessionLocal()
     try:
         user = permissions.user_from_request(db, token)
         if not user:
+            # Same service-to-service path as /p/ — this is the one a remote DAQ
+            # actually needs, since a run boundary is pushed to a PROJECT.
+            if machine_caller(request, registry.read_manifest(svc)):
+                return
             raise login_redirect_or_401(request)
         if not permissions.can_enter_project(db, user, svc, proj):
             if not permissions.verification_current(user):

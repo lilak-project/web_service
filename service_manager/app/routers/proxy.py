@@ -41,6 +41,34 @@ def _block_if_mirror(request: Request, svc: str) -> None:
         raise HTTPException(403, "이 서비스는 다른 서버(main)를 미러링 중이라 읽기 전용입니다.")
 
 
+def machine_caller(request, manifest: dict) -> bool:
+    """True when this is a service-to-service call the TARGET authenticates itself.
+
+    A service on another host cannot hold a portal user's JWT, and the loopback
+    `portal://` lookup only works for something the portal started — so for a
+    remote service (CoMPASS on .37 pushing run boundaries to elog) this proxy is
+    the only way in, and it answered 401 to the only credential it had.
+
+    So: an Authorization bearer that is NOT a portal token is passed through
+    without a portal identity — but only
+
+      • when an Authorization header was actually sent (a browser navigation
+        carries the cookie instead and never takes this path), and
+      • to a service that declared `identity.accepts_portal_token`, i.e. one that
+        reads the Authorization header and decides for itself. A service that
+        does not authenticate at all keeps the portal as its only gate.
+
+    The portal is not vouching for the caller here; it is forwarding a credential
+    that only the target can judge. What that widens is real and worth saying
+    plainly: anyone holding a valid token FOR THAT SERVICE reaches it through the
+    portal, including one registered private.
+    """
+    identity = manifest.get("identity") or {}
+    if not identity.get("accepts_portal_token", manifest.get("mode") == "managed"):
+        return False
+    return bool(security.bearer(request.headers.get("authorization")))
+
+
 def _guard(request: Request, name: str) -> None:
     """Enter-permission on a single service (project=''). Token from header or the
     `lilak_portal_token` cookie (top-level navigations carry no auth header)."""
@@ -50,6 +78,8 @@ def _guard(request: Request, name: str) -> None:
     try:
         user = permissions.user_from_request(db, token)
         if not user:
+            if machine_caller(request, registry.read_manifest(name)):
+                return                      # the service checks the bearer itself
             raise login_redirect_or_401(request)
         if not permissions.can_enter_project(db, user, name, ""):
             if not permissions.verification_current(user):
