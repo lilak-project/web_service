@@ -49,6 +49,127 @@
       "needs_kit": true,
       "ko": "분석 노트/파일 공유",
       "en": "Analysis notes / file sharing"
+    },
+    {
+      "name": "actuator",
+      "dir": "actuator_control",
+      "repo": "",
+      "label": "Actuator Control",
+      "icon": "arrows-left-right",
+      "color": "#1971c2",
+      "needs_kit": false,
+      "ko": "SMC JXC91 액추에이터 제어 (EtherNet/IP)",
+      "en": "SMC JXC91 actuator control over EtherNet/IP"
+    },
+    {
+      "name": "actuator_monitoring",
+      "dir": "actuator_monitoring",
+      "repo": "",
+      "label": "Actuator Monitoring",
+      "icon": "eye",
+      "color": "#4c6ef5",
+      "needs_kit": false,
+      "ko": "액추에이터 위치 읽기 전용 미러",
+      "en": "Read-only mirror of the actuator positions"
+    },
+    {
+      "name": "hv",
+      "dir": "hv_control_monitoring",
+      "repo": "",
+      "label": "CAEN GECO Monitoring",
+      "icon": "lightning",
+      "color": "#e8590c",
+      "needs_kit": false,
+      "ko": "CAEN HV 크레이트 스냅샷",
+      "en": "CAEN HV crate readout and snapshot archive"
+    },
+    {
+      "name": "vacuum",
+      "dir": "vacuum_monitoring",
+      "repo": "",
+      "label": "Vacuum Monitoring",
+      "icon": "gauge",
+      "color": "#099268",
+      "needs_kit": false,
+      "ko": "진공 게이지 측정과 CSV 기록",
+      "en": "Vacuum gauge readout, logged to CSV"
+    },
+    {
+      "name": "minicom",
+      "dir": "minicom_monitoring",
+      "repo": "",
+      "label": "minicom Monitoring",
+      "icon": "terminal",
+      "color": "#868e96",
+      "needs_kit": false,
+      "ko": "CoBo 콘솔 트리거 레이트",
+      "en": "CoBo console trigger rate from the capture file"
+    },
+    {
+      "name": "mte_control",
+      "dir": "mte_control",
+      "repo": "",
+      "label": "MTE Control",
+      "icon": "pulse",
+      "color": "#d6336c",
+      "needs_kit": false,
+      "ko": "MTE DAQ 제어 — 런을 소유하고 elog 에 push",
+      "en": "MTE DAQ control — owns the run, pushes to elog"
+    },
+    {
+      "name": "mte_monitoring",
+      "dir": "mte_monitoring",
+      "repo": "",
+      "label": "MTE Monitoring",
+      "icon": "eye",
+      "color": "#5f3dc4",
+      "needs_kit": false,
+      "ko": "MTE 카운터 읽기 전용 미러",
+      "en": "Read-only mirror of the MTE counters"
+    },
+    {
+      "name": "ganil_daq_monitoring",
+      "dir": "ganil_daq_monitoring",
+      "repo": "",
+      "label": "GANIL DAQ Monitoring",
+      "icon": "database",
+      "color": "#7048e8",
+      "needs_kit": false,
+      "ko": "GANIL 런컨트롤 감시 — elog 메인 시스템",
+      "en": "Watches GANIL run control — elog main system"
+    },
+    {
+      "name": "compass_monitoring",
+      "dir": "compass_monitoring",
+      "repo": "",
+      "label": "COMPASS DAQ Monitoring",
+      "icon": "chart-line",
+      "color": "#0ca678",
+      "needs_kit": false,
+      "ko": "CoMPASS DAQ 감시 (ssh 로 원격 호스트)",
+      "en": "CoMPASS DAQ watcher (remote host over ssh)"
+    },
+    {
+      "name": "compass_remote",
+      "dir": "compass_remote",
+      "repo": "",
+      "label": "COMPASS Remote Control",
+      "icon": "compass",
+      "color": "#e8590c",
+      "needs_kit": true,
+      "ko": "CoMPASS 원격 START/STOP · 런 파라미터 · 상태 읽기 (HTTP 원격제어 + ssh)",
+      "en": "CoMPASS remote START/STOP, run parameters, state readback (HTTP remote control + ssh)"
+    },
+    {
+      "name": "dummy_daq",
+      "dir": "dummy_daq",
+      "repo": "",
+      "label": "Dummy DAQ",
+      "icon": "flask",
+      "color": "#7048e8",
+      "needs_kit": false,
+      "ko": "가짜 DAQ 시험대 — 빔 없이 elog 로깅 체인 점검",
+      "en": "Stand-in DAQ rig — exercise the elog chain without a beam"
     }
   ]
 }

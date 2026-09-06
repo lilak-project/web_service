@@ -22,3 +22,19 @@
 *.log
 /_stack/
 **/.dev-server.pid
+
+# Services moved in beside the stack (2026-09-06). Each is its own git repo, so
+# git would otherwise record them as embedded repositories — a gitlink with no
+# URL behind it, which clones as an empty directory. Ignored until they have
+# remotes and can become real submodules; the store finds them by path either way.
+/actuator_control/
+/actuator_monitoring/
+/compass_monitoring/
+/compass_remote
+/dummy_daq/
+/ganil_daq_monitoring/
+/hv_control_monitoring/
+/minicom_monitoring/
+/mte_control/
+/mte_monitoring/
+/vacuum_monitoring/
