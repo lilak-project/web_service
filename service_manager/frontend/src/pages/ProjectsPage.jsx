@@ -17,7 +17,7 @@ import AccountMenu from './portal/AccountMenu'
 import { MasonryGrid } from './portal/MasonryGrid'
 import HomeModeMenu, { HOME_MODES } from './portal/HomeModeMenu'
 import ServiceGroupBand from './portal/ServiceGroupBand'
-import LiveTiles from './portal/LiveTiles'
+import LiveWall from './portal/LiveWall'
 import { usePortalScale } from '../portalScale'
 
 // True when the viewport is phone-narrow — drives the compact stacked header and
@@ -670,6 +670,12 @@ export default function ProjectsPage() {
     try { await launcher.post('/admin/service-groups', { name: lang === 'ko' ? `그룹 ${groups.length + 1}` : `Group ${groups.length + 1}` }); await refresh() }
     catch (e) { setError(e?.response?.data?.detail || 'failed') }
   }
+  // Live mode shows ONLY live-capable service cards (no builtins, nothing hidden,
+  // nothing inside a hidden group), in the cover's order, on a full-screen wall.
+  const liveCards = fullOrder
+    .map((k) => cards.find((c) => cardKey(c) === k))
+    .filter((c) => c && c.live && !c.builtin && !c.hidden && !memberOf[cardKey(c)]?.hidden)
+
   function onDropCard(key, gid) {
     if (groupsMode) regroup(key, gid)
     else if (manage) reorder(key, `#g:${gid}`)
@@ -755,7 +761,7 @@ export default function ProjectsPage() {
     </div>
   )
   // The active mode's hint + exit, shown above the cards in every size.
-  const modeBar = mode ? (
+  const modeBar = (mode && !liveMode) ? (
     <div style={{ ...capNarrow, display: 'flex', alignItems: 'center', gap: 10, padding: '4px 2px 10px', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
       <Icon name={modeDef?.icon || 'wrench'} size={15} color="var(--warning-text, #e67700)" />
       <span style={{ flex: 1 }}>{manage ? t('manage_hint') : groupsMode ? t('groups_hint') : t('live_hint')}</span>
@@ -828,8 +834,7 @@ export default function ProjectsPage() {
               // only enterable services toggle — request-only cards stay inert.
               // Single (non-project) services also open when the user only has a
               // request option, so "Request access" happens inside the card body.
-              const liveCard = liveMode && !!p.live && !isBuiltin
-              const canToggle = !groupsMode && !liveCard && ((manage && isManager) || !!p.can_enter || (!p.multi_project && !isBuiltin && !!p.can_request))
+              const canToggle = !groupsMode && ((manage && isManager) || !!p.can_enter || (!p.multi_project && !isBuiltin && !!p.can_request))
               const grip = (manage || groupsMode) && isManager
               const statusText = isBuiltin
                 ? (p.builtin === 'newservice' ? t('newsvc_card_hint')
@@ -838,7 +843,7 @@ export default function ProjectsPage() {
                 : p.multi_project ? t('portal_proj_open_svc')
                 : (p.running ? t('projects_running', p.port) : t('projects_stopped'))
               return (
-                <ExpandBox key={key} open={liveCard || isOpen} manage={mgmt && isManager}
+                <ExpandBox key={key} open={isOpen} manage={mgmt && isManager}
                   handle={grip ? (
                     <span draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key); setDragKey(key) }} onDragEnd={() => setDragKey(null)}
                       title={groupsMode ? (lang === 'ko' ? '끌어서 그룹으로' : 'drag into a group') : (lang === 'ko' ? '끌어서 순서 바꾸기' : 'drag to reorder')}
@@ -854,7 +859,7 @@ export default function ProjectsPage() {
                   // The grid's column gap spaces the cards; drop the card's own margin.
                   // A hidden builtin only reaches here in manage mode — dim it so it
                   // reads as "not on the cover" rather than as a normal card.
-                  style={{ marginBottom: 0, opacity: p.hidden ? 0.45 : dragKey === key ? 0.6 : undefined, minHeight: liveCard ? (big ? 150 : 112) : undefined }}
+                  style={{ marginBottom: 0, opacity: p.hidden ? 0.45 : dragKey === key ? 0.6 : undefined }}
                   // Roomy: bigger cards (more padding, larger leading mark + title),
                   // description line dropped; the leading caret stays.
                   padding={big ? '14px 18px' : '8px 14px'}
@@ -919,9 +924,7 @@ export default function ProjectsPage() {
                   )}
                   {/* Inline expansion: manage mode → management panel (builtins too);
                       otherwise the builtin tool / the service's own panel. */}
-                  {liveCard ? (
-                    <LiveTiles service={p} big={big} />
-                  ) : manage && isManager ? (
+                  {manage && isManager ? (
                     <>
                       <ServiceManagePanel service={p} builtinKey={isBuiltin ? p.builtin : null}
                         initialIcon={iconFor(p.name, p.icon)}
@@ -971,6 +974,10 @@ export default function ProjectsPage() {
           })()}
           {isManager && <div style={capNarrow}><ArchivePanel signal={reloadTick} onChanged={refresh} /></div>}
         </>
+      )}
+
+      {liveMode && view === 'home' && user && (
+        <LiveWall cards={liveCards} big={big} iconFor={iconFor} onDone={() => setMode(null)} />
       )}
 
       {logFor && (

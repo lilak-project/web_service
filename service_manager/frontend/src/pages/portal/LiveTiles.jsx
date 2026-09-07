@@ -73,7 +73,7 @@ export function useLive(service) {
   return { data, err, unsupported }
 }
 
-export default function LiveTiles({ service, big = false }) {
+export default function LiveTiles({ service, big = false, pad }) {
   const { data, err, unsupported } = useLive(service)
   const items = data?.items || []
   const tile = {
@@ -81,7 +81,7 @@ export default function LiveTiles({ service, big = false }) {
     borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)',
   }
   return (
-    <div style={{ padding: big ? '4px 18px 14px 58px' : '2px 14px 10px 46px' }}>
+    <div style={{ padding: pad || (big ? '4px 18px 14px 58px' : '2px 14px 10px 46px') }}>
       {unsupported ? (
         <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>live 정보 없음</span>
       ) : err && !items.length ? (
