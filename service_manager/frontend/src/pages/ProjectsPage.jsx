@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { EnvelopeSimple } from '@phosphor-icons/react'
 import { Icon, Button, CoverPage, PROJECT_ICONS, Avatar, MANAGER_COLOR, Modal } from 'lilak-ui'
 import ExpandBox from './portal/ExpandBox'
-import { launcher, setExperiment } from '../api'
+import { launcher, setExperiment, errText } from '../api'
 import { useLang } from '../context/LangContext'
 import AccountView, { settingsMenu } from './portal/AccountView'
 import ArchivePanel from './portal/ArchivePanel'
@@ -438,7 +438,7 @@ export default function ProjectsPage() {
   async function openLog(name) {
     setLogFor(name); setLogBusy(true)
     try { setLogData((await launcher.get(`/admin/services/${name}/log`)).data) }
-    catch (e) { setLogData({ text: `로그를 불러오지 못했습니다: ${e?.response?.data?.detail || e.message}`, path: '' }) }
+    catch (e) { setLogData({ text: `로그를 불러오지 못했습니다: ${errText(e, e.message)}`, path: '' }) }
     finally { setLogBusy(false) }
   }
 
@@ -693,7 +693,7 @@ export default function ProjectsPage() {
   }
   async function createGroup() {
     try { await launcher.post('/admin/service-groups', { name: lang === 'ko' ? `그룹 ${groups.length + 1}` : `Group ${groups.length + 1}` }); await refresh() }
-    catch (e) { setError(e?.response?.data?.detail || 'failed') }
+    catch (e) { setError(errText(e, 'failed')) }
   }
   // Live mode shows ONLY live-capable service cards (no builtins, nothing hidden,
   // nothing inside a hidden group), in the cover's order, on a full-screen wall.

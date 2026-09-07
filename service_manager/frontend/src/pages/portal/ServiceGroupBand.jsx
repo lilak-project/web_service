@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, Icon, Modal } from 'lilak-ui'
-import { launcher } from '../../api'
+import { launcher, errText } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { MasonryGrid } from './MasonryGrid'
 import IconPick from './IconPick'
@@ -33,7 +33,7 @@ export default function ServiceGroupBand({ group, cards, manageGroups, isManager
 
   async function patch(body) {
     try { await launcher.put(`/admin/service-groups/${group.id}`, body); onChanged?.() }
-    catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    catch (e) { setMsg(errText(e, L('실패', 'failed'))) }
   }
   async function toggleCollapse() {
     const next = !collapsed
@@ -42,12 +42,12 @@ export default function ServiceGroupBand({ group, cards, manageGroups, isManager
   }
   async function setVis(v) {
     try { await launcher.put(`/admin/service-groups/${group.id}/visibility`, { visibility: Number(v) }); setMsg(L('적용됨', 'applied')); onChanged?.() }
-    catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    catch (e) { setMsg(errText(e, L('실패', 'failed'))) }
   }
   async function remove() {
     if (!window.confirm(L(`'${group.name}' 그룹을 없앨까요? 카드들은 홈으로 돌아갑니다.`, `Remove group '${group.name}'? Its cards return to the cover.`))) return
     try { await launcher.delete(`/admin/service-groups/${group.id}`); onChanged?.() }
-    catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    catch (e) { setMsg(errText(e, L('실패', 'failed'))) }
   }
 
   const color = group.color || 'var(--text-secondary)'
@@ -133,19 +133,19 @@ function GroupAccessModal({ group, onClose, L }) {
     try {
       const [u, p] = await Promise.all([launcher.get('/admin/users'), launcher.get(`/admin/service-groups/${group.id}/permissions`)])
       setUsers(u.data || []); setInfo(p.data)
-    } catch (e) { setErr(e?.response?.data?.detail || 'load failed') }
+    } catch (e) { setErr(errText(e, 'load failed')) }
   }
   useEffect(() => { load() }, [group.id])  // eslint-disable-line react-hooks/exhaustive-deps
   async function grant() {
     if (!pick) return
     setBusy(true); setErr('')
     try { await launcher.post(`/admin/service-groups/${group.id}/permissions`, { user_id: Number(pick), admin }); await load() }
-    catch (e) { setErr(e?.response?.data?.detail || 'failed') } finally { setBusy(false) }
+    catch (e) { setErr(errText(e, 'failed')) } finally { setBusy(false) }
   }
   async function revoke(uid) {
     setBusy(true); setErr('')
     try { await launcher.delete(`/admin/service-groups/${group.id}/permissions`, { data: { user_id: uid } }); await load() }
-    catch (e) { setErr(e?.response?.data?.detail || 'failed') } finally { setBusy(false) }
+    catch (e) { setErr(errText(e, 'failed')) } finally { setBusy(false) }
   }
   const chip = { fontSize: 'var(--fs-small, 12px)', padding: '3px 10px', borderRadius: 999, background: 'var(--surface-2)', display: 'inline-flex', gap: 6, alignItems: 'center' }
   return (

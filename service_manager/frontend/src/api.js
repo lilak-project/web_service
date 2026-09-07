@@ -36,3 +36,15 @@ export const launcher = axios.create({ baseURL: '/launcher/api', timeout: 30000 
 }
 
 export default launcher
+
+// A readable message from an axios error. FastAPI's 422 carries `detail` as a
+// LIST of {loc,msg,type} objects; rendering that as a React child throws and
+// blanks the page, so it is flattened to text here.
+export function errText(e, fallback = 'failed') {
+  const d = e?.response?.data?.detail ?? e?.response?.data?.error
+  if (d == null) return e?.message || fallback
+  if (typeof d === 'string') return d
+  if (Array.isArray(d)) return d.map((x) => (typeof x === 'string' ? x : x?.msg || JSON.stringify(x))).join('; ')
+  if (typeof d === 'object') return d.msg || d.error || JSON.stringify(d)
+  return String(d)
+}

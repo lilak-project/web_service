@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Button, Icon, ColorPicker, AVATAR_COLORS, LayoutEditor } from 'lilak-ui'
-import { launcher, serviceApi } from '../../api'
+import { launcher, serviceApi, errText } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_WEIGHT, ICON_CHOICES } from './IconPick'
 import SyncPanel from './SyncPanel'
@@ -72,19 +72,19 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
       const code = e?.response?.status
       setLyErr(code === 404
         ? L('이 서비스는 탭 구성 편집을 지원하지 않습니다.', 'This service does not support tab layout editing.')
-        : (e?.response?.data?.detail || L('불러오기 실패', 'Failed to load')))
+        : (errText(e, L('불러오기 실패', 'Failed to load'))))
     }
   }
   async function saveLayout() {
     setLySaving(true); setLyErr('')
     try { const { data } = await serviceApi(svc.name).put('/layout', layout); setLayout(data); setLyDirty(false) }
-    catch (e) { setLyErr(e?.response?.data?.detail || L('저장 실패', 'Save failed')) }
+    catch (e) { setLyErr(errText(e, L('저장 실패', 'Save failed'))) }
     finally { setLySaving(false) }
   }
   async function resetLayout() {
     setLyErr('')
     try { const { data } = await serviceApi(svc.name).post('/layout/reset'); setLayout(data); setLyDirty(false) }
-    catch (e) { setLyErr(e?.response?.data?.detail || L('초기화 실패', 'Reset failed')) }
+    catch (e) { setLyErr(errText(e, L('초기화 실패', 'Reset failed'))) }
   }
 
   async function save() {
@@ -95,7 +95,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
         await launcher.put(`/admin/services/${svc.name}/appearance`, { icon, color, label: label.trim() })
       }
       setMsg(L('저장됨', 'saved')); onChanged?.()
-    } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    } catch (e) { setMsg(errText(e, L('실패', 'failed'))) }
   }
   async function toggleHidden() {
     const next = !hidden
@@ -104,36 +104,36 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
       if (isBuiltin) await launcher.put('/admin/home-builtin', { key: builtinKey, hidden: next })
       else await launcher.put('/admin/home-service', { name: svc.name, hidden: next })
       onChanged?.()
-    } catch (e) { setHidden(!next); setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    } catch (e) { setHidden(!next); setMsg(errText(e, L('실패', 'failed'))) }
   }
   async function toggleLiveHidden() {
     const next = !liveHidden
     setLiveHidden(next)
     try { await launcher.put('/admin/home-service', { name: svc.name, live_hidden: next }); onChanged?.() }
-    catch (e) { setLiveHidden(!next); setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    catch (e) { setLiveHidden(!next); setMsg(errText(e, L('실패', 'failed'))) }
   }
   async function toggleAuto() {
     const next = !auto
     setAuto(next)                                   // optimistic
     try { await launcher.put(`/admin/services/${svc.name}/autostart`, { autostart: next }); onChanged?.() }
-    catch (e) { setAuto(!next); setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    catch (e) { setAuto(!next); setMsg(errText(e, L('실패', 'failed'))) }
   }
   async function changeVis(v) {
     setVis(Number(v))
     try { await launcher.put(`/admin/services/${svc.name}`, { visibility: Number(v) }); onChanged?.() }
-    catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    catch (e) { setMsg(errText(e, L('실패', 'failed'))) }
   }
   async function archiveService() {
     if (!window.confirm(L(`'${svc.name}'을(를) 보관함으로 옮길까요? 데이터는 삭제되고 서비스 정의만 보관되어 나중에 복구할 수 있습니다.`,
       `Move '${svc.name}' to the archive? Its data is deleted; the service definition is kept so you can restore it later.`))) return
     try { await launcher.post(`/admin/services/${svc.name}/archive`); onChanged?.() }
-    catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    catch (e) { setMsg(errText(e, L('실패', 'failed'))) }
   }
   async function removeService() {
     if (!window.confirm(L(`'${svc.name}' 서비스를 완전히 삭제할까요? 서비스와 데이터가 모두 사라지고 복구할 수 없습니다.`,
       `Permanently delete '${svc.name}'? The service and its data are gone for good — no restore.`))) return
     try { await launcher.delete(`/admin/services/${svc.name}`); onChanged?.() }
-    catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    catch (e) { setMsg(errText(e, L('실패', 'failed'))) }
   }
 
   return (
