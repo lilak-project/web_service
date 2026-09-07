@@ -103,6 +103,17 @@ export default function LiveWall({ cards, big, onDone, iconFor }) {
   const cur = Math.min(page, pages.length - 1)
   useEffect(() => { if (page !== cur) setPage(cur) }, [cur, page])
   const columns = pages[cur]
+  // Absolute positions for the current page: column x from the equal column
+  // width, y from the measured heights stacked with the gap.
+  const colW = cols > 0 ? Math.floor((dims.w - GAP * (cols - 1)) / cols) : dims.w
+  const placed = []
+  columns.forEach((col, c) => {
+    let y = 0
+    for (const card of col) {
+      placed.push({ card, left: GAP + c * (colW + GAP), top: GAP + y, width: colW })
+      y += Math.min(Math.max(cardMin, dims.h), heights.get(card.name) ?? cardMin) + GAP
+    }
+  })
 
   useEffect(() => {
     const onKey = (e) => {
@@ -133,26 +144,25 @@ export default function LiveWall({ cards, big, onDone, iconFor }) {
         )}
         <Button variant="primary" size="sm" onClick={onDone} style={{ minWidth: 76, justifyContent: 'center' }}>{L('완료', 'Done')}</Button>
       </div>
-      {/* the wall */}
-      <div ref={areaRef} style={{ flex: 1, minHeight: 0, padding: GAP, display: 'flex', gap: GAP, alignItems: 'flex-start', overflow: 'hidden' }}>
+      {/* the wall: every card of the page is one absolutely-placed box in ONE
+          container, so a card that moves to another column keeps its DOM node
+          (no remount, no flash) and simply slides to its new place. */}
+      <div ref={areaRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         {cards.length === 0 && (
-          <div style={{ flex: 1, textAlign: 'center', paddingTop: 80, color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
+          <div style={{ textAlign: 'center', paddingTop: 80, color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
             {L('라이브를 지원하는 서비스가 없습니다.', 'No service supports live yet.')}
           </div>
         )}
-        {columns.map((col, c) => (
-          <div key={c} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
-            {col.map((p) => (
-              <div key={p.name} ref={observe(p.name)} data-live-key={p.name}
-                style={{ minHeight: cardMin, maxHeight: Math.max(cardMin, dims.h), overflow: 'hidden', border: '1.5px solid var(--border-strong, #94a3b8)', borderRadius: 16, background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px 6px', flexShrink: 0 }}>
-                  <Icon name={iconFor(p.name, p.icon)} size={30} weight="fill" color={p.color || 'var(--text-primary)'} />
-                  <span style={{ fontSize: 18, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.name}</span>
-                  <span style={{ marginLeft: 'auto', width: 10, height: 10, borderRadius: 999, background: dot(p), flexShrink: 0 }} />
-                </div>
-                <LiveTiles service={p} big wall pad="4px 18px 16px" />
-              </div>
-            ))}
+        {placed.map(({ card: p, left, top, width }) => (
+          <div key={p.name} ref={observe(p.name)} data-live-key={p.name}
+            style={{ position: 'absolute', left, top, width, transition: 'left .18s ease, top .18s ease',
+              minHeight: cardMin, maxHeight: Math.max(cardMin, dims.h), overflow: 'hidden', border: '1.5px solid var(--border-strong, #94a3b8)', borderRadius: 16, background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px 6px', flexShrink: 0 }}>
+              <Icon name={iconFor(p.name, p.icon)} size={30} weight="fill" color={p.color || 'var(--text-primary)'} />
+              <span style={{ fontSize: 18, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.name}</span>
+              <span style={{ marginLeft: 'auto', width: 10, height: 10, borderRadius: 999, background: dot(p), flexShrink: 0 }} />
+            </div>
+            <LiveTiles service={p} big wall pad="4px 18px 16px" />
           </div>
         ))}
       </div>
