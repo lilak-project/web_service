@@ -42,12 +42,13 @@ export function useLive(service) {
     async function fetchOnce() {
       try {
         if (service.multi_project) {
-          if (!projectsRef.current) {
-            const r = await axios.get(`/launcher/api/services/${name}/projects`, { headers: authHeaders(), timeout: 8000 })
-            projectsRef.current = (r.data || []).map((p) => p.name || p).filter(Boolean)
-          }
+          // Only projects that are RUNNING: asking a stopped one through the proxy
+          // would start it, and a stopped logbook has nothing live to say anyway.
+          // The list is re-read every poll so a project started meanwhile appears.
+          const r0 = await axios.get(`/launcher/api/services/${name}/projects`, { headers: authHeaders(), timeout: 8000 })
+          projectsRef.current = (r0.data || []).filter((p) => p && p.running).map((p) => p.name).filter(Boolean)
           const items = []
-          for (const proj of projectsRef.current.slice(0, 6)) {
+          for (const proj of projectsRef.current) {
             try {
               const r = await axios.get(`/launcher/pp/${name}/${proj}/api/live`, { headers: authHeaders(), timeout: 8000 })
               for (const it of (r.data?.items || [])) items.push({ ...it, label: `${proj} · ${it.label}` })
