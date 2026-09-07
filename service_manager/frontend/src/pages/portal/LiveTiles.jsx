@@ -65,7 +65,7 @@ export function useLive(service) {
           if (alive) { const d = { items, at: Date.now() }; CACHE.set(name, { data: d }); setData(d); setErr('') }
         } else {
           const r = await serviceApi(name).get('/live', { timeout: 8000 })
-          if (alive) { const d = { items: r.data?.items || [], note: r.data?.note, at: Date.now() }; CACHE.set(name, { data: d }); setData(d); setErr('') }
+          if (alive) { const d = { items: r.data?.items || [], note: r.data?.note, layout: r.data?.layout, at: Date.now() }; CACHE.set(name, { data: d }); setData(d); setErr('') }
         }
       } catch (e) {
         if (!alive) return
@@ -85,17 +85,22 @@ export function useLive(service) {
 export default function LiveTiles({ service, big = false, pad, wall = false }) {
   const { data, err, unsupported } = useLive(service)
   const items = data?.items || []
+  const rows = data?.layout === 'rows'          // one full-width row per item (e.g. one actuator per line)
   // On the wall the tiles stretch to fill the card and the numbers grow when
-  // there are few of them: one figure fills the box, six share it.
+  // there are few of them: one figure fills the box, six share it. The figures
+  // are set in the bold SANS with tabular digits — a monospace face at wall
+  // distance reads thin; a heavy sans reads at a glance.
   const n = Math.max(1, items.length)
-  const valuePx = wall ? (n <= 1 ? 44 : n <= 2 ? 38 : n <= 4 ? 30 : 24) : null
-  const tile = {
-    display: 'flex', flexDirection: 'column', gap: wall ? 4 : 2, minWidth: wall ? 150 : 92,
-    flex: wall ? '1 1 150px' : '0 0 auto',
-    padding: wall ? '10px 14px' : big ? '8px 12px' : '6px 10px',
-    borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)',
-  }
-  const labelPx = wall ? 13 : null
+  const valuePx = wall ? (rows ? 34 : n <= 1 ? 48 : n <= 2 ? 42 : n <= 4 ? 34 : 28) : null
+  const valueFont = { fontFamily: 'var(--font-sans)', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums lining-nums' }
+  const tile = rows
+    ? { display: 'flex', alignItems: 'baseline', gap: 16, flex: '1 1 100%', padding: wall ? '8px 14px' : '6px 10px',
+        borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)', minWidth: 0 }
+    : { display: 'flex', flexDirection: 'column', gap: wall ? 4 : 2, minWidth: wall ? 150 : 92,
+        flex: wall ? '1 1 150px' : '0 0 auto',
+        padding: wall ? '10px 14px' : big ? '8px 12px' : '6px 10px',
+        borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)' }
+  const labelPx = wall ? 14 : null
   return (
     <div style={{ padding: pad || (big ? '4px 18px 14px 58px' : '2px 14px 10px 46px') }}>
       {unsupported ? (
@@ -109,16 +114,31 @@ export default function LiveTiles({ service, big = false, pad, wall = false }) {
           {items.length === 0 && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>—</span>}
           {items.map((it, i) => {
             const tone = TONE[(it.state || '').toLowerCase()]
+            const label = (
+              <span style={{ fontSize: labelPx ? `${labelPx}px` : 'var(--fs-micro, 11px)', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-flex', gap: 6, alignItems: 'center', minWidth: rows ? 96 : undefined }}>
+                {tone && <span style={{ width: 9, height: 9, borderRadius: 999, background: tone, flexShrink: 0 }} />}
+                {it.label}
+              </span>
+            )
+            const value = (
+              <span style={{ ...valueFont, fontSize: valuePx ? `${valuePx}px` : big ? 'var(--fs-xlarge, 18px)' : 'var(--fs-large, 16px)', lineHeight: 1.1, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                {it.value ?? '—'}{it.unit ? <span style={{ fontSize: wall ? 16 : 'var(--fs-small, 12px)', fontWeight: 500, color: 'var(--text-muted)', marginLeft: 4 }}>{it.unit}</span> : null}
+              </span>
+            )
+            if (rows) {
+              return (
+                <div key={i} style={tile} title={it.title || it.label}>
+                  {label}
+                  {value}
+                  {it.sub && <span style={{ ...valueFont, fontWeight: 600, fontSize: valuePx ? `${Math.round(valuePx * 0.85)}px` : 'var(--fs-medium, 14px)', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: 1 }}>{it.sub}</span>}
+                </div>
+              )
+            }
             return (
               <div key={i} style={tile} title={it.title || it.label}>
-                <span style={{ fontSize: labelPx ? `${labelPx}px` : 'var(--fs-micro, 11px)', color: 'var(--text-muted)', letterSpacing: '.03em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-flex', gap: 5, alignItems: 'center' }}>
-                  {tone && <span style={{ width: 7, height: 7, borderRadius: 999, background: tone, flexShrink: 0 }} />}
-                  {it.label}
-                </span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: valuePx ? `${valuePx}px` : big ? 'var(--fs-xlarge, 18px)' : 'var(--fs-large, 16px)', lineHeight: 1.1, fontWeight: 600, color: tone || 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                  {it.value ?? '—'}{it.unit ? <span style={{ fontSize: wall ? 15 : 'var(--fs-small, 12px)', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>{it.unit}</span> : null}
-                </span>
-                {it.sub && <span style={{ fontSize: wall ? 13 : 'var(--fs-micro, 11px)', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.sub}</span>}
+                {label}
+                {value}
+                {it.sub && <span style={{ fontSize: wall ? 14 : 'var(--fs-micro, 11px)', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.sub}</span>}
               </div>
             )
           })}
