@@ -28,10 +28,18 @@ function authHeaders() {
   return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
+// Last answer per service, kept across mounts. The live wall re-packs its
+// columns as cards report their heights, and a card that moves to another
+// column is remounted by React: without this cache it would come back empty
+// ("…", minimum height), be re-measured small, be re-packed, grow again when
+// its poll returned — and never settle. Starting from the cached answer keeps
+// the height the same across the move, so the layout converges.
+const CACHE = new Map()
+
 export function useLive(service) {
-  const [data, setData] = useState(null)        // { items, note, at } | null
+  const [data, setData] = useState(() => (service?.name && CACHE.get(service.name)?.data) || null)
   const [err, setErr] = useState('')
-  const [unsupported, setUnsupported] = useState(false)
+  const [unsupported, setUnsupported] = useState(() => !!(service?.name && CACHE.get(service.name)?.unsupported))
   const projectsRef = useRef(null)
 
   useEffect(() => {
@@ -54,14 +62,14 @@ export function useLive(service) {
               for (const it of (r.data?.items || [])) items.push({ ...it, label: `${proj} · ${it.label}` })
             } catch { /* a stopped project: skip */ }
           }
-          if (alive) { setData({ items, at: Date.now() }); setErr('') }
+          if (alive) { const d = { items, at: Date.now() }; CACHE.set(name, { data: d }); setData(d); setErr('') }
         } else {
           const r = await serviceApi(name).get('/live', { timeout: 8000 })
-          if (alive) { setData({ items: r.data?.items || [], note: r.data?.note, at: Date.now() }); setErr('') }
+          if (alive) { const d = { items: r.data?.items || [], note: r.data?.note, at: Date.now() }; CACHE.set(name, { data: d }); setData(d); setErr('') }
         }
       } catch (e) {
         if (!alive) return
-        if (e?.response?.status === 404) { setUnsupported(true); return }
+        if (e?.response?.status === 404) { CACHE.set(name, { unsupported: true }); setUnsupported(true); return }
         setErr(e?.response?.data?.detail || e.message || 'error')
       }
       if (alive && !unsupported) timer = setTimeout(fetchOnce, POLL_MS)
