@@ -1,0 +1,26 @@
+{
+  "kind": "monitor",
+  "mode": "managed",
+  "start": {
+    "cmd": "/usr/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port {port}",
+    "cwd": "/app/ganil_daq_monitoring/backend",
+    "env": {}
+  },
+  "health": "/api/health",
+  "entry": "/",
+  "url": null,
+  "token": null,
+  "identity": {
+    "accepts_portal_token": false,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": false,
+    "import_export": false
+  },
+  "icon": "radio",
+  "color": "#7048e8",
+  "label": "GANIL DAQ Monitoring",
+  "order": 6,
+  "autostart": true
+}

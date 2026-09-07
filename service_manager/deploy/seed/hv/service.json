@@ -1,0 +1,26 @@
+{
+  "kind": "monitor",
+  "mode": "managed",
+  "start": {
+    "cmd": "/usr/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port {port}",
+    "cwd": "/app/hv_control_monitoring/backend",
+    "env": {}
+  },
+  "health": "/api/health",
+  "entry": "/",
+  "url": null,
+  "token": null,
+  "identity": {
+    "accepts_portal_token": false,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": false,
+    "import_export": true
+  },
+  "icon": "lightning",
+  "color": "#e8590c",
+  "label": "CAEN GECO Monitoring",
+  "order": 2,
+  "autostart": true
+}

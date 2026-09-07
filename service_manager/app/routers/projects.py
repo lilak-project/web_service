@@ -44,8 +44,18 @@ def raw_service(name: str) -> dict:
         "multi_project": bool(caps.get("multi_project")),
         "import_export": bool(caps.get("import_export")),
         "order": manifest.get("order", 1000),      # admin-set display order (manage mode)
+        "autostart": bool(manifest.get("autostart")),   # portal brings it up on ITS start
+        # Answers GET /api/live with a few compact numbers for the cover's live mode.
+        "live": bool(manifest.get("live")),
+        # Taken off this portal's cover in manage mode (data/_portal/home.json).
+        "hidden": name in _hidden_services(),
         "version": gitinfo.service_version((manifest.get("start") or {}).get("cwd")),  # {sha,date}|null
     }
+
+
+def _hidden_services() -> set[str]:
+    from .home import hidden_services
+    return hidden_services()
 
 
 def list_raw_services() -> list[dict]:

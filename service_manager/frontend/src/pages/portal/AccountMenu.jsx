@@ -58,13 +58,13 @@ export default function AccountMenu({ user, isManager, onLogout, width }) {
             </div>
             {user.email && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>}
           </div>
-          {/* Home card layout: 1열 = always one per row; 2열 = responsive (2 when wide). */}
+          {/* Home card layout: 1열 = always one per row; 여러 열 = responsive (up to 3 when wide). */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
             <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
               {lang === 'ko' ? '홈 보기' : 'Home'}
             </span>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-              {[['single', '1열', '1 col'], ['auto', '2열', '2 cols']].map(([v, ko, en]) => {
+              {[['single', '1열', '1 col'], ['multi', '여러 열', 'multi']].map(([v, ko, en]) => {
                 const on = mode === v
                 return (
                   <button key={v} type="button" onClick={() => setHomeCols(v)}

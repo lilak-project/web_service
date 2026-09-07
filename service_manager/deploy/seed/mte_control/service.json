@@ -1,0 +1,23 @@
+{
+  "kind": "daq",
+  "mode": "managed",
+  "start": {
+    "cmd": "/usr/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port {port}",
+    "cwd": "/app/mte_control/backend",
+    "env": {}
+  },
+  "health": "/api/health",
+  "entry": "/",
+  "identity": {
+    "accepts_portal_token": false,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": false,
+    "import_export": false
+  },
+  "label": "MTE Control",
+  "icon": "pulse",
+  "color": "#d6336c",
+  "autostart": true
+}

@@ -32,6 +32,9 @@ export default function ExpandBox({
   open, onToggle, toggleable = true, manage = false, divider = true, caret = true,
   icon, title, badges, subtitle, right, children, style,
   padding = '8px 14px', titleSize = 'var(--fs-medium, 14px)', titleWeight = 600, radius = 12,
+  // handle: rendered in the caret's place (a drag grip in manage mode); clicks on
+  // it do not toggle. outerProps: spread on the box itself (drag/drop handlers).
+  handle = null, outerProps = {}, borderColor = null,
 }) {
   // `render` = children mounted; `grown` = grid expanded. Open: mount now, then grow
   // once the body has mounted (a frame later, so 0fr paints first and the transition
@@ -56,9 +59,9 @@ export default function ExpandBox({
 
   // Keep the border WIDTH fixed (only the colour changes on open) — a thicker open
   // border shrank the content box and nudged the icon/title ~1px down-right.
-  const border = `1.5px ${manage ? 'dashed' : 'solid'} ${open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)'}`
+  const border = `1.5px ${manage ? 'dashed' : 'solid'} ${borderColor || (open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)')}`
   return (
-    <div style={{ border, borderRadius: radius, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10, ...style }}>
+    <div {...outerProps} style={{ border, borderRadius: radius, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10, ...style }}>
       <div onClick={toggleable ? onToggle : undefined}
         style={{ display: 'flex', alignItems: 'center', gap: 13, padding,
           cursor: toggleable ? 'pointer' : 'default',
@@ -66,7 +69,9 @@ export default function ExpandBox({
           // title + inner text (native double-click text selection). Not on the
           // expanded children — only the header row is unselectable.
           ...(toggleable ? { userSelect: 'none', WebkitUserSelect: 'none' } : {}) }}>
-        {toggleable && caret && (
+        {handle != null ? (
+          <div onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0, display: 'flex' }}>{handle}</div>
+        ) : toggleable && caret && (
           // One glyph rotated 90° on open (not caret-right↔caret-down, whose slightly
           // different shapes nudged the icon/title). Same box → nothing shifts; the
           // rotation also animates.

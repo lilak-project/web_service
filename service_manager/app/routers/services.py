@@ -105,7 +105,13 @@ def list_services(
     user: models.User = Depends(require_portal_user),
     db: Session = Depends(get_db),
 ):
-    return annotate_services(db, user, list_raw_services())
+    out = annotate_services(db, user, list_raw_services())
+    if not _is_admin(user):
+        # Hidden in manage mode, or inside a group that is hidden as a whole.
+        from .service_groups import all_groups
+        in_hidden_group = {m for g in all_groups() if g.get("hidden") for m in g.get("members", [])}
+        out = [s for s in out if not s.get("hidden") and s["name"] not in in_hidden_group]
+    return out
 
 
 class AccessRequestBody(BaseModel):
@@ -426,6 +432,34 @@ class HandshakeBody(BaseModel):
     multi_project: bool = False
     import_export: bool = False
     link_by: str = "email"
+
+
+class AutostartBody(BaseModel):
+    autostart: bool
+
+
+@router.put("/api/admin/services/{name}/autostart")
+def admin_set_autostart(name: str, body: AutostartBody,
+                        _: models.User = Depends(require_portal_admin)):
+    """Whether the portal brings this service up when IT starts.
+
+    Lives in the manifest, so it travels with the service's data. A multi-project
+    service keeps a list of projects instead of a bare true; toggling it on here
+    means "every project you already have", which is the only sensible reading
+    without asking which — the list form is for editing by hand or by seed.
+    """
+    if not registry.service_dir(name).exists():
+        raise HTTPException(404, f"'{name}' 없음")
+    manifest = registry.read_manifest(name)
+    multi = bool((manifest.get("capabilities") or {}).get("multi_project"))
+    if not body.autostart:
+        manifest.pop("autostart", None)
+    elif multi and not isinstance(manifest.get("autostart"), list):
+        manifest["autostart"] = True
+    else:
+        manifest["autostart"] = manifest.get("autostart") if multi else True
+    registry.write_manifest(name, manifest)
+    return {"ok": True, "name": name, "autostart": manifest.get("autostart", False)}
 
 
 @router.get("/api/admin/handshake-info")

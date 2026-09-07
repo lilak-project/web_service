@@ -36,6 +36,10 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   const [color, setColor] = useState(startColor)
   const [label, setLabel] = useState(startLabel)
   const [vis, setVis] = useState(service.visibility || 2)
+  // Whether the PORTAL brings this up when it starts. It matters beyond
+  // convenience: a service the portal spawned lives in the portal's cgroup and
+  // under its memory ceiling, one started by hand does not.
+  const [auto, setAuto] = useState(!!service.autostart)
   const [msg, setMsg] = useState('')
   // Builtins only: take the card off THIS portal's cover. Stored in the data
   // volume (data/_portal/home.json), so it is a per-server choice, not a build.
@@ -95,8 +99,17 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   async function toggleHidden() {
     const next = !hidden
     setHidden(next)                                     // optimistic
-    try { await launcher.put('/admin/home-builtin', { key: builtinKey, hidden: next }); onChanged?.() }
-    catch (e) { setHidden(!next); setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    try {
+      if (isBuiltin) await launcher.put('/admin/home-builtin', { key: builtinKey, hidden: next })
+      else await launcher.put('/admin/home-service', { name: svc.name, hidden: next })
+      onChanged?.()
+    } catch (e) { setHidden(!next); setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+  }
+  async function toggleAuto() {
+    const next = !auto
+    setAuto(next)                                   // optimistic
+    try { await launcher.put(`/admin/services/${svc.name}/autostart`, { autostart: next }); onChanged?.() }
+    catch (e) { setAuto(!next); setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
   async function changeVis(v) {
     setVis(Number(v))
@@ -144,17 +157,33 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
             <span style={{ width: 12 }} />
           </>
         )}
+        {!isBuiltin && (
+          <>
+            <button onClick={toggleAuto}
+              title={L('포탈이 시작될 때 이 서비스도 함께 띄웁니다.',
+                       'Bring this service up when the portal starts.')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none',
+                       border: 0, padding: 0, cursor: 'pointer', font: 'inherit',
+                       fontSize: 'var(--fs-small, 12px)',
+                       color: auto ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }}>
+              <Icon name={auto ? 'toggle-right' : 'toggle-left'} size={18}
+                    weight={auto ? 'fill' : 'regular'} />
+              {L('자동 시작', 'Autostart')}
+            </button>
+            <span style={{ width: 12 }} />
+          </>
+        )}
         <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('순서', 'Order')}</span>
         <Button variant="ghost" size="sm" icon disabled={first} title={t('manage_move_up')} onClick={() => onMove(-1)}><Icon name="caret-up" size={15} /></Button>
         <Button variant="ghost" size="sm" icon disabled={last} title={t('manage_move_down')} onClick={() => onMove(1)}><Icon name="caret-down" size={15} /></Button>
 
         <div style={{ flex: 1 }} />
-        {isBuiltin && (
+        {(
           <Button variant="ghost" size="sm" onClick={toggleHidden}
             title={hidden
               ? L('이 서버의 홈 화면에 다시 표시합니다.', 'Show on this server\u2019s home screen again.')
-              : L('이 서버의 홈 화면에서만 숨깁니다. 관리 모드에서는 계속 보입니다.',
-                  'Hide from this server\u2019s home screen. Still shown in manage mode.')}>
+              : L('이 서버의 홈 화면에서만 숨깁니다 (라이브 모드에서도 안 보임). 관리 모드에서는 계속 보입니다.',
+                  'Hide from this server\u2019s home screen (live mode too). Still shown in manage mode.')}>
             <Icon name={hidden ? 'eye' : 'eye-slash'} size={15} />
             {hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
           </Button>

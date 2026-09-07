@@ -18,6 +18,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 
 from . import config
+from . import autostart
+from .routers import service_groups  # noqa: E402
 from .routers import accounts, auth, home, iconlab, links, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
 
 config.ensure_dirs()
@@ -87,6 +89,7 @@ app.include_router(store.router)           # /api/admin/store (catalog install +
 app.include_router(sync_router.router)      # /api/sync + /api/admin/services/{svc}/sync
 app.include_router(links.router)          # /api/links + /api/admin/links (home bookmark card)
 app.include_router(home.router)            # /api/admin/home (builtin overrides + card order)
+app.include_router(service_groups.router)  # /api/service-groups (+ admin: home cover groups)
 app.include_router(iconlab.router)
 app.include_router(reports.router)         # /api/reports + /api/admin/reports (feedback)
 app.include_router(system.router)          # /api/admin/system/ports (managed-service port window)
@@ -113,6 +116,11 @@ async def _security_preflight():
     # Start the cross-portal sync poller (no-op unless a service is a 'sub' with an
     # interval set).
     sync_router.start_scheduler()
+
+    # Bring up the services that asked to be running. Spawning them HERE is what
+    # puts them in the portal's cgroup — and so under its memory ceiling — instead
+    # of wherever whoever opened them first happened to be.
+    autostart.run()
 
     if warns:
         bar = "!" * 72

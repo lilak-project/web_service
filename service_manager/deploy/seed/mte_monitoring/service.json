@@ -1,0 +1,23 @@
+{
+  "kind": "monitor",
+  "mode": "managed",
+  "start": {
+    "cmd": "/usr/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port {port}",
+    "cwd": "/app/mte_monitoring/backend",
+    "env": {}
+  },
+  "health": "/api/upstream",
+  "entry": "/",
+  "identity": {
+    "accepts_portal_token": false,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": false,
+    "import_export": false
+  },
+  "label": "MTE Monitoring",
+  "icon": "eye",
+  "color": "#5f3dc4",
+  "autostart": true
+}

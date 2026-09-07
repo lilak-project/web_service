@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button } from 'lilak-ui'
+import { Button, Icon, copyText } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { useNarrowRef } from './useNarrowRef'
@@ -79,6 +79,50 @@ export default function ServiceSingle({ service, canManage, manage = false, onRe
           <Button variant="secondary" disabled={busy} style={btn} onClick={stop}>{t('projects_stop')}</Button>
         )}
       </div>
+      {canManage && <ElogAddress service={service} />}
+    </div>
+  )
+}
+
+/**
+ * The address to register this service under in elog.
+ *
+ * Written on the card because it is the one thing you need at the moment you are
+ * looking at a service and cannot derive by eye: a portal-managed service takes
+ * its port from a pool at start time, so its real address changes, and the
+ * `portal://` form is what elog resolves per call instead of pinning a number
+ * that will be wrong tomorrow. An external service has a fixed address already,
+ * so that is what it gets — and `portal://` would not resolve for it anyway.
+ *
+ * Shown to managers only: it is a registration detail, not something a shifter
+ * opening the card needs to read past.
+ */
+function ElogAddress({ service }) {
+  const { t } = useLang()
+  const [copied, setCopied] = useState(false)
+  const addr = service.mode === 'external'
+    ? `${(service.url || '').replace(/\/$/, '')}/api/elog`
+    : `portal://${service.name}/api/elog`
+
+  async function copy() {
+    // copyText falls back to execCommand: over plain http (a LAN or VPN address)
+    // navigator.clipboard does not exist and the button used to do nothing.
+    if (await copyText(addr)) { setCopied(true); setTimeout(() => setCopied(false), 1500) }
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                  paddingTop: 10, marginTop: 2, borderTop: '1px dashed var(--border-subtle)' }}>
+      <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', flexShrink: 0 }}>
+        {t('elog_addr')}
+      </span>
+      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)',
+                     background: 'var(--surface-2)', color: 'var(--text-primary)',
+                     padding: '3px 8px', borderRadius: 6, minWidth: 0,
+                     overflowWrap: 'anywhere' }}>{addr}</code>
+      <Button variant="ghost" size="sm" onClick={copy} title={t('elog_addr_hint')}>
+        <Icon name={copied ? 'check' : 'copy'} size={14} /> {copied ? t('copied') : t('copy')}
+      </Button>
     </div>
   )
 }

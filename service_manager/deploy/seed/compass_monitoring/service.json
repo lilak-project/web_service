@@ -1,0 +1,26 @@
+{
+  "kind": "monitor",
+  "mode": "managed",
+  "start": {
+    "cmd": "/usr/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port {port}",
+    "cwd": "/app/compass_monitoring/backend",
+    "env": {}
+  },
+  "health": "/api/health",
+  "entry": "/",
+  "url": null,
+  "token": null,
+  "identity": {
+    "accepts_portal_token": false,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": false,
+    "import_export": false
+  },
+  "icon": "compass",
+  "color": "#4263eb",
+  "label": "COMPASS DAQ Monitoring",
+  "order": 7,
+  "autostart": true
+}

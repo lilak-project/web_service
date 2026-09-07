@@ -32,10 +32,18 @@ def _read() -> dict:
         if isinstance(d, dict):
             d.setdefault("order", [])
             d.setdefault("builtins", {})
+            d.setdefault("hidden_services", [])
             return d
     except Exception:
         pass
-    return {"order": [], "builtins": {}}
+    return {"order": [], "builtins": {}, "hidden_services": []}
+
+
+def hidden_services() -> set[str]:
+    """Services taken off THIS portal's cover in manage mode. Per server, like the
+    builtin hides. Managers still see them in manage mode (dimmed); nobody sees
+    them on the normal cover or in live mode."""
+    return set(_read().get("hidden_services") or [])
 
 
 def _write(d: dict) -> None:
@@ -60,14 +68,33 @@ def set_order(body: OrderBody, _: models.User = Depends(require_portal_admin)):
     # Mirror the relative service order into manifests (non-admins sort by that).
     i = 0
     for k in body.keys:
-        if k.startswith("@"):
+        if k.startswith("@") or k.startswith("#"):
             continue
         if registry.service_dir(k).exists():
             m = registry.read_manifest(k)
             m["order"] = i
             registry.write_manifest(k, m)
             i += 1
+    from . import service_groups
+    service_groups.set_orders(body.keys)
     return {"ok": True}
+
+
+class HiddenServiceBody(BaseModel):
+    name: str
+    hidden: bool
+
+
+@router.put("/api/admin/home-service")
+def set_service_hidden(body: HiddenServiceBody, _: models.User = Depends(require_portal_admin)):
+    if not registry.valid_name(body.name):
+        raise HTTPException(400, "잘못된 서비스 이름")
+    d = _read()
+    hidden = set(d.get("hidden_services") or [])
+    (hidden.add if body.hidden else hidden.discard)(body.name)
+    d["hidden_services"] = sorted(hidden)
+    _write(d)
+    return {"name": body.name, "hidden": body.hidden}
 
 
 class BuiltinBody(BaseModel):
