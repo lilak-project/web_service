@@ -18,6 +18,7 @@ import { MasonryGrid } from './portal/MasonryGrid'
 import HomeModeMenu, { HOME_MODES } from './portal/HomeModeMenu'
 import ServiceGroupBand from './portal/ServiceGroupBand'
 import LiveWall from './portal/LiveWall'
+import useFlip from './portal/useFlip'
 import { usePortalScale } from '../portalScale'
 
 // True when the viewport is phone-narrow — drives the compact stacked header and
@@ -410,7 +411,9 @@ export default function ProjectsPage() {
   const setManage = (v) => setMode((m) => ((typeof v === 'function' ? v(m === 'manage') : v) ? 'manage' : null))
   const [modeMenu, setModeMenu] = useState(false)
   const [groups, setGroups] = useState([])                 // service groups (bands on the cover)
-  const [dragKey, setDragKey] = useState(null)             // card key being dragged (manage/groups modes)
+  const [dragKey, setDragKey] = useState(null)             // card/group key being dragged (manage/groups modes)
+  const [previewOrder, setPreviewOrder] = useState(null)  // the order the drag would produce, shown live while dragging
+  const flipRef = useRef(null)
   const [links, setLinks] = useState(null)               // home bookmark card contents
   // Animate the brand mark rising into place ONLY on an actual login (not on a
   // restored session / reload), so the header doesn't slide on every page load.
@@ -617,13 +620,19 @@ export default function ProjectsPage() {
     if (!c) return 9999
     return isManager ? 1000 + (defaultPos.get(key) ?? 0) : (c.builtin ? -1 : 1000 + (c.order ?? 1000))
   }
+  // The full key list the saved order persists: every card + every group. While a
+  // drag is in progress `previewOrder` (what the drop would produce) replaces it,
+  // so the cover rearranges under the mouse before anything is saved.
+  const baseOrder = [...cards.map(cardKey), ...groups.map(groupKey)].sort((a, b) => orderOf(a) - orderOf(b))
+  const order = previewOrder || baseOrder
+  const pos = (key) => { const i = order.indexOf(key); return i < 0 ? 9999 : i }
   const topLevel = [
     // A grouped card is drawn inside its band (or not at all while the band is hidden).
     ...cards.filter((c) => !memberOf[cardKey(c)]).map((c) => ({ type: 'card', key: cardKey(c), card: c })),
     ...visibleGroups.map((g) => ({ type: 'group', key: groupKey(g), group: g })),
-  ].sort((a, b) => orderOf(a.key) - orderOf(b.key))
+  ].sort((a, b) => pos(a.key) - pos(b.key))
   // Cards inside a visible group, in the same global order.
-  const membersOf = (g) => cards.filter((c) => memberOf[cardKey(c)] === g).sort((a, b) => orderOf(cardKey(a)) - orderOf(cardKey(b)))
+  const membersOf = (g) => cards.filter((c) => memberOf[cardKey(c)] === g).sort((a, b) => pos(cardKey(a)) - pos(cardKey(b)))
   // Consecutive top-level cards share one column grid; a group is its own band.
   const segments = []
   for (const e of topLevel) {
@@ -631,8 +640,8 @@ export default function ProjectsPage() {
     else if (segments.length && segments[segments.length - 1].type === 'cards') segments[segments.length - 1].items.push(e.card)
     else segments.push({ type: 'cards', key: `seg-${segments.length}`, items: [e.card] })
   }
-  // The full key list the saved order persists: every card + every group.
-  const fullOrder = [...cards.map(cardKey), ...groups.map(groupKey)].sort((a, b) => orderOf(a) - orderOf(b))
+  const fullOrder = order
+  useFlip(flipRef, order.join('|'))
 
   async function saveOrder(keys) {
     setHomeCfg((c) => ({ ...(c || { builtins: {} }), order: keys }))   // optimistic
@@ -647,17 +656,33 @@ export default function ProjectsPage() {
     ;[keys[i], keys[j]] = [keys[j], keys[i]]
     await saveOrder(keys)
   }
-  // Drag reorder (manage mode): drop `key` where `target` sits.
-  async function reorder(key, target) {
+  // Drag reorder (manage mode). `movedOrder` is the list with `key` placed at
+  // `target` (after it when the pointer is past its middle); `previewReorder`
+  // shows it while dragging, `reorder` commits it on drop.
+  function movedOrder(key, target, after) {
+    const keys = baseOrder.filter((k) => k !== key)
+    let at = keys.indexOf(target)
+    if (at < 0) at = keys.length; else if (after) at += 1
+    keys.splice(at, 0, key)
+    return keys
+  }
+  function previewReorder(key, target, after) {
     if (!key || !target || key === target) return
-    const keys = fullOrder.filter((k) => k !== key)
-    const at = keys.indexOf(target)
-    keys.splice(at < 0 ? keys.length : at, 0, key)
+    const next = movedOrder(key, target, after)
+    if (!previewOrder || next.join('|') !== previewOrder.join('|')) setPreviewOrder(next)
+  }
+  async function reorder(key, target, after) {
+    if (!key || !target || key === target) { setPreviewOrder(null); return }
+    const keys = previewOrder || movedOrder(key, target, after)
+    setPreviewOrder(null)
     await saveOrder(keys)
   }
+  function endDrag() { setDragKey(null); setPreviewOrder(null) }
+  // Was the pointer past the middle of the element (→ insert after it)?
+  const pastMiddle = (e) => { const r = e.currentTarget.getBoundingClientRect(); return (e.clientY - r.top) > r.height / 2 }
   // Group manage mode: drop a card onto a band (gid) or onto the cover (null).
   async function regroup(key, gid) {
-    if (!key) return
+    if (!key || key.startsWith('#g:')) return
     const from = memberOf[key]
     if ((from?.id || null) === (gid || null)) return
     try {
@@ -676,10 +701,11 @@ export default function ProjectsPage() {
     .map((k) => cards.find((c) => cardKey(c) === k))
     .filter((c) => c && c.live && !c.builtin && !c.hidden && !memberOf[cardKey(c)]?.hidden)
 
-  function onDropCard(key, gid) {
-    if (groupsMode) regroup(key, gid)
-    else if (manage) reorder(key, `#g:${gid}`)
-    setDragKey(null)
+  function onDropCard(key, gid, after) {
+    if (key && key.startsWith('#g:')) reorder(key, `#g:${gid}`, after)        // a group dropped on a group: reorder
+    else if (groupsMode) regroup(key, gid)
+    else if (manage) reorder(key, `#g:${gid}`, after)
+    endDrag()
   }
 
   // The nav/tab bar lives in CoverPage's FIXED subheader (outside the scroll), with
@@ -845,15 +871,18 @@ export default function ProjectsPage() {
               return (
                 <ExpandBox key={key} open={isOpen} manage={mgmt && isManager}
                   handle={grip ? (
-                    <span draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key); setDragKey(key) }} onDragEnd={() => setDragKey(null)}
+                    <span draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key); setDragKey(key) }} onDragEnd={endDrag}
                       title={groupsMode ? (lang === 'ko' ? '끌어서 그룹으로' : 'drag into a group') : (lang === 'ko' ? '끌어서 순서 바꾸기' : 'drag to reorder')}
                       style={{ display: 'inline-flex', cursor: 'grab', color: 'var(--text-muted)', padding: '4px 2px', borderRadius: 6 }}>
                       <Icon name="drag-handle" size={16} />
                     </span>) : null}
-                  outerProps={grip && dragKey && dragKey !== key ? {
-                    onDragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' },
-                    onDrop: (e) => { e.preventDefault(); e.stopPropagation(); if (manage) reorder(dragKey, key); else if (groupsMode) regroup(dragKey, memberOf[key]?.id || null); setDragKey(null) },
-                  } : {}}
+                  outerProps={{
+                    'data-flip-key': key,
+                    ...(grip && dragKey && dragKey !== key ? {
+                      onDragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (manage || dragKey.startsWith('#g:')) previewReorder(dragKey, key, pastMiddle(e)) },
+                      onDrop: (e) => { e.preventDefault(); e.stopPropagation(); if (manage || dragKey.startsWith('#g:')) reorder(dragKey, key, pastMiddle(e)); else if (groupsMode) regroup(dragKey, memberOf[key]?.id || null); endDrag() },
+                    } : {}),
+                  }}
                   borderColor={dragKey === key ? 'var(--warning-text, #e67700)' : null}
                   toggleable={canToggle} divider={false}
                   // The grid's column gap spaces the cards; drop the card's own margin.
@@ -955,15 +984,18 @@ export default function ProjectsPage() {
                 </ExpandBox>
               )
             }
-            const dropToCover = groupsMode && dragKey ? {
+            const dropToCover = groupsMode && dragKey && !dragKey.startsWith('#g:') ? {
               onDragOver: (e) => { e.preventDefault() },
-              onDrop: (e) => { e.preventDefault(); regroup(dragKey, null); setDragKey(null) },
+              onDrop: (e) => { e.preventDefault(); regroup(dragKey, null); endDrag() },
             } : {}
             return (
-              <div {...dropToCover} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div ref={flipRef} {...dropToCover} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {segments.map((seg) => seg.type === 'group' ? (
                   <ServiceGroupBand key={seg.key} group={seg.group} isManager={isManager} big={big}
                     manageGroups={groupsMode && isManager} onChanged={refresh} dragKey={dragKey} onDropCard={onDropCard}
+                    grip={(manage || groupsMode) && isManager}
+                    onDragStartGroup={() => setDragKey(seg.key)} onDragEndGroup={endDrag}
+                    onDragOverGroup={(after) => { if (manage || (dragKey && dragKey.startsWith('#g:'))) previewReorder(dragKey, seg.key, after) }}
                     dim={seg.group.hidden}
                     cards={membersOf(seg.group).map((p, i) => renderCard(p, i))} />
                 ) : (

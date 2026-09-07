@@ -17,7 +17,8 @@ import IconPick from './IconPick'
  */
 const VIS = [[1, 'portal_vis_private'], [2, 'portal_vis_protected'], [3, 'portal_vis_admin']]
 
-export default function ServiceGroupBand({ group, cards, manageGroups, isManager, big, onChanged, dragKey, onDropCard, dim }) {
+export default function ServiceGroupBand({ group, cards, manageGroups, isManager, big, onChanged, dragKey, onDropCard, dim,
+  grip = false, onDragStartGroup, onDragEndGroup, onDragOverGroup }) {
   const { t, lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   // Collapse is persisted for managers (a group setting); everyone else just folds it locally.
@@ -52,16 +53,26 @@ export default function ServiceGroupBand({ group, cards, manageGroups, isManager
   const color = group.color || 'var(--text-secondary)'
   const border = `1.5px ${manageGroups ? 'dashed' : 'solid'} ${over ? 'var(--btn-primary-bg)' : 'var(--border-strong, #94a3b8)'}`
   const n = cards.length
+  const myKey = `#g:${group.id}`
+  const droppable = !!dragKey && dragKey !== myKey && !!onDropCard
+  const pastMiddle = (e) => { const r = e.currentTarget.getBoundingClientRect(); return (e.clientY - r.top) > r.height / 2 }
 
   return (
-    <section
-      onDragOver={manageGroups && dragKey ? (e) => { e.preventDefault(); if (!over) setOver(true) } : undefined}
-      onDragLeave={manageGroups ? () => setOver(false) : undefined}
-      onDrop={manageGroups && dragKey ? (e) => { e.preventDefault(); setOver(false); onDropCard?.(dragKey, group.id) } : undefined}
+    <section data-flip-key={myKey}
+      onDragOver={droppable ? (e) => { e.preventDefault(); if (!over) setOver(true); onDragOverGroup?.(pastMiddle(e)) } : undefined}
+      onDragLeave={droppable ? () => setOver(false) : undefined}
+      onDrop={droppable ? (e) => { e.preventDefault(); e.stopPropagation(); setOver(false); onDropCard?.(dragKey, group.id, pastMiddle(e)) } : undefined}
       style={{ border, borderRadius: 18, background: over ? 'var(--selection-bg, var(--surface-2))' : 'var(--surface-2)',
-        padding: big ? '10px 12px 12px' : '8px 10px 10px', opacity: dim ? 0.5 : 1, transition: 'background .12s, border-color .12s' }}>
+        padding: big ? '10px 12px 12px' : '8px 10px 10px', opacity: dim ? 0.5 : dragKey === myKey ? 0.6 : 1, transition: 'background .12s, border-color .12s' }}>
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 6px 8px', flexWrap: 'wrap' }}>
+        {grip && (
+          <span draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', myKey); onDragStartGroup?.() }} onDragEnd={onDragEndGroup}
+            title={L('끌어서 그룹 위치 바꾸기', 'drag to move the group')}
+            style={{ display: 'inline-flex', cursor: 'grab', color: 'var(--text-muted)', padding: '4px 2px', borderRadius: 6 }}>
+            <Icon name="drag-handle" size={16} />
+          </span>
+        )}
         <button type="button" onClick={toggleCollapse} title={collapsed ? L('펼치기', 'Expand') : L('접기', 'Collapse')}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'none', border: 0, padding: 0, cursor: 'pointer', font: 'inherit', color: 'var(--text-primary)' }}>
           <Icon name="caret-right" size={15} color="var(--text-muted)" style={{ transition: 'transform .2s', transform: collapsed ? 'none' : 'rotate(90deg)' }} />
