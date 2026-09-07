@@ -207,6 +207,13 @@ GET /api/live   →  { "ok": true,
 - `items` — 1–6 entries; `value` is a short string (already formatted), `unit`
   optional, `state` one of `running | idle | ok | warn | trip | alarm | down | off`
   or empty (drives the tile colour), `sub` an optional second line.
+- `spark` (optional) — a short series, oldest first, drawn filled BEHIND the
+  number. `spark_log: true` plots it on a log scale (a quantity spanning
+  decades, e.g. a vacuum gauge); `spark_window` labels it ("1 h"). Keep it to a
+  few dozen points and cache it: the wall polls every few seconds.
+- `layout` (optional, top level) — `"stack"` renders each item as
+  name / figure / large second line (one actuator per block) instead of a
+  compact tile.
 - Answer from state the service already holds — **never touch hardware or a
   remote host on this path**; the cover polls it every few seconds per open card.
 - A multi-project service is asked per project (`/pp/<svc>/<project>/api/live`).

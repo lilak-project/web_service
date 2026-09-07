@@ -4,7 +4,10 @@ import { serviceApi } from '../../api'
 
 /**
  * LiveTiles — the compact live numbers a service shows on its Home card in
- * live mode. The service answers `GET /api/live` with
+ * live mode. An item may also carry `spark`: a short series (oldest first)
+ * drawn behind the number as a filled sparkline, with `spark_log` for
+ * quantities that span decades (a vacuum gauge) and `spark_window` for the
+ * label. The service answers `GET /api/live` with
  *
  *   { "ok": true, "items": [ { "label": "Run", "value": "570", "unit": "",
  *                              "state": "running" | "idle" | "warn" | "alarm" | "" } ],
@@ -124,13 +127,15 @@ export default function LiveTiles({ service, big = false, pad, wall = false }) {
                 {it.value ?? '—'}{it.unit ? <span style={{ fontSize: wall ? 16 : 'var(--fs-small, 12px)', fontWeight: 500, color: 'var(--text-muted)', marginLeft: 4 }}>{it.unit}</span> : null}
               </span>
             )
+            const spark = Array.isArray(it.spark) && it.spark.length > 1 ? it.spark : null
             return (
-              <div key={i} style={tile} title={it.title || it.label}>
-                {label}
-                {value}
-                {it.sub && (stack
+              <div key={i} style={{ ...tile, position: 'relative', overflow: 'hidden' }} title={it.title || it.label}>
+                {spark && <Spark values={spark} log={!!it.spark_log} color={tone || 'var(--text-secondary)'} />}
+                <span style={{ position: 'relative' }}>{label}</span>
+                <span style={{ position: 'relative' }}>{value}</span>
+                {(it.sub || it.spark_window) && (stack
                   ? <span style={{ ...valueFont, fontSize: valuePx ? `${Math.round(valuePx * 0.72)}px` : 'var(--fs-medium, 14px)', lineHeight: 1.2, color: 'var(--text-secondary)', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{it.sub}</span>
-                  : <span style={{ fontSize: wall ? 14 : 'var(--fs-micro, 11px)', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.sub}</span>)}
+                  : <span style={{ position: 'relative', fontSize: wall ? 14 : 'var(--fs-micro, 11px)', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.sub || (spark ? `${it.spark_window || ''} ↗` : '')}</span>)}
               </div>
             )
           })}
@@ -138,5 +143,30 @@ export default function LiveTiles({ service, big = false, pad, wall = false }) {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Spark — the item's recent history, filled, behind the number.
+ *
+ * It is a BACKGROUND: no axes, no labels, and a low opacity, because the tile
+ * is read for its number and the shape is only there to say "steady", "rising"
+ * or "it moved". A log scale is used when the service asks for one — a vacuum
+ * that went from 1e-3 to 2e-4 is a big change that a linear scale would draw
+ * as a flat line on the floor.
+ */
+function Spark({ values, log, color }) {
+  const W = 100, H = 32
+  const scaled = log ? values.map((v) => Math.log10(Math.max(v, Number.MIN_VALUE))) : values
+  const lo = Math.min(...scaled), hi = Math.max(...scaled)
+  const span = hi - lo || 1
+  const step = scaled.length > 1 ? W / (scaled.length - 1) : W
+  const points = scaled.map((v, i) => `${(i * step).toFixed(2)},${(H - ((v - lo) / span) * (H - 3) - 1.5).toFixed(2)}`)
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true"
+      style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', height: '58%', opacity: 0.3, pointerEvents: 'none' }}>
+      <polygon points={`0,${H} ${points.join(' ')} ${W},${H}`} fill={color} opacity="0.35" />
+      <polyline points={points.join(' ')} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    </svg>
   )
 }
