@@ -19,5 +19,6 @@
   "label": "MTE Control",
   "icon": "pulse",
   "color": "#d6336c",
-  "autostart": true
+  "autostart": true,
+  "live": true
 }

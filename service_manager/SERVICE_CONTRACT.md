@@ -188,3 +188,28 @@ movable as one unit:
 - **export** = a `.zip` of `data/<name>/` minus `.port`;
 - **import** = unzip into a new name;
 - **backup/migrate** the whole portal = copy `data/` + `data/_portal/portal.db`.
+
+---
+
+## 10. Live tiles (optional) — `GET /api/live`
+
+The Home cover has a **live mode** in which a card grows and shows a handful of
+numbers from the service. A service opts in with `"live": true` in its manifest
+and answers:
+
+```
+GET /api/live   →  { "ok": true,
+                     "items": [ { "label": "run", "value": "570", "unit": "",
+                                  "state": "running", "sub": "12 min" }, … ],
+                     "note": "optional one-liner" }
+```
+
+- `items` — 1–6 entries; `value` is a short string (already formatted), `unit`
+  optional, `state` one of `running | idle | ok | warn | trip | alarm | down | off`
+  or empty (drives the tile colour), `sub` an optional second line.
+- Answer from state the service already holds — **never touch hardware or a
+  remote host on this path**; the cover polls it every few seconds per open card.
+- A multi-project service is asked per project (`/pp/<svc>/<project>/api/live`).
+- 404 = not supported (the cover stops asking); the manifest flag is what makes
+  the card grow, so set both.
+- A card hidden in manage mode is not shown in live mode either.

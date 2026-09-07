@@ -22,5 +22,6 @@
   "color": "#4a3aa7",
   "label": "minicom Monitoring",
   "order": 4,
-  "autostart": true
+  "autostart": true,
+  "live": true
 }

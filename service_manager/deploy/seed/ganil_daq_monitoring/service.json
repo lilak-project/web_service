@@ -22,5 +22,6 @@
   "color": "#7048e8",
   "label": "GANIL DAQ Monitoring",
   "order": 6,
-  "autostart": true
+  "autostart": true,
+  "live": true
 }

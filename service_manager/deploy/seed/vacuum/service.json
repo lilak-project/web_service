@@ -22,5 +22,6 @@
   "color": "#099268",
   "label": "Vacuum Monitoring",
   "order": 3,
-  "autostart": true
+  "autostart": true,
+  "live": true
 }

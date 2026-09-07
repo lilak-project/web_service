@@ -19,5 +19,6 @@
   "label": "MTE Monitoring",
   "icon": "eye",
   "color": "#5f3dc4",
-  "autostart": true
+  "autostart": true,
+  "live": true
 }

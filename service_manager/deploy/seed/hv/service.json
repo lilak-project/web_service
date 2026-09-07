@@ -22,5 +22,6 @@
   "color": "#e8590c",
   "label": "CAEN GECO Monitoring",
   "order": 2,
-  "autostart": true
+  "autostart": true,
+  "live": true
 }

@@ -11,8 +11,15 @@
   },
   "health": "/api/auth/me",
   "entry": "/",
-  "identity": { "accepts_portal_token": true, "link_by": "email" },
-  "capabilities": { "multi_project": true, "import_export": true },
+  "identity": {
+    "accepts_portal_token": true,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": true,
+    "import_export": true
+  },
   "icon": null,
-  "color": null
+  "color": null,
+  "live": true
 }

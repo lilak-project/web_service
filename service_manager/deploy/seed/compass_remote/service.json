@@ -22,5 +22,6 @@
   "color": "#e8590c",
   "label": "COMPASS Remote Control",
   "order": 8,
-  "autostart": true
+  "autostart": true,
+  "live": true
 }

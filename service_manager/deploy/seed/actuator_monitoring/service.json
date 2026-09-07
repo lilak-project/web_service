@@ -22,5 +22,6 @@
   "color": "#0b7285",
   "label": "Actuator Monitoring",
   "order": 1,
-  "autostart": true
+  "autostart": true,
+  "live": true
 }
