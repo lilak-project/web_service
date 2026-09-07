@@ -4,7 +4,10 @@
   "start": {
     "cmd": "/usr/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port {port}",
     "cwd": "/app/hv_control_monitoring/backend",
-    "env": {}
+    "env": {
+      "HV_ELOG_SNAPSHOT_MIN_INTERVAL": "600",
+      "HV_LIVE_MAX_AGE": "20"
+    }
   },
   "health": "/api/health",
   "entry": "/",
