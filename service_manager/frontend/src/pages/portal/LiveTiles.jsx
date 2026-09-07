@@ -80,18 +80,18 @@ export default function LiveTiles({ service, big = false, pad, wall = false }) {
   // On the wall the tiles stretch to fill the card and the numbers grow when
   // there are few of them: one figure fills the box, six share it.
   const n = Math.max(1, items.length)
-  const valuePx = wall ? (n <= 1 ? 44 : n <= 2 ? 38 : n <= 4 ? 30 : 24) : null
+  const valuePx = wall ? (n <= 1 ? 56 : n <= 2 ? 48 : n <= 4 ? 40 : 32) : null
   const tile = {
-    display: 'flex', flexDirection: 'column', gap: wall ? 4 : 2, minWidth: wall ? 150 : 92,
-    flex: wall ? '1 1 150px' : '0 0 auto',
-    padding: wall ? '10px 14px' : big ? '8px 12px' : '6px 10px',
+    display: 'flex', flexDirection: 'column', gap: wall ? 6 : 2, minWidth: wall ? 180 : 92,
+    flex: wall ? '1 1 180px' : '0 0 auto',
+    padding: wall ? '12px 16px' : big ? '8px 12px' : '6px 10px',
     borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)',
   }
-  const labelPx = wall ? 13 : null
+  const labelPx = wall ? 16 : null
   return (
     <div style={{ padding: pad || (big ? '4px 18px 14px 58px' : '2px 14px 10px 46px') }}>
       {unsupported ? (
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>live 정보 없음</span>
+        <span style={{ fontSize: wall ? 16 : 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>live 정보 없음</span>
       ) : err && !items.length ? (
         <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</span>
       ) : !data ? (
@@ -108,9 +108,9 @@ export default function LiveTiles({ service, big = false, pad, wall = false }) {
                   {it.label}
                 </span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: valuePx ? `${valuePx}px` : big ? 'var(--fs-xlarge, 18px)' : 'var(--fs-large, 16px)', lineHeight: 1.1, fontWeight: 600, color: tone || 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                  {it.value ?? '—'}{it.unit ? <span style={{ fontSize: wall ? 15 : 'var(--fs-small, 12px)', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>{it.unit}</span> : null}
+                  {it.value ?? '—'}{it.unit ? <span style={{ fontSize: wall ? 20 : 'var(--fs-small, 12px)', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>{it.unit}</span> : null}
                 </span>
-                {it.sub && <span style={{ fontSize: wall ? 13 : 'var(--fs-micro, 11px)', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.sub}</span>}
+                {it.sub && <span style={{ fontSize: wall ? 17 : 'var(--fs-micro, 11px)', lineHeight: 1.3, color: wall ? 'var(--text-secondary)' : 'var(--text-muted)', whiteSpace: wall ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.sub}</span>}
               </div>
             )
           })}
