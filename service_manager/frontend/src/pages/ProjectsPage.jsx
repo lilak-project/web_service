@@ -699,7 +699,7 @@ export default function ProjectsPage() {
   // nothing inside a hidden group), in the cover's order, on a full-screen wall.
   const liveCards = fullOrder
     .map((k) => cards.find((c) => cardKey(c) === k))
-    .filter((c) => c && c.live && !c.builtin && !c.hidden && !memberOf[cardKey(c)]?.hidden)
+    .filter((c) => c && c.live && !c.builtin && !c.hidden && !c.live_hidden && !memberOf[cardKey(c)]?.hidden)
 
   function onDropCard(key, gid, after) {
     if (key && key.startsWith('#g:')) reorder(key, `#g:${gid}`, after)        // a group dropped on a group: reorder

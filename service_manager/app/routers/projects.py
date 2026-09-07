@@ -49,6 +49,7 @@ def raw_service(name: str) -> dict:
         "live": bool(manifest.get("live")),
         # Taken off this portal's cover in manage mode (data/_portal/home.json).
         "hidden": name in _hidden_services(),
+        "live_hidden": name in _live_hidden(),
         "version": gitinfo.service_version((manifest.get("start") or {}).get("cwd")),  # {sha,date}|null
     }
 
@@ -56,6 +57,11 @@ def raw_service(name: str) -> dict:
 def _hidden_services() -> set[str]:
     from .home import hidden_services
     return hidden_services()
+
+
+def _live_hidden() -> set[str]:
+    from .home import live_hidden
+    return live_hidden()
 
 
 def list_raw_services() -> list[dict]:

@@ -44,6 +44,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   // Builtins only: take the card off THIS portal's cover. Stored in the data
   // volume (data/_portal/home.json), so it is a per-server choice, not a build.
   const [hidden, setHidden] = useState(!!service.hidden)
+  const [liveHidden, setLiveHidden] = useState(!!service.live_hidden)
   const [admins, setAdmins] = useState(null)   // { managers:[names], scoped:[{username,project}] }
   const dirty = (icon !== startIcon) || (color !== startColor) || (label !== startLabel)
 
@@ -104,6 +105,12 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
       else await launcher.put('/admin/home-service', { name: svc.name, hidden: next })
       onChanged?.()
     } catch (e) { setHidden(!next); setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+  }
+  async function toggleLiveHidden() {
+    const next = !liveHidden
+    setLiveHidden(next)
+    try { await launcher.put('/admin/home-service', { name: svc.name, live_hidden: next }); onChanged?.() }
+    catch (e) { setLiveHidden(!next); setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
   async function toggleAuto() {
     const next = !auto
@@ -178,22 +185,33 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
         <Button variant="ghost" size="sm" icon disabled={last} title={t('manage_move_down')} onClick={() => onMove(1)}><Icon name="caret-down" size={15} /></Button>
 
         <div style={{ flex: 1 }} />
-        {(
-          <Button variant="ghost" size="sm" onClick={toggleHidden}
-            title={hidden
-              ? L('이 서버의 홈 화면에 다시 표시합니다.', 'Show on this server\u2019s home screen again.')
-              : L('이 서버의 홈 화면에서만 숨깁니다 (라이브 모드에서도 안 보임). 관리 모드에서는 계속 보입니다.',
-                  'Hide from this server\u2019s home screen (live mode too). Still shown in manage mode.')}>
-            <Icon name={hidden ? 'eye' : 'eye-slash'} size={15} />
-            {hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
+      </div>
+
+      {/* visibility on the cover + archive/delete: their own row, so they read at a glance */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 10px', borderRadius: 10,
+        background: 'var(--surface-2)', border: '1px solid var(--border-subtle)' }}>
+        <Button variant={hidden ? 'warning' : 'secondary'} size="sm" onClick={toggleHidden}
+          title={hidden
+            ? L('이 서버의 홈 화면에 다시 표시합니다.', 'Show on this server\u2019s home screen again.')
+            : L('이 서버의 홈 화면에서 숨깁니다 (라이브에서도 안 보임). 관리 모드에서는 계속 보입니다.',
+                'Hide from this server\u2019s home screen (live too). Still shown in manage mode.')}>
+          <Icon name={hidden ? 'eye' : 'eye-slash'} size={15} />
+          {hidden ? L('서비스 다시 표시', 'Show service') : L('서비스 숨기기', 'Hide service')}
+        </Button>
+        {!isBuiltin && (
+          <Button variant={liveHidden ? 'warning' : 'secondary'} size="sm" onClick={toggleLiveHidden}
+            title={L('라이브 모드에서만 뺍니다. 홈에는 그대로 있습니다.', 'Keep off the live wall only; stays on the cover.')}>
+            <Icon name="broadcast" size={15} />
+            {liveHidden ? L('라이브에 다시 표시', 'Show in live') : L('라이브에서 숨기기', 'Hide from live')}
           </Button>
         )}
+        <span style={{ flex: 1 }} />
         {!isBuiltin && (
           <>
-            <Button variant="ghost" size="sm" onClick={archiveService} title={L('데이터만 삭제하고 서비스는 보관함으로', 'Delete data, keep the service in the archive')}>
+            <Button variant="secondary" size="sm" onClick={archiveService} title={L('데이터만 삭제하고 서비스는 보관함으로', 'Delete data, keep the service in the archive')}>
               <Icon name="archive" size={15} /> {L('보관함으로', 'Archive')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={removeService} title={L('서비스 완전 삭제', 'Delete permanently')} style={{ color: 'var(--danger-text)' }}>
+            <Button variant="dangerSoft" size="sm" onClick={removeService} title={L('서비스 완전 삭제', 'Delete permanently')}>
               <Icon name="trash" size={15} /> {L('완전 삭제', 'Delete')}
             </Button>
           </>

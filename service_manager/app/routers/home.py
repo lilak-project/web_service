@@ -33,10 +33,16 @@ def _read() -> dict:
             d.setdefault("order", [])
             d.setdefault("builtins", {})
             d.setdefault("hidden_services", [])
+            d.setdefault("live_hidden", [])
             return d
     except Exception:
         pass
-    return {"order": [], "builtins": {}, "hidden_services": []}
+    return {"order": [], "builtins": {}, "hidden_services": [], "live_hidden": []}
+
+
+def live_hidden() -> set[str]:
+    """Services kept off the LIVE wall only; still on the cover."""
+    return set(_read().get("live_hidden") or [])
 
 
 def hidden_services() -> set[str]:
@@ -82,7 +88,8 @@ def set_order(body: OrderBody, _: models.User = Depends(require_portal_admin)):
 
 class HiddenServiceBody(BaseModel):
     name: str
-    hidden: bool
+    hidden: Optional[bool] = None        # off the cover (and therefore off the live wall)
+    live_hidden: Optional[bool] = None   # off the live wall only
 
 
 @router.put("/api/admin/home-service")
@@ -90,11 +97,14 @@ def set_service_hidden(body: HiddenServiceBody, _: models.User = Depends(require
     if not registry.valid_name(body.name):
         raise HTTPException(400, "잘못된 서비스 이름")
     d = _read()
-    hidden = set(d.get("hidden_services") or [])
-    (hidden.add if body.hidden else hidden.discard)(body.name)
-    d["hidden_services"] = sorted(hidden)
+    for key, flag in (("hidden_services", body.hidden), ("live_hidden", body.live_hidden)):
+        if flag is None:
+            continue
+        current = set(d.get(key) or [])
+        (current.add if flag else current.discard)(body.name)
+        d[key] = sorted(current)
     _write(d)
-    return {"name": body.name, "hidden": body.hidden}
+    return {"name": body.name, "hidden": body.name in d["hidden_services"], "live_hidden": body.name in d["live_hidden"]}
 
 
 class BuiltinBody(BaseModel):
