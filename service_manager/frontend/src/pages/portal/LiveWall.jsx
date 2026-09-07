@@ -13,8 +13,8 @@ import LiveTiles from './LiveTiles'
  * service answers `/api/live` are shown; hidden cards never are.
  */
 const GAP = 12
-const COL_MIN = 340
-const MAX_COLS = 4
+const COL_MIN = 380
+const MAX_COLS = 3
 const BAR_H = 52
 
 function pack(cards, heights, cols, areaH, fallbackH) {
@@ -42,7 +42,7 @@ export default function LiveWall({ cards, big, onDone, iconFor }) {
   const [dims, setDims] = useState({ w: 0, h: 0 })
   const [page, setPage] = useState(0)
   const [heights, setHeights] = useState(() => new Map())
-  const cardMin = big ? 168 : 128
+  const cardMin = big ? 190 : 160
 
   useLayoutEffect(() => {
     const el = areaRef.current
@@ -120,12 +120,12 @@ export default function LiveWall({ cards, big, onDone, iconFor }) {
             {col.map((p) => (
               <div key={p.name} ref={observe} data-live-key={p.name}
                 style={{ minHeight: cardMin, maxHeight: Math.max(cardMin, dims.h), overflow: 'hidden', border: '1.5px solid var(--border-strong, #94a3b8)', borderRadius: 16, background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: big ? '10px 16px 4px' : '8px 12px 2px', flexShrink: 0 }}>
-                  <Icon name={iconFor(p.name, p.icon)} size={big ? 26 : 22} weight="fill" color={p.color || 'var(--text-primary)'} />
-                  <span style={{ fontSize: big ? 'var(--fs-medium, 14px)' : 'var(--fs-body, 13px)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.name}</span>
-                  <span style={{ marginLeft: 'auto', width: 8, height: 8, borderRadius: 999, background: dot(p), flexShrink: 0 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px 6px', flexShrink: 0 }}>
+                  <Icon name={iconFor(p.name, p.icon)} size={30} weight="fill" color={p.color || 'var(--text-primary)'} />
+                  <span style={{ fontSize: 18, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.name}</span>
+                  <span style={{ marginLeft: 'auto', width: 10, height: 10, borderRadius: 999, background: dot(p), flexShrink: 0 }} />
                 </div>
-                <LiveTiles service={p} big={big} pad={big ? '2px 16px 12px' : '0 12px 10px'} />
+                <LiveTiles service={p} big wall pad="4px 18px 16px" />
               </div>
             ))}
           </div>

@@ -74,13 +74,20 @@ export function useLive(service) {
   return { data, err, unsupported }
 }
 
-export default function LiveTiles({ service, big = false, pad }) {
+export default function LiveTiles({ service, big = false, pad, wall = false }) {
   const { data, err, unsupported } = useLive(service)
   const items = data?.items || []
+  // On the wall the tiles stretch to fill the card and the numbers grow when
+  // there are few of them: one figure fills the box, six share it.
+  const n = Math.max(1, items.length)
+  const valuePx = wall ? (n <= 1 ? 44 : n <= 2 ? 38 : n <= 4 ? 30 : 24) : null
   const tile = {
-    display: 'flex', flexDirection: 'column', gap: 2, minWidth: 92, padding: big ? '8px 12px' : '6px 10px',
-    borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)',
+    display: 'flex', flexDirection: 'column', gap: wall ? 4 : 2, minWidth: wall ? 150 : 92,
+    flex: wall ? '1 1 150px' : '0 0 auto',
+    padding: wall ? '10px 14px' : big ? '8px 12px' : '6px 10px',
+    borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)',
   }
+  const labelPx = wall ? 13 : null
   return (
     <div style={{ padding: pad || (big ? '4px 18px 14px 58px' : '2px 14px 10px 46px') }}>
       {unsupported ? (
@@ -90,20 +97,20 @@ export default function LiveTiles({ service, big = false, pad }) {
       ) : !data ? (
         <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>…</span>
       ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: wall ? 10 : 8, alignItems: 'stretch' }}>
           {items.length === 0 && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>—</span>}
           {items.map((it, i) => {
             const tone = TONE[(it.state || '').toLowerCase()]
             return (
               <div key={i} style={tile} title={it.title || it.label}>
-                <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', letterSpacing: '.03em', textTransform: 'uppercase', whiteSpace: 'nowrap', display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                <span style={{ fontSize: labelPx ? `${labelPx}px` : 'var(--fs-micro, 11px)', color: 'var(--text-muted)', letterSpacing: '.03em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-flex', gap: 5, alignItems: 'center' }}>
                   {tone && <span style={{ width: 7, height: 7, borderRadius: 999, background: tone, flexShrink: 0 }} />}
                   {it.label}
                 </span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: big ? 'var(--fs-xlarge, 18px)' : 'var(--fs-large, 16px)', fontWeight: 600, color: tone || 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                  {it.value ?? '—'}{it.unit ? <span style={{ fontSize: 'var(--fs-small, 12px)', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 3 }}>{it.unit}</span> : null}
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: valuePx ? `${valuePx}px` : big ? 'var(--fs-xlarge, 18px)' : 'var(--fs-large, 16px)', lineHeight: 1.1, fontWeight: 600, color: tone || 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {it.value ?? '—'}{it.unit ? <span style={{ fontSize: wall ? 15 : 'var(--fs-small, 12px)', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>{it.unit}</span> : null}
                 </span>
-                {it.sub && <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{it.sub}</span>}
+                {it.sub && <span style={{ fontSize: wall ? 13 : 'var(--fs-micro, 11px)', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.sub}</span>}
               </div>
             )
           })}
