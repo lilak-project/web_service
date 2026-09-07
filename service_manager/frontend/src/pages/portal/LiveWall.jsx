@@ -56,22 +56,47 @@ export default function LiveWall({ cards, big, onDone, iconFor }) {
 
   // One observer for every card on screen: a card that grows (more tiles came
   // in) re-packs the pages so nothing is ever cut off or pushed off screen.
+  // A card that leaves the DOM (it moved to another column or page) reports a
+  // height of 0 on its way out; taking that as its size would repack it as
+  // tiny, remount it, measure it tall again, repack… forever. So: only
+  // connected elements count, heights are rounded to 8px steps, and a card
+  // is unobserved the moment it unmounts.
   const roRef = useRef(null)
+  const elsRef = useRef(new Map())            // key -> element currently mounted
   if (!roRef.current && typeof ResizeObserver !== 'undefined') {
     roRef.current = new ResizeObserver((entries) => {
       setHeights((prev) => {
         let next = null
         for (const e of entries) {
+          if (!e.target.isConnected) continue
           const key = e.target.getAttribute('data-live-key')
-          const h = Math.ceil(e.target.getBoundingClientRect().height)
-          if (key && Math.abs((prev.get(key) ?? 0) - h) > 1) { next = next || new Map(prev); next.set(key, h) }
+          const raw = e.target.getBoundingClientRect().height
+          if (!key || raw < 40) continue
+          const h = Math.ceil(raw / 8) * 8
+          if ((prev.get(key) ?? 0) !== h) { next = next || new Map(prev); next.set(key, h) }
         }
         return next || prev
       })
     })
   }
   useEffect(() => () => roRef.current?.disconnect(), [])
-  const observe = useCallback((el) => { if (el && roRef.current) roRef.current.observe(el) }, [])
+  // One stable ref callback per key (a fresh function each render would make
+  // React detach/attach the ref on every render).
+  const refFns = useRef(new Map())
+  const observe = useCallback((key) => {
+    let fn = refFns.current.get(key)
+    if (!fn) {
+      fn = (el) => {
+        const ro = roRef.current
+        if (!ro) return
+        const prev = elsRef.current.get(key)
+        if (el) { if (prev && prev !== el) ro.unobserve(prev); elsRef.current.set(key, el); ro.observe(el) }
+        else if (prev) { ro.unobserve(prev); elsRef.current.delete(key) }
+      }
+      refFns.current.set(key, fn)
+    }
+    return fn
+  }, [])
 
   const cols = Math.max(1, Math.min(MAX_COLS, Math.floor((dims.w + GAP) / (COL_MIN + GAP))))
   const pages = pack(cards, heights, cols, Math.max(cardMin, dims.h), cardMin)
@@ -118,7 +143,7 @@ export default function LiveWall({ cards, big, onDone, iconFor }) {
         {columns.map((col, c) => (
           <div key={c} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
             {col.map((p) => (
-              <div key={p.name} ref={observe} data-live-key={p.name}
+              <div key={p.name} ref={observe(p.name)} data-live-key={p.name}
                 style={{ minHeight: cardMin, maxHeight: Math.max(cardMin, dims.h), overflow: 'hidden', border: '1.5px solid var(--border-strong, #94a3b8)', borderRadius: 16, background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px 6px', flexShrink: 0 }}>
                   <Icon name={iconFor(p.name, p.icon)} size={30} weight="fill" color={p.color || 'var(--text-primary)'} />
