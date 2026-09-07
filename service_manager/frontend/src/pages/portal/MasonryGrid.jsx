@@ -49,7 +49,10 @@ export function MasonryGrid({ children, maxCols = MAX_COLS, style }) {
   }, [maxCols])
 
   const kids = Children.toArray(children)
-  const effCols = single ? 1 : Math.max(1, Math.min(cols, kids.length || 1))
+  // The column count follows the WIDTH only: two cards on a three-column grid
+  // fill two columns at three-column width and leave the third empty, rather
+  // than growing to split the row between them.
+  const effCols = single ? 1 : cols
   const columns = dealColumns(kids, effCols)
 
   const layout = effCols <= 1 ? 'single' : 'multi'
