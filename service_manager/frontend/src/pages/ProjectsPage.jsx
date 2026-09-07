@@ -19,6 +19,7 @@ import HomeModeMenu, { HOME_MODES } from './portal/HomeModeMenu'
 import ServiceGroupBand from './portal/ServiceGroupBand'
 import LiveWall from './portal/LiveWall'
 import useFlip from './portal/useFlip'
+import usePointerDrag from './portal/usePointerDrag'
 import { usePortalScale } from '../portalScale'
 
 // True when the viewport is phone-narrow — drives the compact stacked header and
@@ -406,14 +407,15 @@ export default function ProjectsPage() {
   // menu that drops when Home is pressed while already on Home.
   const [mode, setMode] = useState(null)
   const manage = mode === 'manage'
-  const groupsMode = mode === 'groups'
+  const groupsMode = false                                // folded into manage mode
   const liveMode = mode === 'live'
   const setManage = (v) => setMode((m) => ((typeof v === 'function' ? v(m === 'manage') : v) ? 'manage' : null))
   const [modeMenu, setModeMenu] = useState(false)
   const [groups, setGroups] = useState([])                 // service groups (bands on the cover)
-  const [dragKey, setDragKey] = useState(null)             // card/group key being dragged (manage/groups modes)
   const [previewOrder, setPreviewOrder] = useState(null)  // the order the drag would produce, shown live while dragging
+  const [previewGroup, setPreviewGroup] = useState(null)  // { key, gid|null }: the group the dragged card would land in
   const flipRef = useRef(null)
+  const latest = useRef({})                                // latest derived values for the drag callbacks
   const [links, setLinks] = useState(null)               // home bookmark card contents
   // Animate the brand mark rising into place ONLY on an actual login (not on a
   // restored session / reload), so the header doesn't slide on every page load.
@@ -606,9 +608,13 @@ export default function ProjectsPage() {
   // Service groups: bands on the cover holding member cards. A hidden group takes
   // its cards off the cover with it (managers still see it dimmed in mgmt views).
   const visibleGroups = groups.filter((g) => !g.hidden || (isManager && mgmt))
+  const groupKey = (g) => `#g:${g.id}`
   const memberOf = {}
   for (const g of groups) for (const m of g.members || []) memberOf[m] = g
-  const groupKey = (g) => `#g:${g.id}`
+  if (previewGroup) {                                     // the drag's membership preview
+    if (previewGroup.gid == null) delete memberOf[previewGroup.key]
+    else { const g = groups.find((x) => x.id === previewGroup.gid); if (g) memberOf[previewGroup.key] = g }
+  }
   // Where a key sits on the cover: managers by the saved order; everyone else by the
   // order mirrored into manifests (services) / the group record (groups).
   const savedOrder = homeCfg?.order || []
@@ -641,14 +647,81 @@ export default function ProjectsPage() {
     else segments.push({ type: 'cards', key: `seg-${segments.length}`, items: [e.card] })
   }
   const fullOrder = order
-  useFlip(flipRef, order.join('|'))
+  useFlip(flipRef, order.join('|') + '#' + (previewGroup ? `${previewGroup.key}>${previewGroup.gid}` : ''))
+  latest.current = { baseOrder, order, memberOf, groups, previewOrder, previewGroup }
 
+  // Drag (manage mode). `movedOrder` is the current list with `key` placed at
+  // `target` (after it when the pointer is past its middle). The pointer drag
+  // previews it live — the other cards slide out of the way — and commits on
+  // release: membership first (into / out of a group), then the order.
+  function movedOrder(base, key, target, after) {
+    const keys = base.filter((k) => k !== key)
+    let at = keys.indexOf(target)
+    if (at < 0) at = keys.length; else if (after) at += 1
+    keys.splice(at, 0, key)
+    return keys
+  }
+  async function regroup(key, gid) {
+    if (!key || key.startsWith('#g:')) return
+    const from = groups.find((g) => (g.members || []).includes(key))
+    if ((from?.id || null) === (gid || null)) return
+    if (from) await launcher.put(`/admin/service-groups/${from.id}`, { members: (from.members || []).filter((m) => m !== key) })
+    if (gid) { const g = groups.find((x) => x.id === gid); await launcher.put(`/admin/service-groups/${gid}`, { members: [...(g?.members || []), key] }) }
+  }
+  const { drag, startDrag, ghostRef } = usePointerDrag({
+    containerRef: flipRef,
+    isTarget: (key, kind, target) => {
+      const L = latest.current
+      if (kind === 'group') {
+        // A group moves among top-level things: ungrouped cards and other bands.
+        if (target.startsWith('#g:')) return true
+        return !L.memberOf[target]
+      }
+      return true
+    },
+    onPreview: (key, kind, target, after, targetKind) => {
+      const L = latest.current
+      if (kind === 'group') {
+        const next = movedOrder(L.baseOrder, key, target, after)
+        if (next.join('|') !== (L.previewOrder || []).join('|')) setPreviewOrder(next)
+        return
+      }
+      if (targetKind === 'group') {
+        // Over a band but not over one of its cards: join that group, at its end.
+        const g = L.groups.find((x) => `#g:${x.id}` === target)
+        const members = g ? L.order.filter((k) => (g.members || []).includes(k) && k !== key) : []
+        const anchor = members.length ? members[members.length - 1] : target
+        const next = movedOrder(L.baseOrder, key, anchor, true)
+        if (next.join('|') !== (L.previewOrder || []).join('|')) setPreviewOrder(next)
+        if ((L.previewGroup?.gid ?? undefined) !== (g?.id ?? null) || L.previewGroup?.key !== key) setPreviewGroup({ key, gid: g?.id ?? null })
+        return
+      }
+      // Over a card: take its slot (and its group, or none).
+      const gid = L.groups.find((g) => (g.members || []).includes(target))?.id ?? null
+      const next = movedOrder(L.baseOrder, key, target, after)
+      if (next.join('|') !== (L.previewOrder || []).join('|')) setPreviewOrder(next)
+      if (!L.previewGroup || L.previewGroup.key !== key || L.previewGroup.gid !== gid) setPreviewGroup({ key, gid })
+    },
+    onCommit: async (key, kind) => {
+      const L = latest.current
+      const keys = L.previewOrder
+      const pg = L.previewGroup
+      setPreviewOrder(null); setPreviewGroup(null)
+      try {
+        if (kind === 'card' && pg && pg.key === key) await regroup(key, pg.gid)
+        if (keys) { setHomeCfg((c) => ({ ...(c || { builtins: {} }), order: keys })); await launcher.put('/admin/home-order', { keys }) }
+      } catch (e) { setError(errText(e, 'failed')) }
+      await refresh()
+    },
+    onCancel: () => { setPreviewOrder(null); setPreviewGroup(null) },
+  })
+  const dragKey = drag?.key || null
   async function saveOrder(keys) {
     setHomeCfg((c) => ({ ...(c || { builtins: {} }), order: keys }))   // optimistic
     try { await launcher.put('/admin/home-order', { keys }); await refresh() }
     catch { await refresh() }
   }
-  // Manage mode: move any card (builtin or service) up/down; persist the unified order.
+  // Manage panel ↑↓ buttons.
   async function move(key, dir) {
     const keys = [...fullOrder]
     const i = keys.indexOf(key), j = i + dir
@@ -656,57 +729,18 @@ export default function ProjectsPage() {
     ;[keys[i], keys[j]] = [keys[j], keys[i]]
     await saveOrder(keys)
   }
-  // Drag reorder (manage mode). `movedOrder` is the list with `key` placed at
-  // `target` (after it when the pointer is past its middle); `previewReorder`
-  // shows it while dragging, `reorder` commits it on drop.
-  function movedOrder(key, target, after) {
-    const keys = baseOrder.filter((k) => k !== key)
-    let at = keys.indexOf(target)
-    if (at < 0) at = keys.length; else if (after) at += 1
-    keys.splice(at, 0, key)
-    return keys
-  }
-  function previewReorder(key, target, after) {
-    if (!key || !target || key === target) return
-    const next = movedOrder(key, target, after)
-    if (!previewOrder || next.join('|') !== previewOrder.join('|')) setPreviewOrder(next)
-  }
-  async function reorder(key, target, after) {
-    if (!key || !target || key === target) { setPreviewOrder(null); return }
-    const keys = previewOrder || movedOrder(key, target, after)
-    setPreviewOrder(null)
-    await saveOrder(keys)
-  }
-  function endDrag() { setDragKey(null); setPreviewOrder(null) }
-  // Was the pointer past the middle of the element (→ insert after it)?
-  const pastMiddle = (e) => { const r = e.currentTarget.getBoundingClientRect(); return (e.clientY - r.top) > r.height / 2 }
-  // Group manage mode: drop a card onto a band (gid) or onto the cover (null).
-  async function regroup(key, gid) {
-    if (!key || key.startsWith('#g:')) return
-    const from = memberOf[key]
-    if ((from?.id || null) === (gid || null)) return
-    try {
-      if (from) await launcher.put(`/admin/service-groups/${from.id}`, { members: (from.members || []).filter((m) => m !== key) })
-      if (gid) { const g = groups.find((x) => x.id === gid); await launcher.put(`/admin/service-groups/${gid}`, { members: [...(g?.members || []), key] }) }
-      await refresh()
-    } catch { await refresh() }
-  }
   async function createGroup() {
     try { await launcher.post('/admin/service-groups', { name: lang === 'ko' ? `그룹 ${groups.length + 1}` : `Group ${groups.length + 1}` }); await refresh() }
     catch (e) { setError(errText(e, 'failed')) }
   }
+
   // Live mode shows ONLY live-capable service cards (no builtins, nothing hidden,
   // nothing inside a hidden group), in the cover's order, on a full-screen wall.
   const liveCards = fullOrder
     .map((k) => cards.find((c) => cardKey(c) === k))
     .filter((c) => c && c.live && !c.builtin && !c.hidden && !c.live_hidden && !memberOf[cardKey(c)]?.hidden)
 
-  function onDropCard(key, gid, after) {
-    if (key && key.startsWith('#g:')) reorder(key, `#g:${gid}`, after)        // a group dropped on a group: reorder
-    else if (groupsMode) regroup(key, gid)
-    else if (manage) reorder(key, `#g:${gid}`, after)
-    endDrag()
-  }
+
 
   // The nav/tab bar lives in CoverPage's FIXED subheader (outside the scroll), with
   // a divider under it; only the tab CONTENT below scrolls. Roomy: Home/Settings on
@@ -790,8 +824,8 @@ export default function ProjectsPage() {
   const modeBar = (mode && !liveMode) ? (
     <div style={{ ...capNarrow, display: 'flex', alignItems: 'center', gap: 10, padding: '4px 2px 10px', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
       <Icon name={modeDef?.icon || 'wrench'} size={15} color="var(--warning-text, #e67700)" />
-      <span style={{ flex: 1 }}>{manage ? t('manage_hint') : groupsMode ? t('groups_hint') : t('live_hint')}</span>
-      {groupsMode && isManager && <Button variant="primary" size="sm" onClick={createGroup}><Icon name="folder-plus" size={14} /> {t('groups_new')}</Button>}
+      <span style={{ flex: 1 }}>{manage ? t('manage_hint') : t('live_hint')}</span>
+      {manage && isManager && <Button variant="primary" size="sm" onClick={createGroup}><Icon name="folder-plus" size={14} /> {t('groups_new')}</Button>}
       <Button variant="secondary" size="sm" onClick={() => setMode(null)}>{t('manage_done')}</Button>
     </div>
   ) : null
@@ -852,7 +886,18 @@ export default function ProjectsPage() {
           )}
 
           {(() => {
+            const renderCardStatic = (p) => (
+              <ExpandBox open={false} toggleable={false} manage divider={false} caret={false} radius={16}
+                padding={big ? '14px 18px' : '8px 14px'} titleSize={big ? 'var(--fs-large, 16px)' : 'var(--fs-medium, 14px)'} titleWeight={big ? 400 : 600}
+                style={{ marginBottom: 0 }}
+                icon={<Icon name={iconFor(p.name, p.icon)} size={big ? 34 : 26} weight="fill" color={p.color || 'var(--text-primary)'} />}
+                title={p.label || p.name} />
+            )
             const renderCard = (p, i) => {
+              if (drag?.active !== false && drag && drag.key === cardKey(p)) {
+                // The dragged card's slot: an empty outline the others slide around.
+                return <div key={cardKey(p)} data-flip-key={cardKey(p)} style={{ height: drag.h, borderRadius: 16, border: '2px dashed var(--btn-primary-bg, #2563eb)', background: 'var(--selection-bg, transparent)', opacity: 0.7 }} />
+              }
               const key = cardKey(p)
               const isOpen = expanded === key
               const isBuiltin = !!p.builtin
@@ -871,24 +916,18 @@ export default function ProjectsPage() {
               return (
                 <ExpandBox key={key} open={isOpen} manage={mgmt && isManager}
                   handle={grip ? (
-                    <span draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key); setDragKey(key) }} onDragEnd={endDrag}
-                      title={groupsMode ? (lang === 'ko' ? '끌어서 그룹으로' : 'drag into a group') : (lang === 'ko' ? '끌어서 순서 바꾸기' : 'drag to reorder')}
-                      style={{ display: 'inline-flex', cursor: 'grab', color: 'var(--text-muted)', padding: '4px 2px', borderRadius: 6 }}>
+                    <span onPointerDown={(e) => startDrag(e, key, 'card')}
+                      title={lang === 'ko' ? '끌어서 옮기기 (그룹 안팎으로도)' : 'drag to move (into or out of a group too)'}
+                      style={{ display: 'inline-flex', cursor: 'grab', touchAction: 'none', color: 'var(--text-muted)', padding: '6px 4px', borderRadius: 6 }}>
                       <Icon name="drag-handle" size={16} />
                     </span>) : null}
-                  outerProps={{
-                    'data-flip-key': key,
-                    ...(grip && dragKey && dragKey !== key ? {
-                      onDragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (manage || dragKey.startsWith('#g:')) previewReorder(dragKey, key, pastMiddle(e)) },
-                      onDrop: (e) => { e.preventDefault(); e.stopPropagation(); if (manage || dragKey.startsWith('#g:')) reorder(dragKey, key, pastMiddle(e)); else if (groupsMode) regroup(dragKey, memberOf[key]?.id || null); endDrag() },
-                    } : {}),
-                  }}
+                  outerProps={{ 'data-flip-key': key }}
                   borderColor={dragKey === key ? 'var(--warning-text, #e67700)' : null}
                   toggleable={canToggle} divider={false}
                   // The grid's column gap spaces the cards; drop the card's own margin.
                   // A hidden builtin only reaches here in manage mode — dim it so it
                   // reads as "not on the cover" rather than as a normal card.
-                  style={{ marginBottom: 0, opacity: p.hidden ? 0.45 : dragKey === key ? 0.6 : undefined }}
+                  style={{ marginBottom: 0, opacity: p.hidden ? 0.45 : undefined }}
                   // Roomy: bigger cards (more padding, larger leading mark + title),
                   // description line dropped; the leading caret stays.
                   padding={big ? '14px 18px' : '8px 14px'}
@@ -984,18 +1023,26 @@ export default function ProjectsPage() {
                 </ExpandBox>
               )
             }
-            const dropToCover = groupsMode && dragKey && !dragKey.startsWith('#g:') ? {
-              onDragOver: (e) => { e.preventDefault() },
-              onDrop: (e) => { e.preventDefault(); regroup(dragKey, null); endDrag() },
-            } : {}
+            const dragged = drag && !drag.key.startsWith('#g:') ? cards.find((c) => cardKey(c) === drag.key) : null
+            const draggedGroup = drag && drag.key.startsWith('#g:') ? groups.find((g) => groupKey(g) === drag.key) : null
             return (
-              <div ref={flipRef} {...dropToCover} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div ref={flipRef} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* the floating copy that follows the pointer */}
+                {drag && (
+                  <div ref={ghostRef} style={{ position: 'fixed', left: -9999, top: -9999, width: drag.w, zIndex: 2000, pointerEvents: 'none',
+                    transform: 'scale(1.03)', boxShadow: '0 14px 40px rgba(0,0,0,.28)', borderRadius: 16, opacity: 0.95 }}>
+                    {dragged && <div style={{ pointerEvents: 'none' }}>{renderCardStatic(dragged)}</div>}
+                    {draggedGroup && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 14, background: 'var(--surface)', border: '1.5px solid var(--btn-primary-bg)', fontWeight: 600 }}>
+                        <Icon name={draggedGroup.icon || 'stack'} size={20} weight="fill" color={draggedGroup.color || 'var(--text-secondary)'} /> {draggedGroup.name} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{(draggedGroup.members || []).length}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {segments.map((seg) => seg.type === 'group' ? (
                   <ServiceGroupBand key={seg.key} group={seg.group} isManager={isManager} big={big}
-                    manageGroups={groupsMode && isManager} onChanged={refresh} dragKey={dragKey} onDropCard={onDropCard}
-                    grip={(manage || groupsMode) && isManager}
-                    onDragStartGroup={() => setDragKey(seg.key)} onDragEndGroup={endDrag}
-                    onDragOverGroup={(after) => { if (manage || (dragKey && dragKey.startsWith('#g:'))) previewReorder(dragKey, seg.key, after) }}
+                    manageGroups={manage && isManager} onChanged={refresh} dragKey={dragKey}
+                    grip={manage && isManager} onGripPointerDown={(e) => startDrag(e, seg.key, 'group')}
                     dim={seg.group.hidden}
                     cards={membersOf(seg.group).map((p, i) => renderCard(p, i))} />
                 ) : (

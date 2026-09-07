@@ -629,7 +629,7 @@ export default {
   portal_nav_feedback:     'Feedback',
   portal_guide_docs:       'Integration guide docs',
   manage_done:             'Done',
-  manage_hint:             'Open a card to rename it, change its icon, visibility, hide or delete it; drag the left grip to reorder.',
+  manage_hint:             'Open a card to rename it, change its icon, visibility or hide it; drag the left grip to reorder or to move it into or out of a group. Groups move by their grip too.',
   groups_hint:             'Make groups and drag cards into and out of them. Cards do not open in this mode.',
   groups_new:              'New group',
   live_hint:               'Live mode — cards that support it show live numbers.',

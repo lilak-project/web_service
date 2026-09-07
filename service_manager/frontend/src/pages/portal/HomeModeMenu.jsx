@@ -13,8 +13,7 @@ import { Icon } from 'lilak-ui'
  * Closes on outside click or Escape.
  */
 export const HOME_MODES = [
-  { id: 'manage', icon: 'wrench', ko: '관리 모드', en: 'Manage mode', admin: true, ko_hint: '이름 · 아이콘 · 공개 범위 · 순서 · 숨김', en_hint: 'name · icon · visibility · order · hide' },
-  { id: 'groups', icon: 'squares-four', ko: '서비스 그룹 관리', en: 'Service groups', admin: true, ko_hint: '그룹을 만들고 카드를 끌어 넣기', en_hint: 'make groups, drag cards in and out' },
+  { id: 'manage', icon: 'wrench', ko: '관리 모드', en: 'Manage mode', admin: true, ko_hint: '이름 · 아이콘 · 공개 범위 · 숨김 · 그룹 · 끌어서 정렬', en_hint: 'name · icon · visibility · hide · groups · drag to arrange' },
   { id: 'live', icon: 'broadcast', ko: '라이브 모드', en: 'Live mode', admin: false, ko_hint: '지원하는 카드에 실시간 숫자 표시', en_hint: 'live numbers on cards that support it' },
 ]
 

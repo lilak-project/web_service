@@ -17,14 +17,13 @@ import IconPick from './IconPick'
  */
 const VIS = [[1, 'portal_vis_private'], [2, 'portal_vis_protected'], [3, 'portal_vis_admin']]
 
-export default function ServiceGroupBand({ group, cards, manageGroups, isManager, big, onChanged, dragKey, onDropCard, dim,
-  grip = false, onDragStartGroup, onDragEndGroup, onDragOverGroup }) {
+export default function ServiceGroupBand({ group, cards, manageGroups, isManager, big, onChanged, dragKey, dim,
+  grip = false, onGripPointerDown }) {
   const { t, lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   // Collapse is persisted for managers (a group setting); everyone else just folds it locally.
   const [collapsed, setCollapsed] = useState(!!group.collapsed)
   useEffect(() => { setCollapsed(!!group.collapsed) }, [group.collapsed])
-  const [over, setOver] = useState(false)
   const [name, setName] = useState(group.name || '')
   const [editing, setEditing] = useState(false)
   const [perm, setPerm] = useState(false)
@@ -51,25 +50,24 @@ export default function ServiceGroupBand({ group, cards, manageGroups, isManager
   }
 
   const color = group.color || 'var(--text-secondary)'
-  const border = `1.5px ${manageGroups ? 'dashed' : 'solid'} ${over ? 'var(--btn-primary-bg)' : 'var(--border-strong, #94a3b8)'}`
   const n = cards.length
   const myKey = `#g:${group.id}`
-  const droppable = !!dragKey && dragKey !== myKey && !!onDropCard
-  const pastMiddle = (e) => { const r = e.currentTarget.getBoundingClientRect(); return (e.clientY - r.top) > r.height / 2 }
+  const dragging = dragKey === myKey
+  // While a CARD is being dragged the band is a landing zone: the pointer drag
+  // in ProjectsPage hit-tests this element by its data-flip-key.
+  const landing = !!dragKey && !dragging && !dragKey.startsWith('#g:')
 
   return (
     <section data-flip-key={myKey}
-      onDragOver={droppable ? (e) => { e.preventDefault(); if (!over) setOver(true); onDragOverGroup?.(pastMiddle(e)) } : undefined}
-      onDragLeave={droppable ? () => setOver(false) : undefined}
-      onDrop={droppable ? (e) => { e.preventDefault(); e.stopPropagation(); setOver(false); onDropCard?.(dragKey, group.id, pastMiddle(e)) } : undefined}
-      style={{ border, borderRadius: 18, background: over ? 'var(--selection-bg, var(--surface-2))' : 'var(--surface-2)',
-        padding: big ? '10px 12px 12px' : '8px 10px 10px', opacity: dim ? 0.5 : dragKey === myKey ? 0.6 : 1, transition: 'background .12s, border-color .12s' }}>
+      style={{ border: `1.5px ${manageGroups ? 'dashed' : 'solid'} ${landing ? 'var(--btn-primary-bg)' : 'var(--border-strong, #94a3b8)'}`, borderRadius: 18,
+        background: 'var(--surface-2)',
+        padding: big ? '10px 12px 12px' : '8px 10px 10px', opacity: dim ? 0.5 : dragging ? 0.45 : 1, transition: 'border-color .12s, opacity .12s' }}>
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 6px 8px', flexWrap: 'wrap' }}>
         {grip && (
-          <span draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', myKey); onDragStartGroup?.() }} onDragEnd={onDragEndGroup}
+          <span onPointerDown={onGripPointerDown}
             title={L('끌어서 그룹 위치 바꾸기', 'drag to move the group')}
-            style={{ display: 'inline-flex', cursor: 'grab', color: 'var(--text-muted)', padding: '4px 2px', borderRadius: 6 }}>
+            style={{ display: 'inline-flex', cursor: 'grab', touchAction: 'none', color: 'var(--text-muted)', padding: '6px 4px', borderRadius: 6 }}>
             <Icon name="drag-handle" size={16} />
           </span>
         )}
@@ -113,7 +111,7 @@ export default function ServiceGroupBand({ group, cards, manageGroups, isManager
       {!collapsed && (
         n > 0 ? <MasonryGrid>{cards}</MasonryGrid>
           : <div style={{ padding: '14px 8px', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', textAlign: 'center', border: '1px dashed var(--border-default)', borderRadius: 12 }}>
-              {manageGroups ? L('카드를 여기로 끌어다 놓으세요', 'Drag cards here') : L('빈 그룹', 'Empty group')}
+              {manageGroups ? L('관리 모드에서 카드를 여기로 끌어다 놓으세요', 'Drag cards here in manage mode') : L('빈 그룹', 'Empty group')}
             </div>
       )}
       {perm && <GroupAccessModal group={group} onClose={() => setPerm(false)} L={L} />}
