@@ -207,6 +207,9 @@ GET /api/live   →  { "ok": true,
 - `items` — 1–6 entries; `value` is a short string (already formatted), `unit`
   optional, `state` one of `running | idle | ok | warn | trip | alarm | down | off`
   or empty (drives the tile colour), `sub` an optional second line.
+- `note` (optional) — a short aside beside the name, in brackets: when this
+  reading is from ("15 min ago") when that is the next thing anyone would ask.
+- `title` (optional) — the tile's tooltip (the absolute time, the slot/channel…).
 - `spark` (optional) — a short series, oldest first, drawn filled BEHIND the
   number. `spark_log: true` plots it on a log scale (a quantity spanning
   decades, e.g. a vacuum gauge); `spark_window` labels it ("1 h"). Keep it to a
