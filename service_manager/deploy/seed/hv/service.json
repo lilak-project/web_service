@@ -6,7 +6,7 @@
     "cwd": "/app/hv_control_monitoring/backend",
     "env": {
       "HV_ELOG_SNAPSHOT_MIN_INTERVAL": "600",
-      "HV_LIVE_MAX_AGE": "20"
+      "HV_LIVE_MAX_AGE": "600"
     }
   },
   "health": "/api/health",
