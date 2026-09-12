@@ -105,8 +105,14 @@ async def _security_preflight():
     Warnings only — never blocks startup — but makes an insecure deploy impossible
     to miss in the logs."""
     warns = []
-    if config.SECRET_KEY_IS_INSECURE:
-        warns.append("PORTAL_SECRET_KEY is unset — using the public dev secret; JWTs can be forged. Set a strong random value.")
+    # Where the signing key came from is worth saying out loud every start: a
+    # service that silently disagreed with the portal about it once cost a day of
+    # "the password is wrong" with nothing in any log to show for it.
+    print(f"[SECURITY] JWT signing key source: {config.SECRET_KEY_SOURCE}", flush=True)
+    if config.SECRET_KEY_SOURCE.startswith("generated:"):
+        warns.append(
+            f"A new JWT signing key was generated at {config.SECRET_KEY_FILE}. "
+            "Every existing session is now invalid. Back this file up with the data root.")
     if config.EMAIL_VERIFY_DEV_ECHO:
         warns.append("EMAIL_VERIFY_DEV_ECHO is ON — verification codes / reset passwords are returned in HTTP responses. Do not expose publicly.")
     if config.CORS_ORIGINS == ["*"]:

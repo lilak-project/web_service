@@ -6,6 +6,7 @@ defaults make `./run.sh` work out of the box.
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
 
 # Project root = the directory that contains `app/`.
@@ -67,16 +68,59 @@ BASE_URL = os.environ.get("PORTAL_BASE_URL", f"http://localhost:{PORTAL_PORT}")
 # Shared JWT secret. MUST match the secret of any managed service (e.g. elog) so
 # a portal token is trusted on entry. Reads ELOG_SECRET_KEY for backward-compat
 # with the existing elog deployment.
-_DEFAULT_SECRET = "lilak-dev-secret-CHANGE-in-production"
-SECRET_KEY = (
-    os.environ.get("PORTAL_SECRET_KEY")
-    or os.environ.get("ELOG_SECRET_KEY")
-    or _DEFAULT_SECRET
-)
-# True when the built-in dev secret is still in use. JWTs signed with a publicly
-# known key can be forged, so production MUST set PORTAL_SECRET_KEY. main.py warns
-# loudly at startup while this is True, and it also gates the dev-only echoes below.
-SECRET_KEY_IS_INSECURE = SECRET_KEY == _DEFAULT_SECRET
+#: Where the shared key lives when no environment variable carries it. It sits
+#: beside the portal database because the data root is the one thing the portal
+#: and every managed service must already agree on to work at all.
+SECRET_KEY_FILE = Path(os.environ.get("PORTAL_SECRET_FILE", DATA_ROOT / "_portal" / "secret.key"))
+
+
+def _resolve_secret_key() -> tuple[str, str]:
+    """The JWT signing key, and where it came from.
+
+    This used to fall back to a constant printed in the source. That turned a
+    configuration failure into two silent outcomes, both bad: a service started
+    without the variable disagreed with the portal and rejected its tokens, and —
+    worse — if BOTH sides lost it they AGREED, on a key anybody can read, with
+    nothing looking wrong. Delivery by environment inheritance is what made that
+    reachable: whoever spawns the process decides whether auth works.
+
+    So the key is a property of the shared data root instead. An explicit
+    variable still wins, for deployments that inject secrets; otherwise every
+    process that can see the data root reads the same file, and the first one to
+    need it creates a random one. There is no shared default left to agree on by
+    accident. Kept in step with lilak_elog/backend/auth.py, which resolves the
+    same three ways so both land on the same key.
+    """
+    for var in ("PORTAL_SECRET_KEY", "ELOG_SECRET_KEY"):
+        val = os.environ.get(var)
+        if val:
+            return val, f"env:{var}"
+    try:
+        if SECRET_KEY_FILE.exists():
+            val = SECRET_KEY_FILE.read_text().strip()
+            if val:
+                return val, f"file:{SECRET_KEY_FILE}"
+        SECRET_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        val = secrets.token_urlsafe(48)
+        # 0600 before anything is written — never briefly world-readable.
+        fd = os.open(SECRET_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(val + "\n")
+        return val, f"generated:{SECRET_KEY_FILE}"
+    except FileExistsError:
+        # Another process won the race between exists() and O_EXCL.
+        return SECRET_KEY_FILE.read_text().strip(), f"file:{SECRET_KEY_FILE}"
+    except OSError as err:
+        # An unwritable data root is a real deployment fault. A per-process
+        # random key would let the portal start and then reject every token it
+        # had just issued, which is harder to diagnose than not starting.
+        raise RuntimeError(
+            f"cannot read or create the JWT signing key at {SECRET_KEY_FILE}: {err}. "
+            f"Set PORTAL_SECRET_KEY, or make the data root writable."
+        ) from err
+
+
+SECRET_KEY, SECRET_KEY_SOURCE = _resolve_secret_key()
 TOKEN_EXPIRE_HOURS = int(os.environ.get("PORTAL_TOKEN_EXPIRE_HOURS", "24"))
 
 # Minimum length enforced when a password is SET (register / change / admin reset).
@@ -98,10 +142,16 @@ REGISTER_TOKEN = os.environ.get("PORTAL_REGISTER_TOKEN", _DEFAULT_REGISTER_TOKEN
 # default value can't be used to register services on an exposed portal.
 REGISTER_ENABLED = bool(REGISTER_TOKEN) and REGISTER_TOKEN != _DEFAULT_REGISTER_TOKEN
 
-# "Local dev" = still on the built-in dev secret AND addressed as localhost. The
-# dev-only conveniences below (echoing verification codes / reset passwords in HTTP
-# responses) are gated on this so they can never accidentally ship to production.
-IS_LOCAL_DEV = SECRET_KEY_IS_INSECURE and ("localhost" in BASE_URL or "127.0.0.1" in BASE_URL)
+# Dev mode is now DECLARED, not inferred. It used to mean "still on the built-in
+# dev secret", which quietly tied a convenience switch to a security default:
+# removing that secret would have turned the switch off by side effect, and
+# setting one for real would have turned it off on a developer's machine. It also
+# still has to look like localhost, so an exported PORTAL_DEV cannot open the
+# echoes on a public address.
+IS_LOCAL_DEV = (
+    os.environ.get("PORTAL_DEV", "").strip() in ("1", "true", "True", "yes")
+    and ("localhost" in BASE_URL or "127.0.0.1" in BASE_URL)
+)
 
 # Email verification. REQUIRED gates login on verification. DEV_ECHO returns the
 # verification code / reset password IN THE HTTP RESPONSE so the flow is testable
