@@ -31,6 +31,7 @@
 /actuator_monitoring/
 /compass_monitoring/
 /compass_remote
+/ganil_control
 /dummy_daq/
 /ganil_daq_monitoring/
 /hv_control_monitoring/
