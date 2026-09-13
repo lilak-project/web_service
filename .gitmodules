@@ -18,3 +18,43 @@
 	path = nptool_cens
 	url = git@github.com:lilak-project/nptool_cens.git
 	branch = dev-lilak
+[submodule "actuator_control"]
+	path = actuator_control
+	url = git@github.com:lilak-project/actuator_control.git
+	branch = main
+[submodule "actuator_monitoring"]
+	path = actuator_monitoring
+	url = git@github.com:lilak-project/actuator_monitoring.git
+	branch = main
+[submodule "compass_monitoring"]
+	path = compass_monitoring
+	url = git@github.com:lilak-project/compass_monitoring.git
+	branch = main
+[submodule "dummy_daq"]
+	path = dummy_daq
+	url = git@github.com:lilak-project/dummy_daq.git
+	branch = main
+[submodule "ganil_daq_monitoring"]
+	path = ganil_daq_monitoring
+	url = git@github.com:lilak-project/ganil_daq_monitoring.git
+	branch = main
+[submodule "hv_control_monitoring"]
+	path = hv_control_monitoring
+	url = git@github.com:lilak-project/hv_control_monitoring.git
+	branch = main
+[submodule "minicom_monitoring"]
+	path = minicom_monitoring
+	url = git@github.com:lilak-project/minicom_monitoring.git
+	branch = main
+[submodule "mte_control"]
+	path = mte_control
+	url = git@github.com:lilak-project/mte_control.git
+	branch = main
+[submodule "mte_monitoring"]
+	path = mte_monitoring
+	url = git@github.com:lilak-project/mte_monitoring.git
+	branch = main
+[submodule "vacuum_monitoring"]
+	path = vacuum_monitoring
+	url = git@github.com:lilak-project/vacuum_monitoring.git
+	branch = main
