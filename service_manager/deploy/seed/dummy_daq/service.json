@@ -2,7 +2,7 @@
   "kind": "daq",
   "mode": "managed",
   "start": {
-    "cmd": "/usr/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port {port}",
+    "cmd": "uvicorn app.main:app",
     "cwd": "/app/dummy_daq/backend",
     "env": {}
   },
