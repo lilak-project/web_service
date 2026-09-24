@@ -97,7 +97,7 @@ export default function LiveTiles({ service, big = false, pad, wall = false }) {
   const valuePx = wall ? (n <= 1 ? 48 : n <= 2 ? 42 : n <= 4 ? 34 : 28) : null
   const valueFont = { fontFamily: 'var(--font-sans)', fontWeight: 500, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums lining-nums' }
   const tile = {
-    display: 'flex', flexDirection: 'column', gap: wall ? 4 : 2, minWidth: wall ? (stack ? 170 : 150) : 92,
+    display: 'flex', flexDirection: 'column', gap: wall ? 4 : 2,
     flex: wall ? (stack ? '1 1 170px' : '1 1 150px') : '0 0 auto',
     padding: wall ? '10px 14px' : big ? '8px 12px' : '6px 10px',
     borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)', minWidth: 0,

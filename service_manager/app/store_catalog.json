@@ -150,17 +150,6 @@
       "en": "CoMPASS DAQ watcher (remote host over ssh)"
     },
     {
-      "name": "compass_remote",
-      "dir": "compass_remote",
-      "repo": "",
-      "label": "COMPASS Remote Control",
-      "icon": "compass",
-      "color": "#e8590c",
-      "needs_kit": true,
-      "ko": "CoMPASS 원격 START/STOP · 런 파라미터 · 상태 읽기 (HTTP 원격제어 + ssh)",
-      "en": "CoMPASS remote START/STOP, run parameters, state readback (HTTP remote control + ssh)"
-    },
-    {
       "name": "dummy_daq",
       "dir": "dummy_daq",
       "repo": "",
