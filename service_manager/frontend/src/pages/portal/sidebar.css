@@ -7,6 +7,11 @@
  * kit's tokens, so the theme still drives them.
  */
 .pl-root {
+  /* One firm line for every edge and divider the portal's own chrome draws: the
+     bar's right edge, the rule over the foot, the bands, the settings
+     separators. A step past --border-strong, which the cards inside the bars
+     already use — the chrome's own lines have to beat the cards'. */
+  --divider: var(--text-muted);
   /* The mockup picks these deliberately — less round than the kit's default, so
      the cards read as panels rather than pills. Pinned here (not a fallback) or
      the theme's larger radii win. */
@@ -36,7 +41,7 @@
      which the cards inside the bar already use — the bar's own edge has to beat
      them. It stays 1px: the box is border-box, so 2px would eat a pixel of the
      collapsed 64px bar and drag every icon off centre. */
-  border-right: 1px solid var(--text-muted);
+  border-right: 1px solid var(--divider);
   transition: width .15s;
   overflow: hidden;
 }
@@ -220,11 +225,15 @@
 /* ── foot (modes + account) ──────────────────────────────────────────────── */
 /* The same box as .pl-nav — 10px gutters, 4px between cards — so the cards down
    here sit on the same grid as the service cards above. */
+/* The foot is a plinth, not more list: Modes and the account are about the
+   PORTAL, so they sit on their own ground — the same one the settings bar uses,
+   which is where the account button leads. */
 .pl-user {
   flex-shrink: 0;
   display: flex; flex-direction: column; gap: 4px;
   padding: 10px;
-  border-top: 1px solid var(--border-default);
+  background: var(--surface-3);
+  border-top: 1px solid var(--divider);
 }
 .pl-user .pl-av { flex-shrink: 0; }   /* without this the avatar squeezed when collapsed */
 
@@ -306,8 +315,8 @@
   margin: 4px -10px 10px;
   padding-bottom: 6px;
   background: rgba(148, 163, 184, .16);
-  border-top: 1px solid var(--border-strong);
-  border-bottom: 1px solid var(--border-strong);
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
 }
 .pl-band { flex: 0 0 auto; }
 /* The 24px caret box is centred on x=32 too (the band starts at x=0). */
@@ -350,7 +359,7 @@
   flex-shrink: 0;
   display: flex; flex-direction: column;
   background: var(--surface-3);
-  border-right: 1px solid var(--border-strong);
+  border-right: 1px solid var(--divider);
 }
 .pl-b2head { height: 50px; padding: 0 16px; display: flex; align-items: center; white-space: nowrap; }
 .pl-b2head b { font-size: 15px; font-weight: 700; color: var(--text-emphasis); }
@@ -375,7 +384,7 @@
 .pl-c2 .pl-txt { font-weight: 400; }
 .pl-c2:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 /* Sections are a rule, not a heading — the names labelled a split the items make. */
-.pl-sep { flex: 0 0 auto; height: 1px; margin: 6px 2px; background: var(--border-strong); }
+.pl-sep { flex: 0 0 auto; height: 1px; margin: 6px 2px; background: var(--divider); }
 
 /* Phone: one bar at a time — the settings bar takes the drawer's place. */
 @media (max-width: 639px) {
@@ -398,7 +407,7 @@
   flex: 0 0 auto;
   display: flex; flex-direction: column; gap: 6px;
   padding: 2px 10px 10px;
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--divider);
 }
 .pl-mgnew, .pl-mgout {
   display: flex; align-items: center; gap: 8px;
