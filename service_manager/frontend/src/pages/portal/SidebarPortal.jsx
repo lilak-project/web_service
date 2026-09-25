@@ -41,10 +41,18 @@ const writeSet = (key, set) => {
   try { localStorage.setItem(key, JSON.stringify([...set])) } catch { /* private mode */ }
 }
 
-/** A system card (search, modes, settings) wears the same 30px tile as a service,
- *  so every icon in the bar sits on one vertical line. */
-function SysTile({ name }) {
-  return <span className="pl-av sys"><Icon name={name} size={17} weight="fill" color="#fff" /></span>
+/** Tiles are inverted to show selection: normally a white plate with the icon in
+ *  its own colour, and when picked the plate takes the colour and the icon turns
+ *  white. One indicator that works expanded AND collapsed — unlike a ring, which
+ *  sits against the 64px clip edge and reads as a cut-off box. */
+function Tile({ icon, color, on, dot }) {
+  const c = color || 'var(--text-secondary)'
+  return (
+    <span className="pl-av" style={{ background: on ? c : 'var(--surface)' }}>
+      <Icon name={icon} size={17} weight="fill" color={on ? '#fff' : c} />
+      {dot !== undefined && <i className={dot ? 'up' : ''} />}
+    </span>
+  )
 }
 
 /** Selection ⇄ URL. Without this the address bar never moves: a reload would land
@@ -259,11 +267,8 @@ export default function SidebarPortal({
               if (mini) { setMini(false); setOpenSvcs((o) => new Set(o).add(s.name)); return }
               toggleProj(s.name)
             }}>
-            <span className="pl-av" style={{ background: s.color || 'var(--text-secondary)' }}>
-              <Icon name={iconFor ? iconFor(s.name, s.icon) : (s.icon || 'circle')}
-                size={17} weight="fill" color="#fff" />
-              <i className={s.running ? 'up' : ''} />
-            </span>
+            <Tile icon={iconFor ? iconFor(s.name, s.icon) : (s.icon || 'circle')}
+              color={s.color} on={on} dot={s.running} />
             <span className="pl-txt">
               {s.label || s.name}
               {multi && s.projects_count != null && <small>({s.projects_count})</small>}
@@ -319,7 +324,7 @@ export default function SidebarPortal({
         <div className="pl-nav">
           <div className={`pl-card${modesOpen ? ' open' : ''}`}>
             <button type="button" className="pl-row" onClick={() => setModesOpen((o) => !o)}>
-              <SysTile name="squares-four" />
+              <Tile icon="squares-four" on={modesOpen} />
               <span className="pl-txt">{L('모드', 'Modes')}<small>({modes.length})</small></span>
               <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>
             </button>
@@ -346,7 +351,7 @@ export default function SidebarPortal({
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"
               onClick={() => { setView('settings'); onSettingsTab?.('me'); if (window.innerWidth < PHONE) setMini(true) }}>
-              <SysTile name="settings" />
+              <Tile icon="settings" on={view === 'settings'} />
               <span className="pl-txt">{L('설정', 'Settings')}</span>
             </button>
           </div>

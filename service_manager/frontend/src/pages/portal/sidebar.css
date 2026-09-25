@@ -40,6 +40,11 @@
 .pl-brand { height: 50px; padding: 0 17px; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
 .pl-logo { display: flex; align-items: center; gap: 8px; padding: 4px 6px; margin-left: -6px; border-radius: var(--radius-md, 3px); }
 .pl-logo:hover { background: var(--surface-3); }
+/* The browser's focus ring is drawn OUTSIDE the button, so at 64px it spilled past
+   the clip edge and looked like a stray box beside the mark. An inset ring stays
+   in bounds and still shows keyboard focus. */
+.pl-logo:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--border-focus); }
+.pl-row:focus-visible { outline: none; }   /* the CARD carries the ring (see :has below) */
 .pl-root.mini .pl-brand { padding: 0 10px; }
 .pl-root.mini .pl-logo { width: 44px; padding: 7px; margin-left: 0; border-radius: var(--radius-lg, 5px); }
 .pl-mark { width: 30px; height: 23px; color: var(--text-emphasis); flex-shrink: 0; }
@@ -72,10 +77,9 @@
   border-radius: var(--radius-lg, 5px);
 }
 .pl-root.mini .pl-row:hover { background: var(--surface-3); }
-/* Selected: fill that square. A ring around the 30px tile was the obvious move,
-   but it sits half a pixel from the clip edge and reads as a cut-off box; a solid
-   plate behind the icon says "here" without any outline to crop. */
-.pl-root.mini .pl-card.on .pl-row { background: var(--surface-3); }
+/* Nothing extra for the selected card here: the tile itself is filled with the
+   service colour, which reads at 64px as clearly as at 260px and has no outline
+   to crop. */
 .pl-root.mini .pl-card.on .pl-av { box-shadow: none; }
 
 .pl-nav { flex: 1; overflow-y: auto; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 4px; }
@@ -108,7 +112,7 @@
   display: grid; place-items: center;
   font-size: 14px; font-weight: 700;
 }
-.pl-av.sys { background: var(--text-secondary); }
+
 .pl-av i {
   position: absolute; right: -3px; bottom: -3px;
   width: 9px; height: 9px; border-radius: 50%;
