@@ -180,6 +180,32 @@
 
 /* ── projects ────────────────────────────────────────────────────────────── */
 .pl-projs { flex-shrink: 0; margin: 0 0 4px 16px; display: flex; flex-direction: column; gap: 4px; }
+
+/* ── the rail joining a card to the rows it opened ───────────────────────── */
+/* The line stands at x=32 — the parent tile's own centre, the same one the
+   collapsed bar is built on — and stops at the last row's middle, so the list
+   reads as hanging off the card rather than as the next thing in the bar.
+   It lives INSIDE the container's padding box on purpose: the open/close
+   animation sets overflow:hidden, which would have clipped a rail drawn in the
+   margin beside it. */
+.pl-plist, .pl-mlist {
+  position: relative;
+  margin-left: 22px;   /* content edge 10 + 22 = 32 */
+  padding-left: 12px;
+}
+.pl-plist::before, .pl-mlist::before {
+  content: ''; position: absolute; left: 0; width: 1px;
+  background: var(--border-strong);
+}
+.pl-plist::before { top: 0; bottom: 16px; }         /* down from the card above */
+.pl-mlist::before { top: 16px; bottom: 0; }         /* Modes opens UPWARDS */
+/* One elbow per row, meeting the row's left edge at its middle. */
+.pl-plist > *, .pl-mlist > * { position: relative; }
+.pl-plist > *::before, .pl-mlist > *::before {
+  content: ''; position: absolute; left: -12px; top: 50%;
+  width: 11px; height: 1px;
+  background: var(--border-strong);
+}
 .pl-proj {
   flex-shrink: 0;
   display: flex; align-items: center; gap: 8px;
