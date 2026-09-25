@@ -41,15 +41,19 @@ const writeSet = (key, set) => {
   try { localStorage.setItem(key, JSON.stringify([...set])) } catch { /* private mode */ }
 }
 
-/** Tiles are inverted to show selection: normally a white plate with the icon in
- *  its own colour, and when picked the plate takes the colour and the icon turns
- *  white. One indicator that works expanded AND collapsed — unlike a ring, which
- *  sits against the 64px clip edge and reads as a cut-off box. */
+/** Tiles invert to show selection: normally the plate carries the colour with the
+ *  icon in white, and the PICKED one drops to the bar's own background so the
+ *  plate disappears and the icon is left in its colour. One indicator that works
+ *  expanded and collapsed — unlike a ring, which sits against the 64px clip edge
+ *  and reads as a cut-off box.
+ *
+ *  19px, not 17: inside a 30px plate a smaller glyph leaves so much margin that
+ *  the icon reads as shrunken, which is exactly how it looked. */
 function Tile({ icon, color, on, dot }) {
   const c = color || 'var(--text-secondary)'
   return (
-    <span className="pl-av" style={{ background: on ? c : 'var(--surface)' }}>
-      <Icon name={icon} size={17} weight="fill" color={on ? '#fff' : c} />
+    <span className="pl-av" style={{ background: on ? 'var(--surface-2)' : c }}>
+      <Icon name={icon} size={19} weight="fill" color={on ? c : '#fff'} />
       {dot !== undefined && <i className={dot ? 'up' : ''} />}
     </span>
   )
@@ -322,40 +326,6 @@ export default function SidebarPortal({
         </div>
 
         <div className="pl-nav">
-          <div className={`pl-card${modesOpen ? ' open' : ''}`}>
-            <button type="button" className="pl-row" onClick={() => setModesOpen((o) => !o)}>
-              <Tile icon="squares-four" on={modesOpen} />
-              <span className="pl-txt">{L('모드', 'Modes')}<small>({modes.length})</small></span>
-              <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>
-            </button>
-          </div>
-          <Slider open={modesOpen} className="pl-mlist">
-            {modes.map((m) => (
-              <button key={m.id} type="button"
-                className={`pl-proj${view === 'live' && m.id === 'live' ? ' on' : ''}`}
-                title={lang === 'ko' ? m.ko_hint : m.en_hint}
-                onClick={() => (m.id === 'live' ? enterLive() : onEnterManage?.())}>
-                <Icon name={m.icon} size={14} />
-                <span className="pl-txt">{lang === 'ko' ? m.ko : m.en}</span>
-              </button>
-            ))}
-            {/* A setting, not a mode: it rearranges the sidebar and leaves the
-                panel alone, so it does not belong with manage / live. */}
-            <button type="button" className="pl-proj" onClick={() => setFlat((f) => !f)}>
-              <Icon name={flat ? 'toggle-left' : 'toggle-right'} size={14}
-                color={flat ? 'var(--text-muted)' : 'var(--btn-primary-bg)'} />
-              <span className="pl-txt">{L('그룹으로 보기', 'Show groups')}</span>
-            </button>
-          </Slider>
-
-          <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
-            <button type="button" className="pl-row"
-              onClick={() => { setView('settings'); onSettingsTab?.('me'); if (window.innerWidth < PHONE) setMini(true) }}>
-              <Tile icon="settings" on={view === 'settings'} />
-              <span className="pl-txt">{L('설정', 'Settings')}</span>
-            </button>
-          </div>
-
           {bands.map(({ g, items }) => (g ? (
             <div key={g.id} style={{ display: 'contents' }}>
               {/* The band spans the bar's full width, gutters included, so a group
@@ -385,8 +355,35 @@ export default function SidebarPortal({
           )}
         </div>
 
+        {/* Modes and the account sit together at the foot of the bar: both are
+            about this portal rather than about a service. */}
         <div className="pl-user">
-          <div className={`pl-card${view === 'settings' && settingsTab === 'me' ? ' on' : ''}`}>
+          <div className={`pl-card${modesOpen ? ' open' : ''}`}>
+            <button type="button" className="pl-row" onClick={() => setModesOpen((o) => !o)}>
+              <Tile icon="squares-four" on={modesOpen} />
+              <span className="pl-txt">{L('모드', 'Modes')}<small>({modes.length})</small></span>
+              <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>
+            </button>
+          </div>
+          <Slider open={modesOpen} className="pl-mlist">
+            {modes.map((m) => (
+              <button key={m.id} type="button"
+                className={`pl-proj${view === 'live' && m.id === 'live' ? ' on' : ''}`}
+                title={lang === 'ko' ? m.ko_hint : m.en_hint}
+                onClick={() => (m.id === 'live' ? enterLive() : onEnterManage?.())}>
+                <Icon name={m.icon} size={14} />
+                <span className="pl-txt">{lang === 'ko' ? m.ko : m.en}</span>
+              </button>
+            ))}
+            {/* A setting, not a mode: it rearranges the sidebar and leaves the
+                panel alone, so it does not belong with manage / live. */}
+            <button type="button" className="pl-proj" onClick={() => setFlat((f) => !f)}>
+              <Icon name={flat ? 'toggle-left' : 'toggle-right'} size={14}
+                color={flat ? 'var(--text-muted)' : 'var(--btn-primary-bg)'} />
+              <span className="pl-txt">{L('그룹으로 보기', 'Show groups')}</span>
+            </button>
+          </Slider>
+          <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"
               onClick={() => { setView('settings'); onSettingsTab?.('me'); if (window.innerWidth < PHONE) setMini(true) }}>
               <span className="pl-av" style={{ background: 'transparent' }}>
