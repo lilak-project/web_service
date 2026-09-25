@@ -31,7 +31,12 @@
   display: flex;
   flex-direction: column;
   background: var(--surface-2);
-  border-right: 1px solid var(--border-default);
+  /* The firmest line on the screen: it is what separates the portal's own
+     chrome from the service running beside it. A step past --border-strong,
+     which the cards inside the bar already use — the bar's own edge has to beat
+     them. It stays 1px: the box is border-box, so 2px would eat a pixel of the
+     collapsed 64px bar and drag every icon off centre. */
+  border-right: 1px solid var(--text-muted);
   transition: width .15s;
   overflow: hidden;
 }

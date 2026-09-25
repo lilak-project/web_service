@@ -58,17 +58,23 @@
   overflow: hidden;
   margin-bottom: 12px;
 }
-/* The strip IS the title. Bold lives here and nowhere else on the page. */
+/* The strip IS the title. Bold lives here and nowhere else on the page.
+   Tinted, not grey: grey is what the page GROUND is made of, so a grey strip
+   read as a gap in the panel rather than as its head. The tint also carries the
+   panel's kind — blue for an ordinary one, red for the irreversible one. */
 .set-bar {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 16px;
-  min-height: 42px;
-  background: var(--app-bg);
+  /* A FIXED height, not a minimum: the Accounts strip holds a select and grew
+     12px taller than every other strip on the same page. */
+  flex: 0 0 auto;
+  height: 42px;
+  padding: 0 16px;
+  background: var(--info-bg);
   border-bottom: 1px solid var(--border-strong);
 }
 .set-bar > b { font-weight: 700; color: var(--text-emphasis); }
 .set-bar .sp { flex: 1; }
-.set-bar .hint { color: var(--text-secondary); }
+.set-bar .hint { color: var(--info-text); }
 /* Irreversible things get their own panel, one per page, at the bottom. */
 .set-panel.danger { border-color: var(--danger-border, #fca5a5); }
 .set-panel.danger > .set-bar {
