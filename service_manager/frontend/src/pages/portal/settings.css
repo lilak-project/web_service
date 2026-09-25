@@ -238,6 +238,10 @@
 .set-status.bad .dot { background: var(--danger-text); }
 .set-status.bad .txt { color: var(--danger-text); }
 
+/* The bar's own reset puts text-align:left on every button, so a button whose
+   whole content is one glyph has to say it is centred. */
+:is(.set-panel, .set-card, .set-row) button { text-align: center; }
+
 /* The ✕ that removes a chip is part of the chip, not a button on the page: it
    takes no outline of its own. */
 :is(.pl-setpage, .pl-mgpage, .svc-mg) .set-x {

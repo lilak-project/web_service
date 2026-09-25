@@ -103,8 +103,15 @@ export default function NewServiceView({ onCreated }) {
             onChange={(e) => setService(e.target.value)} />
         </Field>
 
-        <Field label={`${t('newsvc_icon')} · ${t('newsvc_color')}`}>
+        <Field label={t('newsvc_icon')}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
+            borderRadius: 'var(--radius-lg, 5px)', border: '1px solid var(--border-strong)' }}>
+            <Icon name={icon} size={20} weight="fill" color={color} />
+          </span>
           <IconPick value={icon} onChange={setIcon} disabled={!!job} color={color} />
+        </Field>
+
+        <Field label={t('newsvc_color')}>
           <ColorPicker value={color} onChange={setColor} />
           <Button variant="secondary" disabled={!!job} onClick={() => {
             setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS))

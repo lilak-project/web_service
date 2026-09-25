@@ -69,11 +69,14 @@ export default function IconPick({ value, onChange, disabled, color }) {
           boxShadow: '0 6px 20px rgba(0,0,0,.18)',
         }}>
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="search…"
-            style={{ height: 28, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px',
+            style={{ height: 28, borderRadius: 'var(--radius-lg, 5px)', fontSize: 'var(--fs-medium, 14px)', padding: '0 9px',
               backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 30px)', gap: 4, overflowY: 'auto' }}>
             {shown.map((ic) => (
-              <button key={ic} type="button" title={ic}
+              // set-plain: the grid lives inside a settings panel, whose one
+              // button rule would give each 30px cell 11px of side padding and
+              // shove the icon out of it.
+              <button key={ic} type="button" title={ic} className="set-plain"
                 onClick={() => { onChange(ic); setOpen(false) }}
                 style={{
                   display: 'grid', placeItems: 'center', width: 30, height: 30, borderRadius: 6, cursor: 'pointer',

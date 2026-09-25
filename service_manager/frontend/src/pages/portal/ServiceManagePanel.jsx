@@ -138,16 +138,23 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   return (
     <div className="svc-mg">
       <Panel title={L('모양', 'Appearance')} hint={isBuiltin ? L('내장 카드', 'builtin card') : svc.name}>
-        <Field label={L('아이콘 · 색', 'Icon · colour')}>
+        {/* One control per row with a word beside it: four squares in a line
+            said nothing about which one did what. */}
+        <Field label={L('아이콘', 'Icon')}>
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
             borderRadius: 'var(--radius-lg, 5px)', border: '1px solid var(--border-strong)' }}>
             <Icon name={icon} size={20} weight={ICON_WEIGHT} color={color} />
           </span>
           <IconPick value={icon} onChange={setIcon} color={color} />
+          <span style={fieldMuted}>{L('왼쪽이 카드에 보이는 모습, 오른쪽을 눌러 고릅니다.', 'The card shows the left one; press the right to pick.')}</span>
+        </Field>
+
+        <Field label={L('색', 'Colour')}>
           <ColorPicker value={color} onChange={setColor} />
-          <Button variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'Random')}>
-            <Icon name="refresh" size={13} />
+          <Button variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }}>
+            <Icon name="refresh" size={13} /> {L('무작위', 'Random')}
           </Button>
+          <span style={fieldMuted}>{L('아이콘과 카드에 함께 쓰입니다.', 'Used for the icon and the card together.')}</span>
         </Field>
 
         <Field label={L('이름', 'Name')}>
