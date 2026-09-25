@@ -6,7 +6,29 @@ import { HOME_MODES } from './HomeModeMenu'
 import AccountView, { settingsMenu } from './AccountView'
 import { SettingsStatus } from './settingsMsg'
 import LiveWall from './LiveWall'
+import ServiceManagePanel from './ServiceManagePanel'
+import ServiceProjects from './ServiceProjects'
+import ServiceSingle from './ServiceSingle'
+import ServiceGroupBand from './ServiceGroupBand'
+import LinksView from './LinksView'
+import StoreView from './StoreView'
+import NewServiceView from './NewServiceView'
+import IconLabView from './IconLabView'
 import './sidebar.css'
+
+/** A card's stable key — the same one the cover and the saved order use, so a
+ *  builtin ("@links") and a service ("elog") can share one list. */
+const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.name)
+
+/** The order list with `key` lifted out and dropped next to `target`. */
+function movedOrder(base, key, target, after) {
+  const keys = base.filter((k) => k !== key)
+  let at = keys.indexOf(target)
+  if (at < 0) at = keys.length
+  else if (after) at += 1
+  keys.splice(at, 0, key)
+  return keys
+}
 
 /**
  * SidebarPortal — the sidebar cover: services on the left, the selected one in a
@@ -148,7 +170,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
             <span className="pl-txt">{p.name}</span>
             <span className="pl-out" role="button" tabIndex={-1} title={L('새 창', 'new tab')}
               onClick={(e) => { e.stopPropagation(); window.open(`/pp/${svc}/${p.name}/`, '_blank') }}>
-              <Icon name="external" size={13} />
+              <Icon name="link" size={13} />
             </span>
           </button>
         )
@@ -158,8 +180,9 @@ function ProjectList({ svc, color, sel, onPick, open }) {
 }
 
 export default function SidebarPortal({
-  user, isManager, services, groups, liveCards, iconFor,
-  onLogout, onRefresh, onEnterManage, settingsTab, onSettingsTab,
+  user, isManager, cards, groups, liveCards, links, iconFor, fullOrder,
+  onLogout, onRefresh, onSaveOrder, onRegroup, onCreateGroup,
+  settingsTab, onSettingsTab,
 }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
@@ -184,6 +207,11 @@ export default function SidebarPortal({
   const [flat, setFlat] = useState(() => localStorage.getItem(FLAT_KEY) === '1')
   const [shut, setShut] = useState(() => readSet(SHUT_KEY))
   const [modesOpen, setModesOpen] = useState(false)
+  // Manage mode: the bar becomes editable (drag to arrange, a button to make a
+  // group) and picking a card shows its settings in the panel instead of running it.
+  const [manage, setManage] = useState(false)
+  const [drag, setDrag] = useState(null)        // key being dragged
+  const [dropAt, setDropAt] = useState(null)    // { key, after } | { gid } | { end: true }
   // Settings collapses the service bar to make room for its own; remember what the
   // bar was so leaving settings puts it back rather than stranding it at 64px.
   const miniBefore = useRef(null)
@@ -216,15 +244,29 @@ export default function SidebarPortal({
   const openSettings = useCallback((tab) => {
     if (miniBefore.current === null) miniBefore.current = mini
     setMini(true)
+    // Settings and manage are two different jobs, and manage needs the bar wide:
+    // leaving one for the other rather than stacking them keeps the bar readable.
+    setManage(false)
+    setSel(null)
     setView('settings')
     onSettingsTab?.(tab || 'me')
   }, [mini, onSettingsTab])
 
   const openService = useCallback((s) => {
     leaveSettings()
-    if (s.open === 'window') { window.open(`/p/${s.name}/`, '_blank'); return }
-    setSel({ svc: s.name, proj: '' })
+    // A builtin is a portal tool, not a proxied URL: it opens in the panel as a
+    // component. Everything else follows its manifest `open`.
+    if (!s.builtin && s.open === 'window') { window.open(`/p/${s.name}/`, '_blank'); return }
+    setSel({ svc: cardKey(s), proj: '' })
     setView('service')
+    if (window.innerWidth < PHONE) setMini(true)
+  }, [])
+
+  /** Manage mode: picking a card shows its settings in the panel, never runs it. */
+  const openManage = useCallback((s) => {
+    leaveSettings()
+    setSel({ svc: cardKey(s), proj: '' })
+    setView('manage')
     if (window.innerWidth < PHONE) setMini(true)
   }, [])
 
@@ -248,28 +290,92 @@ export default function SidebarPortal({
     const n = new Set(s); n.has(gid) ? n.delete(gid) : n.add(gid); return n
   })
 
-  // Services laid out as bands: each group in its order, then whatever belongs to
-  // no group. Members are card keys, so a group may also list builtins (`@links`)
-  // that this sidebar does not draw yet — those are simply skipped.
+  // Cards laid out as bands: each group in its order, then whatever belongs to no
+  // group. `cards` arrives in the cover's saved order and holds BUILTINS too
+  // (@links, @store, …), so the two covers show the same things in the same order.
   const bands = useMemo(() => {
-    const list = services || []
+    const list = (cards || []).filter((c) => !c.hidden || (manage && isManager))
     if (flat) return [{ g: null, items: list }]
-    const byName = new Map(list.map((s) => [s.name, s]))
+    const byKey = new Map(list.map((c) => [cardKey(c), c]))
     const taken = new Set()
     const out = []
-    for (const g of [...(groups || [])].sort((a, b) => (a.order ?? 1000) - (b.order ?? 1000))) {
-      const items = (g.members || []).map((k) => byName.get(k)).filter(Boolean)
-      items.forEach((s) => taken.add(s.name))
-      if (items.length) out.push({ g, items })
+    const gs = [...(groups || [])]
+      .filter((g) => !g.hidden || (manage && isManager))
+      .sort((a, b) => (a.order ?? 1000) - (b.order ?? 1000))
+    for (const g of gs) {
+      const items = (g.members || []).map((k) => byKey.get(k)).filter(Boolean)
+      items.forEach((c) => taken.add(cardKey(c)))
+      // An empty group still shows in manage mode — otherwise a group you just
+      // made vanishes and there is nothing to drag onto.
+      if (items.length || (manage && isManager)) out.push({ g, items })
     }
-    const rest = list.filter((s) => !taken.has(s.name))
-    if (rest.length) out.push({ g: null, items: rest })
+    const rest = list.filter((c) => !taken.has(cardKey(c)))
+    out.push({ g: null, items: rest })
     return out
-  }, [services, groups, flat])
+  }, [cards, groups, flat, manage, isManager])
+
+  // ── manage mode: drag to arrange ────────────────────────────────────────
+  const gidOf = (key) => (groups || []).find((g) => (g.members || []).includes(key))?.id ?? null
+  const onDrop = async () => {
+    const key = drag
+    const at = dropAt
+    setDrag(null); setDropAt(null)
+    if (!key || !at) return
+    let gid = null
+    let keys = null
+    if (at.gid !== undefined) {
+      gid = at.gid
+      // Dropped on a band rather than on one of its cards: go to its end.
+      const g = (groups || []).find((x) => x.id === at.gid)
+      const members = (fullOrder || []).filter((k) => (g?.members || []).includes(k) && k !== key)
+      keys = members.length ? movedOrder(fullOrder, key, members[members.length - 1], true) : null
+    } else if (at.key) {
+      if (at.key === key) return
+      gid = gidOf(at.key)
+      keys = movedOrder(fullOrder, key, at.key, at.after)
+    }
+    try {
+      if (gidOf(key) !== gid) await onRegroup?.(key, gid)
+      if (keys) await onSaveOrder?.(keys)
+      else await onRefresh?.()
+    } catch { await onRefresh?.() }
+  }
+  const dragProps = (key) => (!manage || !isManager ? {} : {
+    draggable: true,
+    onDragStart: (e) => { setDrag(key); e.dataTransfer.effectAllowed = 'move' },
+    onDragEnd: () => { setDrag(null); setDropAt(null) },
+    onDragOver: (e) => {
+      if (!drag || drag === key) return
+      e.preventDefault(); e.stopPropagation()
+      const r = e.currentTarget.getBoundingClientRect()
+      setDropAt({ key, after: e.clientY > r.top + r.height / 2 })
+    },
+    onDrop: (e) => { e.preventDefault(); e.stopPropagation(); onDrop() },
+  })
+  const bandProps = (gid) => (!manage || !isManager ? {} : {
+    onDragOver: (e) => { if (!drag) return; e.preventDefault(); setDropAt({ gid }) },
+    onDrop: (e) => { e.preventDefault(); onDrop() },
+  })
+  const dropCls = (key) => (dropAt?.key === key ? (dropAt.after ? ' drop-after' : ' drop-before') : '')
 
   // Collapse all: every group and every project list. (Expand-all deliberately
   // only reopens the groups — reopening every project list buries the bar.)
   const allShut = () => { setShut(new Set((groups || []).map((g) => g.id))); setOpenSvcs(new Set()) }
+
+  /** Manage on/off. Leaving it drops back to the empty panel rather than framing
+   *  whatever card you happened to be editing. */
+  const toggleManage = () => {
+    leaveSettings()
+    setModesOpen(false)
+    setManage((m) => {
+      const next = !m
+      setSel(null)
+      setView(next ? 'manage' : 'empty')
+      if (next) { setMini(false); setOpenSvcs(new Set()) }
+      return next
+    })
+  }
+  const openManageGroup = (g) => { setSel({ svc: `#g:${g.id}`, proj: '' }); setView('manage') }
 
   const enterLive = () => {
     leaveSettings()
@@ -278,31 +384,43 @@ export default function SidebarPortal({
     setMini(true)                                // a wall wants the width
   }
 
-  const selSvc = (services || []).find((s) => s.name === sel?.svc)
+  const selSvc = (cards || []).find((c) => cardKey(c) === sel?.svc)
   // A multi-project service has nothing to show on its own — the panel asks for a
   // project instead of framing the service root.
   const needProject = !!selSvc?.multi_project && !sel?.proj
-  const src = sel?.svc && !needProject
+  const src = sel?.svc && !needProject && !selSvc?.builtin && !manage
     ? (sel.proj ? `/pp/${sel.svc}/${sel.proj}/` : `/p/${sel.svc}/`)
     : null
 
   const serviceCard = (s) => {
+    const key = cardKey(s)
     // Opening a service's projects counts as picking it: its tile fills, and the
     // card takes the selected border while the bar is expanded (collapsed, every
     // card's border is transparent, so the tile carries it alone).
-    const on = (view === 'service' && sel?.svc === s.name) || projOpen(s.name)
-    const multi = s.multi_project
+    const on = ((view === 'service' || view === 'manage') && sel?.svc === key) || projOpen(key)
+    // In manage mode a card is a thing to arrange and edit, never a thing to run:
+    // even a multi-project service opens its settings instead of its project list.
+    const multi = s.multi_project && !manage
     return (
-      <div key={s.name} style={{ display: 'contents' }}>
-        <div className={`pl-card${on ? ' on' : ''}${projOpen(s.name) ? ' open' : ''}`}>
+      <div key={key} style={{ display: 'contents' }}>
+        <div className={`pl-card${on ? ' on' : ''}${projOpen(key) ? ' open' : ''}`
+            + `${manage ? ' mg' : ''}${drag === key ? ' dragging' : ''}${dropCls(key)}`
+            + `${s.hidden ? ' off' : ''}`}
+          {...dragProps(key)}>
           <button type="button" className="pl-row"
             onClick={() => {
+              if (manage && isManager) { openManage(s); return }
               if (!multi) { openService(s); return }
               // Collapsed, the project list is hidden — so asking for it expands
               // the bar rather than doing nothing visible.
-              if (mini) { setMini(false); setOpenSvcs((o) => new Set(o).add(s.name)); return }
-              toggleProj(s.name)
+              if (mini) { setMini(false); setOpenSvcs((o) => new Set(o).add(key)); return }
+              toggleProj(key)
             }}>
+            {manage && isManager && (
+              <span className="pl-grip" title={L('끌어서 정렬', 'drag to arrange')}>
+                <Icon name="drag-handle" size={14} color="var(--text-muted)" />
+              </span>
+            )}
             <Tile icon={iconFor ? iconFor(s.name, s.icon) : (s.icon || 'circle')}
               color={s.color} on={on} />
             <span className="pl-txt">
@@ -311,20 +429,71 @@ export default function SidebarPortal({
             </span>
             {multi && <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>}
           </button>
-          {!multi && (
-            <span className="pl-out" role="button" tabIndex={0} title={L('새 창', 'new tab')}
-              onClick={(e) => { e.stopPropagation(); window.open(`/p/${s.name}/`, '_blank') }}>
-              <Icon name="external" size={13} color="var(--text-muted)" />
-            </span>
-          )}
         </div>
         {multi && (
           <ProjectList svc={s.name} color={s.color} sel={view === 'service' ? sel : null}
-            open={projOpen(s.name)} onPick={(p) => pickProject(s, p)} />
+            open={projOpen(key)} onPick={(p) => pickProject(s, p)} />
         )}
       </div>
     )
   }
+
+  /** Manage mode's right side: everything the classic cover shows inside an
+   *  opened card, minus the card. A group selected in the bar shows the group's
+   *  own management band instead. */
+  const selGroup = sel?.svc?.startsWith('#g:')
+    ? (groups || []).find((g) => `#g:${g.id}` === sel.svc) : null
+  const managePanel = (() => {
+    if (!isManager) return null
+    if (selGroup) {
+      return (
+        <>
+          <h1 className="pl-mgtitle">{selGroup.name || L('그룹', 'Group')}</h1>
+          <ServiceGroupBand group={selGroup} cards={[]} manageGroups isManager onChanged={onRefresh} />
+        </>
+      )
+    }
+    if (!selSvc) {
+      return (
+        <div className="pl-empty">
+          <div>
+            <div className="big">{L('관리 모드', 'Manage mode')}</div>
+            <div>{L('왼쪽에서 서비스나 그룹을 고르면 설정이 여기에 열립니다.', 'Pick a service or a group on the left to edit it here.')}</div>
+          </div>
+        </div>
+      )
+    }
+    const key = cardKey(selSvc)
+    const i = (fullOrder || []).indexOf(key)
+    return (
+      <>
+        <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
+        <ServiceManagePanel service={selSvc} builtinKey={selSvc.builtin || null}
+          initialIcon={iconFor ? iconFor(selSvc.name, selSvc.icon) : selSvc.icon}
+          first={i <= 0} last={i >= (fullOrder || []).length - 1}
+          onMove={(dir) => {
+            const keys = [...(fullOrder || [])]
+            const j = i + dir
+            if (i < 0 || j < 0 || j >= keys.length) return
+            ;[keys[i], keys[j]] = [keys[j], keys[i]]
+            onSaveOrder?.(keys)
+          }}
+          onChanged={onRefresh} />
+        {selSvc.builtin === 'links' && <LinksView links={links || []} manage onChanged={onRefresh} />}
+        {!selSvc.builtin && selSvc.multi_project && <ServiceProjects service={selSvc} canManage manage onChanged={onRefresh} />}
+        {!selSvc.builtin && !selSvc.multi_project && <ServiceSingle service={selSvc} canManage manage onChanged={onRefresh} />}
+      </>
+    )
+  })()
+
+  /** What the panel shows for a builtin card, which has no URL to frame. */
+  const builtinView = (b) => (
+    b === 'iconlab' ? <IconLabView />
+      : b === 'links' ? <LinksView links={links || []} onChanged={onRefresh} />
+        : b === 'store' ? <StoreView onChanged={onRefresh} />
+          : b === 'newservice' ? <NewServiceView onCreated={onRefresh} />
+            : null
+  )
 
   const modes = HOME_MODES.filter((m) => !m.admin || isManager)
 
@@ -358,13 +527,22 @@ export default function SidebarPortal({
         </div>
 
         <div className="pl-nav">
+          {manage && isManager && (
+            <div className="pl-mgbar">
+              <button type="button" className="pl-mgnew" onClick={onCreateGroup}>
+                <Icon name="folder-plus" size={14} /> <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
+              </button>
+              <span className="pl-mghint">{L('아이콘을 끌어서 순서를 바꾸거나 그룹에 넣으세요.', 'Drag an icon to reorder it, or onto a group to join it.')}</span>
+            </div>
+          )}
           {bands.map(({ g, items }) => (g ? (
             <div key={g.id} style={{ display: 'contents' }}>
               {/* The band spans the bar's full width, gutters included, so a group
                   reads as a strip rather than an indented box (a box widened the
                   collapsed bar). */}
-              <div className="pl-band">
-                <button type="button" className="pl-grp" onClick={() => toggleGroup(g.id)}>
+              <div className={`pl-band${dropAt?.gid === g.id ? ' drop' : ''}`} {...bandProps(g.id)}>
+                <button type="button" className="pl-grp"
+                  onClick={() => (manage && isManager ? openManageGroup(g) : toggleGroup(g.id))}>
                   <span className={`pl-gchev${groupOpen(g.id) ? ' open' : ''}`}>
                     <Icon name="caret-right" size={14} weight="bold" color="var(--text-secondary)" />
                   </span>
@@ -374,10 +552,18 @@ export default function SidebarPortal({
               </div>
               {/* A shut group hides everything in it, the selected service
                   included — leaving that one behind made the band look broken. */}
-              <Slider open={groupOpen(g.id)} className="pl-gitems">{items.map(serviceCard)}</Slider>
+              <Slider open={groupOpen(g.id) || (manage && isManager)} className="pl-gitems">
+                {items.map(serviceCard)}
+                {manage && isManager && items.length === 0 && (
+                  <div className="pl-gempty" {...bandProps(g.id)}>{L('여기로 끌어다 놓으세요', 'drop things here')}</div>
+                )}
+              </Slider>
             </div>
           ) : (
-            <div key="ungrouped" style={{ display: 'contents' }}>{items.map(serviceCard)}</div>
+            <div key="ungrouped" style={{ display: 'contents' }}
+              {...(manage && isManager ? bandProps(null) : {})}>
+              {items.map(serviceCard)}
+            </div>
           )))}
 
           {bands.every((b) => !b.items.length) && (
@@ -393,9 +579,9 @@ export default function SidebarPortal({
           <Slider open={modesOpen} className="pl-mlist up">
             {modes.map((m) => (
               <button key={m.id} type="button"
-                className={`pl-proj${view === 'live' && m.id === 'live' ? ' on' : ''}`}
+                className={`pl-proj${(m.id === 'live' ? view === 'live' : manage) ? ' on' : ''}`}
                 title={lang === 'ko' ? m.ko_hint : m.en_hint}
-                onClick={() => (m.id === 'live' ? enterLive() : onEnterManage?.())}>
+                onClick={() => (m.id === 'live' ? enterLive() : toggleManage())}>
                 <Icon name={m.icon} size={14} />
                 <span className="pl-txt">{lang === 'ko' ? m.ko : m.en}</span>
               </button>
@@ -481,6 +667,13 @@ export default function SidebarPortal({
           ) : view === 'live' ? (
             <div className="pl-scroll">
               <LiveWall cards={liveCards || []} iconFor={iconFor} onDone={() => setView('empty')} />
+            </div>
+          ) : view === 'manage' ? (
+            <div className="pl-scroll pl-mgpage">{managePanel}</div>
+          ) : view === 'service' && selSvc?.builtin ? (
+            <div className="pl-scroll pl-mgpage">
+              <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
+              {builtinView(selSvc.builtin)}
             </div>
           ) : view === 'service' && needProject ? (
             <div className="pl-empty">

@@ -172,7 +172,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                       : g.permissions.map((p, i) => (
                         <span key={i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
                           {p.admin && <span style={{ color: 'var(--warning-text, #b45309)' }} title={L('멤버 전원이 이 범위의 관리자가 됩니다', 'every member administers this scope')}>· admin</span>}
-                          <button onClick={() => revokePerm(g.id, p)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger-text)', padding: 0, display: 'inline-flex' }}>×</button>
+                          <button type="button" className="set-plain set-x" onClick={() => revokePerm(g.id, p)} title={L('해제', 'Revoke')}>✕</button>
                         </span>))}
                   </Field>
                   <FieldActions>

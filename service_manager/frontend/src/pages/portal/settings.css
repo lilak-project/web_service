@@ -125,11 +125,14 @@
 .set-row.empty { color: var(--text-secondary); }
 
 /* ── the status vocabulary, used the same way on every page ──────────────── */
+/* Fully round, with a ring in its own colour: a pill is a LABEL, and at 5px it
+   was close enough to the buttons beside it to be mistaken for one. */
 .set-pill {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: var(--fs-medium, 14px);
-  padding: 2px 8px;
-  border-radius: var(--radius-lg, 5px);
+  padding: 1px 10px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
   background: var(--surface-2); color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -200,6 +203,8 @@
 /* The ✕ that removes a chip is part of the chip, not a button on the page: it
    takes no outline of its own. */
 .pl-setpage .set-x {
-  border: 0; background: none; padding: 0 2px; margin-left: 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: none; padding: 0; margin-left: 4px;
+  width: 16px; height: 16px; flex-shrink: 0;
   font: inherit; line-height: 1; color: var(--danger-text); cursor: pointer;
 }

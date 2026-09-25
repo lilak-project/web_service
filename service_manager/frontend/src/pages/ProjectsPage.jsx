@@ -836,18 +836,17 @@ export default function ProjectsPage() {
   // The sidebar cover owns the whole window (no CoverPage header), so it replaces
   // this render entirely rather than living inside it. Logged out we still fall
   // through to the classic screen, which carries the login/sign-up card.
-  // Manage mode edits cards — renaming, icons, visibility, drag to arrange — none
-  // of which the sidebar does yet, so picking it hands over to the card view with
-  // manage already on, rather than pretending to offer it here.
-  const enterManageOnCards = () => { setMode('manage'); setPortalLayout('classic') }
-
   if (sidebar && authReady && user) {
+    // The sidebar gets the SAME cards the cover does — builtins included, in the
+    // saved order — so nothing is reachable on one cover and invisible on the other.
+    const sideCards = fullOrder.map((k) => cards.find((c) => cardKey(c) === k)).filter(Boolean)
     return (
       <SidebarPortal
-        user={user} isManager={isManager} services={projects || []} iconFor={iconFor}
-        groups={groups} liveCards={liveCards}
+        user={user} isManager={isManager} cards={sideCards} iconFor={iconFor}
+        groups={groups} liveCards={liveCards} links={links?.links || []}
+        fullOrder={fullOrder}
         onLogout={logout} onRefresh={refresh}
-        onEnterManage={enterManageOnCards}
+        onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup}
         settingsTab={settingsTab} onSettingsTab={setSettingsTab}
       />
     )
