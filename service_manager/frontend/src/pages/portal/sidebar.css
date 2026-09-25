@@ -507,3 +507,13 @@
 /* Collapsed the labels go, and so does this: there is nothing beside it to fold
    a list under, and at 64px it crowded the mark. */
 .pl-root.mini .pl-fold { opacity: 0; pointer-events: none; }
+
+/* ── manage mode wears a different colour ────────────────────────────────── */
+/* An amber wash over the bar's own surfaces, not a flat colour: the plinth
+   under the account still reads one step deeper than the list, and the tint
+   works on every theme because what is underneath is still the theme's. */
+.pl-root.managing { --mg-tint: rgba(234, 179, 8, .16); }
+.pl-root.managing .pl-side,
+.pl-root.managing .pl-user {
+  background-image: linear-gradient(var(--mg-tint), var(--mg-tint));
+}

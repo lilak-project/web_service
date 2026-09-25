@@ -220,6 +220,7 @@ export default function SidebarPortal({
   // Settings collapses the service bar to make room for its own; remember what the
   // bar was so leaving settings puts it back rather than stranding it at 64px.
   const miniBefore = useRef(null)
+  const viewBefore = useRef(null)
 
   useEffect(() => {
     localStorage.setItem(MINI_KEY, mini ? '1' : '0')
@@ -248,6 +249,7 @@ export default function SidebarPortal({
 
   const openSettings = useCallback((tab) => {
     if (miniBefore.current === null) miniBefore.current = mini
+    viewBefore.current = { view, sel }
     setMini(true)
     // Settings and manage are two different jobs, and manage needs the bar wide:
     // leaving one for the other rather than stacking them keeps the bar readable.
@@ -255,7 +257,19 @@ export default function SidebarPortal({
     setSel(null)
     setView('settings')
     onSettingsTab?.(tab || 'me')
-  }, [mini, onSettingsTab])
+  }, [mini, view, sel, onSettingsTab])
+
+  /** The account button opens the settings bar AND closes it — it is the thing
+   *  the bar hangs off, so pressing it again should put it away rather than
+   *  leaving the only way out at the far end of the menu. */
+  const toggleSettings = useCallback(() => {
+    if (view !== 'settings') { openSettings('me'); return }
+    const was = viewBefore.current
+    viewBefore.current = null
+    leaveSettings()
+    setSel(was?.view === 'service' ? was.sel : null)
+    setView(was?.view === 'service' && was.sel ? 'service' : 'empty')
+  }, [view, openSettings, leaveSettings])
 
   const openService = useCallback((s) => {
     leaveSettings()
@@ -515,7 +529,8 @@ export default function SidebarPortal({
   const modes = HOME_MODES.filter((m) => !m.admin || isManager)
 
   return (
-    <div className={`pl-root${mini ? ' mini' : ''}${view === 'settings' ? ' settings' : ''}`}>
+    <div className={`pl-root${mini ? ' mini' : ''}${view === 'settings' ? ' settings' : ''}`
+      + `${manage && isManager ? ' managing' : ''}`}>
       {/* the drawer's scrim — shown by CSS at phone width only, so it follows a
           resize instead of whatever innerWidth was at render time */}
       {!mini && <div className="pl-scrim" onClick={() => setMini(true)} />}
@@ -608,7 +623,7 @@ export default function SidebarPortal({
         <div className="pl-user">
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"
-              onClick={() => openSettings('me')}>
+              onClick={toggleSettings}>
               <span className="pl-av" style={{ background: 'transparent' }}>
                 <Avatar icon={user?.profile_shape}
                   color={isManager ? MANAGER_COLOR : user?.profile_color}
