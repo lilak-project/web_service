@@ -256,8 +256,13 @@
 /* Three kinds of page, three strip colours, so you always know which one you
    are on: settings blue (the default above), manage violet, and mustard for the
    portal's own tools — Create service, Service Manager, Links, the icon lab.
-   Mustard rather than lemon: a touch of olive in it keeps the strip from
-   shouting the way a pure yellow does next to a white panel. */
-.pl-toolpage .set-bar { background: #f2e5a8; }
-.pl-toolpage .set-bar .hint { color: #7c5a12; }
+   The tools take the mustard SOLID with the text reversed out of it: these are
+   the pages that install, build and rewrite things, so their strips are the
+   loudest label on the screen, not the quietest. */
+.pl-toolpage .set-bar {
+  background: #854d0e;
+  border-bottom-color: #854d0e;
+}
+.pl-toolpage .set-bar > b { color: #ffffff; }
+.pl-toolpage .set-bar .hint { color: #fde68a; }
 .pl-toolpage .set-panel.danger > .set-bar { background: var(--danger-bg, #fee2e2); }
