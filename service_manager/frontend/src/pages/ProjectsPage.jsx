@@ -16,6 +16,8 @@ import ServiceSingle from './portal/ServiceSingle'
 import AccountMenu from './portal/AccountMenu'
 import { MasonryGrid } from './portal/MasonryGrid'
 import HomeModeMenu, { HOME_MODES } from './portal/HomeModeMenu'
+import SidebarPortal from './portal/SidebarPortal'
+import { usePortalLayout } from '../portalLayout'
 import ServiceGroupBand from './portal/ServiceGroupBand'
 import LiveWall from './portal/LiveWall'
 import useFlip from './portal/useFlip'
@@ -379,6 +381,7 @@ function AuthCard({ t, onAuthed, needsSetup }) {
 export default function ProjectsPage() {
   const { t, lang } = useLang()
   const { big } = usePortalScale()   // roomy UI toggle (default compact)
+  const { sidebar } = usePortalLayout()   // 'sidebar' cover (redesign) vs the classic card grid
 
   // ── Portal auth (central accounts at the launcher) ──
   const [user, setUser] = useState(null)        // null = logged out
@@ -829,6 +832,19 @@ export default function ProjectsPage() {
       <Button variant="secondary" size="sm" onClick={() => setMode(null)}>{t('manage_done')}</Button>
     </div>
   ) : null
+
+  // The sidebar cover owns the whole window (no CoverPage header), so it replaces
+  // this render entirely rather than living inside it. Logged out we still fall
+  // through to the classic screen, which carries the login/sign-up card.
+  if (sidebar && authReady && user) {
+    return (
+      <SidebarPortal
+        user={user} isManager={isManager} services={projects || []}
+        onLogout={logout} onRefresh={refresh}
+        settingsTab={settingsTab} onSettingsTab={setSettingsTab}
+      />
+    )
+  }
 
   return (
     <CoverPage

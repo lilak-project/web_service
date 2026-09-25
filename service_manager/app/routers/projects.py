@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from sqlalchemy.orm import Session
 
-from .. import models, permissions, registry
+from .. import config, models, permissions, registry
 from ..adapters import get_adapter
 from ..db import get_db
 from ..deps import require_portal_admin, require_portal_user
@@ -42,6 +42,18 @@ def raw_service(name: str) -> dict:
         "icon": manifest.get("icon"),
         "color": manifest.get("color"),
         "multi_project": bool(caps.get("multi_project")),
+        # How the cover opens it: "panel" (inside the portal, in an iframe) or
+        # "window" (its own tab). A multi-project service brings its own top bar,
+        # command bar and drawer, which read as a second set of chrome inside a
+        # panel — so those default to a window unless the manifest says otherwise.
+        "open": (manifest.get("open")
+                 or ("window" if caps.get("multi_project") else "panel")),
+        # Shown on the sidebar card as `(4)`. A directory count, not list_projects():
+        # that also probes each project's port, which is far too much for a label.
+        "projects_count": (
+            sum(1 for d in (config.DATA_ROOT / name / "projects").iterdir() if d.is_dir())
+            if caps.get("multi_project") and (config.DATA_ROOT / name / "projects").is_dir()
+            else None),
         "import_export": bool(caps.get("import_export")),
         "order": manifest.get("order", 1000),      # admin-set display order (manage mode)
         "autostart": bool(manifest.get("autostart")),   # portal brings it up on ITS start

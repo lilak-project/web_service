@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Avatar, Icon, MANAGER_COLOR } from 'lilak-ui'
 import { useLang } from '../../context/LangContext'
 import { useHomeCols } from '../../homeCols'
+import { usePortalLayout } from '../../portalLayout'
 
 /**
  * AccountMenu — the top-right account control: avatar + name as a button that
@@ -12,6 +13,7 @@ import { useHomeCols } from '../../homeCols'
 export default function AccountMenu({ user, isManager, onLogout, width }) {
   const { t, lang } = useLang()
   const { mode, setHomeCols } = useHomeCols()   // Home grid: '1열' fixed vs responsive
+  const { layout, setPortalLayout } = usePortalLayout()   // classic card grid vs the sidebar cover
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -58,6 +60,29 @@ export default function AccountMenu({ user, isManager, onLogout, width }) {
             </div>
             {user.email && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>}
           </div>
+          {/* Which cover: the classic card grid, or the sidebar being built. One
+              click back, so the redesign can ship unfinished. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
+            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+              {lang === 'ko' ? '레이아웃' : 'Layout'}
+            </span>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+              {[['classic', '카드', 'Cards'], ['sidebar', '사이드바', 'Sidebar']].map(([v, ko, en]) => {
+                const on = layout === v
+                return (
+                  <button key={v} type="button" onClick={() => setPortalLayout(v)}
+                    style={{ font: 'inherit', fontSize: 'var(--fs-small, 12px)', cursor: 'pointer',
+                      padding: '4px 10px', borderRadius: 8, whiteSpace: 'nowrap',
+                      border: `1px solid ${on ? 'var(--btn-primary-bg)' : 'var(--border-default)'}`,
+                      background: on ? 'var(--btn-primary-bg)' : 'transparent',
+                      color: on ? '#fff' : 'var(--text-secondary)' }}>
+                    {lang === 'ko' ? ko : en}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           {/* Home card layout: 1열 = always one per row; 여러 열 = responsive (up to 3 when wide). */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
             <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>

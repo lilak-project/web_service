@@ -1,0 +1,228 @@
+/*
+ * Sidebar cover — styles lifted from mockups/portal-sidebar-a.html.
+ *
+ * A stylesheet rather than inline styles because this layout needs things the
+ * style prop cannot express: :has() focus rings on the whole card, keyframes for
+ * the slide, and one `.mini` class collapsing everything at once. Colours are the
+ * kit's tokens, so the theme still drives them.
+ */
+.pl-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--app-bg);
+}
+.pl-root button { font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; text-align: left; }
+
+/* ── sidebar ─────────────────────────────────────────────────────────────── */
+.pl-side {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border-default);
+  transition: width .15s;
+  overflow: hidden;
+}
+.pl-root.mini .pl-side { width: 64px; }
+
+.pl-brand { height: 50px; padding: 0 17px; white-space: nowrap; display: flex; align-items: center; gap: 10px; }
+.pl-logo { display: flex; align-items: center; gap: 8px; padding: 4px 6px; margin-left: -6px; border-radius: var(--radius-md, 3px); }
+.pl-logo:hover { background: var(--surface-3); }
+.pl-mark { width: 30px; height: 23px; color: var(--text-emphasis); flex-shrink: 0; }
+.pl-brand b { font-size: 15px; font-weight: 700; color: var(--text-emphasis); }
+.pl-brand .sub { font-size: 15px; color: var(--text-secondary); }
+
+/* Collapsed is the SAME layout clipped to 64px — nothing is re-centred, the
+   labels just fade. Re-arranging on collapse made the icons jump. */
+.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub { transition: opacity .15s; }
+.pl-root.mini :is(.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub) {
+  opacity: 0;
+  pointer-events: none;
+}
+.pl-root.mini .pl-projs { display: none; }
+
+/* Collapsed: the white cards dissolve into the bar; the selected service keeps a
+   ring on its icon so there is still a "you are here". */
+.pl-card { transition: background .15s, border-color .15s, box-shadow .15s; }
+.pl-av { transition: box-shadow .15s; }
+.pl-root.mini .pl-card { background: transparent; border-color: transparent; box-shadow: none; }
+.pl-root.mini .pl-card.on .pl-av { box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--border-focus); }
+
+.pl-nav { flex: 1; overflow-y: auto; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 4px; }
+
+.pl-card {
+  /* A column flex child grows if anything inside claims flex:1 — the cards are a
+     fixed height, so pin it. */
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg, 5px);
+  box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
+  overflow: hidden;
+}
+.pl-card:hover { border-color: var(--border-strong); }
+.pl-card.on { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
+
+.pl-row { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 7px 9px; }
+.pl-av {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px; height: 30px;
+  border-radius: var(--radius-md, 3px);
+  color: #fff;
+  display: grid; place-items: center;
+  font-size: 14px; font-weight: 700;
+}
+.pl-av.sys { background: var(--text-secondary); }
+.pl-av i {
+  position: absolute; right: -3px; bottom: -3px;
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 2px solid var(--surface);
+  background: var(--text-muted);
+}
+.pl-av i.up { background: #10b981; }
+.pl-txt {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 13px; font-weight: 600; color: var(--text-emphasis);
+}
+.pl-txt small {
+  margin-left: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px; font-weight: 400;
+  color: var(--text-secondary);
+}
+.pl-chev { flex-shrink: 0; transition: transform .15s; display: inline-flex; }
+.pl-card.open .pl-chev { transform: rotate(90deg); }
+
+/* The "open in a new tab" arrow only appears on hover or on the selected card,
+   so the sidebar is not a wall of icons. */
+.pl-out { flex-shrink: 0; padding: 0 8px 0 0; opacity: 0; display: inline-flex; }
+.pl-card:hover .pl-out, .pl-card.on .pl-out, .pl-out:focus-visible { opacity: 1; }
+
+.pl-search { gap: 10px; padding: 7px 9px; cursor: text; }
+.pl-search input {
+  flex: 1; min-width: 0; height: 24px; padding: 0;
+  border: 0; outline: 0; background: transparent;
+  font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--text-emphasis);
+}
+.pl-search input::placeholder { color: var(--text-secondary); font-weight: 600; }
+.pl-card.pl-search:focus-within { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
+
+/* Keyboard focus rings the whole card, not the inner button. */
+.pl-card:has(> .pl-row:focus-visible) { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
+.pl-row:focus-visible { outline: none; }
+
+/* ── projects ────────────────────────────────────────────────────────────── */
+.pl-projs { flex-shrink: 0; margin: 0 0 4px 16px; display: flex; flex-direction: column; gap: 4px; }
+.pl-proj {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+  height: 30px; padding: 0 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md, 3px);
+  font-size: 13px; font-weight: 500;
+  color: var(--text-primary);
+}
+.pl-proj:hover { border-color: var(--border-focus); }
+.pl-proj.on { background: var(--accent, #2563eb); border-color: var(--accent, #2563eb); color: #fff; }
+.pl-proj .dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 1px; }
+.pl-proj.on .dot { box-shadow: 0 0 0 1.5px #fff; }
+.pl-proj .pl-txt { font-weight: 500; color: inherit; }
+.pl-proj:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
+
+/* Slide, not fade: the box grows/shrinks (--h is measured in JS right before the
+   animation) while the cards inside travel down from under the card above. */
+.pl-projs.enter, .pl-projs.leave { overflow: hidden; }
+.pl-projs.enter { animation: pl-grow .24s cubic-bezier(.2, .7, .3, 1); }
+.pl-projs.enter > * { animation: pl-down .24s cubic-bezier(.2, .7, .3, 1); }
+.pl-projs.leave { animation: pl-shrink .2s cubic-bezier(.5, 0, .8, .4) forwards; }
+.pl-projs.leave > * { animation: pl-up .2s cubic-bezier(.5, 0, .8, .4) forwards; }
+/* Enter and leave MUST be separate keyframes. One name played in reverse never
+   fires animationend, and the list stayed in the DOM for good. */
+@keyframes pl-grow { from { max-height: 0 } to { max-height: var(--h) } }
+@keyframes pl-shrink { from { max-height: var(--h) } to { max-height: 0 } }
+@keyframes pl-down { from { transform: translateY(calc(var(--h) * -1)) } to { transform: none } }
+@keyframes pl-up { from { transform: none } to { transform: translateY(calc(var(--h) * -1)) } }
+@media (prefers-reduced-motion: reduce) {
+  .pl-projs.enter, .pl-projs.leave, .pl-projs.enter > *, .pl-projs.leave > * { animation-duration: 1ms; }
+}
+
+/* ── user card ───────────────────────────────────────────────────────────── */
+.pl-user { border-top: 1px solid var(--border-default); padding: 10px; }
+.pl-user .pl-av { flex-shrink: 0; }   /* without this the avatar squeezed when collapsed */
+
+/* ── right panel ─────────────────────────────────────────────────────────── */
+.pl-main { flex: 1; min-width: 0; padding: 10px; display: flex; }
+.pl-panel {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg, 5px);
+  box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
+  overflow: hidden;
+}
+.pl-panel > iframe { flex: 1; width: 100%; border: 0; display: block; }
+.pl-empty {
+  flex: 1;
+  display: grid; place-items: center;
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+}
+.pl-empty .path { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.pl-empty .big { font-size: 17px; font-weight: 700; color: var(--text-emphasis); margin: 6px 0 4px; }
+.pl-scroll { flex: 1; min-width: 0; overflow: auto; }
+
+/* ── narrow ──────────────────────────────────────────────────────────────── */
+/* Under 640px the sidebar stops taking space and slides over the panel instead;
+   the panel gets the whole width, which is the only way a service is usable on a
+   phone. Between 640 and 900 the JS collapses it to 64px. */
+@media (max-width: 639px) {
+  .pl-side {
+    position: absolute; inset: 0 auto 0 0; z-index: 30;
+    box-shadow: 0 8px 30px rgba(15, 23, 42, .18);
+    transform: translateX(0);
+    transition: transform .18s, width .15s;
+  }
+  .pl-root.mini .pl-side { width: 260px; transform: translateX(-100%); box-shadow: none; }
+  /* The drawer is never the clipped 64px bar — it is either over the panel or gone. */
+  .pl-root.mini :is(.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub) {
+    opacity: 1; pointer-events: auto;
+  }
+  .pl-root.mini .pl-card { background: var(--surface); border-color: var(--border-default); }
+  .pl-root.mini .pl-projs { display: flex; }
+  .pl-main { padding: 0; }
+  .pl-panel { border: 0; border-radius: 0; box-shadow: none; }
+}
+
+/* Drawer scrim — only exists at phone width, where the sidebar overlays. */
+.pl-scrim { display: none; }
+@media (max-width: 639px) {
+  .pl-scrim { display: block; position: absolute; inset: 0; z-index: 25; background: rgba(15, 23, 42, .35); }
+}
+
+/* Phone-only handle that brings the drawer back (the logo toggle rides away with
+   the bar). Hidden at widths where the 64px bar — and its logo — remain visible. */
+.pl-reopen { display: none; }
+@media (max-width: 639px) {
+  .pl-reopen {
+    display: grid; place-items: center;
+    position: absolute; top: 8px; left: 8px; z-index: 28;
+    width: 38px; height: 38px;
+    border-radius: var(--radius-lg, 5px);
+    background: var(--surface);
+    border: 1px solid var(--border-default);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, .14);
+    color: var(--text-emphasis);
+  }
+}
