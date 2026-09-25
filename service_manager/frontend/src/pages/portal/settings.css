@@ -133,6 +133,19 @@
 /* A row's secondary half — who/when/where — is grey, the subject stays ink. */
 .set-row .sub { color: var(--text-secondary); }
 .set-row.empty { color: var(--text-secondary); }
+/* A row laid out in COLUMNS: the caller gives the template, every row shares
+   it, so the cells line up down the list instead of each starting wherever the
+   line before it ended. */
+.set-row.cols { display: grid; align-items: center; }
+/* The column names. A head is a label, not a record: shorter, quieter, and it
+   takes the rule under it rather than one of its own above. */
+.set-row.head {
+  min-height: 32px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-default);
+}
+.set-row.head + .set-row { border-top: 0; }
 
 /* ── the status vocabulary, used the same way on every page ──────────────── */
 /* Fully round, with a ring in its own colour: a pill is a LABEL, and at 5px it

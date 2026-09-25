@@ -5,6 +5,12 @@ import { useLang } from '../../context/LangContext'
 import { Panel, Field, FieldActions, Row, Pill, fieldMuted } from './Field'
 import { notify } from './settingsMsg'
 
+// icon · name · state · what it is · the one button
+// The state column is a fixed width, not `auto`: "installed" and "not
+// installed" are different lengths, so an auto column started the description
+// at two different x down the list.
+const COLS = { gridTemplateColumns: '20px minmax(120px, 210px) 128px minmax(0, 1fr) 96px' }
+
 /**
  * StoreView — the "Service Manager" builtin card body (admins only).
  *
@@ -77,25 +83,32 @@ export default function StoreView({ onChanged }) {
     <div className="svc-mg">
       <Panel bare title={L('서비스 카탈로그', 'Service catalogue')}
         hint={items ? String(items.length) : '…'}>
+        {/* A grid, not a flex line: fourteen rows only read as a list if the
+            state, the description and the button start at the same x on each. */}
+        <Row className="cols head" style={COLS}>
+          <span />
+          <span>{L('서비스', 'Service')}</span>
+          <span>{L('상태', 'State')}</span>
+          <span>{L('설명', 'What it is')}</span>
+          <span />
+        </Row>
         {items === null && <Row className="empty">…</Row>}
         {(items || []).map((s) => (
-          <Row key={s.name}>
+          <Row key={s.name} className="cols" style={COLS}>
             {/* The icon is the service's identity — it belongs to something that
                 exists on this portal. Until it is installed the row keeps the
                 slot (so the labels stay aligned) but shows nothing. */}
             {s.registered
               ? <Icon name={s.icon || 'circle'} size={18} weight="fill" color={s.color || 'var(--text-primary)'} />
-              : <span style={{ width: 18, flexShrink: 0 }} aria-hidden="true" />}
+              : <span aria-hidden="true" />}
             {/* The repo is on the name's tooltip, not in the row: it is the
-                longest thing here and the least often read, and with it in the
-                row every line wrapped to two and the buttons stopped lining up. */}
-            <span title={s.repo}>{s.label || s.name}</span>
-            {stateBadge(s)}
-            {s.private && (
-              <Pill tone="warn">{L('비공개', 'private')}</Pill>
-            )}
+                longest thing here and the least often read. */}
+            <span className="ell" title={s.repo}>{s.label || s.name}</span>
+            <span style={{ display: 'flex', gap: 4 }}>
+              {stateBadge(s)}
+              {s.private && <Pill tone="warn">{L('비공개', 'private')}</Pill>}
+            </span>
             <span className="sub ell">{L(s.ko, s.en)}</span>
-            <span className="sp" />
             {s.registered ? (
               <Button variant="secondary" disabled={running} onClick={() => update(s.name)}
                 title={L('git pull 후 다시 빌드', 'git pull, then rebuild')}>
