@@ -29,15 +29,12 @@
 }
 .set-card > *:nth-child(-n + 2) { border-top: 0; }
 .set-card > .set-actions { border-top: 0; padding-top: 0; }
-/* The label column is tinted and ruled off, so a title and its content are told
-   apart by the column they sit in rather than by a shade of grey. */
+/* A title is told apart from its content by the RULE between the columns — no
+   tint, no weight, no grey. One line does the job a shade was doing badly. */
 .set-card > *:nth-child(odd) {
   display: flex; align-items: center;
-  background: var(--surface-2);
   border-right: 1px solid var(--border-subtle);
-  font-weight: 600;
 }
-.set-card > *:nth-child(even) { background: var(--surface); }
 
 /* A heading above a card — the name of the group of facts under it. */
 .set-head {
@@ -88,3 +85,17 @@
   color: var(--text-primary);
 }
 .set-table tr:last-child td { border-bottom: 0; }
+
+
+/* ── one style for the whole settings page ───────────────────────────────── */
+/* Everything here is ONE text size. A settings page is a list of facts, and a
+   size change should mean something — only the page heading gets one. */
+.pl-setpage { font-size: var(--fs-medium, 14px); color: var(--text-primary); }
+.pl-setpage :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 14px 0 6px; }
+/* Buttons: bigger and squarer than the kit default. The kit sets border-radius
+   inline, so this has to out-rank it — the one place !important earns its keep. */
+.pl-setpage button:not(.set-plain) { border-radius: var(--radius-md, 3px) !important; }
+.pl-setpage :is(input, select, textarea) {
+  font-size: var(--fs-medium, 14px);
+  border-radius: var(--radius-md, 3px);
+}

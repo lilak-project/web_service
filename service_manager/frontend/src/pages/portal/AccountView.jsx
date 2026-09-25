@@ -21,8 +21,8 @@ import ExpandBox from './ExpandBox'
 // Card chrome moved to .set-card (settings.css); this is just the gap below one.
 const card = { marginBottom: 10 }
 const rowS = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
-const input = { height: 32, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', minWidth: 0 }
-const badge = { ...FIELD_TEXT, padding: '1px 7px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }
+const input = { height: 32, borderRadius: 6, fontSize: 'var(--fs-medium, 14px)', padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', minWidth: 0 }
+const badge = { ...FIELD_TEXT, padding: '1px 7px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-primary)' }
 const pwOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const pwDialog = { background: 'var(--surface-1, #fff)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 16, width: 320, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }
 
@@ -41,8 +41,8 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
           name="portal-confirm-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true"
           style={{ ...input, width: '100%', marginBottom: 12 }} />
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button size="sm" variant="secondary" onClick={onCancel}>{cancelLabel}</Button>
-          <Button size="sm" variant="primary" onClick={() => onSubmit(v)}>{confirmLabel}</Button>
+          <Button variant="secondary" onClick={onCancel}>{cancelLabel}</Button>
+          <Button variant="primary" onClick={() => onSubmit(v)}>{confirmLabel}</Button>
         </div>
       </div>
     </div>
@@ -158,7 +158,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
     }
   }
 
-  if (!me) return <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-small,12px)' }}>{msg || '…'}</div>
+  if (!me) return <div style={{ color: 'var(--text-primary)', fontSize: 'var(--fs-small,12px)' }}>{msg || '…'}</div>
 
   const verifyText = (ago, left) => (ago == null ? L('미인증', 'unverified')
     : L(`인증 ${ago}일 전 · ${left}일 남음`, `verified ${ago}d ago · ${left}d left`))
@@ -173,11 +173,10 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
     return (
       <button key={key} type="button" onClick={() => setTab(key)} style={{
         display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
-        padding: '7px 4px', cursor: 'pointer', fontSize: 'var(--fs-small, 12px)',
+        padding: '7px 4px', cursor: 'pointer', fontSize: 'var(--fs-medium, 14px)',
         border: 'none', background: 'transparent',
-        color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: on ? 600 : 400,
-        textDecoration: on ? 'underline' : 'none', textUnderlineOffset: 4, textDecorationThickness: 2,
-      }}><Icon name={icon} size={15} /> {label}</button>
+        color: on ? 'var(--text-primary)' : 'var(--text-primary)', fontWeight: on ? 600 : 400,
+        textDecoration: on ? 'underline' : 'none', textUnderlineOffset: 4, textDecorationThickness: 2 }}><Icon name={icon} size={15} /> {label}</button>
     )
   }
 
@@ -192,7 +191,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
       {/* Identity only — avatar/email/role/verified live in their own fields below. */}
       <Field label={L('계정', 'Account')}>
         <b>{me.display_name || me.username}</b>
-        <span style={{ color: 'var(--text-muted)' }}>@{me.username}</span>
+        <span style={{ color: 'var(--text-primary)' }}>@{me.username}</span>
         {(me.groups || []).map((g) => (
           <span key={g.id} style={fieldChip}><GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}</span>
         ))}
@@ -222,7 +221,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
           name="portal-display-name" autoComplete="off" data-1p-ignore data-lpignore="true" />
       </Field>
       <FieldActions>
-        <Button size="sm" variant="secondary" disabled={dname.trim() === (me.display_name || me.username || '')} onClick={changeName}>{L('변경', 'Update')}</Button>
+        <Button variant="secondary" disabled={dname.trim() === (me.display_name || me.username || '')} onClick={changeName}>{L('변경', 'Update')}</Button>
         <span style={fieldMuted}>{L(`로그인 아이디: ${me.username} (변경 불가)`, `Login ID: ${me.username} (fixed)`)}</span>
       </FieldActions>
 
@@ -234,7 +233,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
               : <span style={{ color: 'var(--danger-text)' }}>{L('인증이 만료되어 프로젝트는 보기 전용입니다.', 'Verification lapsed — projects are view-only.')}</span>}
           </Field>
           <FieldActions>
-            <Button size="sm" variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{L('인증 요청 (임시)', 'Request verification (temp)')}</Button>
+            <Button variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{L('인증 요청 (임시)', 'Request verification (temp)')}</Button>
           </FieldActions>
         </>
       )}
@@ -244,7 +243,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
           name="portal-invite-code" autoComplete="off" data-1p-ignore data-lpignore="true" />
       </Field>
       <FieldActions>
-        <Button size="sm" variant="primary" disabled={!f.code.trim()} onClick={redeem}>{L('등록', 'Redeem')}</Button>
+        <Button variant="primary" disabled={!f.code.trim()} onClick={redeem}>{L('등록', 'Redeem')}</Button>
       </FieldActions>
 
       <Field label={L('비밀번호 변경', 'Change password')}>
@@ -254,11 +253,11 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
           name="portal-new-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
       </Field>
       <FieldActions>
-        <Button size="sm" variant="secondary" disabled={!f.cur || !f.npw} onClick={changePw}>{L('변경', 'Update')}</Button>
+        <Button variant="secondary" disabled={!f.cur || !f.npw} onClick={changePw}>{L('변경', 'Update')}</Button>
       </FieldActions>
 
       <Field label={L('이메일', 'Email')}>
-        <span style={{ color: 'var(--text-muted)' }}>{me.email}</span>
+        <span style={{ color: 'var(--text-primary)' }}>{me.email}</span>
         {verifyChip}
         {me.pending_email && <span style={fieldChip}>{L('변경대기', 'pending')}: {me.pending_email}</span>}
       </Field>
@@ -268,7 +267,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
           name="portal-new-email" autoComplete="off" data-1p-ignore data-lpignore="true" />
       </Field>
       <FieldActions>
-        <Button size="sm" variant="secondary" disabled={!f.email.trim()} onClick={requestEmail}>{L('요청', 'Request')}</Button>
+        <Button variant="secondary" disabled={!f.email.trim()} onClick={requestEmail}>{L('요청', 'Request')}</Button>
       </FieldActions>
 
       {/* Signing out belongs with the account, not on the cover's account card:
@@ -277,7 +276,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
         <>
           <Field label={L('로그아웃', 'Log out')} />
           <FieldActions>
-            <Button size="sm" variant="secondary" onClick={onLogout}>
+            <Button variant="secondary" onClick={onLogout}>
               <Icon name="logout" size={14} /> {L('로그아웃', 'Log out')}
             </Button>
           </FieldActions>
@@ -286,7 +285,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
 
       <Field label={L('계정 삭제', 'Delete account')} />
       <FieldActions>
-        <Button size="sm" variant="dangerSoft" onClick={deleteSelf}>{L('계정 삭제', 'Delete account')}</Button>
+        <Button variant="dangerSoft" onClick={deleteSelf}>{L('계정 삭제', 'Delete account')}</Button>
       </FieldActions>
     </div>
   )
@@ -295,19 +294,19 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
     <div>
       {requests.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ ...FIELD_TEXT, fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 6px' }}>{L('접근 요청', 'Access requests')}</div>
+          <div style={{ ...FIELD_TEXT, color: 'var(--text-primary)', margin: '0 0 6px' }}>{L('접근 요청', 'Access requests')}</div>
           {requests.map((r) => (
             <div key={r.id} style={{ ...rowS, padding: '7px 12px', border: '1px solid var(--border-default)', borderRadius: 8, marginBottom: 6 }}>
               <span style={FIELD_TEXT}><b>{r.username}</b> → <span style={{ fontFamily: 'var(--font-mono)' }}>{r.service}{r.project ? '/' + r.project : ''}</span></span>
               <div style={{ flex: 1 }} />
-              <Button size="sm" variant="primary" onClick={() => resolveReq(r.id, 'approve')}>{L('승인', 'Approve')}</Button>
-              <Button size="sm" variant="ghost" onClick={() => resolveReq(r.id, 'reject')}>{L('거절', 'Reject')}</Button>
+              <Button variant="primary" onClick={() => resolveReq(r.id, 'approve')}>{L('승인', 'Approve')}</Button>
+              <Button variant="ghost" onClick={() => resolveReq(r.id, 'reject')}>{L('거절', 'Reject')}</Button>
             </div>
           ))}
         </div>
       )}
       <div style={{ ...rowS, marginBottom: 8 }}>
-        <span style={{ ...FIELD_TEXT, color: 'var(--text-secondary)' }}>{L('그룹별 보기', 'By group')}</span>
+        <span style={{ ...FIELD_TEXT, color: 'var(--text-primary)' }}>{L('그룹별 보기', 'By group')}</span>
         <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} style={{ ...input, height: 28, maxWidth: 200 }}>
           <option value="">{L('전체', 'all')}</option>
           {Array.from(new Map(users.flatMap((u) => u.groups || []).map((g) => [g.id, g])).values())
@@ -333,23 +332,23 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
                   : (u.verify_days_left != null ? L(`인증됨 · ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}
               </Field>
               <FieldActions>
-                <Button size="sm" variant="secondary" onClick={() => adminRequestVerify(u)}>{L('메일 인증 요청', 'Request verification')}</Button>
-                <Button size="sm" variant="secondary" onClick={() => adminVerify(u)}>{L('매니저 인증', 'Verify')}</Button>
+                <Button variant="secondary" onClick={() => adminRequestVerify(u)}>{L('메일 인증 요청', 'Request verification')}</Button>
+                <Button variant="secondary" onClick={() => adminVerify(u)}>{L('매니저 인증', 'Verify')}</Button>
               </FieldActions>
 
               {u.pending_email && (
                 <>
                   <Field label={L('이메일 변경 대기', 'Pending email change')}>{u.pending_email}</Field>
                   <FieldActions>
-                    <Button size="sm" variant="primary" onClick={() => adminApprove(u, true)}>{L('승인', 'Approve')}</Button>
-                    <Button size="sm" variant="secondary" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
+                    <Button variant="primary" onClick={() => adminApprove(u, true)}>{L('승인', 'Approve')}</Button>
+                    <Button variant="secondary" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
                   </FieldActions>
                 </>
               )}
 
               <Field label={L('역할', 'Role')}><b>{u.role}</b></Field>
               <FieldActions>
-                <Button size="sm" variant="secondary" onClick={() => adminRole(u)}>{u.role === 'manager' ? L('매니저 해제', 'Revoke manager') : L('매니저 부여', 'Grant manager')}</Button>
+                <Button variant="secondary" onClick={() => adminRole(u)}>{u.role === 'manager' ? L('매니저 해제', 'Revoke manager') : L('매니저 부여', 'Grant manager')}</Button>
               </FieldActions>
 
               <Field label={L('그룹', 'Groups')} align="start">
@@ -358,7 +357,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
                   : (u.groups || []).map((g) => (
                       <span key={g.id} style={fieldChip}>
                         <GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}
-                        <Button size="sm" variant="ghost" icon onClick={() => removeFromGroup(u, g)} title={L('제외', 'Remove')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
+                        <Button variant="ghost" icon onClick={() => removeFromGroup(u, g)} title={L('제외', 'Remove')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
                       </span>
                     ))}
               </Field>
@@ -382,7 +381,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
                   : <>
                       {(u.permissions || []).filter((p) => p.admin).map((p, i) => (
                         <span key={'d' + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
-                          <Button size="sm" variant="ghost" icon onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
+                          <Button variant="ghost" icon onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
                         </span>
                       ))}
                       {/* group-inherited admin: revoked from the group, not per-user — no ✕ here */}
@@ -403,20 +402,20 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
                     <option value="">{L('전체 (서비스 전체)', 'all (whole service)')}</option>
                     {(projCache[agrant.svc] || []).map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
                   </select>
-                  <Button size="sm" variant="secondary" disabled={!agrant.svc} onClick={() => grantScopedAdmin(u)}>{L('관리자 부여', 'Grant admin')}</Button>
+                  <Button variant="secondary" disabled={!agrant.svc} onClick={() => grantScopedAdmin(u)}>{L('관리자 부여', 'Grant admin')}</Button>
                 </FieldActions>
               )}
 
               <Field label={L('비밀번호', 'Password')} />
               <FieldActions>
-                <Button size="sm" variant="secondary" onClick={() => adminResetPwEmail(u)}>{L('이메일로 새 비번 발송', 'Change password via email')}</Button>
-                <Button size="sm" variant="secondary" onClick={() => adminSetPw(u)}>{L('비밀번호 직접 설정', 'Set password')}</Button>
+                <Button variant="secondary" onClick={() => adminResetPwEmail(u)}>{L('이메일로 새 비번 발송', 'Change password via email')}</Button>
+                <Button variant="secondary" onClick={() => adminSetPw(u)}>{L('비밀번호 직접 설정', 'Set password')}</Button>
               </FieldActions>
 
               <Field label={L('계정', 'Account')} />
               <FieldActions>
-                <Button size="sm" variant="ghost" onClick={() => adminActive(u)}>{u.is_active === false ? L('활성화', 'Activate') : L('비활성화', 'Deactivate')}</Button>
-                <Button size="sm" variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('계정 삭제', 'Delete account')}</Button>
+                <Button variant="ghost" onClick={() => adminActive(u)}>{u.is_active === false ? L('활성화', 'Activate') : L('비활성화', 'Deactivate')}</Button>
+                <Button variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('계정 삭제', 'Delete account')}</Button>
               </FieldActions>
             </div>
         </ExpandBox>
@@ -441,13 +440,13 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
           onSubmit={(v) => { pwAsk.resolve(v); setPwAsk(null) }}
           onCancel={() => { pwAsk.resolve(null); setPwAsk(null) }} />
       )}
-      {msg && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', marginBottom: 8 }}>{msg}</div>}
+      {msg && <div style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', marginBottom: 8 }}>{msg}</div>}
       {/* Narrow: the header button is icon-only, so name the current section here. */}
       {hideMenu && (() => {
         const cur = MENU.find(([k]) => k === tab) || MENU[0]
         return (
           <div style={{ margin: '0 0 12px',
-            fontSize: 'var(--fs-large, 16px)', fontWeight: 700, color: 'var(--text-emphasis)' }}>
+            fontSize: 'var(--fs-large, 16px)', color: 'var(--text-emphasis)' }}>
             {cur[2]}
           </div>
         )

@@ -25,11 +25,11 @@ function GroupProfile({ group, onSaved }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <GroupMark icon={icon} color={color} size={30} />
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={L('그룹 이름', 'group name')} style={{ height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px', minWidth: 120, background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }} />
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={L('그룹 이름', 'group name')} style={{ height: 30, borderRadius: 6, fontSize: 'var(--fs-medium, 14px)', padding: '0 8px', minWidth: 120, background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }} />
       <IconPick value={icon} onChange={setIcon} color={color} />
       <ColorPicker value={color} onChange={setColor} />
-      <Button size="sm" variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'random')}><Icon name="refresh" size={13} /></Button>
-      <Button size="sm" variant="primary" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
+      <Button variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'random')}><Icon name="refresh" size={13} /></Button>
+      <Button variant="primary" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
       {msg && <span style={fieldMuted}>{msg}</span>}
     </div>
   )
@@ -41,7 +41,7 @@ function GroupProfile({ group, onSaved }) {
  * member inherits the group's grants (resolved in app/permissions.py), so this is
  * the convenient bulk way to give a whole lab/team a project.
  */
-const input = { height: 28, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
+const input = { height: 28, borderRadius: 6, fontSize: 'var(--fs-medium, 14px)', padding: '0 8px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
 const card = { border: '1px solid var(--border-default)', borderRadius: 8, padding: 10, marginBottom: 8 }
 
 export default function GroupsAdmin({ users, services, onChanged }) {
@@ -88,7 +88,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
       {msg && <div style={{ ...fieldMuted, marginBottom: 6 }}>{msg}</div>}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
         <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={L('새 그룹 이름 (예: cens, lab-a)', 'new group name')} style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && createGroup()} />
-        <Button size="sm" variant="primary" disabled={!newName.trim()} onClick={createGroup}>{L('그룹 생성', 'Create group')}</Button>
+        <Button variant="primary" disabled={!newName.trim()} onClick={createGroup}>{L('그룹 생성', 'Create group')}</Button>
       </div>
 
       {/* Administrators — a virtual, always-present, read-only group: just who is a manager */}
@@ -112,7 +112,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                         <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={18} />
                           <span>{u.display_name || u.username}</span>
-                          <span style={{ color: 'var(--text-muted)' }}>@{u.username} · {u.email}</span>
+                          <span style={{ color: 'var(--text-primary)' }}>@{u.username} · {u.email}</span>
                         </div>))}
                     </div>}
               </Field>
@@ -143,10 +143,10 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                             <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: u.is_active === false ? 0.55 : 1 }}>
                               <Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={18} />
                               <span>{u.username}</span>
-                              <span style={{ color: 'var(--text-muted)' }}>{u.email}</span>
+                              <span style={{ color: 'var(--text-primary)' }}>{u.email}</span>
                               {u.is_active === false && <span style={{ color: 'var(--danger-text)' }}>{L('비활성', 'inactive')}</span>}
                               <div style={{ flex: 1 }} />
-                              <Button size="sm" variant="ghost" onClick={() => removeMember(g.id, u.id)}>{L('제외', 'Remove')}</Button>
+                              <Button variant="ghost" onClick={() => removeMember(g.id, u.id)}>{L('제외', 'Remove')}</Button>
                             </div>))}
                         </div>}
                   </Field>
@@ -157,7 +157,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                       const hits = nonMembers(g.id).filter((u) => u.username.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)).slice(0, 12)
                       return hits.length === 0 ? <span style={fieldMuted}>{L('일치하는 계정 없음', 'no match')}</span>
                         : hits.map((u) => (
-                            <Button key={u.id} size="sm" variant="ghost" onClick={() => { addMember(g.id, u.id); setMSearch('') }}>
+                            <Button key={u.id} variant="ghost" onClick={() => { addMember(g.id, u.id); setMSearch('') }}>
                               <Icon name="plus" size={12} /> {u.username}
                             </Button>))
                     })()}
@@ -167,7 +167,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                     {g.permissions.length === 0 ? <span style={fieldMuted}>—</span>
                       : g.permissions.map((p, i) => (
                         <span key={i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
-                          {p.admin && <span style={{ fontWeight: 700, color: 'var(--warning-text, #b45309)' }} title={L('멤버 전원이 이 범위의 관리자가 됩니다', 'every member administers this scope')}>· admin</span>}
+                          {p.admin && <span style={{ color: 'var(--warning-text, #b45309)' }} title={L('멤버 전원이 이 범위의 관리자가 됩니다', 'every member administers this scope')}>· admin</span>}
                           <button onClick={() => revokePerm(g.id, p)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger-text)', padding: 0, display: 'inline-flex' }}>×</button>
                         </span>))}
                   </Field>
@@ -180,20 +180,20 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                       <option value="">{L('전체 (서비스 전체)', 'all (whole service)')}</option>
                       {(projCache[add.svc] || []).map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
                     </select>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', cursor: 'pointer' }}
                       title={L('멤버 전원이 이 범위의 관리자가 됩니다', 'every member administers this scope')}>
                       <input type="checkbox" checked={add.admin} onChange={(e) => setAdd((s) => ({ ...s, admin: e.target.checked }))} />
                       {L('관리자로', 'as admin')}
                     </label>
-                    <Button size="sm" variant="primary" disabled={!add.svc} onClick={() => grantPerm(g.id)}>{L('권한 부여', 'Grant')}</Button>
+                    <Button variant="primary" disabled={!add.svc} onClick={() => grantPerm(g.id)}>{L('권한 부여', 'Grant')}</Button>
                   </FieldActions>
 
                   <Field label={L('그룹', 'Group')} />
                   <FieldActions>
-                    <Button size="sm" variant="ghost" onClick={() => deactivateGroup(g)}>{L('멤버 전체 비활성화', 'Deactivate all members')}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => resetGroupPerms(g)}>{L('직접 부여 권한 지우기', 'Clear direct permissions')}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => clearGroupPerms(g)}>{L('그룹 상속 권한 지우기', 'Clear inherited permissions')}</Button>
-                    <Button size="sm" variant="dangerSoft" onClick={() => delGroup(g)}><Icon name="trash" size={13} /> {L('그룹 삭제', 'Delete group')}</Button>
+                    <Button variant="ghost" onClick={() => deactivateGroup(g)}>{L('멤버 전체 비활성화', 'Deactivate all members')}</Button>
+                    <Button variant="ghost" onClick={() => resetGroupPerms(g)}>{L('직접 부여 권한 지우기', 'Clear direct permissions')}</Button>
+                    <Button variant="ghost" onClick={() => clearGroupPerms(g)}>{L('그룹 상속 권한 지우기', 'Clear inherited permissions')}</Button>
+                    <Button variant="dangerSoft" onClick={() => delGroup(g)}><Icon name="trash" size={13} /> {L('그룹 삭제', 'Delete group')}</Button>
                   </FieldActions>
                 </div>
             </ExpandBox>

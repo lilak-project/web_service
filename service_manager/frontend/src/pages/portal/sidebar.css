@@ -218,16 +218,14 @@
 .pl-user .pl-av { flex-shrink: 0; }   /* without this the avatar squeezed when collapsed */
 
 /* ── right panel ─────────────────────────────────────────────────────────── */
-.pl-main { flex: 1; min-width: 0; padding: 10px; display: flex; }
-.pl-main.live { padding: 0; }
-.pl-main.live .pl-panel { border: 0; border-radius: 0; box-shadow: none; }
+/* No frame around the right side. A service is a whole app; putting it in a card
+   made it look like a preview of itself, and live mode already had to opt out of
+   the inset to get its width back. */
+.pl-main { flex: 1; min-width: 0; display: flex; }
 .pl-panel {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column;
   background: var(--surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg, 5px);
-  box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
   overflow: hidden;
 }
 .pl-panel > iframe { flex: 1; width: 100%; border: 0; display: block; }
@@ -260,8 +258,6 @@
   }
   .pl-root.mini .pl-card { background: var(--surface); border-color: var(--border-default); }
   .pl-root.mini :is(.pl-plist, .pl-mlist) { display: flex; }
-  .pl-main { padding: 0; }
-  .pl-panel { border: 0; border-radius: 0; box-shadow: none; }
 }
 
 /* Drawer scrim — only exists at phone width, where the sidebar overlays. */
@@ -352,6 +348,8 @@
 .pl-c2:hover { border-color: var(--border-strong); }
 .pl-c2.on { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
 .pl-c2.on .pl-txt { color: var(--accent, #2563eb); }
+/* The menu is a list of names; weight was making all seven shout at once. */
+.pl-c2 .pl-txt { font-weight: 400; }
 .pl-c2:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 /* Sections are a rule, not a heading — the names labelled a split the items make. */
 .pl-sep { flex: 0 0 auto; height: 1px; margin: 6px 2px; background: var(--border-strong); }

@@ -10,10 +10,10 @@ import { useLang } from '../../context/LangContext'
  *   group   — joins the redeemer to a group, inheriting that group's project grants.
  * The code may be auto-generated or admin-chosen (8–64 chars). Expiry 1–365 days.
  */
-const input = { height: 28, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
-const gl = { fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }
+const input = { height: 28, borderRadius: 6, fontSize: 'var(--fs-medium, 14px)', padding: '0 8px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
+const gl = { fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)' }
 // One uniform, text-only action button for each issued-code card.
-const codeBtn = { height: 32, borderRadius: 8, padding: '0 14px', fontSize: 'var(--fs-small, 12px)', justifyContent: 'center' }
+const codeBtn = { height: 32, borderRadius: 8, padding: '0 14px', fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
 
 export default function InvitesAdmin({ services, onChanged }) {
   const { lang } = useLang()
@@ -64,7 +64,7 @@ export default function InvitesAdmin({ services, onChanged }) {
 
   return (
     <div>
-      {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', marginBottom: 6 }}>{msg}</div>}
+      {msg && <div style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', marginBottom: 6 }}>{msg}</div>}
 
       {/* create — one aligned control per row (label column + input column) */}
       <div style={{ border: '1px solid var(--border-default)', borderRadius: 8, padding: 12, marginBottom: 10,
@@ -126,16 +126,16 @@ export default function InvitesAdmin({ services, onChanged }) {
       )}
 
       {/* list — one card per issued code */}
-      {codes.length === 0 ? <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('코드 없음', 'no codes')}</div>
+      {codes.length === 0 ? <div style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)' }}>{L('코드 없음', 'no codes')}</div>
         : codes.map((c) => (
           <div key={c.id} style={{ border: '1px solid var(--border-strong, #94a3b8)', borderRadius: 8, padding: '10px 12px', marginBottom: 8, background: 'var(--surface)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <code style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: 1 }}>{c.code}</code>
-              <span style={{ fontSize: 'var(--fs-small, 12px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+              <code style={{ fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>{c.code}</code>
+              <span style={{ fontSize: 'var(--fs-medium, 14px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-primary)' }}>
                 {c.kind === 'group' ? `${L('그룹', 'group')}: ${c.group}` : `${c.service}${c.project ? '/' + c.project : ''}`}
               </span>
-              {c.no_verify && <span style={{ fontSize: 'var(--fs-small, 12px)', padding: '2px 8px', borderRadius: 999, background: 'var(--info-bg, var(--surface-2))', color: 'var(--info-text, var(--text-secondary))' }}>{L('인증생략', 'no-verify')}</span>}
-              <span style={{ fontSize: 'var(--fs-small, 12px)', color: c.status === 'active' ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }}>
+              {c.no_verify && <span style={{ fontSize: 'var(--fs-medium, 14px)', padding: '2px 8px', borderRadius: 999, background: 'var(--info-bg, var(--surface-2))', color: 'var(--info-text, var(--text-primary))' }}>{L('인증생략', 'no-verify')}</span>}
+              <span style={{ fontSize: 'var(--fs-medium, 14px)', color: c.status === 'active' ? 'var(--ok-text, #2f9e44)' : 'var(--text-primary)' }}>
                 {c.status} · {c.uses}/{c.max_uses ? c.max_uses : '∞'}{L('회', 'x')}{c.max_uses === 1 ? L(' (일회용)', ' (single)') : ''} · ~{fmt(c.expires_at)}
               </span>
             </div>

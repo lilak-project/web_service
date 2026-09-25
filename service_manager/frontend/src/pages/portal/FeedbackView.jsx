@@ -14,12 +14,11 @@ import ExpandBox from './ExpandBox'
 const KIND = {
   bug:            { icon: 'warning-circle', color: '#dc2626', ko: '버그 신고', en: 'Bug' },
   recommendation: { icon: 'lightbulb',      color: '#ca8a04', ko: '제안',      en: 'Recommendation' },
-  inquiry:        { icon: 'chats',          color: '#2563eb', ko: '문의',      en: 'Inquiry' },
-}
+  inquiry:        { icon: 'chats',          color: '#2563eb', ko: '문의',      en: 'Inquiry' } }
 const input = { height: 32, borderRadius: 8, fontSize: 'var(--fs-small, 13px)', padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', boxSizing: 'border-box' }
-const badge = { fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid transparent' }
-const secLbl = { fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', marginBottom: 4 }
-const secHdr = { fontSize: 'var(--fs-small, 13px)', fontWeight: 600, margin: '0 0 10px', color: 'var(--text-secondary)' }
+const badge = { fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-primary)', border: '1px solid transparent' }
+const secLbl = { fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-primary)', marginBottom: 4 }
+const secHdr = { fontSize: 'var(--fs-small, 13px)', margin: '0 0 10px', color: 'var(--text-primary)' }
 
 export default function FeedbackView({ isManager }) {
   const { lang } = useLang()
@@ -81,19 +80,19 @@ export default function FeedbackView({ isManager }) {
                   style={{ ...input, width: '100%', height: 'auto', padding: '8px 10px', resize: 'vertical' }} />
               </div>
               <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
-                <Button size="sm" variant="secondary" onClick={() => sendReply(r)}>{L('답장 저장', 'Save reply')}</Button>
-                <Button size="sm" variant={r.status === 'resolved' ? 'ghost' : 'primary'} onClick={() => toggleResolve(r)}>
+                <Button variant="secondary" onClick={() => sendReply(r)}>{L('답장 저장', 'Save reply')}</Button>
+                <Button variant={r.status === 'resolved' ? 'ghost' : 'primary'} onClick={() => toggleResolve(r)}>
                   {r.status === 'resolved' ? L('다시 열기', 'Reopen') : L('처리완료로 변경', 'Mark resolved')}
                 </Button>
                 <div style={{ flex: 1 }} />
-                <Button size="sm" variant="dangerSoft" onClick={() => del(r)}><Icon name="trash" size={14} /> {L('삭제', 'Delete')}</Button>
+                <Button variant="dangerSoft" onClick={() => del(r)}><Icon name="trash" size={14} /> {L('삭제', 'Delete')}</Button>
               </div>
             </>
           ) : (
             <div>
               <div style={secLbl}>{L('관리자 답장', 'Admin reply')}</div>
               <div style={{ fontSize: 'var(--fs-small, 13px)', whiteSpace: 'pre-wrap',
-                color: r.reply ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                color: r.reply ? 'var(--text-primary)' : 'var(--text-primary)' }}>
                 {r.reply || L('아직 답장이 없습니다.', 'No reply yet.')}
               </div>
             </div>
@@ -106,21 +105,21 @@ export default function FeedbackView({ isManager }) {
   const rows = isManager ? all : mine
   return (
     <div style={{ maxWidth: 720 }}>
-      {msg && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-muted)', marginBottom: 8 }}>{msg}</div>}
+      {msg && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-primary)', marginBottom: 8 }}>{msg}</div>}
 
       {/* compose — everyone */}
       <div style={{ border: '1px solid var(--border-default)', borderRadius: 12, padding: 14, marginBottom: 20 }}>
-        <div style={{ fontSize: 'var(--fs-small, 13px)', fontWeight: 600, marginBottom: 10 }}>
+        <div style={{ fontSize: 'var(--fs-small, 13px)', marginBottom: 10 }}>
           {L('버그 신고 · 제안 · 문의', 'Bug report · recommendation · inquiry')}
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
           {Object.entries(KIND).map(([k, m]) => (
             <button key={k} type="button" onClick={() => setF((s) => ({ ...s, kind: k }))}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9,
-                cursor: 'pointer', fontSize: 'var(--fs-small, 13px)', fontWeight: 600,
+                cursor: 'pointer', fontSize: 'var(--fs-small, 13px)',
                 border: `1.5px solid ${f.kind === k ? m.color : 'var(--border-default)'}`,
                 background: f.kind === k ? m.color : 'transparent',
-                color: f.kind === k ? '#fff' : 'var(--text-secondary)' }}>
+                color: f.kind === k ? '#fff' : 'var(--text-primary)' }}>
               <Icon name={m.icon} size={16} color={f.kind === k ? '#fff' : m.color} /> {L(m.ko, m.en)}
             </button>
           ))}
@@ -131,17 +130,17 @@ export default function FeedbackView({ isManager }) {
           rows={4} placeholder={L('내용을 자세히 적어주세요…', 'Describe it in detail…')}
           style={{ ...input, width: '100%', height: 'auto', padding: '8px 10px', resize: 'vertical', marginBottom: 10 }} />
         <div style={{ display: 'flex' }}><div style={{ flex: 1 }} />
-          <Button size="sm" variant="primary" onClick={submit}>{L('보내기', 'Send')}</Button>
+          <Button variant="primary" onClick={submit}>{L('보내기', 'Send')}</Button>
         </div>
       </div>
 
       {/* thread */}
       <div style={secHdr}>
         {isManager ? L('받은 리포트', 'Received reports') : L('내 리포트', 'My reports')}
-        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {rows.length}</span>
+        <span style={{ color: 'var(--text-primary)', fontWeight: 400 }}> · {rows.length}</span>
       </div>
       {rows.length === 0
-        ? <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-muted)', padding: '8px 2px' }}>{L('아직 없습니다.', 'Nothing yet.')}</div>
+        ? <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-primary)', padding: '8px 2px' }}>{L('아직 없습니다.', 'Nothing yet.')}</div>
         : rows.map((r) => item(r, isManager))}
     </div>
   )

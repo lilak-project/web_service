@@ -48,7 +48,7 @@ export function Pill({ tone, children }) {
 export function Field({ label, align, children }) {
   return (
     <>
-      <span style={{ ...FIELD_TEXT, color: 'var(--text-secondary)',
+      <span style={{ ...FIELD_TEXT, color: 'var(--text-primary)',
         alignItems: align === 'start' ? 'flex-start' : undefined }}>{label}</span>
       <div style={{ ...FIELD_TEXT, color: 'var(--text-emphasis)', minWidth: 0,
         display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{children}</div>
@@ -67,11 +67,10 @@ export function FieldActions({ children }) {
 }
 
 /** Muted placeholder for an empty value ("no grants yet"), at the card's one size. */
-export const fieldMuted = { ...FIELD_TEXT, color: 'var(--text-muted)' }
+export const fieldMuted = { ...FIELD_TEXT, color: 'var(--text-primary)' }
 
 /** A removable/plain pill — same text size as everything else on the card. */
 export const fieldChip = {
   display: 'inline-flex', alignItems: 'center', gap: 4, ...FIELD_TEXT,
   padding: '2px 4px 2px 8px', borderRadius: 999,
-  border: '1px solid var(--border-default)', background: 'var(--surface)',
-}
+  border: '1px solid var(--border-default)', background: 'var(--surface)' }
