@@ -115,7 +115,7 @@ export default function NewServiceView({ onCreated }) {
         </Field>
 
         {!job && (
-          <Field label={t('newsvc_tab_kind_basic')}>
+          <Field label={t('newsvc_bottom_bar')}>
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <input type="checkbox" checked={commandBar} onChange={(e) => setCommandBar(e.target.checked)} />
               {t('newsvc_command_bar')}

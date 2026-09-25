@@ -736,7 +736,9 @@ export default function SidebarPortal({
             </>
           ) : view === 'service' && selSvc?.builtin ? (
             <>
-              <div className="pl-scroll pl-mgpage">
+              {/* A builtin is a third kind of page: not settings, not manage —
+                  a tool the portal carries. It gets its own strip colour. */}
+              <div className="pl-scroll pl-mgpage pl-toolpage">
                 <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
                 {builtinView(selSvc.builtin)}
               </div>

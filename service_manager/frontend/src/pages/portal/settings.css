@@ -238,3 +238,10 @@
 .set-link:hover { background: var(--surface-2); }
 /* A cell that gives way instead of wrapping the row onto a second line. */
 .set-row .ell { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Three kinds of page, three strip colours, so you always know which one you
+   are on: settings blue (the default above), manage violet, and pale yellow for
+   the portal's own tools — Create service, Service Manager, Links, the icon lab. */
+.pl-toolpage .set-bar { background: #fef9c3; }
+.pl-toolpage .set-bar .hint { color: #854d0e; }
+.pl-toolpage .set-panel.danger > .set-bar { background: var(--danger-bg, #fee2e2); }

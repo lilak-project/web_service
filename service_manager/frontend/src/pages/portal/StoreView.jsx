@@ -86,14 +86,16 @@ export default function StoreView({ onChanged }) {
             {s.registered
               ? <Icon name={s.icon || 'circle'} size={18} weight="fill" color={s.color || 'var(--text-primary)'} />
               : <span style={{ width: 18, flexShrink: 0 }} aria-hidden="true" />}
-            <span>{s.label || s.name}</span>
+            {/* The repo is on the name's tooltip, not in the row: it is the
+                longest thing here and the least often read, and with it in the
+                row every line wrapped to two and the buttons stopped lining up. */}
+            <span title={s.repo}>{s.label || s.name}</span>
             {stateBadge(s)}
             {s.private && (
               <Pill tone="warn">{L('비공개', 'private')}</Pill>
             )}
-            <span className="sub">{L(s.ko, s.en)}</span>
+            <span className="sub ell">{L(s.ko, s.en)}</span>
             <span className="sp" />
-            <span className="sub mono ell">{s.repo.replace(/^https?:\/\//, '')}</span>
             {s.registered ? (
               <Button variant="secondary" disabled={running} onClick={() => update(s.name)}
                 title={L('git pull 후 다시 빌드', 'git pull, then rebuild')}>
