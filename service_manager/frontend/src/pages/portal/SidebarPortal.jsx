@@ -498,7 +498,7 @@ export default function SidebarPortal({
   const modes = HOME_MODES.filter((m) => !m.admin || isManager)
 
   return (
-    <div className={`pl-root${mini ? ' mini' : ''}`}>
+    <div className={`pl-root${mini ? ' mini' : ''}${view === 'settings' ? ' settings' : ''}`}>
       {/* the drawer's scrim — shown by CSS at phone width only, so it follows a
           resize instead of whatever innerWidth was at render time */}
       {!mini && <div className="pl-scrim" onClick={() => setMini(true)} />}

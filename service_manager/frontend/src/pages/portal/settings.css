@@ -158,11 +158,13 @@
 .set-list .set-card { border: 0; border-radius: 0; }
 
 /* ── the page's own heading and its width ────────────────────────────────── */
-/* The one size change on the page. Panels stop before the screen does: a fact
-   row read edge-to-edge on a wide monitor is a fact row nobody reads. */
+/* The page's name is the same rank as "lilak portal" and "Settings" — the three
+   of them read across in a row — so it is the same size, 15px. Panels stop
+   before the screen does: a fact row read edge-to-edge on a wide monitor is a
+   fact row nobody reads. */
 .pl-setpage .set-title {
   margin: 2px 0 14px;
-  font-size: var(--fs-xlarge, 20px);
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-emphasis);
 }
