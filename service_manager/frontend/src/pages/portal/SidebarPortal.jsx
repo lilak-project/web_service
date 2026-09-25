@@ -125,9 +125,19 @@ function useSlide(open) {
     if (open && !shown) { setShown(true); setPhase('enter') }
     else if (!open && shown) { setPhase('leave') }
   }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
+  // --h is the height to grow to. A project list is fetched, so the first open
+  // measures the "…" placeholder and the box would stop short of the rows that
+  // land a moment later, then snap. Re-measure whenever the content resizes and
+  // the animation retargets instead of jumping.
   useLayoutEffect(() => {
     const el = ref.current
-    if (el && phase) el.style.setProperty('--h', `${el.scrollHeight}px`)
+    if (!el || !phase) return
+    const measure = () => el.style.setProperty('--h', `${el.scrollHeight}px`)
+    measure()
+    if (phase === 'leave' || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    for (const kid of el.children) ro.observe(kid)
+    return () => ro.disconnect()
   }, [phase, shown])
   const onAnimEnd = (e) => {
     // Children animate too and their animationend bubbles — only the container's

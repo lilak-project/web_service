@@ -223,12 +223,17 @@
 .pl-proj:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 
 /* Slide, not fade: the box grows/shrinks (--h is measured in JS right before the
-   animation) while the cards inside travel down from under the card above. */
+   animation) while the cards inside travel down from under the card above.
+   NOT in a list with a rail: the rail is drawn on the box and grows with it,
+   while a travelling row carries its elbow ahead of where the rail has got to,
+   so the tree lines swam against the rows. There the box alone moves and each
+   elbow appears exactly as the rail reaches it. */
 .pl-projs.enter, .pl-projs.leave { overflow: hidden; }
 .pl-projs.enter { animation: pl-grow .15s cubic-bezier(.2, .7, .3, 1); }
 .pl-projs.enter > * { animation: pl-down .15s cubic-bezier(.2, .7, .3, 1); }
 .pl-projs.leave { animation: pl-shrink .12s cubic-bezier(.5, 0, .8, .4) forwards; }
 .pl-projs.leave > * { animation: pl-up .12s cubic-bezier(.5, 0, .8, .4) forwards; }
+.pl-plist.enter > *, .pl-plist.leave > * { animation: none; }
 /* Enter and leave MUST be separate keyframes. One name played in reverse never
    fires animationend, and the list stayed in the DOM for good. */
 @keyframes pl-grow { from { max-height: 0 } to { max-height: var(--h) } }
