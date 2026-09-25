@@ -434,21 +434,24 @@
 }
 /* Both carry manage mode's own colour, so the top of the bar says which mode
    you are in without the bar itself being repainted. Violet because blue is
-   already "selected" and red is already "danger". */
-.pl-mgbar { --mg: #7c3aed; }
+   already "selected" and red is already "danger" — but TINTED, the way the kit
+   tints its buttons: a solid violet strip was loud enough to be hard to read
+   and drowned out the bar under it. */
+.pl-mgbar { --mg-ink: #5b21b6; --mg-line: #c4b5fd; --mg-fill: #ede9fe; }
 .pl-mgnew, .pl-mgout {
   display: flex; align-items: center; gap: 8px;
   height: 34px; padding: 0 12px;
-  border: 1px solid var(--mg);
+  border: 1px solid var(--mg-line);
   border-radius: var(--radius-lg, 5px);
+  color: var(--mg-ink);
 }
-/* The way out is filled: in manage mode it is the thing you most need to find,
-   and a solid strip doubles as the badge for the mode. */
-.pl-mgout { background: var(--mg); color: #fff; }
-.pl-mgout:hover { background: #6d28d9; border-color: #6d28d9; }
-/* The action is outlined in the same colour — the two read as one block. */
-.pl-mgnew { background: var(--surface); color: var(--mg); }
-.pl-mgnew:hover { background: #f5f3ff; }
+/* The way out is the filled one: in manage mode it is what you most need to
+   find, and the tint doubles as the badge for the mode. */
+.pl-mgout { background: var(--mg-fill); }
+.pl-mgout:hover { background: #ddd6fe; border-color: #a78bfa; }
+/* The action is the same colour on white — the two read as one block. */
+.pl-mgnew { background: var(--surface); }
+.pl-mgnew:hover { background: var(--mg-fill); }
 .pl-root.mini .pl-mgbar { padding: 8px 6px; }
 
 .pl-grip { display: flex; flex: 0 0 auto; cursor: grab; margin-left: -2px; }

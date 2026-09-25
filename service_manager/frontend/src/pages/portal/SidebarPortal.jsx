@@ -9,7 +9,7 @@ import LiveWall from './LiveWall'
 import ServiceManagePanel from './ServiceManagePanel'
 import ServiceProjects from './ServiceProjects'
 import ServiceSingle from './ServiceSingle'
-import ServiceGroupBand from './ServiceGroupBand'
+import GroupManagePanel from './GroupManagePanel'
 import LinksView from './LinksView'
 import StoreView from './StoreView'
 import NewServiceView from './NewServiceView'
@@ -488,10 +488,12 @@ export default function SidebarPortal({
   const managePanel = (() => {
     if (!isManager) return null
     if (selGroup) {
+      const mem = (selGroup.members || [])
+        .map((k) => (cards || []).find((c) => cardKey(c) === k)).filter(Boolean)
       return (
         <>
           <h1 className="pl-mgtitle">{selGroup.name || L('그룹', 'Group')}</h1>
-          <ServiceGroupBand group={selGroup} cards={[]} manageGroups isManager onChanged={onRefresh} />
+          <GroupManagePanel group={selGroup} members={mem} onChanged={onRefresh} />
         </>
       )
     }
@@ -714,12 +716,20 @@ export default function SidebarPortal({
             // Framed, not fixed: the bar stays (collapsed), live fills the panel.
             <LiveWall framed cards={liveCards || []} iconFor={iconFor} onDone={() => setView('empty')} />
           ) : view === 'manage' ? (
-            <div className="pl-scroll pl-mgpage">{managePanel}</div>
+            // The manage panels report through notify() like the settings pages,
+            // so they need the same line at the foot to report INTO.
+            <>
+              <div className="pl-scroll pl-mgpage">{managePanel}</div>
+              <SettingsStatus />
+            </>
           ) : view === 'service' && selSvc?.builtin ? (
-            <div className="pl-scroll pl-mgpage">
-              <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
-              {builtinView(selSvc.builtin)}
-            </div>
+            <>
+              <div className="pl-scroll pl-mgpage">
+                <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
+                {builtinView(selSvc.builtin)}
+              </div>
+              <SettingsStatus />
+            </>
           ) : view === 'service' && needProject ? (
             <div className="pl-empty">
               <div>

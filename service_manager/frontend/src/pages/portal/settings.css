@@ -216,3 +216,8 @@
   width: 16px; height: 16px; flex-shrink: 0;
   font: inherit; line-height: 1; color: var(--danger-text); cursor: pointer;
 }
+
+/* The manage panels are settings pages by another name: same ground, same
+   panels, same rows. This is only the stack. */
+.svc-mg { display: flex; flex-direction: column; }
+.svc-mg .set-panel { max-width: 940px; }

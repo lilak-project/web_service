@@ -4,6 +4,8 @@ import { launcher, serviceApi, errText } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_WEIGHT, ICON_CHOICES } from './IconPick'
 import SyncPanel from './SyncPanel'
+import { Panel, Field, FieldActions, Pill, fieldInput, fieldMuted, fieldChip } from './Field'
+import { notify } from './settingsMsg'
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
@@ -18,11 +20,8 @@ const VIS_OPTS = [
   { v: 2, key: 'portal_vis_protected' },
   { v: 3, key: 'portal_vis_admin' },
 ]
-const field = {
-  height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px', flex: 1, minWidth: 150,
-  backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)',
-}
-const sel = { height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 6px', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
+const field = { ...fieldInput, flex: 1, minWidth: 150 }
+const sel = { ...fieldInput, maxWidth: 220 }
 
 export default function ServiceManagePanel({ service, builtinKey, initialIcon, first, last, onMove, onChanged }) {
   const { t, lang } = useLang()
@@ -40,7 +39,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   // convenience: a service the portal spawned lives in the portal's cgroup and
   // under its memory ceiling, one started by hand does not.
   const [auto, setAuto] = useState(!!service.autostart)
-  const [msg, setMsg] = useState('')
+  const setMsg = (m, tone = 'bad') => notify(m, tone)
   // Builtins only: take the card off THIS portal's cover. Stored in the data
   // volume (data/_portal/home.json), so it is a per-server choice, not a build.
   const [hidden, setHidden] = useState(!!service.hidden)
@@ -94,7 +93,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
       } else {
         await launcher.put(`/admin/services/${svc.name}/appearance`, { icon, color, label: label.trim() })
       }
-      setMsg(L('저장됨', 'saved')); onChanged?.()
+      setMsg(L('저장됨', 'saved'), 'ok'); onChanged?.()
     } catch (e) { setMsg(errText(e, L('실패', 'failed'))) }
   }
   async function toggleHidden() {
@@ -137,124 +136,142 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   }
 
   return (
-    <div style={{ padding: '14px 14px 16px 46px', borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* name on line 1; the icon/colour/random/save editors always drop to their
-          own line, left-aligned (the name input grows, so keeping them inline would
-          push them to the right edge). */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, border: '1px solid var(--border-default)' }}>
-          <Icon name={icon} size={22} weight={ICON_WEIGHT} color={color} />
-        </span>
-        <input style={field} value={label} placeholder={svc.name} onChange={(e) => setLabel(e.target.value)} />
-        <div style={{ flexBasis: '100%', height: 0 }} aria-hidden="true" />
-        <IconPick value={icon} onChange={setIcon} color={color} />
-        <ColorPicker value={color} onChange={setColor} />
-        <Button variant="secondary" size="sm" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'Random')}><Icon name="refresh" size={13} /></Button>
-        <Button variant="primary" size="sm" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
-      </div>
+    <div className="svc-mg">
+      <Panel title={L('모양', 'Appearance')} hint={isBuiltin ? L('내장 카드', 'builtin card') : svc.name}>
+        <Field label={L('아이콘 · 색', 'Icon · colour')}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
+            borderRadius: 'var(--radius-lg, 5px)', border: '1px solid var(--border-strong)' }}>
+            <Icon name={icon} size={20} weight={ICON_WEIGHT} color={color} />
+          </span>
+          <IconPick value={icon} onChange={setIcon} color={color} />
+          <ColorPicker value={color} onChange={setColor} />
+          <Button variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'Random')}>
+            <Icon name="refresh" size={13} />
+          </Button>
+        </Field>
 
-      {/* visibility (services only) + reorder + delete (services only) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Field label={L('이름', 'Name')}>
+          <input style={field} value={label} placeholder={svc.name} onChange={(e) => setLabel(e.target.value)} />
+        </Field>
+        <FieldActions>
+          <Button variant="primary" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
+          <span style={fieldMuted}>{L('카드에 보이는 이름입니다. 비우면 서비스 이름을 씁니다.', 'What the card shows. Empty falls back to the service name.')}</span>
+        </FieldActions>
+
+        <Field label={L('순서', 'Order')}>
+          <Button variant="secondary" disabled={first} onClick={() => onMove(-1)}><Icon name="caret-up" size={15} /></Button>
+          <Button variant="secondary" disabled={last} onClick={() => onMove(1)}><Icon name="caret-down" size={15} /></Button>
+          <span style={fieldMuted}>{L('끌어서 옮길 수도 있습니다.', 'Dragging works too.')}</span>
+        </Field>
+      </Panel>
+
+      <Panel title={L('표시', 'On the cover')}>
         {!isBuiltin && (
-          <>
-            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('공개 범위', 'Visibility')}</span>
+          <Field label={L('공개 범위', 'Visibility')}>
             <select value={vis} onChange={(e) => changeVis(e.target.value)} style={sel}>
               {VIS_OPTS.map((o) => <option key={o.v} value={o.v}>{t(o.key)}</option>)}
             </select>
-            <span style={{ width: 12 }} />
-          </>
+          </Field>
         )}
         {!isBuiltin && (
-          <>
-            <button onClick={toggleAuto}
-              title={L('포탈이 시작될 때 이 서비스도 함께 띄웁니다.',
-                       'Bring this service up when the portal starts.')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none',
-                       border: 0, padding: 0, cursor: 'pointer', font: 'inherit',
-                       fontSize: 'var(--fs-small, 12px)',
-                       color: auto ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }}>
-              <Icon name={auto ? 'toggle-right' : 'toggle-left'} size={18}
-                    weight={auto ? 'fill' : 'regular'} />
-              {L('자동 시작', 'Autostart')}
-            </button>
-            <span style={{ width: 12 }} />
-          </>
+          <Field label={L('자동 시작', 'Autostart')}>
+            {auto ? <Pill tone="ok">{L('켜짐', 'on')}</Pill> : <Pill>{L('꺼짐', 'off')}</Pill>}
+            <span style={fieldMuted}>{L('포탈이 시작될 때 이 서비스도 함께 띄웁니다.', 'Bring this service up when the portal starts.')}</span>
+          </Field>
         )}
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{L('순서', 'Order')}</span>
-        <Button variant="ghost" size="sm" icon disabled={first} title={t('manage_move_up')} onClick={() => onMove(-1)}><Icon name="caret-up" size={15} /></Button>
-        <Button variant="ghost" size="sm" icon disabled={last} title={t('manage_move_down')} onClick={() => onMove(1)}><Icon name="caret-down" size={15} /></Button>
-
-        <div style={{ flex: 1 }} />
-      </div>
-
-      {/* visibility on the cover + archive/delete: their own row, so they read at a glance */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 10px', borderRadius: 10,
-        background: 'var(--surface-2)', border: '1px solid var(--border-subtle)' }}>
-        <Button variant={hidden ? 'warning' : 'secondary'} size="sm" onClick={toggleHidden}
-          title={hidden
-            ? L('이 서버의 홈 화면에 다시 표시합니다.', 'Show on this server\u2019s home screen again.')
-            : L('이 서버의 홈 화면에서 숨깁니다 (라이브에서도 안 보임). 관리 모드에서는 계속 보입니다.',
-                'Hide from this server\u2019s home screen (live too). Still shown in manage mode.')}>
-          <Icon name={hidden ? 'eye' : 'eye-slash'} size={15} />
-          {hidden ? L('서비스 다시 표시', 'Show service') : L('서비스 숨기기', 'Hide service')}
-        </Button>
         {!isBuiltin && (
-          <Button variant={liveHidden ? 'warning' : 'secondary'} size="sm" onClick={toggleLiveHidden}
-            title={L('라이브 모드에서만 뺍니다. 홈에는 그대로 있습니다.', 'Keep off the live wall only; stays on the cover.')}>
-            <Icon name="broadcast" size={15} />
-            {liveHidden ? L('라이브에 다시 표시', 'Show in live') : L('라이브에서 숨기기', 'Hide from live')}
+          <FieldActions>
+            <Button variant={auto ? 'warning' : 'secondary'} onClick={toggleAuto}>
+              {auto ? L('자동 시작 끄기', 'Turn autostart off') : L('자동 시작 켜기', 'Turn autostart on')}
+            </Button>
+          </FieldActions>
+        )}
+
+        <Field label={L('홈 화면', 'Home screen')}>
+          {hidden ? <Pill tone="warn">{L('숨김', 'hidden')}</Pill> : <Pill tone="ok">{L('표시됨', 'shown')}</Pill>}
+          <span style={fieldMuted}>{L('숨겨도 관리 모드에서는 계속 보입니다.', 'Hidden here, still shown in manage mode.')}</span>
+        </Field>
+        <FieldActions>
+          <Button variant={hidden ? 'warning' : 'secondary'} onClick={toggleHidden}>
+            <Icon name={hidden ? 'eye' : 'eye-slash'} size={15} />
+            {hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
           </Button>
-        )}
-        <span style={{ flex: 1 }} />
+        </FieldActions>
+
         {!isBuiltin && (
           <>
-            <Button variant="secondary" size="sm" onClick={archiveService} title={L('데이터만 삭제하고 서비스는 보관함으로', 'Delete data, keep the service in the archive')}>
-              <Icon name="archive" size={15} /> {L('보관함으로', 'Archive')}
-            </Button>
-            <Button variant="dangerSoft" size="sm" onClick={removeService} title={L('서비스 완전 삭제', 'Delete permanently')}>
-              <Icon name="trash" size={15} /> {L('완전 삭제', 'Delete')}
-            </Button>
+            <Field label={L('라이브 모드', 'Live wall')}>
+              {liveHidden ? <Pill tone="warn">{L('제외됨', 'off the wall')}</Pill> : <Pill tone="ok">{L('포함됨', 'on the wall')}</Pill>}
+            </Field>
+            <FieldActions>
+              <Button variant={liveHidden ? 'warning' : 'secondary'} onClick={toggleLiveHidden}>
+                <Icon name="broadcast" size={15} />
+                {liveHidden ? L('라이브에 다시 표시', 'Show in live') : L('라이브에서 빼기', 'Hide from live')}
+              </Button>
+            </FieldActions>
           </>
         )}
-      </div>
 
-      {/* who administers this service (managers + scoped admins) */}
-      {!isBuiltin && admins && (
-        <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: 10, fontSize: 'var(--fs-small, 12px)' }}>
-          <div style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', marginBottom: 4 }}>{L('관리자', 'Administrators')}</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-            {(admins.managers || []).map((n) => <span key={'m' + n} style={{ fontSize: 'var(--fs-micro, 10px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{n} · {L('전체', 'global')}</span>)}
-            {(admins.scoped || []).map((a, i) => <span key={'s' + i} style={{ fontSize: 'var(--fs-micro, 10px)', fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>{a.username} · {a.project ? a.project : L('서비스 전체', 'whole service')}{a.group ? ` (${a.group})` : ''}</span>)}
-            {(admins.managers || []).length + (admins.scoped || []).length === 0 && <span style={{ color: 'var(--text-muted)' }}>—</span>}
-          </div>
-        </div>
-      )}
+        {!isBuiltin && (
+          <Field label={L('관리자', 'Administrators')} align="start">
+            {!admins ? <span style={fieldMuted}>…</span>
+              : (admins.managers || []).length + (admins.scoped || []).length === 0
+                ? <span style={fieldMuted}>—</span>
+                : <>
+                    {(admins.managers || []).map((n) => <span key={'m' + n} style={fieldChip}>{n} · {L('전체', 'global')}</span>)}
+                    {(admins.scoped || []).map((a, i) => (
+                      <span key={'s' + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>
+                        {a.username} · {a.project ? a.project : L('서비스 전체', 'whole service')}{a.group ? ` (${a.group})` : ''}
+                      </span>
+                    ))}
+                  </>}
+          </Field>
+        )}
+      </Panel>
 
       {/* tab / menu layout (services only) — lazy: only loads on open */}
       {!isBuiltin && (
-        <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: 10 }}>
+        <Panel bare title={L('탭 · 메뉴 구성', 'Tabs · menu layout')}
+          right={!lyOpen ? <Button variant="secondary" onClick={openLayout}>{L('편집', 'Edit')}</Button> : null}>
           {!lyOpen ? (
-            <Button variant="ghost" size="sm" onClick={openLayout} title={L('탭과 왼쪽 메뉴바 구성 편집', 'Edit tabs and left menu bar')}>
-              <Icon name="browse" size={14} /> {L('탭 / 메뉴 구성', 'Tabs / menu layout')}
-            </Button>
+            <div className="set-row empty">{L('이 서비스의 탭과 왼쪽 메뉴바 구성을 고칩니다.', 'The tabs and left menu bar this service shows.')}</div>
           ) : lyErr && !layout ? (
-            <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{lyErr}</div>
+            <div className="set-row empty">{lyErr}</div>
           ) : layout ? (
-            <>
+            <div style={{ padding: 14 }}>
               <LayoutEditor value={layout} onChange={(c) => { setLayout(c); setLyDirty(true) }}
                 onSave={saveLayout} onReset={resetLayout} dirty={lyDirty} saving={lySaving} />
-              {lyErr && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--danger-text)', marginTop: 6 }}>{lyErr}</div>}
-            </>
+              {lyErr && <div style={{ color: 'var(--danger-text)', marginTop: 8 }}>{lyErr}</div>}
+            </div>
           ) : (
-            <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('불러오는 중…', 'Loading…')}</div>
+            <div className="set-row empty">{L('불러오는 중…', 'Loading…')}</div>
           )}
-        </div>
+        </Panel>
       )}
 
       {/* cross-portal mirroring (services only) */}
-      {!isBuiltin && <SyncPanel service={svc} />}
+      {!isBuiltin && (
+        <Panel bare title={L('다른 서버와 동기화', 'Mirror another server')}>
+          <div style={{ padding: 14 }}><SyncPanel service={svc} /></div>
+        </Panel>
+      )}
 
-      {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</div>}
+      {!isBuiltin && (
+        <Panel danger title={L('되돌릴 수 없는 것', 'Cannot be undone')}>
+          <Field label={L('보관함으로', 'Archive')}>
+            {L('데이터는 지우고 서비스 정의만 남깁니다. 나중에 되살릴 수 있습니다.', 'Deletes the data, keeps the definition so you can restore it later.')}
+          </Field>
+          <FieldActions>
+            <Button variant="secondary" onClick={archiveService}><Icon name="archive" size={15} /> {L('보관함으로', 'Archive')}</Button>
+          </FieldActions>
+          <Field label={L('완전 삭제', 'Delete')}>
+            {L('서비스와 데이터가 모두 사라집니다. 복구할 수 없습니다.', 'The service and its data go for good — no restore.')}
+          </Field>
+          <FieldActions>
+            <Button variant="dangerSoft" onClick={removeService}><Icon name="trash" size={15} /> {L('완전 삭제', 'Delete')}</Button>
+          </FieldActions>
+        </Panel>
+      )}
     </div>
   )
 }
