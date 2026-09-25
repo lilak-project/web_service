@@ -3,6 +3,7 @@ import { Button, Icon, ColorPicker, AVATAR_COLORS } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { DEFAULT_ICON, ICON_CHOICES } from './IconPick'
+import { Panel, Field, FieldActions, fieldInput, fieldMuted } from './Field'
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
@@ -20,11 +21,7 @@ let _tabSeq = 1
 // regular tabs get a random icon (re-rollable + click-to-pick); built-in tabs pass their own
 const newTab = (over = {}) => ({ key: _tabSeq++, id: '', label: '', icon: rnd(ICON_CHOICES), kind: '', ...over })
 
-const field = {
-  height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px',
-  backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)',
-}
-const lbl = { fontSize: 'var(--fs-small, 12px)', fontWeight: 600, color: 'var(--text-secondary)' }
+const field = { ...fieldInput }
 
 export default function NewServiceView({ onCreated }) {
   const { t, lang } = useLang()
@@ -88,80 +85,70 @@ export default function NewServiceView({ onCreated }) {
   }
 
   return (
-    <div style={{ padding: 14, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 620 }}>
-      <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{t('newsvc_intro')}</div>
+    <div className="svc-mg">
+      {/* The intro is a paragraph, so it goes in a ROW, not in the strip: the
+          strip is a fixed 42px and a paragraph there wraps the title with it. */}
+      <Panel title={t('newsvc_title')}>
+        <Field label={t('newsvc_title')}>{t('newsvc_intro')}</Field>
 
-      {/* name + brand — stack on narrow columns, sit side by side when wide */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 150 }}>
-          <span style={lbl}>{t('newsvc_name')}</span>
-          <input style={{ ...field, borderColor: name && !nameOk ? 'var(--danger-border, #e5484d)' : field.border }}
+        <Field label={t('newsvc_name')}>
+          <input style={{ ...field, flex: 1, borderColor: name && !nameOk ? 'var(--danger-text)' : undefined }}
             value={name} placeholder="mysvc" disabled={!!job}
             onChange={(e) => setName(e.target.value.toLowerCase())} />
-          <span style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{t('newsvc_name_rule')}</span>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 150 }}>
-          <span style={lbl}>{t('newsvc_brand')}</span>
-          <input style={field} value={service} placeholder={t('newsvc_brand_ph')} disabled={!!job}
+          <span style={fieldMuted}>{t('newsvc_name_rule')}</span>
+        </Field>
+
+        <Field label={t('newsvc_brand')}>
+          <input style={{ ...field, flex: 1 }} value={service} placeholder={t('newsvc_brand_ph')} disabled={!!job}
             onChange={(e) => setService(e.target.value)} />
-        </label>
-      </div>
+        </Field>
 
-      {/* icon + colour + random — the compact controls on their own row */}
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={lbl}>{t('newsvc_icon')}</span>
-          <div style={{ display: 'flex', alignItems: 'center', height: 30 }}>
-            <IconPick value={icon} onChange={setIcon} disabled={!!job} color={color} />
-          </div>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={lbl}>{t('newsvc_color')}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30 }}>
-            <ColorPicker value={color} onChange={setColor} />
-          </div>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 'auto' }}>
-          <span style={lbl}>&nbsp;</span>
-          <div style={{ display: 'flex', alignItems: 'center', height: 30 }}>
-            <Button variant="secondary" disabled={!!job} onClick={() => {
-              setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS))
-              setTabs((ts) => ts.map((x) => (x.kind ? x : { ...x, icon: rnd(ICON_CHOICES) })))   // re-roll regular tab icons
-            }}>
-              <Icon name="refresh" size={13} /> {t('newsvc_random')}
-            </Button>
-          </div>
-        </label>
-      </div>
+        <Field label={`${t('newsvc_icon')} · ${t('newsvc_color')}`}>
+          <IconPick value={icon} onChange={setIcon} disabled={!!job} color={color} />
+          <ColorPicker value={color} onChange={setColor} />
+          <Button variant="secondary" disabled={!!job} onClick={() => {
+            setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS))
+            setTabs((ts) => ts.map((x) => (x.kind ? x : { ...x, icon: rnd(ICON_CHOICES) })))   // re-roll regular tab icons
+          }}>
+            <Icon name="refresh" size={13} /> {t('newsvc_random')}
+          </Button>
+        </Field>
 
-      {/* tabs */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span style={lbl}>{t('newsvc_tabs')}</span>
+        {!job && (
+          <Field label={t('newsvc_tab_kind_basic')}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={commandBar} onChange={(e) => setCommandBar(e.target.checked)} />
+              {t('newsvc_command_bar')}
+            </label>
+          </Field>
+        )}
+      </Panel>
+
+      <Panel bare title={t('newsvc_tabs')} hint={String(tabs.length)}>
         {tabs.map((tb) => (
-          <div key={tb.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input style={{ ...field, width: 80, flexShrink: 0 }} value={tb.id} placeholder="id" disabled={!!job}
+          <div key={tb.key} className="set-row">
+            <input style={{ ...field, width: 90, flexShrink: 0 }} value={tb.id} placeholder="id" disabled={!!job}
               onChange={(e) => setTab(tb.key, { id: e.target.value })} />
-            <input style={{ ...field, flex: 1, minWidth: 0 }} value={tb.label} placeholder={t('newsvc_tab_label')} disabled={!!job}
+            <input style={{ ...field, flex: 1, minWidth: 120 }} value={tb.label} placeholder={t('newsvc_tab_label')} disabled={!!job}
               onChange={(e) => setTab(tb.key, { label: e.target.value })} />
             <IconPick value={tb.icon} disabled={!!job} onChange={(ic) => setTab(tb.key, { icon: ic })} />
-            {/* kind badge only for built-in tabs (community/settings/parameter); a plain
-                tab shows none, freeing the width for the label at narrow column sizes */}
+            {/* kind badge only for built-in tabs; a plain tab shows none, freeing
+                the width for the label at narrow column sizes */}
             {tb.kind && (
-              <span style={{ flexShrink: 0, textAlign: 'center', fontSize: 'var(--fs-tiny, 11px)',
-                color: 'var(--info-text)', background: 'var(--info-bg)', borderRadius: 999, padding: '2px 8px' }}>
+              <span className="set-pill">
                 {tb.kind === 'community' ? t('newsvc_tab_kind_community')
                   : tb.kind === 'settings' ? t('newsvc_tab_kind_settings')
                   : tb.kind === 'parameter' ? t('newsvc_tab_kind_parameter')
                   : t('newsvc_tab_kind_basic')}
               </span>
             )}
-            <Button variant="ghost" icon disabled={!!job || tabs.length <= 1} onClick={() => delTab(tb.key)} title={t('newsvc_tab_del')}>
+            <Button variant="dangerSoft" disabled={!!job || tabs.length <= 1} onClick={() => delTab(tb.key)} title={t('newsvc_tab_del')}>
               <Icon name="trash" size={14} />
             </Button>
           </div>
         ))}
         {!job && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className="set-row">
             <Button variant="secondary" onClick={() => setTabs((ts) => [...ts, newTab()])}>
               <Icon name="plus" size={13} /> {t('newsvc_tab_add')}
             </Button>
@@ -179,51 +166,41 @@ export default function NewServiceView({ onCreated }) {
             </Button>
           </div>
         )}
-      </div>
+      </Panel>
+
+      {/* Building is a job with a log, so it gets its own panel rather than a
+          strip under the form: it outlives the form and you watch it. */}
+      {(err || job) && (
+        <Panel bare title={t('newsvc_create')}
+          hint={job ? (running ? t('newsvc_building', job.name) : done ? t('newsvc_done', job.name) : t('newsvc_error')) : undefined}>
+          {err && <div className="set-row" style={{ color: 'var(--danger-text)' }}>{err}</div>}
+          {job?.error && <div className="set-row" style={{ color: 'var(--danger-text)' }}>{job.error}</div>}
+          {job && (
+            <>
+              <pre ref={logBox} style={{
+                margin: 14, maxHeight: 200, overflow: 'auto', fontSize: 'var(--fs-small, 13px)', lineHeight: 1.5,
+                backgroundColor: 'var(--surface-2)', color: 'var(--text-secondary)',
+                borderRadius: 'var(--radius-lg, 5px)', padding: 10, whiteSpace: 'pre-wrap',
+              }}>{(job.log || []).join('\n') || '…'}</pre>
+              <div className="set-row">
+                {done && <Button variant="primary" onClick={() => window.open(`/p/${job.name}/`, '_blank')}>
+                  <Icon name="link" size={13} /> {t('newsvc_enter')}
+                </Button>}
+                {!running && <Button variant="secondary" onClick={reset}>{t('newsvc_again')}</Button>}
+              </div>
+            </>
+          )}
+        </Panel>
+      )}
 
       {!job && (
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-          <input type="checkbox" checked={commandBar} onChange={(e) => setCommandBar(e.target.checked)} />
-          {t('newsvc_command_bar')}
-        </label>
-      )}
-
-      {err && (
-        <div style={{ padding: '8px 10px', borderRadius: 8, fontSize: 'var(--fs-small, 12px)',
-          backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{err}</div>
-      )}
-
-      {/* actions */}
-      {!job ? (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button variant="primary" disabled={busy || !nameOk} onClick={create}>
-            <Icon name="plus" size={14} /> {t('newsvc_create')}
-          </Button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-small, 12px)', fontWeight: 600 }}>
-            {running && <Icon name="loader" size={14} />}
-            {done && <Icon name="check" size={14} style={{ color: 'var(--success-text, #2e7d32)' }} />}
-            {job.status === 'error' && <Icon name="x" size={14} style={{ color: 'var(--danger-text)' }} />}
-            <span>
-              {running ? t('newsvc_building', job.name)
-                : done ? t('newsvc_done', job.name)
-                : t('newsvc_error')}
-            </span>
+        <Panel bare>
+          <div className="set-row">
+            <Button variant="primary" disabled={busy || !nameOk} onClick={create}>
+              <Icon name="plus" size={14} /> {t('newsvc_create')}
+            </Button>
           </div>
-          {job.error && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{job.error}</div>}
-          <pre ref={logBox} style={{
-            margin: 0, maxHeight: 180, overflow: 'auto', fontSize: 'var(--fs-micro, 10px)', lineHeight: 1.5,
-            backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)', borderRadius: 8, padding: 10, whiteSpace: 'pre-wrap',
-          }}>{(job.log || []).join('\n') || '…'}</pre>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {done && <Button variant="primary" onClick={() => window.open(`/p/${job.name}/`, '_blank')}>
-              <Icon name="external-link" size={13} /> {t('newsvc_enter')}
-            </Button>}
-            {!running && <Button variant="secondary" onClick={reset}>{t('newsvc_again')}</Button>}
-          </div>
-        </div>
+        </Panel>
       )}
     </div>
   )

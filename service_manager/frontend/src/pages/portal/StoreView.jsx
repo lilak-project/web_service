@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import { Panel, Field, FieldActions, Row, Pill, fieldMuted } from './Field'
+import { notify } from './settingsMsg'
 
 /**
  * StoreView — the "Service Manager" builtin card body (admins only).
@@ -12,9 +14,6 @@ import { useLang } from '../../context/LangContext'
  * the new service card appears. A second section rebuilds the portal frontend
  * itself (optionally after a git pull).
  */
-const btn = { height: 32, borderRadius: 8, padding: '0 14px', fontSize: 'var(--fs-small, 12px)',
-  justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }
-const badge = { fontSize: 'var(--fs-micro, 10px)', padding: '2px 8px', borderRadius: 999 }
 
 export default function StoreView({ onChanged }) {
   const { lang } = useLang()
@@ -22,7 +21,7 @@ export default function StoreView({ onChanged }) {
   const [items, setItems] = useState(null)      // null = loading
   const [job, setJob] = useState(null)          // {id, name, status, log, error}
   const [pull, setPull] = useState(false)       // build-portal: git pull first
-  const [err, setErr] = useState('')
+  const setErr = (m) => m && notify(m, 'bad')
   const poll = useRef(null)
   const logBox = useRef(null)
 
@@ -69,97 +68,71 @@ export default function StoreView({ onChanged }) {
   }
 
   const stateBadge = (s) => s.registered
-    ? <span style={{ ...badge, background: 'var(--ok-bg, #e6f4ea)', color: 'var(--ok-text, #2f9e44)' }}>{L('설치됨', 'installed')}</span>
+    ? <Pill tone="ok">{L('설치됨', 'installed')}</Pill>
     : s.code_present
-      ? <span style={{ ...badge, background: 'var(--info-bg, var(--surface-2))', color: 'var(--info-text, var(--text-secondary))' }}>{L('코드만 있음', 'code only')}</span>
-      : <span style={{ ...badge, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>{L('미설치', 'not installed')}</span>
+      ? <Pill tone="warn">{L('코드만 있음', 'code only')}</Pill>
+      : <Pill>{L('미설치', 'not installed')}</Pill>
 
   return (
-    <div style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
-        {L('카탈로그의 서비스를 내려받아(git) 빌드하고 포털에 등록합니다. 설치가 끝나면 홈에 카드가 나타납니다.',
-          'Download (git), build and register catalog services. The service card appears on Home when the install finishes.')}
-      </div>
-      {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
-
-      {/* catalog */}
-      {items === null ? (
-        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>…</div>
-      ) : items.map((s) => (
-        <div key={s.name} style={{ border: '1px solid var(--border-default)', borderRadius: 8, padding: '10px 12px', background: 'var(--surface)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+    <div className="svc-mg">
+      <Panel bare title={L('서비스 카탈로그', 'Service catalogue')}
+        hint={items ? String(items.length) : '…'}>
+        {items === null && <Row className="empty">…</Row>}
+        {(items || []).map((s) => (
+          <Row key={s.name}>
             {/* The icon is the service's identity — it belongs to something that
-                exists on this portal. Until it is installed the row keeps the slot
-                (so the labels stay aligned) but shows nothing. */}
+                exists on this portal. Until it is installed the row keeps the
+                slot (so the labels stay aligned) but shows nothing. */}
             {s.registered
-              ? <Icon name={s.icon || 'circle'} size={20} weight="fill" color={s.color || 'var(--text-primary)'} style={{ flexShrink: 0 }} />
-              : <span style={{ width: 20, height: 20, flexShrink: 0 }} aria-hidden="true" />}
-            <span style={{ fontWeight: 600, fontSize: 'var(--fs-medium, 14px)' }}>{s.label || s.name}</span>
+              ? <Icon name={s.icon || 'circle'} size={18} weight="fill" color={s.color || 'var(--text-primary)'} />
+              : <span style={{ width: 18, flexShrink: 0 }} aria-hidden="true" />}
+            <span>{s.label || s.name}</span>
             {stateBadge(s)}
             {s.private && (
-              <span style={{ ...badge, background: 'var(--surface-2)', color: 'var(--text-muted)' }}
-                title={L('비공개 레포 — 서버에 SSH 키 필요', 'private repo — needs an SSH key on the server')}>
-                {L('비공개', 'private')}
-              </span>
+              <Pill tone="warn">{L('비공개', 'private')}</Pill>
             )}
-            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L(s.ko, s.en)}</span>
-          </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="sub">{L(s.ko, s.en)}</span>
+            <span className="sp" />
+            <span className="sub mono ell">{s.repo.replace(/^https?:\/\//, '')}</span>
             {s.registered ? (
-              <Button variant="secondary" style={btn} disabled={running} onClick={() => update(s.name)}
+              <Button variant="secondary" disabled={running} onClick={() => update(s.name)}
                 title={L('git pull 후 다시 빌드', 'git pull, then rebuild')}>
                 {L('업데이트', 'Update')}
               </Button>
             ) : (
-              <Button variant="primary" style={btn} disabled={running} onClick={() => install(s.name)}>
+              <Button variant="primary" disabled={running} onClick={() => install(s.name)}>
                 {L('설치', 'Install')}
               </Button>
             )}
-            <span style={{ fontSize: 'var(--fs-micro, 10px)', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {s.repo.replace(/^https?:\/\//, '')}
-            </span>
-          </div>
-        </div>
-      ))}
+          </Row>
+        ))}
+      </Panel>
 
-      {/* portal build */}
-      <div style={{ border: '1px solid var(--border-default)', borderRadius: 8, padding: '10px 12px', background: 'var(--surface)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <Icon name="lilak" size={20} style={{ flexShrink: 0 }} />
-          <span style={{ fontWeight: 600, fontSize: 'var(--fs-medium, 14px)' }}>{L('포털', 'Portal')}</span>
-          <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
-            {L('포털 프론트엔드를 다시 빌드합니다. 빌드 후 새로고침하면 반영됩니다.',
-              'Rebuild the portal frontend; refresh after it finishes.')}
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Button variant="primary" style={btn} disabled={running} onClick={buildPortal}>{L('포털 빌드', 'Build portal')}</Button>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+      <Panel title={L('포털', 'Portal')}>
+        <Field label={L('프론트엔드 빌드', 'Rebuild frontend')}>
+          {L('빌드가 끝난 뒤 새로고침하면 반영됩니다.', 'Refresh once it finishes and the new build is live.')}
+        </Field>
+        <FieldActions>
+          <Button variant="primary" disabled={running} onClick={buildPortal}>{L('포털 빌드', 'Build portal')}</Button>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
             <input type="checkbox" checked={pull} onChange={(e) => setPull(e.target.checked)} />
             {L('git pull 먼저 (--ff-only)', 'git pull first (--ff-only)')}
           </label>
-        </div>
-      </div>
+        </FieldActions>
+      </Panel>
 
       {/* live job log */}
       {job && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-small, 12px)', fontWeight: 600 }}>
-            {running && <Icon name="loader" size={14} />}
-            {job.status === 'done' && <Icon name="check" size={14} style={{ color: 'var(--success-text, #2e7d32)' }} />}
-            {job.status === 'error' && <Icon name="x" size={14} style={{ color: 'var(--danger-text)' }} />}
-            <span>
-              {job.name === 'portal' ? L('포털 빌드', 'portal build') : job.name}
-              {' · '}
-              {running ? L('진행 중…', 'running…') : job.status === 'done' ? L('완료', 'done') : L('실패', 'failed')}
-            </span>
-          </div>
-          {job.error && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{job.error}</div>}
+        <Panel bare
+          title={job.name === 'portal' ? L('포털 빌드', 'portal build') : job.name}
+          hint={running ? L('진행 중…', 'running…') : job.status === 'done' ? L('완료', 'done') : L('실패', 'failed')}>
+          {job.error && <div className="set-row" style={{ color: 'var(--danger-text)' }}>{job.error}</div>}
           <pre ref={logBox} style={{
-            margin: 0, maxHeight: 220, overflow: 'auto', fontSize: 'var(--fs-micro, 10px)', lineHeight: 1.5,
-            backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)', borderRadius: 8, padding: 10, whiteSpace: 'pre-wrap',
+            margin: 14, maxHeight: 240, overflow: 'auto', fontSize: 'var(--fs-small, 13px)', lineHeight: 1.5,
+            backgroundColor: 'var(--surface-2)', color: 'var(--text-secondary)',
+            borderRadius: 'var(--radius-lg, 5px)', padding: 10, whiteSpace: 'pre-wrap',
           }}>{(job.log || []).join('\n') || '…'}</pre>
-        </div>
+        </Panel>
       )}
     </div>
   )

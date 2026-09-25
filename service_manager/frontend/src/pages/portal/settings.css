@@ -229,3 +229,8 @@
 .pl-root.managing .pl-mgpage .set-bar { background: #ede9fe; }
 .pl-root.managing .pl-mgpage .set-bar .hint { color: #5b21b6; }
 .pl-root.managing .pl-mgpage .set-panel.danger > .set-bar { background: var(--danger-bg, #fee2e2); }
+/* A row that is itself a link. */
+.set-link { text-decoration: none; color: inherit; }
+.set-link:hover { background: var(--surface-2); }
+/* A cell that gives way instead of wrapping the row onto a second line. */
+.set-row .ell { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
