@@ -621,6 +621,7 @@ export default {
   portal_admin_services:   '서비스 · 권한',
   portal_admin_no_users:   '아직 다른 계정이 없습니다.',
   portal_admin_load_fail:  '관리 데이터를 불러오지 못했습니다.',
+  portal_vis_public:       '완전 공개',
   portal_vis_private:      '비공개',
   portal_vis_protected:    '보호',
   portal_vis_admin:        '관리자 전용',

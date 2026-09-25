@@ -25,7 +25,7 @@ from .. import config, models, permissions, registry, security
 from ..db import get_db
 from ..deps import require_portal_admin, require_portal_user
 from ..models import (
-    VIS_ADMIN, VIS_PRIVATE, VIS_PROTECTED, DEFAULT_VISIBILITY,
+    VIS_ADMIN, VIS_PRIVATE, VIS_PROTECTED, VIS_PUBLIC, DEFAULT_VISIBILITY,
     AccessRequest, Service, ServicePermission,
 )
 from .projects import list_raw_services
@@ -70,6 +70,8 @@ def annotate_services(db: Session, user: models.User, raw: list[dict]) -> list[d
         vis = svc.visibility
         multi = bool(p.get("multi_project"))
         if admin:
+            can_enter, can_request = True, False
+        elif vis == VIS_PUBLIC:
             can_enter, can_request = True, False
         elif vis == VIS_ADMIN:
             continue
@@ -174,7 +176,7 @@ def admin_set_service(
 ):
     svc = get_or_create_service(db, name)
     if body.visibility is not None:
-        if body.visibility not in (VIS_PRIVATE, VIS_PROTECTED, VIS_ADMIN):
+        if body.visibility not in (VIS_PUBLIC, VIS_PRIVATE, VIS_PROTECTED, VIS_ADMIN):
             raise HTTPException(status_code=400, detail="visibility must be 1, 2 or 3")
         svc.visibility = body.visibility
     if body.kind is not None:
@@ -612,7 +614,7 @@ def admin_register_service(
     registry.write_manifest(name, manifest)
 
     svc = get_or_create_service(db, name, body.kind)
-    if body.visibility in (VIS_PRIVATE, VIS_PROTECTED, VIS_ADMIN):
+    if body.visibility in (VIS_PUBLIC, VIS_PRIVATE, VIS_PROTECTED, VIS_ADMIN):
         svc.visibility = body.visibility
     db.commit()
     return {"name": name, "kind": body.kind, "mode": body.mode}

@@ -202,8 +202,11 @@ function ProjectList({ svc, color, sel, onPick, open }) {
 export default function SidebarPortal({
   user, isManager, cards, groups, liveCards, links, iconFor, fullOrder,
   onLogout, onRefresh, onSaveOrder, onRegroup, onCreateGroup,
-  settingsTab, onSettingsTab,
+  settingsTab, onSettingsTab, authCard,
 }) {
+  // Signed out: the bar is a list of names and the panel is the login card.
+  // Nothing opens, nothing is managed, and the foot has no account to show.
+  const signedOut = !!authCard
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
 
@@ -286,6 +289,7 @@ export default function SidebarPortal({
   }, [view, openSettings, leaveSettings])
 
   const openService = useCallback((s) => {
+    if (signedOut) { setSel({ svc: cardKey(s), proj: '' }); return }
     leaveSettings()
     // A builtin is a portal tool, not a proxied URL: it opens in the panel as a
     // component. Everything else follows its manifest `open`.
@@ -328,7 +332,9 @@ export default function SidebarPortal({
   // (@links, @store, …), so the two covers show the same things in the same order.
   const bands = useMemo(() => {
     const list = (cards || []).filter((c) => !c.hidden || (manage && isManager))
-    if (flat) return [{ g: null, items: list }]
+    // Signed out there is one kind of thing in the bar and no groups to read it
+    // by, so it is a plain list whatever the reader's group-mode setting says.
+    if (flat || signedOut) return [{ g: null, items: list }]
     const byKey = new Map(list.map((c) => [cardKey(c), c]))
     const taken = new Set()
     const out = []
@@ -356,7 +362,7 @@ export default function SidebarPortal({
     const rest = list.filter((c) => !taken.has(cardKey(c)))
     out.push({ g: { id: NOGROUP_ID, name: L('그룹 없음', 'No group'), loose: true }, items: rest })
     return out
-  }, [cards, groups, flat, manage, isManager, lang])
+  }, [cards, groups, flat, manage, isManager, signedOut, lang])
 
   // ── manage mode: drag to arrange ────────────────────────────────────────
   const gidOf = (key) => (groups || []).find((g) => (g.members || []).includes(key))?.id ?? null
@@ -467,10 +473,10 @@ export default function SidebarPortal({
     // Opening a service's projects counts as picking it: its tile fills, and the
     // card takes the selected border while the bar is expanded (collapsed, every
     // card's border is transparent, so the tile carries it alone).
-    const on = ((view === 'service' || view === 'manage') && sel?.svc === key) || projOpen(key)
+    const on = ((view === 'service' || view === 'manage' || signedOut) && sel?.svc === key) || projOpen(key)
     // In manage mode a card is a thing to arrange and edit, never a thing to run:
     // even a multi-project service opens its settings instead of its project list.
-    const multi = s.multi_project && !manage
+    const multi = s.multi_project && !manage && !signedOut
     return (
       <div key={key} style={{ display: 'contents' }}>
         {dropLine(key, false)}
@@ -652,7 +658,8 @@ export default function SidebarPortal({
 
           {bands.every((b) => !b.items.length) && (
             <div style={{ padding: '10px 9px', color: 'var(--text-muted)' }}>
-              {L('서비스가 없습니다', 'no services')}
+              {signedOut ? L('공개된 서비스가 없습니다. 로그인하세요.', 'Nothing is public here — sign in.')
+                : L('서비스가 없습니다', 'no services')}
             </div>
           )}
         </div>
@@ -675,6 +682,7 @@ export default function SidebarPortal({
 
         {/* The account alone at the foot now: the modes moved into the settings
             bar, which is where the rest of "things about this portal" live. */}
+        {!signedOut && (
         <div className="pl-user">
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"
@@ -688,6 +696,7 @@ export default function SidebarPortal({
             </button>
           </div>
         </div>
+        )}
       </aside>
 
       {/* Live takes the whole right side — no panel inset, because a wall wants
@@ -746,7 +755,9 @@ export default function SidebarPortal({
 
       <main className="pl-main">
         <div className="pl-panel">
-          {view === 'settings' ? (
+          {signedOut ? (
+            <div className="pl-scroll pl-authpage">{authCard}</div>
+          ) : view === 'settings' ? (
             <>
               <div className="pl-scroll pl-setpage">
                 <AccountView isManager={isManager} onChanged={onRefresh} onAccountGone={onLogout}

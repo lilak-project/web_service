@@ -537,3 +537,11 @@
 /* A band runs the bar's full width, so it is drawn with top and bottom rules
    only — the picked one needs the sides as well to read as one box. */
 .pl-root.managing .pl-group.on { border-left-width: 1px; border-right-width: 1px; }
+
+/* Signed out: the panel is the login card, centred on the same ground the rest
+   of the portal's own pages use. */
+.pl-authpage {
+  display: grid; place-items: center;
+  background: var(--surface-2);
+  padding: 24px;
+}

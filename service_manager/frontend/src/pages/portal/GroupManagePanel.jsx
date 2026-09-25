@@ -12,7 +12,7 @@ import { notify } from './settingsMsg'
  * in its header, and a modal for access was one layer too many.
  * (ServiceGroupBand still carries the classic cover's band, untouched.)
  */
-const VIS = [[1, 'portal_vis_private'], [2, 'portal_vis_protected'], [3, 'portal_vis_admin']]
+const VIS = [[0, 'portal_vis_public'], [1, 'portal_vis_private'], [2, 'portal_vis_protected'], [3, 'portal_vis_admin']]
 
 /** Show / hide one card on the cover. The endpoint differs for a builtin, the
  *  meaning does not — and it is the one setting every band's members share, so

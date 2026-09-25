@@ -87,6 +87,25 @@ def api_projects(_user=Depends(require_portal_user)):
     return list_raw_services()
 
 
+@router.get("/api/public-services")
+def api_public_services(db: Session = Depends(get_db)):
+    """The services a visitor may see BEFORE signing in — the signed-out cover
+    lists these beside the login card.
+
+    No auth on purpose, so it carries the bare minimum: a name, what it is
+    called, its mark. Nothing here says who may enter or how to reach it, and a
+    service is only in this list because an admin set its visibility to PUBLIC
+    — the default is PROTECTED, so an untouched portal returns [].
+    """
+    public = {s.name for s in db.query(models.Service)
+              .filter(models.Service.visibility == models.VIS_PUBLIC).all()}
+    if not public:
+        return []
+    return [{k: s.get(k) for k in ("name", "label", "icon", "color", "kind",
+                                   "multi_project", "open", "order")}
+            for s in list_raw_services() if s["name"] in public]
+
+
 class NewProject(BaseModel):
     name: str
     kind: str = "elog"

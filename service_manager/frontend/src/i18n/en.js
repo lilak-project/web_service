@@ -621,6 +621,7 @@ export default {
   portal_admin_services:   'Services & permissions',
   portal_admin_no_users:   'No other accounts yet.',
   portal_admin_load_fail:  'Could not load admin data.',
+  portal_vis_public:       'Public',
   portal_vis_private:      'Private',
   portal_vis_protected:    'Protected',
   portal_vis_admin:        'Admin only',

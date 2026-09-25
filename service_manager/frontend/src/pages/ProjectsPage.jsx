@@ -179,7 +179,7 @@ function setPortalToken(token) {
 }
 
 // ── Login / Sign-up card (shown when logged out) ──────────────────────────────
-function AuthCard({ t, onAuthed, needsSetup }) {
+export function AuthCard({ t, onAuthed, needsSetup }) {
   const [mode, setMode] = useState('login')   // 'login' | 'signup'
   const [f, setF] = useState({ username: '', password: '', email: '', invite_code: '' })
   const [err, setErr] = useState('')
@@ -446,6 +446,14 @@ export default function ProjectsPage() {
     catch (e) { setLogData({ text: `로그를 불러오지 못했습니다: ${errText(e, e.message)}`, path: '' }) }
     finally { setLogBusy(false) }
   }
+
+  // The signed-OUT bar's contents. Its own call, because /services is
+  // auth-aware and there is no session yet; an untouched portal answers [].
+  const [publicCards, setPublicCards] = useState([])
+  useEffect(() => {
+    if (user) return
+    launcher.get('/public-services').then((r) => setPublicCards(r.data || [])).catch(() => setPublicCards([]))
+  }, [user])
 
   // Restore a saved portal session.
   useEffect(() => {
@@ -845,6 +853,20 @@ export default function ProjectsPage() {
   // The sidebar cover owns the whole window (no CoverPage header), so it replaces
   // this render entirely rather than living inside it. Logged out we still fall
   // through to the classic screen, which carries the login/sign-up card.
+  // Signed out, on the sidebar cover: the bar lists the services an admin marked
+  // PUBLIC (an untouched portal has none, so the bar is simply empty) and the
+  // panel is the login card. Nothing here is enterable until you are in.
+  if (sidebar && authReady && !user) {
+    return (
+      <SidebarPortal
+        user={null} isManager={false} cards={publicCards} iconFor={iconFor}
+        groups={[]} liveCards={[]} links={[]} fullOrder={publicCards.map(cardKey)}
+        authCard={<AuthCard t={t} needsSetup={!!portalInfo?.needs_setup}
+          onAuthed={(u) => { setUser(u); refresh() }} />}
+      />
+    )
+  }
+
   if (sidebar && authReady && user) {
     // The sidebar gets the SAME cards the cover does — builtins included, in the
     // saved order — so nothing is reachable on one cover and invisible on the other.

@@ -16,6 +16,7 @@ const rnd = (a) => a[Math.floor(Math.random() * a.length)]
  */
 
 const VIS_OPTS = [
+  { v: 0, key: 'portal_vis_public' },
   { v: 1, key: 'portal_vis_private' },
   { v: 2, key: 'portal_vis_protected' },
   { v: 3, key: 'portal_vis_admin' },

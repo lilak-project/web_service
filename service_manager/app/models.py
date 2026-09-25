@@ -60,7 +60,13 @@ VERIFY_VALID_DAYS = 365
 
 
 # ── Service registry / visibility ────────────────────────────────────────────
-VIS_PRIVATE, VIS_PROTECTED, VIS_ADMIN = 1, 2, 3
+# 0 PUBLIC     — listed on the signed-OUT cover as well; anyone may see that it
+#                exists. Opt-in, never a default: marking a service public is an
+#                admin saying "the internet may know this name".
+# 1 PRIVATE    — only accounts holding a grant see it at all.
+# 2 PROTECTED  — any signed-in account sees it and may ask for access.
+# 3 ADMIN      — managers only.
+VIS_PUBLIC, VIS_PRIVATE, VIS_PROTECTED, VIS_ADMIN = 0, 1, 2, 3
 DEFAULT_VISIBILITY = VIS_PROTECTED
 
 

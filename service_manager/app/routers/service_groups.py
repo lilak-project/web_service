@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from .. import config, models, permissions, registry
 from ..db import get_db
 from ..deps import require_portal_admin, require_portal_user
-from .services import VIS_ADMIN, VIS_PRIVATE, VIS_PROTECTED, get_or_create_service
+from .services import VIS_ADMIN, VIS_PRIVATE, VIS_PROTECTED, VIS_PUBLIC, get_or_create_service
 
 router = APIRouter(tags=["portal-service-groups"])
 
@@ -199,7 +199,7 @@ class VisibilityBody(BaseModel):
 def set_group_visibility(gid: str, body: VisibilityBody, _: models.User = Depends(require_portal_admin),
                          db: Session = Depends(get_db)):
     """The same tier for every member service (builtins have none)."""
-    if body.visibility not in (VIS_PRIVATE, VIS_PROTECTED, VIS_ADMIN):
+    if body.visibility not in (VIS_PUBLIC, VIS_PRIVATE, VIS_PROTECTED, VIS_ADMIN):
         raise HTTPException(400, "visibility must be 1, 2 or 3")
     g = _find(_read(), gid)
     names = _service_members(g)
