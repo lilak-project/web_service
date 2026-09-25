@@ -67,7 +67,10 @@
 /* Collapsed: the white cards dissolve into the bar; the selected service keeps a
    ring on its icon so there is still a "you are here". */
 .pl-card { transition: background .15s, border-color .15s, box-shadow .15s; }
-.pl-av { transition: box-shadow .15s; }
+.pl-av { transition: border-radius .15s, box-shadow .15s; }
+/* Selection is a SHAPE change, so it cannot be clipped and does not depend on the
+   service's colour being distinct. */
+.pl-av.round { border-radius: 50%; }
 .pl-root.mini .pl-card { background: transparent; border-color: transparent; box-shadow: none; }
 /* Collapsed, a card's hit area is a square INSIDE the bar (10..54) rather than a
    260px strip running off the right edge. */
