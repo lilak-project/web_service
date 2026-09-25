@@ -207,6 +207,15 @@ export default function SidebarPortal({
   // Signed out: the bar is a list of names and the panel is the login card.
   // Nothing opens, nothing is managed, and the foot has no account to show.
   const signedOut = !!authCard
+
+  // Logging out takes the settings bar with it — it belongs to an account, and
+  // the cover would otherwise keep showing yesterday's menu beside the sign-in
+  // panel. Also un-collapses, since settings was what collapsed the bar.
+  useEffect(() => {
+    if (!signedOut) return
+    setView('empty'); setManage(false); setMini(false)
+    miniBefore.current = null; viewBefore.current = null
+  }, [signedOut])
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
 

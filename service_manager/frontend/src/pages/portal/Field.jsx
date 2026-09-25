@@ -34,7 +34,7 @@ export const FIELD_CARD_CLASS = 'set-card'
  * `danger` paints the strip red; use it once per page, at the bottom, for the
  * things that cannot be undone.
  */
-export function Panel({ title, hint, right, danger, bare, fold, open: openProp, style, children }) {
+export function Panel({ title, hint, right, danger, bare, fold, open: openProp, strip, style, children }) {
   // `fold`: the strip becomes the handle for its own body. Local state, because
   // nothing outside the panel needs to know — and a panel you closed stays shut
   // while you work in the one below it.
@@ -42,17 +42,18 @@ export function Panel({ title, hint, right, danger, bare, fold, open: openProp, 
   const shown = !fold || open
   return (
     <section className={`set-panel${danger ? ' danger' : ''}`} style={style}>
-      {(title || hint || right) && (
-        <header className="set-bar">
-          {fold ? (
+      {(title || hint || right || strip) && (
+        <header className={`set-bar${strip ? ' tabs' : ''}`}>
+          {strip}
+          {!strip && (fold ? (
             <button type="button" className={`set-plain set-fold${open ? ' open' : ''}`}
               onClick={() => setOpen((o) => !o)} aria-expanded={open}>
               <Icon name="caret-right" size={12} />
               <b>{title}</b>
             </button>
-          ) : title && <b>{title}</b>}
+          ) : title && <b>{title}</b>)}
           {hint && <span className="hint">{hint}</span>}
-          <span className="sp" />
+          {!strip && <span className="sp" />}
           {right}
         </header>
       )}

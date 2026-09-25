@@ -170,18 +170,26 @@ function setPortalToken(token) {
 }
 
 // ── Login / Sign-up card (shown when logged out) ──────────────────────────────
-export function AuthCard({ t, onAuthed, needsSetup }) {
+/**
+ * AuthCard — one panel that GROWS. Sign-up is not another screen: choosing it
+ * appends the rows it needs below the two that were already there, and the
+ * verification code appends below those, so the thing you were typing in never
+ * moves under your hands. Only the first run differs — there is no account to
+ * sign in to yet, so there is nothing to choose between.
+ */
+export function AuthCard({ t, onAuthed, needsSetup, info }) {
   const [mode, setMode] = useState('login')   // 'login' | 'signup'
   const [f, setF] = useState({ username: '', password: '', email: '', invite_code: '' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const [pending, setPending] = useState(null)   // email-verification notice
+  const [pending, setPending] = useState(null)   // awaiting the emailed code
   const [verifyCode, setVerifyCode] = useState('')
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  const signup = mode === 'signup'
+  const locked = busy || !!pending    // the account rows are settled once a code is out
 
-  async function login() {
-    const res = await launcher.post('/auth/login', { username: f.username.trim(), password: f.password })
-    setPortalToken(res.data.access_token)        // authorize the follow-up /auth/me
+  async function finish(token) {
+    setPortalToken(token)                      // authorize the follow-up /auth/me
     const me = await launcher.get('/auth/me')
     onAuthed(me.data)
   }
@@ -193,36 +201,34 @@ export function AuthCard({ t, onAuthed, needsSetup }) {
       if (needsSetup) {
         // First run: no accounts yet — set the built-in superuser's password.
         const res = await launcher.post('/auth/setup', { password: f.password })
-        setPortalToken(res.data.access_token)
-        const me = await launcher.get('/auth/me')
-        onAuthed(me.data)
+        await finish(res.data.access_token)
         return
       }
-      if (mode === 'login') { await login(); return }
+      if (!signup) {
+        const res = await launcher.post('/auth/login', { username: f.username.trim(), password: f.password })
+        await finish(res.data.access_token)
+        return
+      }
       // display_name is left unset → the backend defaults it to username.
       const res = await launcher.post('/auth/register', {
         username: f.username.trim(), email: f.email.trim(), password: f.password,
         invite_code: f.invite_code.trim() || undefined,
       })
-      if (res.data.verify_required) {
-        setVerifyCode('')
-        setPending(res.data)                     // show "check your email" notice
-      } else {
-        setPortalToken(res.data.access_token)    // verification disabled → log in
-        const me = await launcher.get('/auth/me')
-        onAuthed(me.data)
-      }
+      if (res.data.verify_required) { setVerifyCode(''); setPending(res.data) }
+      else await finish(res.data.access_token)   // verification disabled → straight in
     } catch (e2) {
       const detail = e2?.response?.data?.detail
       if (detail && typeof detail === 'object' && detail.code === 'verify_required') {
-        // Correct password, but the email is still unverified — reopen the
-        // code-entry screen instead of dead-ending on an error message.
-        setVerifyCode('')
+        // Correct password, but the email is still unverified. Open the code row
+        // in place rather than dead-ending on an error message — and switch to
+        // the sign-up side, because that is the sign-up being finished.
+        setVerifyCode(''); setMode('signup')
+        if (detail.email) setF((s) => ({ ...s, email: detail.email }))
         setPending(detail)
         return
       }
       setErr((typeof detail === 'string' && detail) ||
-        t(mode === 'login' ? 'projects_login_fail' : 'projects_signup_fail'))
+        t(signup ? 'projects_signup_fail' : 'projects_login_fail'))
     } finally { setBusy(false) }
   }
 
@@ -234,75 +240,34 @@ export function AuthCard({ t, onAuthed, needsSetup }) {
         username: pending?.username || f.username.trim(),
         code: verifyCode.trim(),
       })
-      setPortalToken(res.data.access_token)
-      const me = await launcher.get('/auth/me')
-      onAuthed(me.data)
+      await finish(res.data.access_token)
     } catch {
-      setErr('Invalid verification code.')
+      setErr(t('auth_verify_fail'))
     } finally { setBusy(false) }
   }
 
   // Give up on a pending signup: delete the unverified account (username/email
-  // become free again) and return to the sign-up form. Needs the password from
-  // the form state — present in both paths that open this screen (signup, and a
-  // login attempt that bounced with verify_required).
+  // become free again) and fold the code row back up. Needs the password from
+  // the form state — present in both paths that open the row.
   async function cancelSignup() {
     setBusy(true); setErr('')
     try {
       await launcher.post('/auth/register-cancel', {
-        username: pending?.username || f.username.trim(),
-        password: f.password,
+        username: pending?.username || f.username.trim(), password: f.password,
       })
-      setPending(null); setVerifyCode(''); setMode('signup')
+      setPending(null); setVerifyCode('')
     } catch {
-      setErr('Could not cancel the sign-up.')
+      setErr(t('auth_verify_cancel_fail'))
     } finally { setBusy(false) }
   }
 
-  if (pending) {
-    return (
-      <form onSubmit={submitVerifyCode} style={cardStyle}>
-        <Panel title="Verify your email" hint={pending.email}>
-          <Field label="Code">
-            <input autoFocus className="keep-font" inputMode="numeric" maxLength={6} placeholder="6-digit code"
-              value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              style={{ ...inputStyle, width: 160, textAlign: 'center', letterSpacing: 4 }} />
-            <span style={fieldMuted}>The email may take a minute to arrive.</span>
-          </Field>
-          <FieldActions>
-            <Button type="submit" variant="primary" disabled={busy || verifyCode.length !== 6}>Verify &amp; log in</Button>
-            <Button variant="secondary" disabled={busy} onClick={cancelSignup}>Cancel sign-up</Button>
-            {err && <span style={{ color: 'var(--danger-text)' }}>{err}</span>}
-          </FieldActions>
-          {(pending.verify_code || pending.verify_url) && (
-            <Field label="DEV">
-              {pending.verify_code && <span style={{ fontFamily: 'var(--font-mono)' }}>{pending.verify_code}</span>}
-              {pending.verify_url && (
-                <a href={pending.verify_url} target="_blank" rel="noreferrer"
-                  style={{ wordBreak: 'break-all' }}>{pending.verify_url}</a>
-              )}
-              <span style={fieldMuted}>email not sent — this portal is in dev echo mode</span>
-            </Field>
-          )}
-        </Panel>
-      </form>
-    )
-  }
-
-  // The two modes live in the panel's own strip, the way a list's filter does.
-  const tabBtn = (m, label) => (
-    <Button variant={mode === m ? 'primary' : 'secondary'} onClick={() => { setMode(m); setErr('') }}>{label}</Button>
-  )
-
-  // First run: no accounts exist yet, so there is nothing to sign in to and no
-  // point offering sign-up — just set the built-in superuser's password.
+  // First run: no accounts exist, so there is nothing to sign in to and no point
+  // offering sign-up — just set the built-in superuser's password.
   if (needsSetup) {
     return (
-      <form onSubmit={submit} autoComplete="off" style={cardStyle}>
+      <form className="set-auth" onSubmit={submit} autoComplete="off" style={cardStyle}>
         <Panel title={t('setup_submit')}>
-          <Field label="admin">
-            <span style={fieldMuted}>{t('setup_hint')}</span>
-          </Field>
+          <Field label="admin"><span style={fieldMuted}>{t('setup_hint')}</span></Field>
           <Field label={t('setup_pw')}>
             <input type="password" autoFocus placeholder={t('setup_pw')} value={f.password} onChange={set('password')}
               style={inputStyle} name="su_pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
@@ -316,52 +281,86 @@ export function AuthCard({ t, onAuthed, needsSetup }) {
     )
   }
 
+  // The two modes live in the panel's own strip — the choice happens where the
+  // title would be, not as a pair of buttons wedged in beside it.
+  const tab = (m, label) => (
+    <button type="button" className="set-plain" aria-pressed={mode === m} disabled={locked}
+      onClick={() => { setMode(m); setErr('') }}>{label}</button>
+  )
+  const host = info && `${info.host || '?'}${info.version ? ` · ${info.version}` : ''}`
+  const canSubmit = !busy && f.username.trim() && f.password && (!signup || f.email.trim())
+
   return (
-    /* Order: id, email, password, code. On signup we deliberately break the
-       browser's login autofill (off / new-password) so it doesn't drop the
-       saved sign-in id/password into the new-account fields. */
-    <form onSubmit={submit} autoComplete={mode === 'signup' ? 'off' : 'on'} style={cardStyle}>
-      <Panel
-        title={t(mode === 'login' ? 'projects_login_title' : 'projects_signup')}
-        right={<>
-          {tabBtn('login', t('projects_login_title'))}
-          {tabBtn('signup', t('projects_signup'))}
-        </>}>
+    /* On signup we deliberately break the browser's login autofill (off /
+       new-password) so it doesn't drop the saved sign-in id and password into
+       the new-account fields. */
+    <form className="set-auth" onSubmit={pending ? submitVerifyCode : submit}
+      autoComplete={signup ? 'off' : 'on'} style={cardStyle}>
+      {host && <span className="set-host">{host}</span>}
+      <Panel strip={<>{tab('login', t('projects_login_title'))}{tab('signup', t('projects_signup'))}</>}>
         <Field label={t('projects_login_user')}>
-          <input autoFocus placeholder={t('projects_login_user')} value={f.username} onChange={set('username')} style={inputStyle}
-            name={mode === 'signup' ? 'su_id' : 'username'}
-            autoComplete={mode === 'signup' ? 'off' : 'username'}
-            {...(mode === 'signup' ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
+          <input autoFocus placeholder={t('projects_login_user')} value={f.username} onChange={set('username')}
+            style={inputStyle} disabled={locked}
+            name={signup ? 'su_id' : 'username'}
+            autoComplete={signup ? 'off' : 'username'}
+            {...(signup ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
         </Field>
-        {mode === 'signup' && (
+        <Field label={t('projects_login_pass')}>
+          <input type="password" placeholder={t('projects_login_pass')} value={f.password} onChange={set('password')}
+            style={inputStyle} disabled={locked}
+            name={signup ? 'su_pw' : 'password'}
+            autoComplete={signup ? 'new-password' : 'current-password'}
+            {...(signup ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
+        </Field>
+        {signup && (
           <Field label={t('projects_signup_email')}>
-            <input placeholder={t('projects_signup_email')} value={f.email} onChange={set('email')} style={inputStyle}
+            <input placeholder={t('projects_signup_email')} value={f.email} onChange={set('email')}
+              style={inputStyle} disabled={locked}
               name="su_email" autoComplete="off" data-1p-ignore data-lpignore="true" />
+            <span style={fieldMuted}>{t('auth_email_hint')}</span>
           </Field>
         )}
-        <Field label={t('projects_login_pass')}>
-          <input type="password" placeholder={t('projects_login_pass')} value={f.password} onChange={set('password')} style={inputStyle}
-            name={mode === 'signup' ? 'su_pw' : 'password'}
-            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-            {...(mode === 'signup' ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
-        </Field>
-        {mode === 'signup' && (
+        {signup && (
           <Field label={t('projects_signup_code')}>
-            <input placeholder={t('projects_signup_code')} value={f.invite_code} onChange={set('invite_code')} style={inputStyle}
+            <input placeholder={t('projects_signup_code')} value={f.invite_code} onChange={set('invite_code')}
+              style={inputStyle} disabled={locked}
               name="su_code" autoComplete="off" data-1p-ignore data-lpignore="true" />
+            <span style={fieldMuted}>{t('auth_invite_hint')}</span>
+          </Field>
+        )}
+        {pending && (
+          <Field label={t('auth_verify_label')}>
+            <input autoFocus className="keep-font" inputMode="numeric" maxLength={6} placeholder="------"
+              value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              style={{ ...inputStyle, width: 150, textAlign: 'center', letterSpacing: 5 }} />
+            <span style={fieldMuted}>{t('auth_verify_hint')}</span>
+          </Field>
+        )}
+        {pending && (pending.verify_code || pending.verify_url) && (
+          <Field label="DEV">
+            {pending.verify_code && <span style={{ fontFamily: 'var(--font-mono)', letterSpacing: 2 }}>{pending.verify_code}</span>}
+            {pending.verify_url && (
+              <a href={pending.verify_url} target="_blank" rel="noreferrer" style={{ wordBreak: 'break-all' }}>{pending.verify_url}</a>
+            )}
+            <span style={fieldMuted}>{t('auth_verify_dev')}</span>
           </Field>
         )}
         <FieldActions>
-          <Button type="submit" variant="primary"
-            disabled={busy || !f.username.trim() || !f.password || (mode === 'signup' && !f.email.trim())}>
-            {t(mode === 'login' ? 'projects_login_submit' : 'projects_signup_submit')}
-          </Button>
+          {pending ? (<>
+            <Button type="submit" variant="primary" disabled={busy || verifyCode.length !== 6}>{t('auth_verify_submit')}</Button>
+            <Button variant="secondary" disabled={busy} onClick={cancelSignup}>{t('auth_verify_cancel')}</Button>
+          </>) : (
+            <Button type="submit" variant="primary" disabled={!canSubmit}>
+              {t(signup ? 'projects_signup_submit' : 'projects_login_submit')}
+            </Button>
+          )}
           {err && <span style={{ color: 'var(--danger-text)' }}>{err}</span>}
         </FieldActions>
       </Panel>
     </form>
   )
 }
+
 
 export default function ProjectsPage() {
   const { t, lang } = useLang()
@@ -846,7 +845,7 @@ export default function ProjectsPage() {
       <SidebarPortal
         user={null} isManager={false} cards={publicCards} iconFor={iconFor}
         groups={[]} liveCards={[]} links={[]} fullOrder={publicCards.map(cardKey)}
-        authCard={<AuthCard t={t} needsSetup={!!portalInfo?.needs_setup}
+        authCard={<AuthCard t={t} info={portalInfo} needsSetup={!!portalInfo?.needs_setup}
           onAuthed={(u) => { setUser(u); refresh() }} />}
       />
     )
@@ -892,7 +891,7 @@ export default function ProjectsPage() {
     >
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
-        <AuthCard t={t} needsSetup={!!portalInfo?.needs_setup}
+        <AuthCard t={t} info={portalInfo} needsSetup={!!portalInfo?.needs_setup}
           onAuthed={(u) => { setAnimateHeader(true); setUser(u); setView('home'); refresh() }} />
       ) : view === 'settings' ? (
         <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout}

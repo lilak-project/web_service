@@ -541,7 +541,9 @@
 /* Signed out: the panel is the login card, centred on the same ground the rest
    of the portal's own pages use. */
 .pl-authpage {
-  display: grid; place-items: center;
+  /* Top-aligned, not centred: the panel grows downward when you choose sign-up,
+     and a centred panel would slide the username row up under the cursor. */
+  display: grid; place-items: start center; align-content: start;
   background: var(--surface-2);
-  padding: 24px;
+  padding: 10vh 24px 24px;
 }
