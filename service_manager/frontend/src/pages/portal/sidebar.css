@@ -470,3 +470,20 @@
   padding: 0 10px 10px;
 }
 .pl-root.mini.settings .pl-user .pl-card.on:hover .pl-row { background: transparent; }
+
+/* The fold-all button beside the brand. It had no plate at all, so there was
+   nothing to aim at and no sign it had taken the click. */
+.pl-fold {
+  flex-shrink: 0;
+  display: grid; place-items: center;
+  width: 28px; height: 28px;
+  border-radius: var(--radius-lg, 5px);
+  border: 1px solid transparent;
+  transition: background .12s, border-color .12s, transform .06s;
+}
+.pl-fold:hover { background: var(--surface-3); border-color: var(--divider); }
+.pl-fold:active { background: var(--border-strong); transform: translateY(1px); }
+.pl-fold:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
+/* Collapsed the labels go, and so does this: there is nothing beside it to fold
+   a list under, and at 64px it crowded the mark. */
+.pl-root.mini .pl-fold { opacity: 0; pointer-events: none; }

@@ -372,9 +372,15 @@ export default function SidebarPortal({
   const bandDrop = (g) => (g.fixed ? {} : bandProps(g.loose ? null : g.id))
   const dropCls = (key) => (dropAt?.key === key ? (dropAt.after ? ' drop-after' : ' drop-before') : '')
 
-  // Collapse all: every group and every project list. (Expand-all deliberately
-  // only reopens the groups — reopening every project list buries the bar.)
-  const allShut = () => { setShut(new Set(bands.map((b) => b.g?.id).filter(Boolean))); setOpenSvcs(new Set()) }
+  // One button, two jobs: while anything is open it closes everything; once
+  // everything is shut it becomes the way back. (Opening deliberately only
+  // reopens the BANDS — reopening every project list too buries the bar.)
+  const bandIds = bands.map((b) => b.g?.id).filter(Boolean)
+  const anyOpen = bandIds.some((id) => !shut.has(id)) || openSvcs.size > 0
+  const foldAll = () => {
+    if (anyOpen) { setShut(new Set(bandIds)); setOpenSvcs(new Set()) }
+    else setShut(new Set())
+  }
 
   /** Manage on/off. Leaving it drops back to the empty panel rather than framing
    *  whatever card you happened to be editing. */
@@ -534,9 +540,10 @@ export default function SidebarPortal({
             <b>lilak</b><span className="sub">portal</span>
           </button>
           <span style={{ flex: 1 }} />
-          <button type="button" className="pl-chev" title={L('전부 접기', 'Collapse all')}
-            onClick={allShut}>
-            <Icon name="caret-up" size={14} color="var(--text-muted)" />
+          <button type="button" className="pl-fold"
+            title={anyOpen ? L('전부 접기', 'Collapse all') : L('전부 펼치기', 'Expand all')}
+            onClick={foldAll}>
+            <Icon name={anyOpen ? 'caret-up' : 'caret-down'} size={14} color="var(--text-secondary)" />
           </button>
         </div>
 
