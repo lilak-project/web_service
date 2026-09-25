@@ -291,13 +291,18 @@
 /* ── group bands ─────────────────────────────────────────────────────────── */
 /* The band covers the bar's full width, gutters included: an indented box made
    the collapsed 64px bar wider, which is why the strip won. */
-.pl-band {
+/* The whole group is one tinted region spanning the bar's full width, gutters
+   included, and its cards sit INSIDE it. Tinting only the title read as a
+   heading with some indented rows under it, not as a container. */
+.pl-group {
   flex: 0 0 auto;
   margin: 4px -10px 0;
+  padding-bottom: 6px;
   background: rgba(148, 163, 184, .16);
   border-top: 1px solid var(--border-strong);
   border-bottom: 1px solid var(--border-strong);
 }
+.pl-band { flex: 0 0 auto; }
 /* The 24px caret box is centred on x=32 too (the band starts at x=0). */
 .pl-grp {
   display: flex; align-items: center; gap: 8px;
@@ -321,11 +326,12 @@
 }
 /* Collapsed: drop the fill, keep the top rule and the caret box so groups can
    still be opened from the 64px bar. */
-.pl-root.mini .pl-band { background: transparent; border-bottom-color: transparent; }
+.pl-root.mini .pl-group { background: transparent; border-bottom-color: transparent; padding-bottom: 0; }
 .pl-root.mini .pl-grp .pl-txt, .pl-root.mini .pl-gcount { opacity: 0; pointer-events: none; }
 
-/* A group's members are not indented — only projects are. */
-.pl-projs.pl-gitems { margin-left: 0; }
+/* A group's members are not indented — only projects are. The padding puts them
+   back on the nav's 10px gutter, which the full-bleed region gave up. */
+.pl-projs.pl-gitems { margin: 0; padding: 0 10px; }
 
 /* ── level 2: the settings bar ───────────────────────────────────────────── */
 /* The same geometry as the service bar — 10px gutters, 4px gaps — on a deeper
@@ -383,7 +389,7 @@
   padding: 8px 9px 10px; margin-bottom: 4px;
   border-bottom: 1px solid var(--border-strong);
 }
-.pl-mgnew {
+.pl-mgnew, .pl-mgout {
   display: flex; align-items: center; gap: 8px;
   height: 34px; padding: 0 12px;
   background: var(--surface);
@@ -392,9 +398,10 @@
   color: var(--btn-primary-bg, #2563eb);
 }
 .pl-mgnew:hover { background: var(--info-bg); }
-.pl-mghint { font-size: 12px; line-height: 1.35; color: var(--text-muted); }
+/* The way out is the same shape but neutral: an escape, not an action. */
+.pl-mgout { border-color: var(--border-strong); color: var(--text-primary); }
+.pl-mgout:hover { background: var(--surface-2); }
 .pl-root.mini .pl-mgbar { padding: 8px 6px; }
-.pl-root.mini .pl-mghint { display: none; }
 
 .pl-grip { display: flex; flex: 0 0 auto; cursor: grab; margin-left: -2px; }
 .pl-card.mg { cursor: grab; }
@@ -403,9 +410,9 @@
 .pl-card.drop-before { box-shadow: inset 0 2px 0 var(--btn-primary-bg, #2563eb); }
 .pl-card.drop-after { box-shadow: inset 0 -2px 0 var(--btn-primary-bg, #2563eb); }
 .pl-card.off { opacity: .5; }
-.pl-band.drop { background: var(--info-bg); }
+.pl-group.drop { background: var(--info-bg); }
 .pl-gempty {
-  margin: 2px 9px 6px;
+  margin: 2px 0 2px;
   padding: 10px; text-align: center;
   font-size: 12px; color: var(--text-muted);
   border: 1px dashed var(--border-strong);
@@ -434,7 +441,9 @@
   border-color: transparent;
   box-shadow: none;
   border-radius: 0;
-  margin: 0 -10px;
-  padding: 0 10px;
+  /* Down to the bar's bottom edge as well as out to its sides: a fill that
+     stopped 10px short left a stripe of bar under it and broke the join. */
+  margin: 0 -10px -10px;
+  padding: 0 10px 10px;
 }
 .pl-root.mini.settings .pl-user .pl-card.on:hover .pl-row { background: transparent; }

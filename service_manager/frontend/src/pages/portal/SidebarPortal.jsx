@@ -529,18 +529,23 @@ export default function SidebarPortal({
         <div className="pl-nav">
           {manage && isManager && (
             <div className="pl-mgbar">
+              {/* The way OUT comes first: manage mode changes what every card
+                  does, so leaving it should not be a hunt through the mode list. */}
+              <button type="button" className="pl-mgout" onClick={toggleManage}>
+                <Icon name="close" size={14} /> <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
+              </button>
               <button type="button" className="pl-mgnew" onClick={onCreateGroup}>
                 <Icon name="folder-plus" size={14} /> <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
               </button>
-              <span className="pl-mghint">{L('아이콘을 끌어서 순서를 바꾸거나 그룹에 넣으세요.', 'Drag an icon to reorder it, or onto a group to join it.')}</span>
             </div>
           )}
           {bands.map(({ g, items }) => (g ? (
-            <div key={g.id} style={{ display: 'contents' }}>
-              {/* The band spans the bar's full width, gutters included, so a group
-                  reads as a strip rather than an indented box (a box widened the
-                  collapsed bar). */}
-              <div className={`pl-band${dropAt?.gid === g.id ? ' drop' : ''}`} {...bandProps(g.id)}>
+            /* A group is one tinted REGION spanning the bar's full width, with its
+               cards inside it — a tinted title alone left the members looking like
+               they had simply been indented under a heading. */
+            <div key={g.id} className={`pl-group${dropAt?.gid === g.id ? ' drop' : ''}`}
+              {...bandProps(g.id)}>
+              <div className="pl-band">
                 <button type="button" className="pl-grp"
                   onClick={() => (manage && isManager ? openManageGroup(g) : toggleGroup(g.id))}>
                   <span className={`pl-gchev${groupOpen(g.id) ? ' open' : ''}`}>
