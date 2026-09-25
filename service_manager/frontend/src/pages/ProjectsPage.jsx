@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { EnvelopeSimple } from '@phosphor-icons/react'
 import { Icon, Button, CoverPage, PROJECT_ICONS, Avatar, MANAGER_COLOR, Modal } from 'lilak-ui'
 import ExpandBox from './portal/ExpandBox'
 import { launcher, setExperiment, errText } from '../api'
@@ -23,6 +22,7 @@ import LiveWall from './portal/LiveWall'
 import useFlip from './portal/useFlip'
 import usePointerDrag from './portal/usePointerDrag'
 import { usePortalScale } from '../portalScale'
+import { Panel, Field, FieldActions, fieldInput, fieldMuted } from './portal/Field'
 
 // True when the viewport is phone-narrow — drives the compact stacked header and
 // the settings dropdown (the desktop settings sidebar is unusable at this width).
@@ -144,21 +144,12 @@ const CTRL_R = 10
 // service-card Enter/Start/Stop buttons (see ServiceSingle) so every card's main
 // action looks the same.
 const ENTER_BTN = { height: 40, borderRadius: 10, padding: '0 18px', minWidth: 88, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
-const inputStyle = {
-  width: '100%', height: CTRL_H, padding: '0 14px', borderRadius: CTRL_R, fontFamily: 'var(--font-mono)',
-  fontSize: 'var(--fs-medium, 14px)', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
-  border: '1px solid var(--input-border)', outline: 'none',
-}
+const inputStyle = { ...fieldInput, width: '100%', fontFamily: 'var(--font-mono)' }
 // The card's own side padding, on top of the page Container's 16px — on a phone
 // the column is the full width, and the controls shouldn't run up to the glass.
-const cardStyle = {
-  maxWidth: 360, margin: '28px auto 0', padding: '0 12px',
-  display: 'flex', flexDirection: 'column', gap: 10,
-}
-const authBtnStyle = {
-  width: '100%', height: CTRL_H, borderRadius: CTRL_R,
-  fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center',
-}
+// The auth card is written in the same panels as the rest of the portal; this
+// is only how wide it sits and where.
+const cardStyle = { width: '100%', maxWidth: 420, margin: '28px auto 0' }
 
 // Attach / clear the portal bearer token on the shared launcher axios.
 function setPortalToken(token) {
@@ -270,111 +261,105 @@ export function AuthCard({ t, onAuthed, needsSetup }) {
 
   if (pending) {
     return (
-      <div style={{ ...cardStyle, margin: '12px auto 0', textAlign: 'center' }}>
-        <EnvelopeSimple size={34} style={{ color: 'var(--text-muted)', alignSelf: 'center' }} />
-        <div style={{ fontWeight: 600 }}>Verify your email</div>
-        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
-          Enter the 6-digit code sent to <b>{pending.email}</b>
-          <br />The email may take a minute to arrive.
-        </div>
-        <form onSubmit={submitVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <input
-            autoFocus
-            className="keep-font"
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="6-digit code"
-            value={verifyCode}
-            onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            style={{ ...inputStyle, textAlign: 'center', letterSpacing: 4, fontSize: 18 }}
-          />
-          {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
-          <Button type="submit" disabled={busy || verifyCode.length !== 6}
-            style={authBtnStyle}>Verify &amp; log in</Button>
-        </form>
-        {pending.verify_code && (
-          <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', wordBreak: 'break-all',
-            border: '1px dashed var(--border, #ccc)', borderRadius: 8, padding: 8 }}>
-            DEV — verification code (email not sent): {pending.verify_code}
-          </div>
-        )}
-        {pending.verify_url && (
-          <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', wordBreak: 'break-all',
-            border: '1px dashed var(--border, #ccc)', borderRadius: 8, padding: 8 }}>
-            DEV — verification link:&nbsp;
-            <a href={pending.verify_url} target="_blank" rel="noreferrer">{pending.verify_url}</a>
-          </div>
-        )}
-        <Button variant="ghost" disabled={busy} onClick={cancelSignup}
-          style={{ ...authBtnStyle, border: '1px solid var(--border-default)' }}>Cancel sign-up</Button>
-      </div>
+      <form onSubmit={submitVerifyCode} style={cardStyle}>
+        <Panel title="Verify your email" hint={pending.email}>
+          <Field label="Code">
+            <input autoFocus className="keep-font" inputMode="numeric" maxLength={6} placeholder="6-digit code"
+              value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              style={{ ...inputStyle, width: 160, textAlign: 'center', letterSpacing: 4 }} />
+            <span style={fieldMuted}>The email may take a minute to arrive.</span>
+          </Field>
+          <FieldActions>
+            <Button type="submit" variant="primary" disabled={busy || verifyCode.length !== 6}>Verify &amp; log in</Button>
+            <Button variant="secondary" disabled={busy} onClick={cancelSignup}>Cancel sign-up</Button>
+            {err && <span style={{ color: 'var(--danger-text)' }}>{err}</span>}
+          </FieldActions>
+          {(pending.verify_code || pending.verify_url) && (
+            <Field label="DEV">
+              {pending.verify_code && <span style={{ fontFamily: 'var(--font-mono)' }}>{pending.verify_code}</span>}
+              {pending.verify_url && (
+                <a href={pending.verify_url} target="_blank" rel="noreferrer"
+                  style={{ wordBreak: 'break-all' }}>{pending.verify_url}</a>
+              )}
+              <span style={fieldMuted}>email not sent — this portal is in dev echo mode</span>
+            </Field>
+          )}
+        </Panel>
+      </form>
     )
   }
 
+  // The two modes live in the panel's own strip, the way a list's filter does.
   const tabBtn = (m, label) => (
-    <Button variant={mode === m ? 'primary' : 'ghost'} onClick={() => { setMode(m); setErr('') }}
-      style={{ ...authBtnStyle, flex: 1,
-        // The unselected mode is a ghost (no fill), so give it a faint outline to
-        // still read as a button. The selected one keeps a transparent border of
-        // the same width, so switching modes can't nudge the layout.
-        border: mode === m ? '1px solid transparent' : '1px solid var(--border-default)' }}>{label}</Button>
+    <Button variant={mode === m ? 'primary' : 'secondary'} onClick={() => { setMode(m); setErr('') }}>{label}</Button>
   )
 
   // First run: no accounts exist yet, so there is nothing to sign in to and no
   // point offering sign-up — just set the built-in superuser's password.
   if (needsSetup) {
     return (
-      <div style={cardStyle}>
-        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', textAlign: 'center' }}>
-          {t('setup_hint')}
-        </div>
-        <form onSubmit={submit} autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <input value="admin" readOnly style={{ ...inputStyle, opacity: 0.7 }} aria-label="admin" />
-          <input type="password" autoFocus placeholder={t('setup_pw')} value={f.password} onChange={set('password')}
-            style={inputStyle} name="su_pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
-          {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
-          <Button type="submit" style={{ ...authBtnStyle, marginTop: 2 }} disabled={busy || !f.password}>
-            {t('setup_submit')}
-          </Button>
-        </form>
-      </div>
+      <form onSubmit={submit} autoComplete="off" style={cardStyle}>
+        <Panel title={t('setup_submit')}>
+          <Field label="admin">
+            <span style={fieldMuted}>{t('setup_hint')}</span>
+          </Field>
+          <Field label={t('setup_pw')}>
+            <input type="password" autoFocus placeholder={t('setup_pw')} value={f.password} onChange={set('password')}
+              style={inputStyle} name="su_pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
+          </Field>
+          <FieldActions>
+            <Button type="submit" variant="primary" disabled={busy || !f.password}>{t('setup_submit')}</Button>
+            {err && <span style={{ color: 'var(--danger-text)' }}>{err}</span>}
+          </FieldActions>
+        </Panel>
+      </form>
     )
   }
 
   return (
-    <div style={cardStyle}>
-      <div style={{ display: 'flex', gap: 6 }}>
-        {tabBtn('login', t('projects_login_title'))}
-        {tabBtn('signup', t('projects_signup'))}
-      </div>
-      {/* Order: id, email, password, code. On signup we deliberately break the
-          browser's login autofill (off / new-password) so it doesn't drop the
-          saved sign-in id/password into the new-account fields. */}
-      <form onSubmit={submit} autoComplete={mode === 'signup' ? 'off' : 'on'}
-        style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <input autoFocus placeholder={t('projects_login_user')} value={f.username} onChange={set('username')} style={inputStyle}
-          name={mode === 'signup' ? 'su_id' : 'username'}
-          autoComplete={mode === 'signup' ? 'off' : 'username'}
-          {...(mode === 'signup' ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
+    /* Order: id, email, password, code. On signup we deliberately break the
+       browser's login autofill (off / new-password) so it doesn't drop the
+       saved sign-in id/password into the new-account fields. */
+    <form onSubmit={submit} autoComplete={mode === 'signup' ? 'off' : 'on'} style={cardStyle}>
+      <Panel
+        title={t(mode === 'login' ? 'projects_login_title' : 'projects_signup')}
+        right={<>
+          {tabBtn('login', t('projects_login_title'))}
+          {tabBtn('signup', t('projects_signup'))}
+        </>}>
+        <Field label={t('projects_login_user')}>
+          <input autoFocus placeholder={t('projects_login_user')} value={f.username} onChange={set('username')} style={inputStyle}
+            name={mode === 'signup' ? 'su_id' : 'username'}
+            autoComplete={mode === 'signup' ? 'off' : 'username'}
+            {...(mode === 'signup' ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
+        </Field>
         {mode === 'signup' && (
-          <input placeholder={t('projects_signup_email')} value={f.email} onChange={set('email')} style={inputStyle}
-            name="su_email" autoComplete="off" data-1p-ignore data-lpignore="true" />
+          <Field label={t('projects_signup_email')}>
+            <input placeholder={t('projects_signup_email')} value={f.email} onChange={set('email')} style={inputStyle}
+              name="su_email" autoComplete="off" data-1p-ignore data-lpignore="true" />
+          </Field>
         )}
-        <input type="password" placeholder={t('projects_login_pass')} value={f.password} onChange={set('password')} style={inputStyle}
-          name={mode === 'signup' ? 'su_pw' : 'password'}
-          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-          {...(mode === 'signup' ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
+        <Field label={t('projects_login_pass')}>
+          <input type="password" placeholder={t('projects_login_pass')} value={f.password} onChange={set('password')} style={inputStyle}
+            name={mode === 'signup' ? 'su_pw' : 'password'}
+            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            {...(mode === 'signup' ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
+        </Field>
         {mode === 'signup' && (
-          <input placeholder={t('projects_signup_code')} value={f.invite_code} onChange={set('invite_code')} style={inputStyle}
-            name="su_code" autoComplete="off" data-1p-ignore data-lpignore="true" />
+          <Field label={t('projects_signup_code')}>
+            <input placeholder={t('projects_signup_code')} value={f.invite_code} onChange={set('invite_code')} style={inputStyle}
+              name="su_code" autoComplete="off" data-1p-ignore data-lpignore="true" />
+          </Field>
         )}
-        {err && <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</div>}
-        <Button type="submit" style={{ ...authBtnStyle, marginTop: 2 }}
-          disabled={busy || !f.username.trim() || !f.password || (mode === 'signup' && !f.email.trim())}>
-          {t(mode === 'login' ? 'projects_login_submit' : 'projects_signup_submit')}
-        </Button>
-      </form>
-    </div>
+        <FieldActions>
+          <Button type="submit" variant="primary"
+            disabled={busy || !f.username.trim() || !f.password || (mode === 'signup' && !f.email.trim())}>
+            {t(mode === 'login' ? 'projects_login_submit' : 'projects_signup_submit')}
+          </Button>
+          {err && <span style={{ color: 'var(--danger-text)' }}>{err}</span>}
+        </FieldActions>
+      </Panel>
+    </form>
   )
 }
 

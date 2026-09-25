@@ -658,8 +658,7 @@ export default function SidebarPortal({
 
           {bands.every((b) => !b.items.length) && (
             <div style={{ padding: '10px 9px', color: 'var(--text-muted)' }}>
-              {signedOut ? L('공개된 서비스가 없습니다. 로그인하세요.', 'Nothing is public here — sign in.')
-                : L('서비스가 없습니다', 'no services')}
+              {L('서비스가 없습니다', 'no services')}
             </div>
           )}
         </div>
