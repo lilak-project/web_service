@@ -35,7 +35,7 @@
    The border is `currentColor`: the kit already colours a button's TEXT by what
    it does (blue primary, red danger, grey secondary), so the outline inherits
    that and every button is legible as a button without inventing a palette. */
-:is(.set-panel, .set-card, .set-row) button:not(.set-plain) {
+:is(.set-panel, .set-card, .set-row) button:not(.set-plain):not(.set-pick *) {
   border: 1px solid currentColor !important;
   border-radius: var(--radius-lg, 5px) !important;
   min-height: 28px;
@@ -43,8 +43,11 @@
 }
 /* Hovered, the kit fills the button solid and flips the text white — a white
    outline on a solid fill is the same shape, one shade lighter. */
-:is(.set-panel, .set-card, .set-row) button:not(.set-plain):hover { border-color: currentColor !important; }
-:is(.set-panel, .set-card, .set-row) :is(input, select, textarea) {
+:is(.set-panel, .set-card, .set-row) button:not(.set-plain):not(.set-pick *):hover { border-color: currentColor !important; }
+/* A range is not a field and a checkbox is not a box to type in; a picker
+   brings its own square controls. `.set-pick` is the way out for a widget that
+   has to keep its own shape inside a panel. */
+:is(.set-panel, .set-card, .set-row) :is(input, select, textarea):not([type="range"], [type="checkbox"], [type="radio"], .set-pick *) {
   font-size: var(--fs-medium, 14px);
   min-height: 28px;
   padding: 0 9px;

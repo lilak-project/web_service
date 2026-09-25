@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Icon, ColorPicker } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import { Panel, Field, FieldActions, Row, fieldInput, fieldMuted } from './Field'
+import { notify } from './settingsMsg'
 import { LOGO_PATHS, LOGO_CENTER, LOGO_SPAN } from './lilakLogo'
 
 /**
@@ -70,23 +72,22 @@ function buildSVG(c, { px, dark } = {}) {
 }
 
 // ── small styled bits ─────────────────────────────────────────────────────────
-const sectionHdr = { fontSize: 'var(--fs-small, 12px)', fontWeight: 600, color: 'var(--text-secondary)', margin: '14px 0 8px' }
-const rowS = { display: 'flex', alignItems: 'center', gap: 8 }
-const lblS = { fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', minWidth: 56 }
-const numStyle = { width: 56, height: 26, padding: '0 6px', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)', textAlign: 'right', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
+const numStyle = { ...fieldInput, width: 58, fontFamily: 'var(--font-mono)', textAlign: 'right' }
+const numS = { ...numStyle, width: '100%' }
+// on · name · colour · slider · w · rot · x · y
+const LINE_COLS = { gridTemplateColumns: '18px minmax(60px, 96px) 24px minmax(40px, 1fr) 54px 54px 54px 54px' }
 const CHECKER = 'repeating-conic-gradient(#0001 0% 25%, transparent 0% 50%) 50% / 18px 18px'
 
 // One scalar control: slider + number input, both editing the same value.
 function NumField({ label, value, min, max, step = 1, onChange, suffix = '' }) {
   return (
-    <div style={rowS}>
-      {label != null && <span style={lblS}>{label}</span>}
+    <Field label={label}>
       <input type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(Number(e.target.value))} style={{ flex: 1, minWidth: 60 }} />
       <input type="number" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(e.target.value === '' ? 0 : Number(e.target.value))} style={numStyle} />
-      {suffix && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', width: 12 }}>{suffix}</span>}
-    </div>
+      {suffix && <span style={fieldMuted}>{suffix}</span>}
+    </Field>
   )
 }
 
@@ -114,12 +115,9 @@ export default function IconLabView() {
   const [c, setC] = useState(DEFAULT_CFG)
   const [presets, setPresets] = useState([])      // user presets (≤10)
   const [hover, setHover] = useState(null)
-  const [msg, setMsg] = useState('')
+  const setMsg = (m, tone) => m && notify(m, tone)
   const [busy, setBusy] = useState('')
   const [pngSize, setPngSize] = useState(512)
-  const [open, setOpen] = useState({ box: true, whole: true, lines: true, all: true })  // collapsible sections
-  const toggle = (k) => setOpen((s) => ({ ...s, [k]: !s[k] }))
-  const caretEl = (k) => <span style={{ display: 'inline-block', width: 9, fontSize: 9, color: 'var(--text-muted)' }}>{open[k] ? '▼' : '▶'}</span>
 
   const upd = (patch) => setC((s) => ({ ...s, ...patch }))
   const updLine = (i, patch) => setC((s) => ({ ...s, lines: s.lines.map((ln, j) => (j === i ? { ...ln, ...patch } : ln)) }))
@@ -132,11 +130,11 @@ export default function IconLabView() {
   }, [])
 
   async function act(kind) {
-    setBusy(kind); setMsg('')
+    setBusy(kind)
     try {
       if (kind === 'favicon') {
         const r = await launcher.post('/admin/iconlab/favicon', { svg: buildSVG(c, { dark: true }) })
-        setMsg(L(`favicon 적용됨 · ${r.data.wrote.length}곳 · 탭에서 Cmd+Shift+R`, `favicon written to ${r.data.wrote.length} files · hard-reload the tab`))
+        setMsg(L(`favicon 적용됨 · ${r.data.wrote.length}곳 · 탭에서 Cmd+Shift+R`, `favicon written to ${r.data.wrote.length} files · hard-reload the tab`), 'ok')
       } else if (kind === 'appicon') {
         const r = await launcher.post('/admin/iconlab/appicon', { svg: buildSVG(c) })
         setMsg(r.data.icns_rebuilt ? L('앱 아이콘 재생성 완료 (~/Applications)', 'app icon rebuilt (~/Applications)')
@@ -181,7 +179,7 @@ export default function IconLabView() {
   }
   function exportSVG() { download('lilak-icon.svg', new Blob([buildSVG(c, { dark: true })], { type: 'image/svg+xml' })) }
   async function exportVector(fmt) {   // pdf | eps — converted server-side
-    setBusy(fmt); setMsg('')
+    setBusy(fmt)
     try {
       const res = await launcher.post('/admin/iconlab/export', { svg: buildSVG(c, { dark: true }), fmt }, { responseType: 'blob' })
       download(`lilak-icon.${fmt}`, res.data)
@@ -222,155 +220,133 @@ export default function IconLabView() {
   const allPresets = [...FIXED_PRESETS, ...presets]
 
   return (
-    <div>
-      <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', marginBottom: 12 }}>
-        {L('각 선의 굵기·색상·회전·위치(x/y)와 박스 안 위치·크기·회전을 편집해 favicon·앱 아이콘으로 적용하거나 SVG·PNG로 내보냅니다. 설정은 프리셋으로 최대 10개 저장됩니다.',
-          'Edit each line’s width/color/rotation/position (x/y) and the logo’s position/size/rotation, then apply as favicon/app icon or export SVG/PNG. Save up to 10 presets.')}
-      </div>
-
-      {/* ── presets strip ── */}
-      <div style={sectionHdr}>{L('프리셋', 'Presets')}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
-        {allPresets.map((p) => (
-          <div key={p.id} title={p.fixed ? L(p.name_ko, p.name_en) : p.name}
-            style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: 54 }}>
-            <button onClick={() => loadPreset(p)} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
-              <MiniIcon cfg={normCfg(p.config)} px={36} />
-            </button>
-            <span style={{ fontSize: 'var(--fs-micro, 10px)', color: p.fixed ? 'var(--btn-primary-bg)' : 'var(--text-muted)',
-              maxWidth: 54, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
-              {p.fixed ? L(p.name_ko, p.name_en) : p.name}
+    <div className="svc-mg">
+      <Panel bare title={L('프리셋', 'Presets')} hint={String(allPresets.length)}>
+        <Row>
+          {allPresets.map((p) => (
+            <span key={p.id} title={p.fixed ? L(p.name_ko, p.name_en) : p.name}
+              style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: 54 }}>
+              <button type="button" className="set-plain" onClick={() => loadPreset(p)}
+                style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
+                <MiniIcon cfg={normCfg(p.config)} px={36} />
+              </button>
+              <span style={{ fontSize: 'var(--fs-small, 12px)', color: p.fixed ? 'var(--btn-primary-bg)' : 'var(--text-muted)',
+                maxWidth: 54, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                {p.fixed ? L(p.name_ko, p.name_en) : p.name}
+              </span>
+              {!p.fixed && (
+                <button type="button" className="set-plain" onClick={() => deletePreset(p.id)} title={L('삭제', 'delete')}
+                  style={{ position: 'absolute', top: -4, right: 2, width: 16, height: 16, lineHeight: '14px', borderRadius: 999,
+                    border: '1px solid var(--border-default)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, padding: 0 }}>×</button>
+              )}
             </span>
-            {!p.fixed && (
-              <button onClick={() => deletePreset(p.id)} title={L('삭제', 'delete')}
-                style={{ position: 'absolute', top: -4, right: 2, width: 16, height: 16, lineHeight: '14px', borderRadius: 999,
-                  border: '1px solid var(--border-default)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, padding: 0 }}>×</button>
-            )}
-          </div>
-        ))}
-        <button onClick={saveCurrent} disabled={presets.length >= 10} title={L('현재 설정을 프리셋으로 저장', 'save current as preset')}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px dashed var(--border-default)', background: 'var(--surface)',
-            color: 'var(--text-muted)', cursor: presets.length >= 10 ? 'default' : 'pointer', fontSize: 18, opacity: presets.length >= 10 ? 0.4 : 1 }}>+</button>
-      </div>
+          ))}
+          <button type="button" className="set-plain" onClick={saveCurrent} disabled={presets.length >= 10}
+            title={L('현재 설정을 프리셋으로 저장', 'save current as preset')}
+            style={{ width: 36, height: 36, borderRadius: 'var(--radius-lg, 5px)', border: '1px dashed var(--border-strong)',
+              background: 'var(--surface)', color: 'var(--text-muted)', cursor: presets.length >= 10 ? 'default' : 'pointer',
+              fontSize: 18, opacity: presets.length >= 10 ? 0.4 : 1 }}>+</button>
+        </Row>
+      </Panel>
 
-      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
-        {/* ── left: live preview + actions (capped so the controls sit beside it
-             even in the narrow 760 card) ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 280, flexShrink: 0 }}>
-          <Preview px={250} checker />
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
-            <div style={{ textAlign: 'center' }}><Preview px={48} checker /><div style={{ fontSize: 'var(--fs-micro,10px)', color: 'var(--text-muted)' }}>tab 48</div></div>
-            <div style={{ textAlign: 'center' }}><Preview px={24} checker /><div style={{ fontSize: 'var(--fs-micro,10px)', color: 'var(--text-muted)' }}>tab 24</div></div>
-            <div style={{ textAlign: 'center' }}><Preview px={48} dark /><div style={{ fontSize: 'var(--fs-micro,10px)', color: 'var(--text-muted)' }}>dark</div></div>
-          </div>
-          <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', marginTop: 2 }}>{L('아이콘으로 적용', 'Apply as')}</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            <Button size="sm" variant="primary" disabled={busy === 'favicon'} onClick={() => act('favicon')} title={L('favicon으로 만들기', 'Set as favicon')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="images" size={14} /> favicon</Button>
-            <Button size="sm" variant="primary" disabled={busy === 'appicon'} onClick={() => act('appicon')} title={L('앱 아이콘으로 만들기', 'Set as app icon')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="images" size={14} /> {L('앱', 'app')}</Button>
-            <Button size="sm" variant="primary" disabled={busy === 'header'} onClick={() => act('header')} title={L('헤더 아이콘으로 만들기', 'Set as header icon')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="images" size={14} /> {L('헤더', 'header')}</Button>
-            <Button size="sm" variant="primary" disabled={busy === 'webicon'} onClick={() => act('webicon')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }} title={L('PWA(앱 설치) 아이콘 — 모든 OS', 'PWA install icon — all OSes')}><Icon name="images" size={14} /> {L('웹앱', 'web')}</Button>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            <Button size="sm" variant="secondary" onClick={exportSVG} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="download" size={14} /> SVG</Button>
-            <Button size="sm" variant="secondary" onClick={exportPNG} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="download" size={14} /> PNG</Button>
-            <Button size="sm" variant="secondary" disabled={busy === 'pdf'} onClick={() => exportVector('pdf')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="download" size={14} /> PDF</Button>
-            <Button size="sm" variant="secondary" disabled={busy === 'eps'} onClick={() => exportVector('eps')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="download" size={14} /> EPS</Button>
-            <select value={pngSize} onChange={(e) => setPngSize(Number(e.target.value))}
-              style={{ height: 28, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 4px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }}>
-              {[256, 512, 1024].map((s) => <option key={s} value={s}>{s}px</option>)}
-            </select>
-            <div style={{ flex: 1 }} />
-            <Button size="sm" variant="ghost" disabled={busy === 'save'} onClick={saveWorking}>{L('작업 저장', 'Save')}</Button>
-          </div>
-          {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{msg}</div>}
+      {/* The preview and its exports on the left, the numbers on the right —
+          two columns of the same panels, so the page reads like the rest. */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ width: 300, flexShrink: 0 }}>
+          <Panel bare title={L('미리보기', 'Preview')}>
+            <Row><Preview px={250} checker /></Row>
+            <Row>
+              <span style={{ textAlign: 'center' }}><Preview px={48} checker /><div style={fieldMuted}>tab 48</div></span>
+              <span style={{ textAlign: 'center' }}><Preview px={24} checker /><div style={fieldMuted}>tab 24</div></span>
+              <span style={{ textAlign: 'center' }}><Preview px={48} dark /><div style={fieldMuted}>dark</div></span>
+            </Row>
+          </Panel>
+
         </div>
 
-        {/* ── right: controls (flow in the page — one scrollbar for the whole view) ── */}
-        <div style={{ flex: 1, minWidth: 260 }}>
-          <div style={{ ...sectionHdr, marginTop: 0, cursor: 'pointer', userSelect: 'none' }} onClick={() => toggle('box')}>{caretEl('box')} {L('박스', 'Box')}</div>
-          {open.box && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={rowS}>
-              <span style={lblS}>{L('배경', 'Background')}</span>
-              <ColorPicker value={c.bg} onChange={(v) => upd({ bg: v, bgTransparent: false })} size={22} title={L('배경색', 'Background color')} />
-              <label style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+        <div style={{ flex: 1, minWidth: 320 }}>
+          <Panel title={L('박스', 'Box')}>
+            <Field label={L('배경', 'Background')}>
+              <span className="set-pick"><ColorPicker value={c.bg} onChange={(v) => upd({ bg: v, bgTransparent: false })} size={22} title={L('배경색', 'Background color')} /></span>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
                 <input type="checkbox" checked={c.bgTransparent} onChange={(e) => upd({ bgTransparent: e.target.checked })} /> {L('투명', 'Transparent')}
               </label>
-              <div style={{ flex: 1 }} />
-              <label style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={L('favicon 다크모드에서 흰색', 'whiten in dark mode (favicon)')}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
+                title={L('favicon 다크모드에서 흰색', 'whiten in dark mode (favicon)')}>
                 <input type="checkbox" checked={c.darkInvert} onChange={(e) => upd({ darkInvert: e.target.checked })} /> {L('다크 흰색', 'Dark→white')}
               </label>
-            </div>
+            </Field>
             <NumField label={L('모서리', 'Corner')} value={c.radius} min={0} max={50} onChange={(v) => upd({ radius: v })} suffix="%" />
-          </div>
-          )}
+          </Panel>
 
-          <div style={{ ...sectionHdr, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span onClick={() => toggle('whole')} style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{caretEl('whole')} {L('전체: 위치 · 크기 · 회전', 'Whole: position · size · rotation')}</span>
-            <div style={{ flex: 1 }} />
-            {open.whole && <Button size="sm" variant="ghost" onClick={() => upd({ size: 80, offsetX: 0, offsetY: 35, rotation: 0 })}>{L('가운데로', 'Recenter')}</Button>}
-          </div>
-          {open.whole && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Panel title={L('전체: 위치 · 크기 · 회전', 'Whole: position · size · rotation')}
+            right={<Button variant="secondary" onClick={() => upd({ size: 80, offsetX: 0, offsetY: 35, rotation: 0 })}>{L('가운데로', 'Recenter')}</Button>}>
             <NumField label={L('크기', 'Size')} value={c.size} min={20} max={110} onChange={(v) => upd({ size: v })} suffix="%" />
             <NumField label={L('가로', 'X')} value={c.offsetX} min={-300} max={300} onChange={(v) => upd({ offsetX: v })} />
             <NumField label={L('세로', 'Y')} value={c.offsetY} min={-300} max={300} onChange={(v) => upd({ offsetY: v })} />
             <NumField label={L('회전', 'Rotate')} value={c.rotation} min={-180} max={180} onChange={(v) => upd({ rotation: v })} suffix="°" />
-          </div>
-          )}
+          </Panel>
 
-          <div style={{ ...sectionHdr, cursor: 'pointer', userSelect: 'none' }} onClick={() => toggle('lines')}>{caretEl('lines')} {L('선 (굵기 · 색상 · 회전 · 위치)', 'Lines (width · color · rot · x/y)')}</div>
-          {open.lines && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {/* per-line column header */}
-            <div style={{ ...rowS, fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>
-              <span style={{ width: 18 }} /><span style={{ minWidth: 64 }} /><span style={{ width: 22 }} />
-              <span style={{ flex: 1, minWidth: 40 }}>{L('굵기', 'width')}</span>
-              <span style={{ width: 46, textAlign: 'right' }}>{L('굵기', 'w')}</span>
-              <span style={{ width: 46, textAlign: 'right' }}>{L('회전°', 'rot°')}</span>
-              <span style={{ width: 46, textAlign: 'right' }}>X</span>
-              <span style={{ width: 46, textAlign: 'right' }}>Y</span>
-            </div>
-            {c.lines.map((ln, i) => {
-              const numS = { ...numStyle, width: 46 }
-              return (
-              <div key={i} style={{ ...rowS, padding: '3px 6px', borderRadius: 6, background: hover === i ? 'var(--surface-2)' : 'transparent' }}
+          <Panel bare title={L('선', 'Lines')} hint={L('굵기 · 색상 · 회전 · 위치', 'width · colour · rotation · x/y')}>
+            <Row className="cols head" style={LINE_COLS}>
+              <span /><span /><span />
+              <span>{L('굵기', 'width')}</span>
+              <span style={{ textAlign: 'right' }}>w</span>
+              <span style={{ textAlign: 'right' }}>rot°</span>
+              <span style={{ textAlign: 'right' }}>X</span>
+              <span style={{ textAlign: 'right' }}>Y</span>
+            </Row>
+            {c.lines.map((ln, i) => (
+              <div key={i} className="set-row cols" style={{ ...LINE_COLS, background: hover === i ? 'var(--surface-2)' : undefined }}
                 onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
                 <input type="checkbox" checked={ln.on} onChange={(e) => updLine(i, { on: e.target.checked })} />
-                <span style={{ ...lblS, minWidth: 64, opacity: ln.on ? 1 : 0.4 }}>{L(LOGO_PATHS[i].ko, LOGO_PATHS[i].en)}</span>
-                <ColorPicker value={ln.color} onChange={(v) => updLine(i, { color: v })} size={22} title={L(LOGO_PATHS[i].ko, LOGO_PATHS[i].en)} />
-                <input type="range" min={0} max={70} value={ln.width} onChange={(e) => updLine(i, { width: Number(e.target.value) })} style={{ flex: 1, minWidth: 40 }} />
+                <span style={{ opacity: ln.on ? 1 : 0.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{L(LOGO_PATHS[i].ko, LOGO_PATHS[i].en)}</span>
+                <span className="set-pick"><ColorPicker value={ln.color} onChange={(v) => updLine(i, { color: v })} size={22} title={L(LOGO_PATHS[i].ko, LOGO_PATHS[i].en)} /></span>
+                <input type="range" min={0} max={70} value={ln.width} onChange={(e) => updLine(i, { width: Number(e.target.value) })} />
                 <input type="number" min={0} max={70} value={ln.width} onChange={(e) => updLine(i, { width: e.target.value === '' ? 0 : Number(e.target.value) })} style={numS} title={L('굵기', 'width')} />
                 <input type="number" min={-180} max={180} value={ln.rot} onChange={(e) => updLine(i, { rot: e.target.value === '' ? 0 : Number(e.target.value) })} style={numS} title={L('회전', 'rotation')} />
                 <input type="number" min={-400} max={400} value={ln.dx} onChange={(e) => updLine(i, { dx: e.target.value === '' ? 0 : Number(e.target.value) })} style={numS} title={L('가로 위치', 'x offset')} />
                 <input type="number" min={-400} max={400} value={ln.dy} onChange={(e) => updLine(i, { dy: e.target.value === '' ? 0 : Number(e.target.value) })} style={numS} title={L('세로 위치', 'y offset')} />
               </div>
-            )})}
-          </div>
-          )}
+            ))}
+          </Panel>
 
-          {/* ── ALL controls, full-width, at the bottom ── */}
-          <div style={{ ...sectionHdr, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span onClick={() => toggle('all')} style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{caretEl('all')} {L('전체 선 (all)', 'All lines')}</span>
-            {open.all && <>
-              <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', fontWeight: 400 }}>{L('색', 'color')}</span>
-              <ColorPicker value={c.lines[0].color} onChange={(v) => allLines({ color: v })} size={22} title={L('전체 색', 'all color')} />
-              <button onClick={() => allLines({ color: '#111827' })} title="#111827" style={{ width: 18, height: 18, borderRadius: 4, background: '#111827', border: '1px solid var(--border-default)', cursor: 'pointer', padding: 0 }} />
-              <button onClick={() => allLines({ color: '#ffffff' })} title="#ffffff" style={{ width: 18, height: 18, borderRadius: 4, background: '#ffffff', border: '1px solid var(--border-default)', cursor: 'pointer', padding: 0 }} />
-            </>}
-          </div>
-          {open.all && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Panel title={L('전체 선', 'All lines')}>
+            <Field label={L('색', 'Colour')}>
+              <span className="set-pick"><ColorPicker value={c.lines[0].color} onChange={(v) => allLines({ color: v })} size={22} title={L('전체 색', 'all color')} /></span>
+              <button type="button" className="set-plain" onClick={() => allLines({ color: '#111827' })} title="#111827"
+                style={{ width: 20, height: 20, borderRadius: 4, background: '#111827', border: '1px solid var(--border-strong)', cursor: 'pointer', padding: 0 }} />
+              <button type="button" className="set-plain" onClick={() => allLines({ color: '#ffffff' })} title="#ffffff"
+                style={{ width: 20, height: 20, borderRadius: 4, background: '#ffffff', border: '1px solid var(--border-strong)', cursor: 'pointer', padding: 0 }} />
+            </Field>
             <NumField label={L('전체 굵기', 'All width')} value={c.lines[0].width} min={0} max={70} onChange={(v) => allLines({ width: v })} />
             <NumField label={L('전체 회전', 'All rotate')} value={c.lines[0].rot} min={-180} max={180} onChange={(v) => allLines({ rot: v })} suffix="°" />
-          </div>
-          )}
+          </Panel>
         </div>
       </div>
+
+      {/* Full width under both columns: four buttons on a line need the room,
+          and applying or exporting is what you do AFTER the numbers are right. */}
+      <Panel title={L('아이콘으로 적용', 'Apply as')}>
+        <Field label={L('포털', 'Portal')}>
+          <Button variant="primary" disabled={busy === 'favicon'} onClick={() => act('favicon')} title={L('favicon으로 만들기', 'Set as favicon')}>favicon</Button>
+          <Button variant="primary" disabled={busy === 'appicon'} onClick={() => act('appicon')} title={L('앱 아이콘으로 만들기', 'Set as app icon')}>{L('앱', 'app')}</Button>
+          <Button variant="primary" disabled={busy === 'header'} onClick={() => act('header')} title={L('헤더 아이콘으로 만들기', 'Set as header icon')}>{L('헤더', 'header')}</Button>
+          <Button variant="primary" disabled={busy === 'webicon'} onClick={() => act('webicon')} title={L('PWA(앱 설치) 아이콘 — 모든 OS', 'PWA install icon — all OSes')}>{L('웹앱', 'web')}</Button>
+        </Field>
+        <Field label={L('내보내기', 'Export')}>
+          <Button variant="secondary" onClick={exportSVG}>SVG</Button>
+          <Button variant="secondary" onClick={exportPNG}>PNG</Button>
+          <Button variant="secondary" disabled={busy === 'pdf'} onClick={() => exportVector('pdf')}>PDF</Button>
+          <Button variant="secondary" disabled={busy === 'eps'} onClick={() => exportVector('eps')}>EPS</Button>
+          <select value={pngSize} onChange={(e) => setPngSize(Number(e.target.value))} style={{ ...fieldInput, width: 84 }}>
+                {[256, 512, 1024].map((v) => <option key={v} value={v}>{v}px</option>)}
+              </select>
+        </Field>
+        <FieldActions>
+          <Button variant="secondary" disabled={busy === 'save'} onClick={saveWorking}>{L('작업 저장', 'Save working copy')}</Button>
+        </FieldActions>
+      </Panel>
     </div>
   )
 }

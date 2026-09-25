@@ -741,14 +741,20 @@ export default function SidebarPortal({
             // The manage panels report through notify() like the settings pages,
             // so they need the same line at the foot to report INTO.
             <>
-              <div className="pl-scroll pl-mgpage">{managePanel}</div>
+              {/* Keyed on the selection: every panel below seeds its form state
+                  from props with useState, so without a remount React kept the
+                  card you were editing a moment ago. The key goes HERE, on the
+                  one container, rather than on the panels — they are siblings of
+                  conditional ones, and a keyed child next to an unkeyed one is
+                  where the old panels were surviving the switch. */}
+              <div key={sel?.svc || '@none'} className="pl-scroll pl-mgpage">{managePanel}</div>
               <SettingsStatus />
             </>
           ) : view === 'service' && selSvc?.builtin ? (
             <>
               {/* A builtin is a third kind of page: not settings, not manage —
                   a tool the portal carries. It gets its own strip colour. */}
-              <div className="pl-scroll pl-mgpage pl-toolpage">
+              <div key={selSvc.builtin} className="pl-scroll pl-mgpage pl-toolpage">
                 <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
                 {builtinView(selSvc.builtin)}
               </div>
