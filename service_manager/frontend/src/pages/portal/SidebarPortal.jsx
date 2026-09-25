@@ -572,21 +572,6 @@ export default function SidebarPortal({
           </button>
         </div>
 
-        {/* Outside .pl-nav so it stays put while the list scrolls: these two act on
-            the WHOLE bar, like the brand above them, not on anything in the list. */}
-        {manage && isManager && (
-          <div className="pl-mgbar">
-            {/* The way OUT comes first: manage mode changes what every card does,
-                so leaving it should not be a hunt through the mode list. */}
-            <button type="button" className="pl-mgout" onClick={toggleManage}>
-              <Icon name="close" size={14} /> <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
-            </button>
-            <button type="button" className="pl-mgnew" onClick={onCreateGroup}>
-              <Icon name="folder-plus" size={14} /> <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
-            </button>
-          </div>
-        )}
-
         <div className="pl-nav">
           {bands.map(({ g, items }) => (g ? (
             /* A group is one tinted REGION spanning the bar's full width, with its
@@ -630,6 +615,22 @@ export default function SidebarPortal({
             </div>
           )}
         </div>
+
+        {/* Outside .pl-nav so it stays put while the list scrolls: these two act on
+            the WHOLE bar, not on anything in the list — so they sit at its foot,
+            on the plinth, where the other whole-portal controls already are. */}
+        {manage && isManager && (
+          <div className="pl-mgbar">
+            {/* The way OUT comes first: manage mode changes what every card does,
+                so leaving it should not be a hunt through the mode list. */}
+            <button type="button" className="pl-mgout" onClick={toggleManage}>
+              <Icon name="close" size={14} /> <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
+            </button>
+            <button type="button" className="pl-mgnew" onClick={onCreateGroup}>
+              <Icon name="folder-plus" size={14} /> <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
+            </button>
+          </div>
+        )}
 
         {/* The account alone at the foot now: the modes moved into the settings
             bar, which is where the rest of "things about this portal" live. */}

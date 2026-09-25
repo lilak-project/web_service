@@ -424,13 +424,14 @@
 /* ── manage mode ─────────────────────────────────────────────────────────── */
 /* The bar becomes editable: a button that makes a group, a grip on every card,
    and a line that shows where a dragged card would land. */
-/* Pinned under the brand, outside the scrolling list: these act on the whole
-   bar, so they do not travel with what is in it. */
+/* Pinned at the foot, outside the scrolling list: these act on the whole bar,
+   so they do not travel with what is in it, and they belong with the other
+   whole-portal controls rather than above the thing they arrange. */
 .pl-mgbar {
   flex: 0 0 auto;
   display: flex; flex-direction: column; gap: 6px;
-  padding: 2px 10px 10px;
-  border-bottom: 1px solid var(--divider);
+  padding: 10px;
+  border-top: 1px solid var(--divider);
 }
 /* Both carry manage mode's own colour, so the top of the bar says which mode
    you are in without the bar itself being repainted. Violet because blue is
