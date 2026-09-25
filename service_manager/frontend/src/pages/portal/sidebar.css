@@ -55,7 +55,9 @@
 /* Collapsed is the SAME layout clipped to 64px — nothing is re-centred, the
    labels just fade. Re-arranging on collapse made the icons jump. */
 .pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub { transition: opacity .15s; }
-.pl-root.mini :is(.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub) {
+/* Scoped to the SERVICE bar: unscoped it also blanked the settings bar's labels,
+   which sits beside a collapsed service bar by design. */
+.pl-root.mini .pl-side :is(.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub) {
   opacity: 0;
   pointer-events: none;
 }
@@ -257,7 +259,7 @@
   }
   .pl-root.mini .pl-side { width: 260px; transform: translateX(-100%); box-shadow: none; }
   /* The drawer is never the clipped 64px bar — it is either over the panel or gone. */
-  .pl-root.mini :is(.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub) {
+  .pl-root.mini .pl-side :is(.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub) {
     opacity: 1; pointer-events: auto;
   }
   .pl-root.mini .pl-card { background: var(--surface); border-color: var(--border-default); }
@@ -326,3 +328,40 @@
 
 /* A group's members are not indented — only projects are. */
 .pl-projs.pl-gitems { margin-left: 0; }
+
+/* ── level 2: the settings bar ───────────────────────────────────────────── */
+/* The same geometry as the service bar — 10px gutters, 4px gaps — on a deeper
+   background, so it reads as one step in rather than a different component. */
+.pl-bar2 {
+  width: 214px;
+  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  background: var(--surface-3);
+  border-right: 1px solid var(--border-strong);
+}
+.pl-b2head { height: 50px; padding: 0 16px; display: flex; align-items: center; white-space: nowrap; }
+.pl-b2head b { font-size: 15px; font-weight: 700; color: var(--text-emphasis); }
+.pl-nav2 { flex: 1; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+/* No icon per item: a settings menu is a list of words, so the card carries the
+   selection the way a service card does. */
+.pl-c2 {
+  flex: 0 0 auto;
+  display: flex; align-items: center;
+  height: 36px; padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg, 5px);
+  box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
+}
+.pl-c2:hover { border-color: var(--border-strong); }
+.pl-c2.on { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
+.pl-c2.on .pl-txt { color: var(--accent, #2563eb); }
+.pl-c2:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
+/* Sections are a rule, not a heading — the names labelled a split the items make. */
+.pl-sep { flex: 0 0 auto; height: 1px; margin: 6px 2px; background: var(--border-strong); }
+.pl-setpage { padding: 16px 18px; }
+
+/* Phone: one bar at a time — the settings bar takes the drawer's place. */
+@media (max-width: 639px) {
+  .pl-bar2 { position: absolute; inset: 0 auto 0 0; z-index: 26; width: 214px; box-shadow: 0 8px 30px rgba(15, 23, 42, .18); }
+}

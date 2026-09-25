@@ -3,7 +3,7 @@ import { Avatar, Icon, MANAGER_COLOR } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { HOME_MODES } from './HomeModeMenu'
-import AccountView from './AccountView'
+import AccountView, { settingsMenu } from './AccountView'
 import LiveWall from './LiveWall'
 import './sidebar.css'
 
@@ -184,6 +184,9 @@ export default function SidebarPortal({
   const [flat, setFlat] = useState(() => localStorage.getItem(FLAT_KEY) === '1')
   const [shut, setShut] = useState(() => readSet(SHUT_KEY))
   const [modesOpen, setModesOpen] = useState(false)
+  // Settings collapses the service bar to make room for its own; remember what the
+  // bar was so leaving settings puts it back rather than stranding it at 64px.
+  const miniBefore = useRef(null)
 
   useEffect(() => {
     localStorage.setItem(MINI_KEY, mini ? '1' : '0')
@@ -206,7 +209,19 @@ export default function SidebarPortal({
     return () => window.removeEventListener('resize', fit)
   }, [])
 
+  const leaveSettings = useCallback(() => {
+    if (miniBefore.current !== null) { setMini(miniBefore.current); miniBefore.current = null }
+  }, [])
+
+  const openSettings = useCallback((tab) => {
+    if (miniBefore.current === null) miniBefore.current = mini
+    setMini(true)
+    setView('settings')
+    onSettingsTab?.(tab || 'me')
+  }, [mini, onSettingsTab])
+
   const openService = useCallback((s) => {
+    leaveSettings()
     if (s.open === 'window') { window.open(`/p/${s.name}/`, '_blank'); return }
     setSel({ svc: s.name, proj: '' })
     setView('service')
@@ -217,6 +232,7 @@ export default function SidebarPortal({
   // whose chrome belongs in its own tab does not become panel-friendly just
   // because you reached it through a project.
   const pickProject = useCallback((s, proj) => {
+    leaveSettings()
     if (s.open === 'window') { window.open(`/pp/${s.name}/${proj}/`, '_blank'); return }
     setSel({ svc: s.name, proj })
     setView('service')
@@ -256,6 +272,7 @@ export default function SidebarPortal({
   const allShut = () => { setShut(new Set((groups || []).map((g) => g.id))); setOpenSvcs(new Set()) }
 
   const enterLive = () => {
+    leaveSettings()
     setView('live')
     setModesOpen(false)
     setMini(true)                                // a wall wants the width
@@ -408,7 +425,7 @@ export default function SidebarPortal({
           </div>
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"
-              onClick={() => { setView('settings'); onSettingsTab?.('me'); if (window.innerWidth < PHONE) setMini(true) }}>
+              onClick={() => openSettings('me')}>
               <span className="pl-av" style={{ background: 'transparent' }}>
                 <Avatar icon={user?.profile_shape}
                   color={isManager ? MANAGER_COLOR : user?.profile_color}
@@ -426,12 +443,33 @@ export default function SidebarPortal({
 
       {/* Live takes the whole right side — no panel inset, because a wall wants
           every pixel it can get. */}
+      {/* Settings is a SECOND bar of the same shape one step in, not a page that
+          replaces the first: the service bar stays, so there is always a way out
+          and you can still see what is running. */}
+      {view === 'settings' && (
+        <aside className="pl-bar2">
+          <div className="pl-b2head"><b>{L('설정', 'Settings')}</b></div>
+          <div className="pl-nav2">
+            {settingsMenu(isManager, lang).map(([key, , label], i, arr) => (
+              <div key={key} style={{ display: 'contents' }}>
+                {/* a rule where the personal half ends, instead of naming the halves */}
+                {i > 0 && arr[i - 1][0] === 'feedback' && <div className="pl-sep" />}
+                <button type="button" className={`pl-c2${settingsTab === key ? ' on' : ''}`}
+                  onClick={() => onSettingsTab?.(key)}>
+                  <span className="pl-txt">{label}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </aside>
+      )}
+
       <main className={`pl-main${view === 'live' ? ' live' : ''}`}>
         <div className="pl-panel">
           {view === 'settings' ? (
-            <div className="pl-scroll">
+            <div className="pl-scroll pl-setpage">
               <AccountView isManager={isManager} onChanged={onRefresh} onAccountGone={onLogout}
-                tab={settingsTab} onTab={onSettingsTab} />
+                tab={settingsTab} onTab={onSettingsTab} hideMenu />
             </div>
           ) : view === 'live' ? (
             <div className="pl-scroll">
