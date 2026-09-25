@@ -632,13 +632,13 @@ export default function SidebarPortal({
             on the plinth, where the other whole-portal controls already are. */}
         {manage && isManager && (
           <div className="pl-mgbar">
-            {/* The way OUT comes first: manage mode changes what every card does,
-                so leaving it should not be a hunt through the mode list. */}
-            <button type="button" className="pl-mgout" onClick={toggleManage}>
-              <Icon name="close" size={14} /> <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
-            </button>
+            {/* The action first, the way out last — at the foot of the bar the
+                way out sits closest to where the eye ends up. */}
             <button type="button" className="pl-mgnew" onClick={onCreateGroup}>
               <Icon name="folder-plus" size={14} /> <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
+            </button>
+            <button type="button" className="pl-mgout" onClick={toggleManage}>
+              <Icon name="close" size={14} /> <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
             </button>
           </div>
         )}

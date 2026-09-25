@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon, ColorPicker } from 'lilak-ui'
+import { Button, Icon } from 'lilak-ui'
 import { launcher, errText } from '../../api'
 import { useLang } from '../../context/LangContext'
-import IconPick from './IconPick'
-import GroupMark from './GroupMark'
 import { Panel, Field, FieldActions, Row, Pill, fieldInput, fieldMuted, fieldChip } from './Field'
 import { notify } from './settingsMsg'
 
@@ -16,22 +14,49 @@ import { notify } from './settingsMsg'
  */
 const VIS = [[1, 'portal_vis_private'], [2, 'portal_vis_protected'], [3, 'portal_vis_admin']]
 
+/** Show / hide one card on the cover. The endpoint differs for a builtin, the
+ *  meaning does not — and it is the one setting every band's members share, so
+ *  both panels below offer it on the member row itself. */
+async function setCardHidden(card, hidden, L, onChanged) {
+  const builtin = !!card.builtin
+  try {
+    await launcher.put(builtin ? '/admin/home-builtin' : '/admin/home-service',
+      builtin ? { key: card.builtin, hidden } : { name: card.name, hidden })
+    const n = card.label || card.name
+    notify(hidden ? L(`${n} 숨김`, `${n} hidden`) : L(`${n} 표시됨`, `${n} shown`), 'ok')
+    onChanged?.()
+  } catch (e) { notify(errText(e, L('실패', 'failed')), 'bad') }
+}
+
+/** One member of a band: what it is, whether the cover shows it, and the toggle. */
+function MemberRow({ card, L, onChanged }) {
+  return (
+    <Row>
+      <Icon name={card.icon || 'circle'} size={16} color={card.color || 'var(--text-secondary)'} weight="fill" />
+      <span>{card.label || card.name}</span>
+      {card.hidden ? <Pill tone="warn">{L('숨김', 'hidden')}</Pill> : <Pill tone="ok">{L('표시됨', 'shown')}</Pill>}
+      <span className="sp" />
+      <Button variant={card.hidden ? 'warning' : 'secondary'}
+        onClick={() => setCardHidden(card, !card.hidden, L, onChanged)}>
+        <Icon name={card.hidden ? 'eye' : 'eye-off'} size={15} />
+        {card.hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
+      </Button>
+    </Row>
+  )
+}
+
 export default function GroupManagePanel({ group, members = [], onChanged }) {
   const { t, lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [name, setName] = useState(group.name || '')
-  const [icon, setIcon] = useState(group.icon || 'stack')
-  const [color, setColor] = useState(group.color || '#475569')
   const [users, setUsers] = useState([])
   const [info, setInfo] = useState(null)       // { services, grants }
   const [pick, setPick] = useState('')
   const [asAdmin, setAsAdmin] = useState(false)
 
-  useEffect(() => {
-    setName(group.name || ''); setIcon(group.icon || 'stack'); setColor(group.color || '#475569')
-  }, [group.id, group.name, group.icon, group.color])
+  useEffect(() => { setName(group.name || '') }, [group.id, group.name])
 
-  const dirty = name.trim() !== (group.name || '') || icon !== (group.icon || 'stack') || color !== (group.color || '#475569')
+  const dirty = name.trim() !== (group.name || '')
 
   async function load() {
     try {
@@ -49,7 +74,7 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
     catch (e) { notify(errText(e, L('실패', 'failed')), 'bad') }
   }
   const patch = (body, ok) => run(launcher.put(`/admin/service-groups/${group.id}`, body), ok)
-  const save = () => patch({ name: name.trim() || undefined, icon, color }, L('그룹 저장됨', 'group saved'))
+  const save = () => patch({ name: name.trim() || undefined }, L('그룹 저장됨', 'group saved'))
   const setVis = (v) => v && run(launcher.put(`/admin/service-groups/${group.id}/visibility`, { visibility: Number(v) }),
     L('멤버 전체에 적용됨', 'applied to every member'))
   const grant = () => pick && run(launcher.post(`/admin/service-groups/${group.id}/permissions`, { user_id: Number(pick), admin: asAdmin }),
@@ -66,12 +91,7 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
 
   return (
     <div className="svc-mg">
-      <Panel title={L('그룹', 'Group')} hint={`${members.length}`}>
-        <Field label={L('아이콘 · 색', 'Icon · colour')}>
-          <GroupMark icon={icon} color={color} size={30} />
-          <IconPick value={icon} onChange={setIcon} color={color} />
-          <ColorPicker value={color} onChange={setColor} />
-        </Field>
+      <Panel title={L('그룹', 'Group')}>
         <Field label={L('이름', 'Name')}>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={L('그룹 이름', 'group name')}
             style={{ ...fieldInput, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && dirty && save()} />
@@ -79,17 +99,6 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
         <FieldActions>
           <Button variant="primary" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
         </FieldActions>
-
-        <Field label={L('멤버', 'Members')} align="start">
-          {members.length === 0
-            ? <span style={fieldMuted}>{L('아직 없습니다 — 왼쪽에서 카드를 끌어다 놓으세요.', 'None yet — drag a card onto the band.')}</span>
-            : members.map((c) => (
-                <span key={c.name} style={fieldChip}>
-                  <Icon name={c.icon || 'circle'} size={13} color={c.color || 'var(--text-secondary)'} weight="fill" />
-                  {c.label || c.name}
-                </span>
-              ))}
-        </Field>
 
         <Field label={L('홈 화면', 'Home screen')}>
           {group.hidden ? <Pill tone="warn">{L('숨김', 'hidden')}</Pill> : <Pill tone="ok">{L('표시됨', 'shown')}</Pill>}
@@ -102,6 +111,14 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
             {group.hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
           </Button>
         </FieldActions>
+      </Panel>
+
+      {/* The members, with the one setting each of them has of its own. */}
+      <Panel bare title={L('멤버', 'Members')} hint={String(members.length)}>
+        {members.length === 0 && (
+          <Row className="empty">{L('아직 없습니다 — 왼쪽에서 카드를 끌어다 놓으세요.', 'None yet — drag a card onto the band.')}</Row>
+        )}
+        {members.map((c) => <MemberRow key={c.name} card={c} L={L} onChanged={onChanged} />)}
       </Panel>
 
       {/* Everything here lands on EVERY member service at once — the reason a
@@ -166,18 +183,6 @@ export function FixedGroupPanel({ band, onChanged }) {
   const system = band.g.fixed
   const members = band.items || []
 
-  async function setHidden(card, hidden) {
-    const body = card.builtin
-      ? { key: card.builtin, hidden }
-      : { name: card.name, hidden }
-    const url = card.builtin ? '/admin/home-builtin' : '/admin/home-service'
-    try {
-      await launcher.put(url, body)
-      notify(hidden ? L(`${card.label || card.name} 숨김`, `${card.label || card.name} hidden`)
-        : L(`${card.label || card.name} 표시됨`, `${card.label || card.name} shown`), 'ok')
-      onChanged?.()
-    } catch (e) { notify(errText(e, L('실패', 'failed')), 'bad') }
-  }
 
   return (
     <div className="svc-mg">
@@ -188,18 +193,7 @@ export function FixedGroupPanel({ band, onChanged }) {
               : L('그룹에 들어가지 않은 카드가 없습니다.', 'Every card is in a group.')}
           </Row>
         )}
-        {members.map((c) => (
-          <Row key={c.name}>
-            <Icon name={c.icon || 'circle'} size={16} color={c.color || 'var(--text-secondary)'} weight="fill" />
-            <span>{c.label || c.name}</span>
-            {c.hidden ? <Pill tone="warn">{L('숨김', 'hidden')}</Pill> : <Pill tone="ok">{L('표시됨', 'shown')}</Pill>}
-            <span className="sp" />
-            <Button variant={c.hidden ? 'warning' : 'secondary'} onClick={() => setHidden(c, !c.hidden)}>
-              <Icon name={c.hidden ? 'eye' : 'eye-off'} size={15} />
-              {c.hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
-            </Button>
-          </Row>
-        ))}
+        {members.map((c) => <MemberRow key={c.name} card={c} L={L} onChanged={onChanged} />)}
       </Panel>
 
       <Panel title={L('이 묶음에 대하여', 'About this band')}>

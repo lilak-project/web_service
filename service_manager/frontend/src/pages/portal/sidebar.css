@@ -335,8 +335,9 @@
   margin: 4px -10px 10px;
   padding-bottom: 6px;
   background: rgba(148, 163, 184, .16);
-  border-top: 1px solid var(--divider);
-  border-bottom: 1px solid var(--divider);
+  border: 0 solid var(--divider);
+  border-top-width: 1px;
+  border-bottom-width: 1px;
 }
 .pl-band { flex: 0 0 auto; }
 /* The 24px caret box is centred on x=32 too (the band starts at x=0). */
@@ -517,11 +518,14 @@
 .pl-root.managing .pl-group { border-style: dashed; }
 
 /* Manage mode: what you are editing. The dashed edges say "everything here is
-   editable", so the one you picked has to say more than that — a solid, ink
-   edge, on the card and on the band alike. */
+   editable", so the one you picked has to say more than that — a solid edge in
+   the mode's own violet, on the card and on the band alike. */
 .pl-root.managing .pl-card.on,
 .pl-root.managing .pl-group.on {
   border-style: solid;
-  border-color: var(--text-emphasis);
-  box-shadow: 0 0 0 1px var(--text-emphasis);
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 1px #7c3aed;
 }
+/* A band runs the bar's full width, so it is drawn with top and bottom rules
+   only — the picked one needs the sides as well to read as one box. */
+.pl-root.managing .pl-group.on { border-left-width: 1px; border-right-width: 1px; }
