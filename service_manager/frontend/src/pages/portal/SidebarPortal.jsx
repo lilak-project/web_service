@@ -212,7 +212,6 @@ export default function SidebarPortal({
   })
   const [flat, setFlat] = useState(() => localStorage.getItem(FLAT_KEY) === '1')
   const [shut, setShut] = useState(() => readSet(SHUT_KEY))
-  const [modesOpen, setModesOpen] = useState(false)
   // Manage mode: the bar becomes editable (drag to arrange, a button to make a
   // group) and picking a card shows its settings in the panel instead of running it.
   const [manage, setManage] = useState(false)
@@ -386,7 +385,6 @@ export default function SidebarPortal({
    *  whatever card you happened to be editing. */
   const toggleManage = () => {
     leaveSettings()
-    setModesOpen(false)
     setManage((m) => {
       const next = !m
       setSel(null)
@@ -400,7 +398,6 @@ export default function SidebarPortal({
   const enterLive = () => {
     leaveSettings()
     setView('live')
-    setModesOpen(false)
     setMini(true)                                // a wall wants the width
   }
 
@@ -606,42 +603,9 @@ export default function SidebarPortal({
           )}
         </div>
 
-        {/* Modes and the account sit together at the foot of the bar: both are
-            about this portal rather than about a service. */}
+        {/* The account alone at the foot now: the modes moved into the settings
+            bar, which is where the rest of "things about this portal" live. */}
         <div className="pl-user">
-          <Slider open={modesOpen} className="pl-mlist up">
-            {modes.map((m) => (
-              <button key={m.id} type="button"
-                className={`pl-proj${(m.id === 'live' ? view === 'live' : manage) ? ' on' : ''}`}
-                title={lang === 'ko' ? m.ko_hint : m.en_hint}
-                onClick={() => (m.id === 'live' ? enterLive() : toggleManage())}>
-                <Icon name={m.icon} size={14} />
-                <span className="pl-txt">{lang === 'ko' ? m.ko : m.en}</span>
-              </button>
-            ))}
-            {/* Group mode reads like the other two: a fixed name that fills when
-                it is on. (It only rearranges the sidebar and leaves the panel
-                alone, but a switch that changed its own label made the reader
-                work out which way it pointed.) */}
-            <button type="button" className={`pl-proj${flat ? '' : ' on'}`}
-              onClick={() => setFlat((f) => !f)}>
-              <Icon name="tree" size={14} />
-              <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
-            </button>
-          </Slider>
-          <div className={`pl-card pl-up${modesOpen ? ' open' : ''}`}>
-            <button type="button" className="pl-row"
-              onClick={() => {
-                // Collapsed, the list is hidden — so asking for it expands the bar
-                // rather than doing nothing visible, same as a service does.
-                if (mini) { setMini(false); setModesOpen(true); return }
-                setModesOpen((o) => !o)
-              }}>
-              <Tile icon="squares-four" on={modesOpen} />
-              <span className="pl-txt">{L('모드', 'Modes')}</span>
-              <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>
-            </button>
-          </div>
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"
               onClick={() => openSettings('me')}>
@@ -675,6 +639,28 @@ export default function SidebarPortal({
                 </button>
               </div>
             ))}
+            {/* The modes are not pages — they change what the whole cover does —
+                so they sit under the pages, past a rule, in the same cards. */}
+            <div className="pl-sep" />
+            {modes.map((m) => (
+              <button key={m.id} type="button"
+                className={`pl-c2${(m.id === 'live' ? view === 'live' : manage) ? ' on' : ''}`}
+                title={lang === 'ko' ? m.ko_hint : m.en_hint}
+                onClick={() => (m.id === 'live' ? enterLive() : toggleManage())}>
+                <Icon name={m.icon} size={15} />
+                <span className="pl-txt">{lang === 'ko' ? m.ko : m.en}</span>
+              </button>
+            ))}
+            {/* Group mode reads like the other two: a fixed name that fills when
+                it is on. (It only rearranges the sidebar and leaves the panel
+                alone, but a switch that changed its own label made the reader
+                work out which way it pointed.) */}
+            <button type="button" className={`pl-c2${flat ? '' : ' on'}`}
+              onClick={() => setFlat((f) => !f)}>
+              <Icon name="tree" size={15} />
+              <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
+            </button>
+
             <div className="pl-spring" />
             {/* Signing out is not a settings page, so it sits under them all,
                 past the spring — the last thing in the bar, not one of the list. */}

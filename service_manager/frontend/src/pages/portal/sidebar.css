@@ -74,7 +74,7 @@
 /* Collapsed, hide the PROJECT and MODE lists only. The same slider class carries
    a group's members, and hiding those left the bar with bands and no service
    icons at all. */
-.pl-root.mini :is(.pl-plist, .pl-mlist) { display: none; }
+.pl-root.mini .pl-plist { display: none; }
 
 /* Collapsed: the white cards dissolve into the bar; the selected service keeps a
    ring on its icon so there is still a "you are here". */
@@ -106,7 +106,10 @@
   display: flex;
   align-items: center;
   background: var(--surface);
-  border: 1px solid var(--border-default);
+  /* The same weight the project rows inside them already used: at
+     --border-default a card's edge was faint enough that a row of them read as
+     one block instead of as separate things. */
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg, 5px);
   box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
   overflow: hidden;
@@ -114,7 +117,7 @@
 /* Expanded only. Collapsed, .pl-root.mini .pl-card ties this on specificity and
    loses on order, so a hover would draw a border box in a bar that has no cards
    to outline. */
-.pl-root:not(.mini) .pl-card:hover { border-color: var(--border-strong); background: var(--surface-2); }
+.pl-root:not(.mini) .pl-card:hover { border-color: var(--divider); background: var(--surface-2); }
 /* Collapsed there is no card to fill, so the 43px hit square takes the plate. */
 .pl-root.mini .pl-card:hover .pl-row { background: var(--surface-3); }
 .pl-card.on { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
@@ -152,12 +155,6 @@
 }
 .pl-chev { flex-shrink: 0; transition: transform .12s; display: inline-flex; }
 .pl-card.open .pl-chev { transform: rotate(90deg); }
-/* A card whose list opens UPWARDS points its caret up, not down — the caret says
-   where the rows will appear. */
-.pl-card.pl-up.open .pl-chev { transform: rotate(-90deg); }
-/* Open IS the pressed state: the card takes the same ring a picked service does,
-   so "the list is out" and "this is selected" look like one thing. */
-.pl-card.pl-up.open { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
 
 /* The "open in a new tab" arrow only appears on hover or on the selected card,
    so the sidebar is not a wall of icons. */
@@ -182,29 +179,30 @@
 .pl-projs { flex-shrink: 0; margin: 0 0 4px 16px; display: flex; flex-direction: column; gap: 4px; }
 
 /* ── the rail joining a card to the rows it opened ───────────────────────── */
-/* The line stands at x=32 — the parent tile's own centre, the same one the
-   collapsed bar is built on — and stops at the last row's middle, so the list
-   reads as hanging off the card rather than as the next thing in the bar.
+/* The line stands at x=20 and the rows start at x=32 — where the parent tile's
+   own centre is — and it stops at the last row's middle, so the list reads as
+   hanging off the card rather than as the next thing in the bar. Drawn in the
+   same --divider as the bar's other lines: at --border-strong it was the same
+   weight as the card edges it runs past and disappeared among them.
    It lives INSIDE the container's padding box on purpose: the open/close
    animation sets overflow:hidden, which would have clipped a rail drawn in the
    margin beside it. */
-.pl-plist, .pl-mlist {
+.pl-plist {
   position: relative;
-  margin-left: 22px;   /* content edge 10 + 22 = 32 */
+  margin-left: 10px;   /* content edge 10 + 10 = 20 */
   padding-left: 12px;
 }
-.pl-plist::before, .pl-mlist::before {
+.pl-plist::before {
   content: ''; position: absolute; left: 0; width: 1px;
-  background: var(--border-strong);
+  top: 0; bottom: 16px;
+  background: var(--divider);
 }
-.pl-plist::before { top: 0; bottom: 16px; }         /* down from the card above */
-.pl-mlist::before { top: 16px; bottom: 0; }         /* Modes opens UPWARDS */
 /* One elbow per row, meeting the row's left edge at its middle. */
-.pl-plist > *, .pl-mlist > * { position: relative; }
-.pl-plist > *::before, .pl-mlist > *::before {
+.pl-plist > * { position: relative; }
+.pl-plist > *::before {
   content: ''; position: absolute; left: -12px; top: 50%;
   width: 11px; height: 1px;
-  background: var(--border-strong);
+  background: var(--divider);
 }
 .pl-proj {
   flex-shrink: 0;
@@ -240,10 +238,6 @@
 /* Anchored at the foot of the bar, a list has to grow UPWARDS: the box still
    changes height, but its cards rise from under the card below instead of
    dropping from the one above. */
-@keyframes pl-rise { from { transform: translateY(var(--h)) } to { transform: none } }
-@keyframes pl-sink { from { transform: none } to { transform: translateY(var(--h)) } }
-.pl-projs.up.enter > * { animation: pl-rise .15s cubic-bezier(.2, .7, .3, 1); }
-.pl-projs.up.leave > * { animation: pl-sink .12s cubic-bezier(.5, 0, .8, .4) forwards; }
 @media (prefers-reduced-motion: reduce) {
   .pl-projs.enter, .pl-projs.leave, .pl-projs.enter > *, .pl-projs.leave > * { animation-duration: 1ms; }
 }
@@ -303,7 +297,7 @@
     opacity: 1; pointer-events: auto;
   }
   .pl-root.mini .pl-card { background: var(--surface); border-color: var(--border-default); }
-  .pl-root.mini :is(.pl-plist, .pl-mlist) { display: flex; }
+  .pl-root.mini .pl-plist { display: flex; }
 }
 
 /* Drawer scrim — only exists at phone width, where the sidebar overlays. */
@@ -399,14 +393,14 @@
    selection the way a service card does. */
 .pl-c2 {
   flex: 0 0 auto;
-  display: flex; align-items: center;
+  display: flex; align-items: center; gap: 9px;
   height: 36px; padding: 0 12px;
   background: var(--surface);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg, 5px);
   box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
 }
-.pl-c2:hover { border-color: var(--border-strong); background: var(--surface-2); }
+.pl-c2:hover { border-color: var(--divider); background: var(--surface-2); }
 .pl-c2.on { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
 .pl-c2.on .pl-txt { color: var(--accent, #2563eb); }
 /* The menu is a list of names; weight was making all seven shout at once. */
@@ -423,7 +417,7 @@
 /* Log out lives at the FOOT of the settings bar, pushed there by a spring, so it
    is plainly not one of the settings pages above it. */
 .pl-spring { flex: 1 1 auto; min-height: 8px; }
-.pl-c2.out { gap: 9px; color: var(--danger-text); }
+.pl-c2.out { color: var(--danger-text); }
 .pl-c2.out:hover { border-color: var(--danger-text); background: var(--danger-bg); }
 .pl-c2.out .pl-txt { color: var(--danger-text); }
 
