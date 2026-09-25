@@ -9,8 +9,10 @@
 /* A card of fact rows: label column, value column, a rule between rows. */
 .set-card {
   display: grid;
-  grid-template-columns: 104px 1fr;
-  align-items: center;
+  grid-template-columns: 116px 1fr;
+  /* stretch, not center: a centred cell does not fill its row, which broke the
+     tinted label column into bands with white slivers between them. */
+  align-items: stretch;
   background: var(--surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg, 5px);
@@ -27,8 +29,15 @@
 }
 .set-card > *:nth-child(-n + 2) { border-top: 0; }
 .set-card > .set-actions { border-top: 0; padding-top: 0; }
-/* The label cell owns the left padding; the value cell should not double it. */
-.set-card > *:nth-child(odd) { padding-right: 0; }
+/* The label column is tinted and ruled off, so a title and its content are told
+   apart by the column they sit in rather than by a shade of grey. */
+.set-card > *:nth-child(odd) {
+  display: flex; align-items: center;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border-subtle);
+  font-weight: 600;
+}
+.set-card > *:nth-child(even) { background: var(--surface); }
 
 /* A heading above a card — the name of the group of facts under it. */
 .set-head {

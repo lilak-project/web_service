@@ -19,7 +19,8 @@
 
 import './settings.css'
 
-export const FIELD_TEXT = { fontSize: 'var(--fs-small, 12px)' }
+// One step up from the old --fs-small: these cards are the page, not a footnote.
+export const FIELD_TEXT = { fontSize: 'var(--fs-medium, 14px)' }
 
 /** The card the rows live in. Kept as a style object for the call sites that
  *  spread it, but the look now comes from `.set-card` (settings.css) — a grid
@@ -48,8 +49,8 @@ export function Field({ label, align, children }) {
   return (
     <>
       <span style={{ ...FIELD_TEXT, color: 'var(--text-secondary)',
-        alignSelf: align === 'start' ? 'start' : undefined }}>{label}</span>
-      <div style={{ ...FIELD_TEXT, color: 'var(--text-primary)', minWidth: 0,
+        alignItems: align === 'start' ? 'flex-start' : undefined }}>{label}</span>
+      <div style={{ ...FIELD_TEXT, color: 'var(--text-emphasis)', minWidth: 0,
         display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{children}</div>
     </>
   )

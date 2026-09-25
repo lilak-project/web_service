@@ -446,9 +446,9 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
       {hideMenu && (() => {
         const cur = MENU.find(([k]) => k === tab) || MENU[0]
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, margin: '0 0 10px',
-            fontSize: 'var(--fs-medium, 14px)', fontWeight: 600, color: 'var(--text-primary)' }}>
-            <Icon name={cur[1]} size={16} /> {cur[2]}
+          <div style={{ margin: '0 0 12px',
+            fontSize: 'var(--fs-large, 16px)', fontWeight: 700, color: 'var(--text-emphasis)' }}>
+            {cur[2]}
           </div>
         )
       })()}
