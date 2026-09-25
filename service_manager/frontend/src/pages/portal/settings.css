@@ -17,10 +17,11 @@
 /* ── the ground ──────────────────────────────────────────────────────────── */
 /* Everything here is ONE text size. A settings page is a list of facts, and a
    size change should mean something — only the page heading gets one.
-   The manage pages (.pl-mgpage, and .svc-mg wherever a manage panel is used
-   outside the sidebar) are the same kind of page and take the same rules —
-   they were reading as a different product because only the selectors below
-   were scoped to the settings page. */
+   The manage pages (.pl-mgpage) are the same kind of page and take the same
+   rules. The one button and one input below are scoped to the PANELS rather
+   than to the page: a tool that brings its own control language — the icon lab,
+   with its swatches, sliders and 16px delete crosses — sits on this ground
+   without being dressed as a form. */
 .pl-setpage, .pl-mgpage {
   font-size: var(--fs-medium, 14px);
   color: var(--text-primary);
@@ -34,7 +35,7 @@
    The border is `currentColor`: the kit already colours a button's TEXT by what
    it does (blue primary, red danger, grey secondary), so the outline inherits
    that and every button is legible as a button without inventing a palette. */
-:is(.pl-setpage, .pl-mgpage, .svc-mg) button:not(.set-plain) {
+:is(.set-panel, .set-card, .set-row) button:not(.set-plain) {
   border: 1px solid currentColor !important;
   border-radius: var(--radius-lg, 5px) !important;
   min-height: 32px;
@@ -42,14 +43,14 @@
 }
 /* Hovered, the kit fills the button solid and flips the text white — a white
    outline on a solid fill is the same shape, one shade lighter. */
-:is(.pl-setpage, .pl-mgpage, .svc-mg) button:not(.set-plain):hover { border-color: currentColor !important; }
-:is(.pl-setpage, .pl-mgpage, .svc-mg) :is(input, select, textarea) {
+:is(.set-panel, .set-card, .set-row) button:not(.set-plain):hover { border-color: currentColor !important; }
+:is(.set-panel, .set-card, .set-row) :is(input, select, textarea) {
   font-size: var(--fs-medium, 14px);
   min-height: 32px;
   padding: 0 10px;
   border-radius: var(--radius-lg, 5px);
 }
-:is(.pl-setpage, .pl-mgpage, .svc-mg) textarea { padding: 8px 10px; }
+:is(.set-panel, .set-card, .set-row) textarea { padding: 8px 10px; }
 :is(.pl-setpage, .pl-mgpage, .svc-mg) :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 16px 0 6px; }
 
 /* ── the panel ───────────────────────────────────────────────────────────── */
