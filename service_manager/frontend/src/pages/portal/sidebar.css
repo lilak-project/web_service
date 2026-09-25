@@ -320,9 +320,12 @@
 }
 .pl-band { flex: 0 0 auto; }
 /* The 24px caret box is centred on x=32 too (the band starts at x=0). */
+/* Shorter than a card on purpose: the title is a label for the band, not another
+   row in it. (The height is the same in both bar widths — changing it per state
+   is what once made every icon below jump as the bar opened.) */
 .pl-grp {
   display: flex; align-items: center; gap: 8px;
-  width: 100%; height: 40px; padding: 0 20px 0 20px;
+  width: 100%; height: 32px; padding: 0 20px 0 20px;
 }
 /* The box stays put and only the caret inside it turns, so the title does not
    shift as a group opens. */
