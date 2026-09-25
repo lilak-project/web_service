@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import ScaleToggle from './ScaleToggle'
+import { Panel, Field, FieldActions, Pill, fieldInput, fieldMuted } from './Field'
 
-const card = { border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)', padding: 14, background: 'var(--surface)' }
-const lbl = { fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', minWidth: 76 }
-const input = { height: 30, border: '1px solid var(--input-border)', borderRadius: 'var(--radius-md, 3px)', padding: '0 9px', width: 100, fontSize: 'var(--fs-medium, 14px)', boxSizing: 'border-box' }
+const input = { ...fieldInput, width: 100 }
 
 // Manager-only: the managed-service port window. Widening it lets more sessions
 // run at once (each launched service claims one loopback port from this range).
@@ -31,64 +30,54 @@ export default function SystemAdmin() {
     } catch (e) { flash(e?.response?.data?.detail || String(e)) }
   }
 
-  if (!d) return <div style={{ padding: 12, color: 'var(--text-primary)' }}>{msg || '…'}</div>
+  if (!d) return <div className="set-msg">{msg || '…'}</div>
 
   const slots = (Number(end) - Number(start) + 1)
   const dirty = Number(start) !== d.start || Number(end) !== d.end
   const bad = !(start && end) || Number(end) < Number(start) || slots < 1
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <>
       {/* UI size — the same toggle that's in the top bar, kept here so it has a
           settled home once it's removed from the top bar. */}
-      <div style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <Icon name="images" size={16} />
-          <b style={{ fontSize: 'var(--fs-body, 13px)' }}>{L('화면 크기', 'UI size')}</b>
-          <span style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)' }}>
-            {L('기본(작게) ↔ 크게', 'default (compact) ↔ large')}
-          </span>
-          <span style={{ flex: 1 }} />
+      <Panel title={L('화면', 'Display')}>
+        <Field label={L('화면 크기', 'UI size')}>
+          {L('기본(작게) ↔ 크게', 'default (compact) ↔ large')}
+        </Field>
+        <FieldActions>
           <ScaleToggle variant="secondary" />
-        </div>
-      </div>
+        </FieldActions>
+      </Panel>
 
-      <div style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <Icon name="sliders" size={16} />
-          <b style={{ fontSize: 'var(--fs-body, 13px)' }}>{L('서비스 포트 배정', 'Service port pool')}</b>
-          <span style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)' }}>{msg}</span>
-          <span style={{ flex: 1 }} />
-          <Button variant="secondary" onClick={load}>{L('새로고침', 'Refresh')}</Button>
-        </div>
+      <Panel title={L('서비스 포트 배정', 'Service port pool')} hint={msg}
+        right={<Button variant="secondary" onClick={load}>{L('새로고침', 'Refresh')}</Button>}>
+        <Field label={L('사용 현황', 'In use')}>
+          <Pill>{L('총 슬롯', 'total')} {d.total}</Pill>
+          <Pill tone="warn">{L('사용 중', 'in use')} {d.in_use}</Pill>
+          <Pill tone={d.free ? 'ok' : 'bad'}>{L('여유', 'free')} {d.free}</Pill>
+        </Field>
 
-        <p style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', margin: '0 0 12px' }}>
-          {L('실행되는 각 세션은 이 범위에서 포트를 하나씩 사용합니다. 범위가 모두 차면 "No free service port" 오류가 납니다. 넓히면 더 많은 동시 사용자를 받을 수 있습니다. (컨테이너 내부 포트 · 재시작 없이 즉시 반영)',
-            'Each running session claims one port from this range. When it fills up you get "No free service port". Widen it to admit more concurrent users. (Internal container ports · applied live, no restart.)')}
-        </p>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginBottom: 12 }}>
-          <div><div style={{ fontSize: 20 }}>{d.total}</div><div style={lbl}>{L('총 슬롯', 'total slots')}</div></div>
-          <div><div style={{ fontSize: 20 }}>{d.in_use}</div><div style={lbl}>{L('사용 중', 'in use')}</div></div>
-          <div><div style={{ fontSize: 20, color: d.free ? 'var(--ok-text, #2f9e44)' : 'var(--danger-text)' }}>{d.free}</div><div style={lbl}>{L('여유', 'free')}</div></div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={lbl}>{L('시작 포트', 'Start port')}</span>
+        <Field label={L('범위', 'Range')}>
           <input style={input} type="number" value={start} onChange={(e) => setStart(e.target.value)} />
-          <span style={lbl}>{L('끝 포트', 'End port')}</span>
+          <span style={fieldMuted}>–</span>
           <input style={input} type="number" value={end} onChange={(e) => setEnd(e.target.value)} />
-          <span style={{ fontSize: 'var(--fs-medium, 14px)', color: bad ? 'var(--danger-text)' : 'var(--text-primary)' }}>
+          <span style={{ color: bad ? 'var(--danger-text)' : 'var(--text-secondary)' }}>
             = {Number.isFinite(slots) ? slots : '?'} {L('슬롯', 'slots')}
           </span>
-          <Button disabled={!dirty || bad} onClick={save}>{L('저장', 'Save')}</Button>
-        </div>
+        </Field>
+        <FieldActions>
+          <Button variant="primary" disabled={!dirty || bad} onClick={save}>{L('저장', 'Save')}</Button>
+          <span style={fieldMuted}>
+            {L(`기본값 ${d.default_start}–${d.default_end} · 허용 ${d.min}–${d.max}, 최대 ${d.max_slots}슬롯`,
+              `Default ${d.default_start}–${d.default_end} · allowed ${d.min}–${d.max}, up to ${d.max_slots} slots`)}
+          </span>
+        </FieldActions>
 
-        <div style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', marginTop: 10 }}>
-          {L(`기본값 ${d.default_start}–${d.default_end} · 포탈 포트 ${d.portal_port}은 범위에서 제외 · 허용 ${d.min}–${d.max}, 최대 ${d.max_slots}슬롯`,
-            `Default ${d.default_start}–${d.default_end} · portal port ${d.portal_port} must stay outside · allowed ${d.min}–${d.max}, up to ${d.max_slots} slots`)}
-        </div>
-      </div>
-    </div>
+        <Field label={L('설명', 'What this is')}>
+          {L(`실행되는 각 세션은 이 범위에서 포트를 하나씩 사용합니다. 범위가 모두 차면 "No free service port" 오류가 납니다. 넓히면 더 많은 동시 사용자를 받을 수 있습니다. 컨테이너 내부 포트이고, 재시작 없이 즉시 반영됩니다. 포탈 포트 ${d.portal_port}은 범위에서 제외해야 합니다.`,
+            `Each running session claims one port from this range. When it fills up you get "No free service port" — widen it to admit more concurrent users. These are internal container ports, applied live with no restart. Portal port ${d.portal_port} must stay outside the range.`)}
+        </Field>
+      </Panel>
+    </>
   )
 }

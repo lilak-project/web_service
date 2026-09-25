@@ -3,6 +3,7 @@ import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import ExpandBox from './ExpandBox'
+import { Panel, Row, Pill, fieldInput } from './Field'
 
 /**
  * FeedbackView — bug reports, recommendations and inquiries.
@@ -15,10 +16,9 @@ const KIND = {
   bug:            { icon: 'warning-circle', color: '#dc2626', ko: '버그 신고', en: 'Bug' },
   recommendation: { icon: 'lightbulb',      color: '#ca8a04', ko: '제안',      en: 'Recommendation' },
   inquiry:        { icon: 'chats',          color: '#2563eb', ko: '문의',      en: 'Inquiry' } }
-const input = { height: 30, borderRadius: 'var(--radius-md, 3px)', fontSize: 'var(--fs-medium, 14px)', padding: '0 9px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', boxSizing: 'border-box' }
-const badge = { fontSize: 'var(--fs-medium, 14px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-primary)', border: '1px solid transparent' }
-const secLbl = { fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-primary)', marginBottom: 4 }
-const secHdr = { fontSize: 'var(--fs-small, 13px)', margin: '0 0 10px', color: 'var(--text-primary)' }
+const input = fieldInput
+// The label above a block inside an opened report — grey, same size as the rest.
+const secLbl = { color: 'var(--text-secondary)', marginBottom: 4 }
 
 export default function FeedbackView({ isManager }) {
   const { lang } = useLang()
@@ -50,18 +50,19 @@ export default function FeedbackView({ isManager }) {
   const fmt = (iso) => { try { return new Date(iso).toLocaleString() } catch { return iso } }
   const km = (k) => KIND[k] || KIND.inquiry
   const statusBadge = (s) => s === 'resolved'
-    ? <span style={{ ...badge, background: 'var(--ok-bg, #e6f4ea)', color: 'var(--ok-text, #2f9e44)' }}>{L('처리완료', 'resolved')}</span>
-    : <span style={{ ...badge, background: 'var(--warning-bg, #fef3c7)', color: 'var(--warning-text, #b45309)' }}>{L('접수', 'open')}</span>
+    ? <Pill tone="ok">{L('처리완료', 'resolved')}</Pill>
+    : <Pill tone="warn">{L('접수', 'open')}</Pill>
 
   const item = (r, admin) => {
     const m = km(r.kind)
     return (
       <ExpandBox key={r.id} open={open === r.id} onToggle={() => setOpen(open === r.id ? null : r.id)}
+        outerProps={{ className: open === r.id ? 'on' : undefined }}
         style={{ opacity: r.status === 'resolved' ? 0.72 : 1 }}
         icon={<Icon name={m.icon} size={22} color={m.color} weight="duotone" />}
         title={r.subject || L('(제목 없음)', '(no subject)')}
         badges={<>
-          <span style={{ ...badge, color: m.color, borderColor: m.color }}>{L(m.ko, m.en)}</span>
+          <span className="set-pill" style={{ color: m.color }}>{L(m.ko, m.en)}</span>
           {statusBadge(r.status)}
         </>}
         subtitle={(admin ? (r.username + ' · ') : '') + fmt(r.created_at)}
@@ -69,7 +70,7 @@ export default function FeedbackView({ isManager }) {
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
             <div style={secLbl}>{L('내용', 'Message')}</div>
-            <div style={{ whiteSpace: 'pre-wrap', fontSize: 'var(--fs-small, 13px)' }}>{r.body || '—'}</div>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{r.body || '—'}</div>
           </div>
           {admin ? (
             <>
@@ -91,8 +92,7 @@ export default function FeedbackView({ isManager }) {
           ) : (
             <div>
               <div style={secLbl}>{L('관리자 답장', 'Admin reply')}</div>
-              <div style={{ fontSize: 'var(--fs-small, 13px)', whiteSpace: 'pre-wrap',
-                color: r.reply ? 'var(--text-primary)' : 'var(--text-primary)' }}>
+              <div style={{ whiteSpace: 'pre-wrap' }}>
                 {r.reply || L('아직 답장이 없습니다.', 'No reply yet.')}
               </div>
             </div>
@@ -104,44 +104,43 @@ export default function FeedbackView({ isManager }) {
 
   const rows = isManager ? all : mine
   return (
-    <div style={{ maxWidth: 720 }}>
-      {msg && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-primary)', marginBottom: 8 }}>{msg}</div>}
+    <>
+      {msg && <div className="set-msg">{msg}</div>}
 
       {/* compose — everyone */}
-      <div style={{ border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)', padding: 14, marginBottom: 14 }}>
-        <div style={{ fontSize: 'var(--fs-small, 13px)', marginBottom: 10 }}>
-          {L('버그 신고 · 제안 · 문의', 'Bug report · recommendation · inquiry')}
+      <Panel bare title={L('새 리포트', 'New report')}
+        hint={L('버그 신고 · 제안 · 문의', 'bug · recommendation · inquiry')}>
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {Object.entries(KIND).map(([k, m]) => (
+              <button key={k} type="button" onClick={() => setF((s) => ({ ...s, kind: k }))}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 13px',
+                  cursor: 'pointer', fontSize: 'var(--fs-medium, 14px)',
+                  border: `1px solid ${f.kind === k ? m.color : 'var(--border-default)'}`,
+                  background: f.kind === k ? m.color : 'transparent',
+                  color: f.kind === k ? '#fff' : 'var(--text-primary)' }}>
+                <Icon name={m.icon} size={16} color={f.kind === k ? '#fff' : m.color} /> {L(m.ko, m.en)}
+              </button>
+            ))}
+          </div>
+          <input value={f.subject} onChange={(e) => setF((s) => ({ ...s, subject: e.target.value }))}
+            placeholder={L('제목', 'Subject')} style={{ ...input, width: '100%' }} />
+          <textarea value={f.body} onChange={(e) => setF((s) => ({ ...s, body: e.target.value }))}
+            rows={4} placeholder={L('내용을 자세히 적어주세요…', 'Describe it in detail…')}
+            style={{ ...input, width: '100%', height: 'auto', resize: 'vertical' }} />
+          <div style={{ display: 'flex' }}><div style={{ flex: 1 }} />
+            <Button variant="primary" onClick={submit}>{L('보내기', 'Send')}</Button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-          {Object.entries(KIND).map(([k, m]) => (
-            <button key={k} type="button" onClick={() => setF((s) => ({ ...s, kind: k }))}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9,
-                cursor: 'pointer', fontSize: 'var(--fs-small, 13px)',
-                border: `1.5px solid ${f.kind === k ? m.color : 'var(--border-default)'}`,
-                background: f.kind === k ? m.color : 'transparent',
-                color: f.kind === k ? '#fff' : 'var(--text-primary)' }}>
-              <Icon name={m.icon} size={16} color={f.kind === k ? '#fff' : m.color} /> {L(m.ko, m.en)}
-            </button>
-          ))}
-        </div>
-        <input value={f.subject} onChange={(e) => setF((s) => ({ ...s, subject: e.target.value }))}
-          placeholder={L('제목', 'Subject')} style={{ ...input, width: '100%', marginBottom: 8 }} />
-        <textarea value={f.body} onChange={(e) => setF((s) => ({ ...s, body: e.target.value }))}
-          rows={4} placeholder={L('내용을 자세히 적어주세요…', 'Describe it in detail…')}
-          style={{ ...input, width: '100%', height: 'auto', padding: '8px 10px', resize: 'vertical', marginBottom: 10 }} />
-        <div style={{ display: 'flex' }}><div style={{ flex: 1 }} />
-          <Button variant="primary" onClick={submit}>{L('보내기', 'Send')}</Button>
-        </div>
-      </div>
+      </Panel>
 
       {/* thread */}
-      <div style={secHdr}>
-        {isManager ? L('받은 리포트', 'Received reports') : L('내 리포트', 'My reports')}
-        <span style={{ color: 'var(--text-primary)', fontWeight: 400 }}> · {rows.length}</span>
-      </div>
-      {rows.length === 0
-        ? <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-primary)', padding: '8px 2px' }}>{L('아직 없습니다.', 'Nothing yet.')}</div>
-        : rows.map((r) => item(r, isManager))}
-    </div>
+      <Panel bare title={isManager ? L('받은 리포트', 'Received reports') : L('내 리포트', 'My reports')}
+        hint={String(rows.length)}>
+        {rows.length === 0
+          ? <Row className="empty">{L('아직 없습니다.', 'Nothing yet.')}</Row>
+          : <div className="set-list">{rows.map((r) => item(r, isManager))}</div>}
+      </Panel>
+    </>
   )
 }

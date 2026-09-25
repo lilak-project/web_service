@@ -1,114 +1,185 @@
 /*
- * Settings pages — the card vocabulary from mockups/portal-settings-a.html, so
- * the content beside the settings bar is built from the same pieces as the bars.
+ * Settings pages — direction C ("묶음"), the vocabulary chosen from
+ * the three-direction canvas. Three rules, and every page obeys them:
+ *
+ *   1. The page is a grey GROUND. Content never sits on it directly — it sits
+ *      on white PANELS.
+ *   2. A panel's title is its header STRIP (.set-bar), not a heading floating
+ *      above it. That is the only bold text on the page.
+ *   3. Inside a panel everything is a ROW of one text size: .set-card for
+ *      label/value facts, .set-row for a list of records. No vertical rules.
  *
  * A stylesheet rather than style props because the pieces need what the style
- * prop cannot express: a divider on every row EXCEPT the last, and hover states.
+ * prop cannot express: a rule between rows but not after the last one, and
+ * hover states.
  */
 
-/* A card of fact rows: label column, value column, a rule between rows. */
+/* ── the ground ──────────────────────────────────────────────────────────── */
+/* Everything here is ONE text size. A settings page is a list of facts, and a
+   size change should mean something — only the page heading gets one. */
+.pl-setpage {
+  font-size: var(--fs-medium, 14px);
+  color: var(--text-primary);
+  /* The ground is grey and the panel strips are LIGHTER than it, so a panel
+     reads as something laid on top rather than a hole cut into the page. */
+  background: var(--surface-2);
+  padding: 16px 20px 24px;
+}
+/* One button, one input, everywhere. The kit sets height and radius inline, so
+   this has to out-rank it — the one place !important earns its keep. */
+.pl-setpage button:not(.set-plain) {
+  border-radius: var(--radius-lg, 5px) !important;
+  min-height: 32px;
+  padding: 0 13px !important;
+}
+.pl-setpage :is(input, select, textarea) {
+  font-size: var(--fs-medium, 14px);
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-lg, 5px);
+}
+.pl-setpage textarea { padding: 8px 10px; }
+.pl-setpage :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 16px 0 6px; }
+
+/* ── the panel ───────────────────────────────────────────────────────────── */
+/* White on the grey ground. The edge is one step stronger than the rules
+   inside it, which is the whole hierarchy: two weights, no shadow. */
+.set-panel {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg, 5px);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+/* The strip IS the title. Bold lives here and nowhere else on the page. */
+.set-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  min-height: 42px;
+  background: var(--app-bg);
+  border-bottom: 1px solid var(--border-strong);
+}
+.set-bar > b { font-weight: 700; color: var(--text-emphasis); }
+.set-bar .sp { flex: 1; }
+.set-bar .hint { color: var(--text-secondary); }
+/* Irreversible things get their own panel, one per page, at the bottom. */
+.set-panel.danger { border-color: var(--danger-border, #fca5a5); }
+.set-panel.danger > .set-bar {
+  background: var(--danger-bg, #fee2e2);
+  border-bottom-color: var(--danger-border, #fca5a5);
+}
+.set-panel.danger > .set-bar > b { color: var(--danger-text, #b91c1c); }
+
+/* ── rows of facts: label column, value column ───────────────────────────── */
 .set-card {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  grid-template-columns: 170px 1fr;
   /* stretch, not center: a centred cell does not fill its row, which broke the
-     tinted label column into bands with white slivers between them. */
+     row rules into segments with slivers between them. */
   align-items: stretch;
   background: var(--surface);
-  /* The card's edge is the strongest line, the rules inside it one step down:
-     three weights make a hierarchy where one weight made a spreadsheet. */
+}
+/* Standalone it carries its own edge; inside a panel the panel already has one. */
+.set-card {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg, 5px);
   overflow: hidden;
 }
+.set-panel > .set-card { border: 0; border-radius: 0; }
 /* The rule goes on TOP of a row, not under it, so a row can opt out of the one
-   above it — which is how an actions row joins the field it belongs to instead of
-   being fenced off as a row of its own with an empty label. */
+   above it — which is how an actions row joins the field it belongs to instead
+   of being fenced off as a row of its own with an empty label. */
 .set-card > * {
-  padding: 9px 14px;
+  padding: 11px 16px;
   border-top: 1px solid var(--border-default);
   min-width: 0;
 }
 .set-card > *:nth-child(-n + 2) { border-top: 0; }
 .set-card > .set-actions { border-top: 0; padding-top: 0; }
-/* A title is told apart from its content by the RULE between the columns — no
-   tint, no weight, no grey. One line does the job a shade was doing badly. */
+/* The label column is grey, the value column is ink. No vertical rule and no
+   tint: the colour of the words already says which column you are in. */
 .set-card > *:nth-child(odd) {
   display: flex; align-items: center;
-  border-right: 1px solid var(--border-default);
+  color: var(--text-secondary);
 }
 
-/* A section is a NAME AND A RULE, never a card inside a card. The rule runs to
-   the end of the row so the eye has something to follow to the hint on the right. */
-.set-head {
+/* ── rows of records: a list inside a panel ──────────────────────────────── */
+.set-row {
   display: flex; align-items: center; gap: 10px;
-  margin: 12px 0 2px;
-  font-size: var(--fs-medium, 14px);
+  padding: 10px 16px;
+  min-height: 44px;
+  flex-wrap: wrap;
 }
-.set-head h2 {
-  margin: 0;
-  font-size: var(--fs-medium, 14px); font-weight: 700;
-  color: var(--text-emphasis);
-}
-.set-head .sp { flex: 1; height: 1px; background: var(--border-strong); }
-.set-head .hint { color: var(--text-secondary); }
+.set-row + .set-row { border-top: 1px solid var(--border-default); }
+.set-row .sp { flex: 1; }
+.set-row .mono { font-family: var(--font-mono); letter-spacing: .5px; }
+/* A row's secondary half — who/when/where — is grey, the subject stays ink. */
+.set-row .sub { color: var(--text-secondary); }
+.set-row.empty { color: var(--text-secondary); }
 
-/* The status vocabulary, used the same way on every page. */
+/* ── the status vocabulary, used the same way on every page ──────────────── */
 .set-pill {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: var(--fs-medium, 14px);
-  padding: 2px 8px; border-radius: 999px;
+  padding: 2px 8px;
+  border-radius: var(--radius-lg, 5px);
   background: var(--surface-2); color: var(--text-secondary);
   white-space: nowrap;
 }
-.set-pill.ok { background: var(--success-bg, #d1fae5); color: var(--success-text, #065f46); }
-.set-pill.warn { background: var(--warning-bg, #fef3c7); color: var(--warning-text, #92400e); }
+.set-pill.ok { background: var(--ok-bg, #e6f4ea); color: var(--ok-text, #2f9e44); }
+.set-pill.warn { background: var(--warning-bg, #fef3c7); color: var(--warning-text, #b45309); }
 .set-pill.bad { background: var(--danger-bg, #fee2e2); color: var(--danger-text, #b91c1c); }
 
-/* A table of records (accounts, sessions) in the same skin as the row card. */
-.set-table {
-  width: 100%; border-collapse: collapse;
-  font-size: var(--fs-small, 12px);
-  background: var(--surface);
-  /* The card's edge is the strongest line, the rules inside it one step down:
-     three weights make a hierarchy where one weight made a spreadsheet. */
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg, 5px);
-  overflow: hidden;
+/* ── a form laid out as rows, for a panel that is one big form ───────────── */
+.set-form {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  align-items: center;
 }
-.set-table th {
-  text-align: left; font-weight: 600;
-  color: var(--text-secondary);
-  padding: 9px 14px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border-default);
-}
-.set-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-}
-.set-table tr:last-child td { border-bottom: 0; }
+.set-form > * { padding: 9px 16px; min-width: 0; }
+.set-form > *:nth-child(n + 3) { border-top: 1px solid var(--border-default); }
+.set-form > *:nth-child(odd) { color: var(--text-secondary); padding-right: 0; }
+.set-form > *:nth-child(even) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.set-form > .set-span { grid-column: 1 / -1; }
 
+/* ── a list of collapsible records inside a panel ────────────────────────── */
+/* ExpandBox brings its own border, radius and gap — inside a panel the panel
+   already draws the edge, so the boxes become plain rows separated by a rule.
+   !important because ExpandBox sets all three inline. */
+.set-list > * {
+  border: 0 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+}
+.set-list > * + * { border-top: 1px solid var(--border-default) !important; }
+/* Open is a tint on the header row, not a coloured border: this page has no
+   coloured borders, and the revealed body already says which one is open. */
+.set-list > .on > *:first-child { background: var(--surface-2); }
+/* No card inside a card: the rows revealed under an open record belong to the
+   panel that holds the list, so they get no edge of their own. */
+.set-list .set-card { border: 0; border-radius: 0; }
 
-/* ── one style for the whole settings page ───────────────────────────────── */
-/* Everything here is ONE text size. A settings page is a list of facts, and a
-   size change should mean something — only the page heading gets one. */
-.pl-setpage { font-size: var(--fs-medium, 14px); color: var(--text-primary); }
-.pl-setpage :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 14px 0 6px; }
-/* One button: 30px tall, square corners. The kit sets height and radius inline,
-   so this has to out-rank it — the one place !important earns its keep. */
-.pl-setpage button:not(.set-plain) {
-  border-radius: var(--radius-md, 3px) !important;
-  min-height: 30px;
-  padding: 0 12px !important;
+/* ── the page's own heading and its width ────────────────────────────────── */
+/* The one size change on the page. Panels stop before the screen does: a fact
+   row read edge-to-edge on a wide monitor is a fact row nobody reads. */
+.pl-setpage .set-title {
+  margin: 2px 0 14px;
+  font-size: var(--fs-xlarge, 20px);
+  font-weight: 700;
+  color: var(--text-emphasis);
 }
-.pl-setpage :is(input, select, textarea) {
-  font-size: var(--fs-medium, 14px);
-  min-height: 30px;
-  padding: 0 9px;
-  border-radius: var(--radius-md, 3px);
+.pl-setpage .set-msg { margin-bottom: 10px; color: var(--text-secondary); }
+.pl-setpage .set-panel, .pl-setpage .set-title, .pl-setpage .set-msg { max-width: 940px; }
+
+/* ── phone ───────────────────────────────────────────────────────────────── */
+/* A 170px label column leaves nothing for the value on a phone, so the row
+   stacks: name on its own line, value under it, rule still between rows. */
+@media (max-width: 639px) {
+  .pl-setpage { padding: 12px 12px 20px; }
+  .set-card, .set-form { grid-template-columns: 1fr; }
+  .set-card > *:nth-child(even) { border-top: 0; padding-top: 0; }
+  .set-form > *:nth-child(even) { padding-top: 0; }
+  .set-form > *:nth-child(odd) { padding-right: 16px; }
+  .set-form > *:nth-child(n + 3) { border-top: 0; }
+  .set-form > *:nth-child(odd):not(:first-child) { border-top: 1px solid var(--border-default); }
 }
-.pl-setpage textarea { padding: 7px 9px; }
-/* Tighter than the page was: the rows carry the structure, so the gaps between
-   them do not have to. */
-.pl-setpage { padding: 14px 24px 24px; }

@@ -5,7 +5,7 @@ import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_CHOICES } from './IconPick'
 import GroupMark from './GroupMark'
 import ExpandBox from './ExpandBox'
-import { Field, FieldActions, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
+import { Field, FieldActions, Panel, Row, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
@@ -84,19 +84,26 @@ export default function GroupsAdmin({ users, services, onChanged }) {
   const nonMembers = (gid) => users.filter((u) => u.role !== 'manager' && !(u.groups || []).some((g) => g.id === gid))
 
   return (
-    <div>
-      {msg && <div style={{ ...fieldMuted, marginBottom: 6 }}>{msg}</div>}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-        <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={L('새 그룹 이름 (예: cens, lab-a)', 'new group name')} style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && createGroup()} />
-        <Button variant="primary" disabled={!newName.trim()} onClick={createGroup}>{L('그룹 생성', 'Create group')}</Button>
-      </div>
+    <>
+      {msg && <div className="set-msg">{msg}</div>}
+      <Panel title={L('새 그룹', 'New group')}>
+        <Field label={L('이름', 'Name')}>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={L('예: cens, lab-a', 'e.g. cens, lab-a')} style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && createGroup()} />
+        </Field>
+        <FieldActions>
+          <Button variant="primary" disabled={!newName.trim()} onClick={createGroup}>{L('그룹 생성', 'Create group')}</Button>
+        </FieldActions>
+      </Panel>
 
+      <Panel bare title={L('그룹', 'Groups')} hint={String(groups.length + 1)}>
+      <div className="set-list">
       {/* Administrators — a virtual, always-present, read-only group: just who is a manager */}
       {(() => {
         const admins = users.filter((u) => u.role === 'manager')
         const isOpen = open === 'admins'
         return (
           <ExpandBox open={isOpen} onToggle={() => setOpen(isOpen ? null : 'admins')}
+            outerProps={{ className: isOpen ? 'on' : undefined }}
             icon={<GroupMark icon="key" color="#111827" size={26} />}
             title={L('관리자', 'Administrators')}
             subtitle={`${admins.length} ${L('명', 'members')}`}
@@ -121,12 +128,12 @@ export default function GroupsAdmin({ users, services, onChanged }) {
         )
       })()}
 
-      {groups.length === 0 ? <div style={fieldMuted}>{L('그룹 없음', 'no groups')}</div>
-        : groups.map((g) => {
+      {groups.map((g) => {
           const isOpen = open === g.id
           return (
             <ExpandBox key={g.id} open={isOpen}
               onToggle={() => setOpen(isOpen ? null : g.id)}
+              outerProps={{ className: isOpen ? 'on' : undefined }}
               icon={<GroupMark icon={g.icon} color={g.color} size={26} />}
               title={g.name}
               subtitle={`${g.members} ${L('명', 'members')} · ${g.permissions.length} ${L('권한', 'perms')}`}
@@ -199,6 +206,9 @@ export default function GroupsAdmin({ users, services, onChanged }) {
             </ExpandBox>
           )
         })}
-    </div>
+      {groups.length === 0 && <Row className="empty">{L('그룹 없음 — 관리자 그룹만 있습니다.', 'No groups yet — only Administrators.')}</Row>}
+      </div>
+      </Panel>
+    </>
   )
 }

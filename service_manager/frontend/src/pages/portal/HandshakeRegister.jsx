@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import { Panel, fieldInput } from './Field'
 
 /**
  * HandshakeRegister — register an EXTERNAL / self-hosted service with the portal.
@@ -16,10 +17,7 @@ const VIS_OPTS = [
   { v: 2, key: 'portal_vis_protected' },
   { v: 3, key: 'portal_vis_admin' },
 ]
-const sectionHdr = { fontSize: 'var(--fs-small, 12px)', fontWeight: 600, color: 'var(--text-secondary)', margin: '4px 0 8px' }
-const selectStyle = { height: 28, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 6px', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
-const card = { border: '1px solid var(--border-default)', borderRadius: 8, padding: 10, marginBottom: 8 }
-const fieldStyle = { ...selectStyle, height: 28, flex: 1, minWidth: 0 }
+const fieldStyle = { ...fieldInput, flex: 1 }
 
 export default function HandshakeRegister({ onChanged }) {
   const { t } = useLang()
@@ -99,31 +97,31 @@ export default function HandshakeRegister({ onChanged }) {
   }
 
   return (
-    <div>
-      {err && <div style={{ color: 'var(--danger-text)', fontSize: 'var(--fs-small, 12px)', marginBottom: 10 }}>{err}</div>}
+    <>
+      {err && <div className="set-msg" style={{ color: 'var(--danger-text)' }}>{err}</div>}
 
-      <div style={sectionHdr}>{t('portal_hs_title')}</div>
-      <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{t('portal_hs_desc')}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ flex: 1 }} />
-          <Button size="sm" variant="secondary" onClick={copySnippet} disabled={!hs}
+      <Panel bare title={t('portal_hs_title')}
+        right={
+          <Button variant="secondary" onClick={copySnippet} disabled={!hs}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
             <Icon name={copied ? 'check' : 'copy'} size={14} /> {copied ? t('portal_guide_copied') : t('portal_guide_copy')}
-          </Button>
+          </Button>}>
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>{t('portal_hs_desc')}</div>
+          <pre style={{ margin: 0, padding: 12, borderRadius: 'var(--radius-lg, 5px)', background: 'var(--surface-2)',
+            fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 13px)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+            color: 'var(--text-primary)' }}>{hsSnippet || '…'}</pre>
+          <div style={{ color: 'var(--text-secondary)' }}>{t('portal_hs_guide_hint')}</div>
         </div>
-        <pre style={{ margin: 0, padding: 10, borderRadius: 6, background: 'var(--surface-3, var(--surface-2))',
-          fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-tiny, 11px)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-          color: 'var(--text-primary)' }}>{hsSnippet || '…'}</pre>
-        <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)' }}>{t('portal_hs_guide_hint')}</div>
-      </div>
+      </Panel>
 
-      <div style={{ ...sectionHdr, marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-        onClick={() => setShowManual((v) => !v)}>
-        <Icon name={showManual ? 'close' : 'plus'} size={12} /> {t('portal_admin_register_manual')}
-      </div>
+      <Panel bare title={t('portal_admin_register_manual')}
+        right={
+          <Button variant="secondary" onClick={() => setShowManual((v) => !v)}>
+            <Icon name={showManual ? 'close' : 'plus'} size={13} />
+          </Button>}>
       {showManual && (
-      <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <input placeholder={t('portal_ext_name')} value={reg.name} onChange={setR('name')} style={fieldStyle} />
           <input placeholder={t('portal_ext_kind')} value={reg.kind} onChange={setR('kind')} style={{ ...fieldStyle, maxWidth: 88 }} />
@@ -150,16 +148,16 @@ export default function HandshakeRegister({ onChanged }) {
             <input placeholder={t('portal_ext_url')} value={reg.url} onChange={setR('url')} style={fieldStyle} />
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input placeholder={t('portal_ext_token')} value={reg.token} onChange={setR('token')} style={fieldStyle} />
-              <Button size="sm" variant="ghost" disabled={!reg.url.trim()} onClick={testConn}>{t('portal_ext_test')}</Button>
+              <Button variant="secondary" disabled={!reg.url.trim()} onClick={testConn}>{t('portal_ext_test')}</Button>
               {probe && (
-                <span style={{ fontSize: 'var(--fs-small, 12px)', whiteSpace: 'nowrap', color: probe.reachable ? 'var(--ok-text, #2f9e44)' : 'var(--danger-text)' }}>
+                <span style={{ whiteSpace: 'nowrap', color: probe.reachable ? 'var(--ok-text, #2f9e44)' : 'var(--danger-text)' }}>
                   {probe.reachable ? `✓ ${t('portal_ext_reachable')}` : `✕ ${t('portal_ext_unreachable')}`}{probe.status ? ` (${probe.status})` : ''}
                 </span>
               )}
             </div>
           </>
         )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', marginTop: 2 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, color: 'var(--text-secondary)', marginTop: 2 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}><input type="checkbox" checked={reg.accepts_portal_token} onChange={setR('accepts_portal_token')} /> {t('portal_ext_sso')}</label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}><input type="checkbox" checked={reg.multi_project} onChange={setR('multi_project')} /> {t('portal_reg_multi')}</label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: reg.multi_project ? 0.6 : 1 }}
@@ -167,12 +165,13 @@ export default function HandshakeRegister({ onChanged }) {
             <input type="checkbox" checked={reg.import_export || reg.multi_project} disabled={reg.multi_project} onChange={setR('import_export')} /> {t('portal_reg_importexport')}</label>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {regMsg && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{regMsg}</span>}
+          {regMsg && <span style={{ color: 'var(--text-secondary)' }}>{regMsg}</span>}
           <div style={{ flex: 1 }} />
-          <Button size="sm" variant="primary" disabled={!reg.name.trim() || (reg.mode === 'external' && !reg.url.trim())} onClick={registerService}>{t('portal_ext_register')}</Button>
+          <Button variant="primary" disabled={!reg.name.trim() || (reg.mode === 'external' && !reg.url.trim())} onClick={registerService}>{t('portal_ext_register')}</Button>
         </div>
       </div>
       )}
-    </div>
+      </Panel>
+    </>
   )
 }

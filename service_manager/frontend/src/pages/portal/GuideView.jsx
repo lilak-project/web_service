@@ -3,6 +3,7 @@ import { Button, Icon, Markdown } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import HandshakeRegister from './HandshakeRegister'
+import { Panel } from './Field'
 
 /**
  * GuideView — the AI service-integration guide as an inline screen (no popup).
@@ -44,25 +45,24 @@ export default function GuideView({ onChanged }) {
   )
 
   return (
-    <div>
+    <>
       {/* Register an external / self-hosted service (handshake). */}
       <HandshakeRegister onChanged={onChanged} />
 
-      <div style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', margin: '18px 0 8px' }}>{t('portal_guide_docs')}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        {tab('service-guide', t('portal_guide_tab_guide'))}
-        {tab('service-contract', t('portal_guide_tab_contract'))}
-        <div style={{ flex: 1 }} />
-        <Button variant="secondary" onClick={copy} disabled={!md}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          <Icon name={copied ? 'check' : 'copy'} size={14} />
-          {copied ? t('portal_guide_copied') : t('portal_guide_copy')}
-        </Button>
-      </div>
-      {err && <div style={{ color: 'var(--danger-text)', fontSize: 'var(--fs-medium, 14px)' }}>{err}</div>}
-      <div style={{ border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)', padding: '6px 14px', background: 'var(--surface)' }}>
-        <Markdown>{md}</Markdown>
-      </div>
-    </div>
+      <Panel bare title={t('portal_guide_docs')}
+        right={
+          <>
+            {tab('service-guide', t('portal_guide_tab_guide'))}
+            {tab('service-contract', t('portal_guide_tab_contract'))}
+            <Button variant="secondary" onClick={copy} disabled={!md}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Icon name={copied ? 'check' : 'copy'} size={14} />
+              {copied ? t('portal_guide_copied') : t('portal_guide_copy')}
+            </Button>
+          </>}>
+        {err && <div style={{ padding: '12px 16px', color: 'var(--danger-text)' }}>{err}</div>}
+        <div style={{ padding: '2px 16px 10px' }}><Markdown>{md}</Markdown></div>
+      </Panel>
+    </>
   )
 }

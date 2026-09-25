@@ -1,45 +1,58 @@
 /**
- * Field — the two-column card layout the Settings screens share.
+ * Field — the pieces every Settings screen is built from (direction C, "묶음").
  *
- * Left column is the field's title, right column is its value / edit control, and
- * any buttons for that field go on their OWN line under the value (never beside
- * the title). Everything on these cards is ONE text size — FIELD_TEXT — so a card
- * reads as a table of facts instead of a pile of competing sizes.
+ * A page is a grey ground holding white PANELS. A panel's title is its header
+ * strip, and inside it everything is a row of one text size:
  *
- *   <div style={fieldGrid}>
- *     <Field label="Email">a@b.c · verified</Field>
- *     <FieldActions>
- *       <Button>Verify</Button>
- *     </FieldActions>
- *   </div>
+ *   <Panel title="계정" hint="jungwoo · 매니저">
+ *     <div className={FIELD_CARD_CLASS}>
+ *       <Field label="이메일">a@b.c <Pill tone="ok">확인됨</Pill></Field>
+ *       <FieldActions><Button>변경</Button></FieldActions>
+ *     </div>
+ *   </Panel>
  *
  * Field/FieldActions each emit TWO grid cells, so they only work as direct
- * children of a `fieldGrid` container (FieldActions leaves the label cell empty).
+ * children of a `.set-card` container (FieldActions leaves the label cell empty).
  */
 
 import './settings.css'
 
-// One step up from the old --fs-small: these cards are the page, not a footnote.
+// One step up from the old --fs-small: these rows are the page, not a footnote.
 export const FIELD_TEXT = { fontSize: 'var(--fs-medium, 14px)' }
 
-/** The card the rows live in. Kept as a style object for the call sites that
- *  spread it, but the look now comes from `.set-card` (settings.css) — a grid
- *  needs a stylesheet to put a rule between rows and not after the last one. */
+/** The rows grid. Kept as a style object for the call sites that spread it, but
+ *  the look comes from `.set-card` (settings.css) — a grid needs a stylesheet to
+ *  put a rule between rows and not after the last one. */
 export const fieldGrid = {}
 export const FIELD_CARD_CLASS = 'set-card'
 
-/** A heading above a card, and the status pill both used across the pages. */
-export function SettingsHead({ title, hint, children }) {
+/**
+ * Panel — a white box on the grey ground with its name in the header strip.
+ * `danger` paints the strip red; use it once per page, at the bottom, for the
+ * things that cannot be undone.
+ */
+export function Panel({ title, hint, right, danger, bare, style, children }) {
   return (
-    <div className="set-head">
-      <h2>{title}</h2>
-      <span className="sp" />
-      {hint && <span className="hint">{hint}</span>}
-      {children}
-    </div>
+    <section className={`set-panel${danger ? ' danger' : ''}`} style={style}>
+      {(title || hint || right) && (
+        <header className="set-bar">
+          {title && <b>{title}</b>}
+          {hint && <span className="hint">{hint}</span>}
+          <span className="sp" />
+          {right}
+        </header>
+      )}
+      {bare ? children : <div className={FIELD_CARD_CLASS}>{children}</div>}
+    </section>
   )
 }
 
+/** One record in a list panel: `<Row>` is a flex line with a rule above it. */
+export function Row({ className, style, children }) {
+  return <div className={`set-row${className ? ' ' + className : ''}`} style={style}>{children}</div>
+}
+
+/** The status vocabulary: tone is undefined | "ok" | "warn" | "bad". */
 export function Pill({ tone, children }) {
   return <span className={`set-pill${tone ? ` ${tone}` : ''}`}>{children}</span>
 }
@@ -48,9 +61,9 @@ export function Pill({ tone, children }) {
 export function Field({ label, align, children }) {
   return (
     <>
-      <span style={{ ...FIELD_TEXT, color: 'var(--text-primary)',
+      <span style={{ ...FIELD_TEXT,
         alignItems: align === 'start' ? 'flex-start' : undefined }}>{label}</span>
-      <div style={{ ...FIELD_TEXT, color: 'var(--text-emphasis)', minWidth: 0,
+      <div style={{ ...FIELD_TEXT, color: 'var(--text-primary)', minWidth: 0,
         display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{children}</div>
     </>
   )
@@ -66,11 +79,29 @@ export function FieldActions({ children }) {
   )
 }
 
-/** Muted placeholder for an empty value ("no grants yet"), at the card's one size. */
-export const fieldMuted = { ...FIELD_TEXT, color: 'var(--text-primary)' }
+/** Secondary text inside a row ("no grants yet"), at the page's one size. */
+export const fieldMuted = { ...FIELD_TEXT, color: 'var(--text-secondary)' }
 
-/** A removable/plain pill — same text size as everything else on the card. */
+/** A removable/plain chip — same text size and corner as everything else. */
 export const fieldChip = {
   display: 'inline-flex', alignItems: 'center', gap: 4, ...FIELD_TEXT,
-  padding: '2px 4px 2px 8px', borderRadius: 999,
-  border: '1px solid var(--border-default)', background: 'var(--surface)' }
+  padding: '2px 4px 2px 8px', borderRadius: 'var(--radius-lg, 5px)',
+  border: '1px solid var(--border-subtle)', background: 'var(--surface-2)' }
+
+/** The one input style, for the places that cannot use a plain <input>. */
+export const fieldInput = {
+  height: 32, borderRadius: 'var(--radius-lg, 5px)', ...FIELD_TEXT,
+  padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)',
+  border: '1px solid var(--input-border)', boxSizing: 'border-box', minWidth: 0 }
+
+/** Deprecated: a heading above a card. Panels carry their own title now. */
+export function SettingsHead({ title, hint, children }) {
+  return (
+    <div className="set-bar">
+      <b>{title}</b>
+      <span className="sp" />
+      {hint && <span className="hint">{hint}</span>}
+      {children}
+    </div>
+  )
+}
