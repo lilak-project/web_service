@@ -396,14 +396,25 @@ export default function SidebarPortal({
   }
 
   /** Manage on/off. Leaving it drops back to the empty panel rather than framing
-   *  whatever card you happened to be editing. */
+   *  whatever card you happened to be editing.
+   *  Manage always runs in GROUP mode: a flat list has no bands, so there is
+   *  nothing to drop a card into and nowhere for a new group to appear. The
+   *  reader's own setting is put back on the way out. */
+  const flatBefore = useRef(null)
   const toggleManage = () => {
     leaveSettings()
     setManage((m) => {
       const next = !m
       setSel(null)
       setView(next ? 'manage' : 'empty')
-      if (next) { setMini(false); setOpenSvcs(new Set()) }
+      if (next) {
+        setMini(false); setOpenSvcs(new Set())
+        flatBefore.current = flat
+        setFlat(false)
+      } else if (flatBefore.current !== null) {
+        setFlat(flatBefore.current)
+        flatBefore.current = null
+      }
       return next
     })
   }
@@ -656,8 +667,16 @@ export default function SidebarPortal({
             ))}
             <div className="pl-spring" />
 
-            {/* The modes are not pages — they change what the whole cover does —
-                so they sit at the FOOT, past the spring, with the way out. */}
+            {/* Signing out is not a settings page, so it sits under them all,
+                past the spring. */}
+            <div className="pl-sep" />
+            <button type="button" className="pl-c2 out" onClick={onLogout}>
+              <Icon name="logout" size={15} />
+              <span className="pl-txt">{L('로그아웃', 'Log out')}</span>
+            </button>
+
+            {/* The modes are not pages either — they change what the whole cover
+                does — and they are the last thing in the bar. */}
             <div className="pl-sep" />
             {modes.map((m) => (
               <button key={m.id} type="button"
@@ -676,13 +695,6 @@ export default function SidebarPortal({
               onClick={() => setFlat((f) => !f)}>
               <Icon name="tree" size={15} />
               <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
-            </button>
-            {/* Signing out is not a settings page, so it sits under them all,
-                past the spring — the last thing in the bar, not one of the list. */}
-            <div className="pl-sep" />
-            <button type="button" className="pl-c2 out" onClick={onLogout}>
-              <Icon name="logout" size={15} />
-              <span className="pl-txt">{L('로그아웃', 'Log out')}</span>
             </button>
           </div>
         </aside>

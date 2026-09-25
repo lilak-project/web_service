@@ -508,16 +508,10 @@
    a list under, and at 64px it crowded the mark. */
 .pl-root.mini .pl-fold { opacity: 0; pointer-events: none; }
 
-/* ── manage mode wears a different colour ────────────────────────────────── */
-/* Lilac. Amber went first and came out muddy: a warm tint over the bar's cool
-   slate turns beige. A cool violet lands clean on the same surfaces, it is the
-   portal's own name, and it is not spoken for — blue already means selected and
-   red already means danger.
-   A wash over the bar's own surfaces, not a flat colour: the plinth under the
-   account still reads one step deeper than the list, and the tint works on
-   every theme because what is underneath is still the theme's. */
-.pl-root.managing { --mg-tint: rgba(124, 58, 237, .13); }
-.pl-root.managing .pl-side,
-.pl-root.managing .pl-user {
-  background-image: linear-gradient(var(--mg-tint), var(--mg-tint));
-}
+/* ── manage mode says so in shape, not in colour ─────────────────────────── */
+/* Dashed edges, the same signal the cards on the classic cover already use for
+   manage mode. A tint was tried twice (amber, then lilac) and neither earned
+   its place: recolouring the whole bar is a lot of noise for a state the manage
+   bar at the top, the grips and the open bands already announce. */
+.pl-root.managing .pl-card,
+.pl-root.managing .pl-group { border-style: dashed; }
