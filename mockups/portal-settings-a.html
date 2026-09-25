@@ -47,13 +47,17 @@ button{font:inherit;color:inherit;border:0;background:transparent;cursor:pointer
 .b2head .back:hover{background:var(--surface-3)}
 .b2head b{font-size:15px;font-weight:700;color:var(--text-emphasis)}
 .nav2{flex:1;padding:2px 10px 10px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
-.c2{display:flex;align-items:center;gap:10px;padding:7px 9px 7px 6px;background:var(--surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);box-shadow:var(--shadow)}
+/* No per-item icon: a settings menu is a list of words, and six little tiles were
+   decoration that had to be invented rather than meaning anything. Without them
+   the card itself carries the selection, the way a service card does. */
+.c2{display:flex;align-items:center;height:36px;padding:0 12px;background:var(--surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);box-shadow:var(--shadow)}
 .c2:hover{border-color:var(--border-strong)}
 .c2.on{border-color:var(--border-focus);box-shadow:0 0 0 2px rgba(59,130,246,.15)}
-.c2 .ic{flex-shrink:0;width:30px;height:30px;border-radius:var(--radius-md);display:grid;place-items:center;background:var(--text-secondary);color:#fff;transition:border-radius .15s}
-.c2.on .ic{border-radius:50%}
+.c2.on .t{color:var(--accent)}
 .c2 .t{flex:1;min-width:0;font-weight:600;color:var(--text-emphasis);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sec{padding:12px 10px 4px;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--text-muted)}
+/* Sections are a rule, not a heading — the names were labelling two obvious
+   halves. */
+.sep{height:1px;margin:6px 2px;background:var(--border-strong)}
 
 /* ── level 3: the content ───────────────────────────────────────────────── */
 main{flex:1;min-width:0;padding:10px;display:flex}
@@ -126,21 +130,15 @@ input:focus{outline:0;border-color:var(--border-focus);box-shadow:0 0 0 2px rgba
 
 <!-- ───────── level 2 : the settings menu ───────── -->
 <aside class="bar2">
-  <div class="b2head">
-    <button class="back" title="서비스로 돌아가기">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
-    </button>
-    <b>설정</b>
-  </div>
+  <div class="b2head"><b>설정</b></div>
   <div class="nav2" id="menu">
-    <div class="sec">내 것</div>
-    <button class="c2 on" data-page="me"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6z"/></svg></span><span class="t">내 계정</span></button>
-    <button class="c2" data-page="feedback"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M4 4h16v11H8l-4 4V4z"/></svg></span><span class="t">피드백</span></button>
-    <div class="sec">관리</div>
-    <button class="c2" data-page="accounts"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><circle cx="9" cy="8" r="3.4"/><circle cx="17" cy="9" r="2.6"/><path d="M2 20c0-3.4 3.2-5.2 7-5.2s7 1.8 7 5.2zM16.5 14c3 .3 5.5 1.9 5.5 4.6"/></svg></span><span class="t">계정</span></button>
-    <button class="c2" data-page="groups"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 4v5M6 20v-4h12v4M12 9v7M6 16h12"/></svg></span><span class="t">그룹</span></button>
-    <button class="c2" data-page="invites"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><circle cx="8" cy="12" r="4"/><path d="M12 12h9v3h-2v-3"/></svg></span><span class="t">초대 코드</span></button>
-    <button class="c2" data-page="system"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="#fff"/><circle cx="15" cy="12" r="2" fill="#fff"/><circle cx="7" cy="17" r="2" fill="#fff"/></svg></span><span class="t">시스템</span></button>
+    <button class="c2 on" data-page="me"><span class="t">내 계정</span></button>
+    <button class="c2" data-page="feedback"><span class="t">피드백</span></button>
+    <div class="sep"></div>
+    <button class="c2" data-page="accounts"><span class="t">계정</span></button>
+    <button class="c2" data-page="groups"><span class="t">그룹</span></button>
+    <button class="c2" data-page="invites"><span class="t">초대 코드</span></button>
+    <button class="c2" data-page="system"><span class="t">시스템</span></button>
   </div>
 </aside>
 
