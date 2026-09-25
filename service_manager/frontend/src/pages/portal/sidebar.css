@@ -476,7 +476,7 @@
 /* The manage / builtin panel IS a settings page — its ground, padding, buttons
    and inputs come from settings.css, which names it alongside .pl-setpage. */
 .pl-mgtitle {
-  margin: 2px 0 14px;
+  margin: 0 0 10px;
   font-size: 15px; font-weight: 700;
   color: var(--text-emphasis);
 }

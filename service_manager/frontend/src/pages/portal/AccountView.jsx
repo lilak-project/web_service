@@ -4,7 +4,7 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
-import { Field, FieldActions, Panel, Row, Pill, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
+import { Field, FieldActions, Panel, Row, Pill, fieldGrid, fieldInput, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
 import SystemAdmin from './SystemAdmin'
 import { notify } from './settingsMsg'
 import FeedbackView from './FeedbackView'
@@ -22,7 +22,7 @@ import ExpandBox from './ExpandBox'
 // Card chrome moved to .set-card (settings.css); this is just the gap below one.
 const card = { marginBottom: 10 }
 const rowS = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
-const input = { height: 32, borderRadius: 'var(--radius-lg, 5px)', fontSize: 'var(--fs-medium, 14px)', padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', minWidth: 0 }
+const input = { ...fieldInput }
 const pwOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const pwDialog = { background: 'var(--surface-1, #fff)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 16, width: 320, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }
 

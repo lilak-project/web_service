@@ -5,7 +5,7 @@ import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_CHOICES } from './IconPick'
 import GroupMark from './GroupMark'
 import ExpandBox from './ExpandBox'
-import { Field, FieldActions, Panel, Row, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
+import { Field, FieldActions, Panel, Row, fieldGrid, fieldInput, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
 import { notify } from './settingsMsg'
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)]
@@ -25,7 +25,7 @@ function GroupProfile({ group, onSaved }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <GroupMark icon={icon} color={color} size={30} />
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={L('그룹 이름', 'group name')} style={{ height: 30, borderRadius: 6, fontSize: 'var(--fs-medium, 14px)', padding: '0 8px', minWidth: 120, background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }} />
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={L('그룹 이름', 'group name')} style={{ ...fieldInput, minWidth: 120 }} />
       <IconPick value={icon} onChange={setIcon} color={color} />
       <ColorPicker value={color} onChange={setColor} />
       <Button variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'random')}><Icon name="refresh" size={13} /></Button>
@@ -40,7 +40,7 @@ function GroupProfile({ group, onSaved }) {
  * member inherits the group's grants (resolved in app/permissions.py), so this is
  * the convenient bulk way to give a whole lab/team a project.
  */
-const input = { height: 28, borderRadius: 6, fontSize: 'var(--fs-medium, 14px)', padding: '0 8px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
+const input = { ...fieldInput }
 const card = { border: '1px solid var(--border-default)', borderRadius: 8, padding: 10, marginBottom: 8 }
 
 export default function GroupsAdmin({ users, services, onChanged }) {

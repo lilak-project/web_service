@@ -28,7 +28,7 @@
   /* The ground is grey and the panel strips are LIGHTER than it, so a panel
      reads as something laid on top rather than a hole cut into the page. */
   background: var(--surface-2);
-  padding: 16px 20px 24px;
+  padding: 12px 16px 20px;
 }
 /* One button, one input, everywhere. The kit sets border, height and radius
    inline, so this has to out-rank it — the one place !important earns its keep.
@@ -38,20 +38,20 @@
 :is(.set-panel, .set-card, .set-row) button:not(.set-plain) {
   border: 1px solid currentColor !important;
   border-radius: var(--radius-lg, 5px) !important;
-  min-height: 32px;
-  padding: 0 13px !important;
+  min-height: 28px;
+  padding: 0 11px !important;
 }
 /* Hovered, the kit fills the button solid and flips the text white — a white
    outline on a solid fill is the same shape, one shade lighter. */
 :is(.set-panel, .set-card, .set-row) button:not(.set-plain):hover { border-color: currentColor !important; }
 :is(.set-panel, .set-card, .set-row) :is(input, select, textarea) {
   font-size: var(--fs-medium, 14px);
-  min-height: 32px;
-  padding: 0 10px;
+  min-height: 28px;
+  padding: 0 9px;
   border-radius: var(--radius-lg, 5px);
 }
-:is(.set-panel, .set-card, .set-row) textarea { padding: 8px 10px; }
-:is(.pl-setpage, .pl-mgpage, .svc-mg) :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 16px 0 6px; }
+:is(.set-panel, .set-card, .set-row) textarea { padding: 7px 9px; }
+:is(.pl-setpage, .pl-mgpage, .svc-mg) :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 12px 0 5px; }
 
 /* ── the panel ───────────────────────────────────────────────────────────── */
 /* White on the grey ground. The edge is one step stronger than the rules
@@ -61,19 +61,19 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg, 5px);
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 /* The strip IS the title. Bold lives here and nowhere else on the page.
    Tinted, not grey: grey is what the page GROUND is made of, so a grey strip
    read as a gap in the panel rather than as its head. The tint also carries the
    panel's kind — blue for an ordinary one, red for the irreversible one. */
 .set-bar {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 9px;
   /* A FIXED height, not a minimum: the Accounts strip holds a select and grew
      12px taller than every other strip on the same page. */
   flex: 0 0 auto;
-  height: 42px;
-  padding: 0 16px;
+  height: 34px;
+  padding: 0 13px;
   background: var(--info-bg);
   border-bottom: 1px solid var(--border-strong);
 }
@@ -108,7 +108,7 @@
    above it — which is how an actions row joins the field it belongs to instead
    of being fenced off as a row of its own with an empty label. */
 .set-card > * {
-  padding: 11px 16px;
+  padding: 7px 13px;
   border-top: 1px solid var(--border-default);
   min-width: 0;
 }
@@ -123,9 +123,9 @@
 
 /* ── rows of records: a list inside a panel ──────────────────────────────── */
 .set-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 16px;
-  min-height: 44px;
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 13px;
+  min-height: 36px;
   flex-wrap: wrap;
 }
 .set-row + .set-row { border-top: 1px solid var(--border-default); }
@@ -141,7 +141,7 @@
 /* The column names. A head is a label, not a record: shorter, quieter, and it
    takes the rule under it rather than one of its own above. */
 .set-row.head {
-  min-height: 32px;
+  min-height: 26px;
   background: var(--surface-2);
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-default);
@@ -154,7 +154,7 @@
 .set-pill {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: var(--fs-medium, 14px);
-  padding: 1px 10px;
+  padding: 0 8px;
   border-radius: 999px;
   border: 1px solid currentColor;
   background: var(--surface-2); color: var(--text-secondary);
@@ -187,7 +187,7 @@
    before the screen does: a fact row read edge-to-edge on a wide monitor is a
    fact row nobody reads. */
 :is(.pl-setpage, .pl-mgpage) .set-title {
-  margin: 2px 0 14px;
+  margin: 0 0 10px;
   font-size: 15px;
   font-weight: 700;
   color: var(--text-emphasis);
@@ -199,7 +199,7 @@
 /* A 170px label column leaves nothing for the value on a phone, so the row
    stacks: name on its own line, value under it, rule still between rows. */
 @media (max-width: 639px) {
-  .pl-setpage, .pl-mgpage { padding: 12px 12px 20px; }
+  .pl-setpage, .pl-mgpage { padding: 10px 10px 16px; }
   .set-card { grid-template-columns: 1fr; }
   .set-card > *:nth-child(even) { border-top: 0; padding-top: 0; }
 }
@@ -210,7 +210,7 @@
 .set-status {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 8px;
-  height: 34px; padding: 0 20px;
+  height: 30px; padding: 0 16px;
   font-size: var(--fs-medium, 14px);
   color: var(--text-secondary);
   background: var(--surface-2);

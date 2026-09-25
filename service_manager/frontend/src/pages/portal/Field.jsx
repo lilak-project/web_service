@@ -85,13 +85,13 @@ export const fieldMuted = { ...FIELD_TEXT, color: 'var(--text-secondary)' }
 /** A removable/plain chip — same text size and corner as everything else. */
 export const fieldChip = {
   display: 'inline-flex', alignItems: 'center', gap: 4, ...FIELD_TEXT,
-  padding: '2px 4px 2px 8px', borderRadius: 'var(--radius-lg, 5px)',
+  padding: '0 4px 0 8px', borderRadius: 'var(--radius-lg, 5px)',
   border: '1px solid var(--border-subtle)', background: 'var(--surface-2)' }
 
 /** The one input style, for the places that cannot use a plain <input>. */
 export const fieldInput = {
-  height: 32, borderRadius: 'var(--radius-lg, 5px)', ...FIELD_TEXT,
-  padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)',
+  height: 28, borderRadius: 'var(--radius-lg, 5px)', ...FIELD_TEXT,
+  padding: '0 9px', background: 'var(--input-bg)', color: 'var(--text-primary)',
   border: '1px solid var(--input-border)', boxSizing: 'border-box', minWidth: 0 }
 
 /** Deprecated: a heading above a card. Panels carry their own title now. */
