@@ -20,6 +20,12 @@ import './sidebar.css'
  *  builtin ("@links") and a service ("elog") can share one list. */
 const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.name)
 
+/** The portal's own tools always band together: they are things you do TO the
+ *  portal, not services it runs, and an admin should not have to file them. */
+const SYSTEM_KEYS = ['@iconlab', '@newservice', '@store']
+const SYSTEM_ID = '@system'
+const NOGROUP_ID = '@none'
+
 /** The order list with `key` lifted out and dropped next to `target`. */
 function movedOrder(base, key, target, after) {
   const keys = base.filter((k) => k !== key)
@@ -299,20 +305,26 @@ export default function SidebarPortal({
     const byKey = new Map(list.map((c) => [cardKey(c), c]))
     const taken = new Set()
     const out = []
+    // System first, and always: the portal's own tools are not filed by hand.
+    const sys = SYSTEM_KEYS.map((k) => byKey.get(k)).filter(Boolean)
+    sys.forEach((c) => taken.add(cardKey(c)))
+    if (sys.length) out.push({ g: { id: SYSTEM_ID, name: L('시스템', 'System'), fixed: true }, items: sys })
     const gs = [...(groups || [])]
       .filter((g) => !g.hidden || (manage && isManager))
       .sort((a, b) => (a.order ?? 1000) - (b.order ?? 1000))
     for (const g of gs) {
-      const items = (g.members || []).map((k) => byKey.get(k)).filter(Boolean)
+      const items = (g.members || []).map((k) => byKey.get(k)).filter((c) => c && !taken.has(cardKey(c)))
       items.forEach((c) => taken.add(cardKey(c)))
       // An empty group still shows in manage mode — otherwise a group you just
       // made vanishes and there is nothing to drag onto.
       if (items.length || (manage && isManager)) out.push({ g, items })
     }
+    // In group mode EVERY card is in a band, so the eye reads one kind of thing
+    // down the bar instead of bands and then loose cards.
     const rest = list.filter((c) => !taken.has(cardKey(c)))
-    out.push({ g: null, items: rest })
+    out.push({ g: { id: NOGROUP_ID, name: L('그룹 없음', 'No group'), loose: true }, items: rest })
     return out
-  }, [cards, groups, flat, manage, isManager])
+  }, [cards, groups, flat, manage, isManager, lang])
 
   // ── manage mode: drag to arrange ────────────────────────────────────────
   const gidOf = (key) => (groups || []).find((g) => (g.members || []).includes(key))?.id ?? null
@@ -356,11 +368,13 @@ export default function SidebarPortal({
     onDragOver: (e) => { if (!drag) return; e.preventDefault(); setDropAt({ gid }) },
     onDrop: (e) => { e.preventDefault(); onDrop() },
   })
+  /** Where a band's drop puts a card: a real group, or out of every group. */
+  const bandDrop = (g) => (g.fixed ? {} : bandProps(g.loose ? null : g.id))
   const dropCls = (key) => (dropAt?.key === key ? (dropAt.after ? ' drop-after' : ' drop-before') : '')
 
   // Collapse all: every group and every project list. (Expand-all deliberately
   // only reopens the groups — reopening every project list buries the bar.)
-  const allShut = () => { setShut(new Set((groups || []).map((g) => g.id))); setOpenSvcs(new Set()) }
+  const allShut = () => { setShut(new Set(bands.map((b) => b.g?.id).filter(Boolean))); setOpenSvcs(new Set()) }
 
   /** Manage on/off. Leaving it drops back to the empty panel rather than framing
    *  whatever card you happened to be editing. */
@@ -526,29 +540,36 @@ export default function SidebarPortal({
           </button>
         </div>
 
+        {/* Outside .pl-nav so it stays put while the list scrolls: these two act on
+            the WHOLE bar, like the brand above them, not on anything in the list. */}
+        {manage && isManager && (
+          <div className="pl-mgbar">
+            {/* The way OUT comes first: manage mode changes what every card does,
+                so leaving it should not be a hunt through the mode list. */}
+            <button type="button" className="pl-mgout" onClick={toggleManage}>
+              <Icon name="close" size={14} /> <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
+            </button>
+            <button type="button" className="pl-mgnew" onClick={onCreateGroup}>
+              <Icon name="folder-plus" size={14} /> <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
+            </button>
+          </div>
+        )}
+
         <div className="pl-nav">
-          {manage && isManager && (
-            <div className="pl-mgbar">
-              {/* The way OUT comes first: manage mode changes what every card
-                  does, so leaving it should not be a hunt through the mode list. */}
-              <button type="button" className="pl-mgout" onClick={toggleManage}>
-                <Icon name="close" size={14} /> <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
-              </button>
-              <button type="button" className="pl-mgnew" onClick={onCreateGroup}>
-                <Icon name="folder-plus" size={14} /> <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
-              </button>
-            </div>
-          )}
           {bands.map(({ g, items }) => (g ? (
             /* A group is one tinted REGION spanning the bar's full width, with its
                cards inside it — a tinted title alone left the members looking like
                they had simply been indented under a heading. */
-            <div key={g.id} className={`pl-group${dropAt?.gid === g.id ? ' drop' : ''}`}
-              {...bandProps(g.id)}>
+            <div key={g.id} className={`pl-group${g.fixed || g.loose ? ' auto' : ''}`
+                + `${dropAt?.gid === (g.loose ? null : g.id) && !g.fixed ? ' drop' : ''}`}
+              {...bandDrop(g)}>
               <div className="pl-band">
                 <button type="button" className="pl-grp"
-                  onClick={() => (manage && isManager ? openManageGroup(g) : toggleGroup(g.id))}>
-                  <span className={`pl-gchev${groupOpen(g.id) ? ' open' : ''}`}>
+                  onClick={() => (manage && isManager && !g.fixed && !g.loose
+                    ? openManageGroup(g) : toggleGroup(g.id))}>
+                  {/* Manage mode forces every band open (you cannot drop into a
+                      band you cannot see), so the caret has to say so too. */}
+                  <span className={`pl-gchev${groupOpen(g.id) || (manage && isManager) ? ' open' : ''}`}>
                     <Icon name="caret-right" size={14} weight="bold" color="var(--text-secondary)" />
                   </span>
                   <span className="pl-txt">{g.name || L('그룹', 'Group')}</span>
@@ -559,8 +580,8 @@ export default function SidebarPortal({
                   included — leaving that one behind made the band look broken. */}
               <Slider open={groupOpen(g.id) || (manage && isManager)} className="pl-gitems">
                 {items.map(serviceCard)}
-                {manage && isManager && items.length === 0 && (
-                  <div className="pl-gempty" {...bandProps(g.id)}>{L('여기로 끌어다 놓으세요', 'drop things here')}</div>
+                {manage && isManager && items.length === 0 && !g.fixed && (
+                  <div className="pl-gempty" {...bandDrop(g)}>{L('여기로 끌어다 놓으세요', 'drop things here')}</div>
                 )}
               </Slider>
             </div>

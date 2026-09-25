@@ -296,7 +296,9 @@
    heading with some indented rows under it, not as a container. */
 .pl-group {
   flex: 0 0 auto;
-  margin: 4px -10px 0;
+  /* The bottom margin is what tells a band's last card from the first loose one
+     below it — without it the two rows read as one list. */
+  margin: 4px -10px 10px;
   padding-bottom: 6px;
   background: rgba(148, 163, 184, .16);
   border-top: 1px solid var(--border-strong);
@@ -325,8 +327,10 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, .35);
 }
 /* Collapsed: drop the fill, keep the top rule and the caret box so groups can
-   still be opened from the 64px bar. */
-.pl-root.mini .pl-group { background: transparent; border-bottom-color: transparent; padding-bottom: 0; }
+   still be opened from the 64px bar. COLOURS only — changing the padding here
+   made a shut group a different height in the two states, so every icon below it
+   jumped as the bar opened. */
+.pl-root.mini .pl-group { background: transparent; border-bottom-color: transparent; }
 .pl-root.mini .pl-grp .pl-txt, .pl-root.mini .pl-gcount { opacity: 0; pointer-events: none; }
 
 /* A group's members are not indented — only projects are. The padding puts them
@@ -383,10 +387,12 @@
 /* ── manage mode ─────────────────────────────────────────────────────────── */
 /* The bar becomes editable: a button that makes a group, a grip on every card,
    and a line that shows where a dragged card would land. */
+/* Pinned under the brand, outside the scrolling list: these act on the whole
+   bar, so they do not travel with what is in it. */
 .pl-mgbar {
   flex: 0 0 auto;
   display: flex; flex-direction: column; gap: 6px;
-  padding: 8px 9px 10px; margin-bottom: 4px;
+  padding: 2px 10px 10px;
   border-bottom: 1px solid var(--border-strong);
 }
 .pl-mgnew, .pl-mgout {
