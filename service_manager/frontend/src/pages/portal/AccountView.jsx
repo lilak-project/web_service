@@ -6,6 +6,7 @@ import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
 import { Field, FieldActions, Panel, Row, Pill, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
 import SystemAdmin from './SystemAdmin'
+import { notify } from './settingsMsg'
 import FeedbackView from './FeedbackView'
 import GuideView from './GuideView'
 import ProfileEditor from './ProfileEditor'
@@ -66,7 +67,7 @@ export function settingsMenu(isManager, lang) {
 
 // tab/onTab make the active sub-tab controllable from the header; hideMenu drops
 // the left sidebar (the header dropdown navigates instead) on narrow screens.
-export default function AccountView({ isManager, onChanged, onAccountGone, onLogout, tab: tabProp, onTab, hideMenu = false }) {
+export default function AccountView({ isManager, onChanged, onAccountGone, tab: tabProp, onTab, hideMenu = false }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [me, setMe] = useState(null)
@@ -96,13 +97,13 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
         setRequests((await launcher.get('/admin/access-requests')).data)
         setServices((await launcher.get('/admin/services')).data)
       }
-    } catch (e) { setMsg(e?.response?.data?.detail || 'load failed') }
+    } catch (e) { const m = e?.response?.data?.detail || 'load failed'; setMsg(m); notify(m, 'bad') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (me) setDname(me.display_name || me.username || '') }, [me?.display_name, me?.username])
 
-  const say = (m) => { setMsg(m) }
-  async function run(p, ok) { try { const r = await p; say(ok(r)); await load(); onChanged?.() } catch (e) { say(e?.response?.data?.detail || L('실패', 'failed')) } }
+  const say = (m, tone) => { setMsg(m); notify(m, tone) }
+  async function run(p, ok) { try { const r = await p; say(ok(r), 'ok'); await load(); onChanged?.() } catch (e) { say(e?.response?.data?.detail || L('실패', 'failed'), 'bad') } }
 
   // ── self actions ──
   const redeem = () => f.code.trim() && run(launcher.post('/invite-codes/redeem', { code: f.code.trim() }),
@@ -123,7 +124,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
   const reverify = () => run(launcher.post('/account/verify'), () => L('이메일 인증됨 (임시)', 'email verified (temp)'))
   async function deleteSelf() {
     if (!window.confirm(L('정말 계정을 삭제할까요? 되돌릴 수 없습니다.', 'Delete your account? This cannot be undone.'))) return
-    try { await launcher.delete('/account'); onAccountGone?.() } catch (e) { say(e?.response?.data?.detail || L('실패', 'failed')) }
+    try { await launcher.delete('/account'); onAccountGone?.() } catch (e) { say(e?.response?.data?.detail || L('실패', 'failed'), 'bad') }
   }
 
   // ── admin actions on a user ──
@@ -262,28 +263,19 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
           </Field>
         )}
 
-        <Field label={L('초대 코드 등록', 'Redeem invite code')}>
+        <Field label={L('초대 코드', 'Invite code')}>
           <input value={f.code} onChange={setField('code')} placeholder="XXXXXXXX" style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && redeem()}
             name="portal-invite-code" autoComplete="off" data-1p-ignore data-lpignore="true" />
         </Field>
         <FieldActions>
-          <Button variant="primary" disabled={!f.code.trim()} onClick={redeem}>{L('등록', 'Redeem')}</Button>
+          <Button variant="primary" disabled={!f.code.trim()} onClick={redeem}>{L('등록', 'Add')}</Button>
+          <span style={fieldMuted}>{L('받은 코드를 입력하면 그 서비스·그룹에 들어갑니다.', 'A code you were given joins you to that service or group.')}</span>
         </FieldActions>
       </Panel>
 
       {/* Signing out belongs with the account, not on the cover's account card:
           it is something you do TO this account, like changing its password. */}
       <Panel danger title={L('되돌릴 수 없는 것', 'Cannot be undone')}>
-        {onLogout && (
-          <>
-            <Field label={L('로그아웃', 'Log out')}>{L('이 브라우저에서만 나갑니다.', 'Signs out of this browser only.')}</Field>
-            <FieldActions>
-              <Button variant="secondary" onClick={onLogout}>
-                <Icon name="logout" size={14} /> {L('로그아웃', 'Log out')}
-              </Button>
-            </FieldActions>
-          </>
-        )}
         <Field label={L('계정 삭제', 'Delete account')}>{L('계정이 사라집니다. 작성한 기록은 남습니다.', 'The account goes; what it wrote stays.')}</Field>
         <FieldActions>
           <Button variant="dangerSoft" onClick={deleteSelf}>{L('계정 삭제', 'Delete account')}</Button>
@@ -362,7 +354,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
                   : (u.groups || []).map((g) => (
                       <span key={g.id} style={fieldChip}>
                         <GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}
-                        <Button variant="ghost" icon onClick={() => removeFromGroup(u, g)} title={L('제외', 'Remove')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
+                        <button type="button" className="set-plain set-x" onClick={() => removeFromGroup(u, g)} title={L('제외', 'Remove')}>✕</button>
                       </span>
                     ))}
               </Field>
@@ -386,7 +378,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
                   : <>
                       {(u.permissions || []).filter((p) => p.admin).map((p, i) => (
                         <span key={'d' + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
-                          <Button variant="ghost" icon onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')} style={{ minWidth: 0, padding: '0 2px' }}>✕</Button>
+                          <button type="button" className="set-plain set-x" onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')}>✕</button>
                         </span>
                       ))}
                       {/* group-inherited admin: revoked from the group, not per-user — no ✕ here */}
@@ -411,15 +403,19 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
                 </FieldActions>
               )}
 
-              <Field label={L('비밀번호', 'Password')} />
+              <Field label={L('비밀번호', 'Password')}>
+                {L('새 비밀번호를 메일로 보내거나, 직접 정합니다.', 'Mail a new one, or set it yourself.')}
+              </Field>
               <FieldActions>
                 <Button variant="secondary" onClick={() => adminResetPwEmail(u)}>{L('이메일로 새 비번 발송', 'Change password via email')}</Button>
                 <Button variant="secondary" onClick={() => adminSetPw(u)}>{L('비밀번호 직접 설정', 'Set password')}</Button>
               </FieldActions>
 
-              <Field label={L('계정', 'Account')} />
+              <Field label={L('계정', 'Account')}>
+                {L('이 계정을 끄거나 지웁니다.', 'Turn this account off, or remove it.')}
+              </Field>
               <FieldActions>
-                <Button variant="ghost" onClick={() => adminActive(u)}>{u.is_active === false ? L('활성화', 'Activate') : L('비활성화', 'Deactivate')}</Button>
+                <Button variant="warning" onClick={() => adminActive(u)}>{u.is_active === false ? L('활성화', 'Activate') : L('비활성화', 'Deactivate')}</Button>
                 <Button variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('계정 삭제', 'Delete account')}</Button>
               </FieldActions>
             </div>
@@ -447,7 +443,6 @@ export default function AccountView({ isManager, onChanged, onAccountGone, onLog
           onSubmit={(v) => { pwAsk.resolve(v); setPwAsk(null) }}
           onCancel={() => { pwAsk.resolve(null); setPwAsk(null) }} />
       )}
-      {msg && <div className="set-msg">{msg}</div>}
       {/* The page's one size change: its name. Every other word on the page is
           the same size, so this is what tells you where you are. */}
       {hideMenu && <h1 className="set-title">{(MENU.find(([k]) => k === tab) || MENU[0])[2]}</h1>}

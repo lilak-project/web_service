@@ -4,6 +4,7 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import ScaleToggle from './ScaleToggle'
 import { Panel, Field, FieldActions, Pill, fieldInput, fieldMuted } from './Field'
+import { notify } from './settingsMsg'
 
 const input = { ...fieldInput, width: 100 }
 
@@ -16,18 +17,18 @@ export default function SystemAdmin() {
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [msg, setMsg] = useState('')
-  const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 3000) }
+  const flash = (m, tone) => { setMsg(m); notify(m, tone); setTimeout(() => setMsg(''), 3000) }
 
   const load = () => launcher.get('/admin/system/ports').then((r) => {
     setD(r.data); setStart(String(r.data.start)); setEnd(String(r.data.end))
-  }).catch((e) => flash(e?.response?.data?.detail || String(e)))
+  }).catch((e) => flash(e?.response?.data?.detail || String(e), 'bad'))
   useEffect(() => { load() }, [])
 
   const save = async () => {
     try {
       const r = await launcher.put('/admin/system/ports', { start: Number(start), end: Number(end) })
-      setD(r.data); flash(L('저장됨', 'saved'))
-    } catch (e) { flash(e?.response?.data?.detail || String(e)) }
+      setD(r.data); flash(L('포트 범위 저장됨', 'port range saved'), 'ok')
+    } catch (e) { flash(e?.response?.data?.detail || String(e), 'bad') }
   }
 
   if (!d) return <div className="set-msg">{msg || '…'}</div>

@@ -4,6 +4,7 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { HOME_MODES } from './HomeModeMenu'
 import AccountView, { settingsMenu } from './AccountView'
+import { SettingsStatus } from './settingsMsg'
 import LiveWall from './LiveWall'
 import './sidebar.css'
 
@@ -455,6 +456,14 @@ export default function SidebarPortal({
                 </button>
               </div>
             ))}
+            <div className="pl-spring" />
+            {/* Signing out is not a settings page, so it sits under them all,
+                past the spring — the last thing in the bar, not one of the list. */}
+            <div className="pl-sep" />
+            <button type="button" className="pl-c2 out" onClick={onLogout}>
+              <Icon name="logout" size={15} />
+              <span className="pl-txt">{L('로그아웃', 'Log out')}</span>
+            </button>
           </div>
         </aside>
       )}
@@ -462,10 +471,13 @@ export default function SidebarPortal({
       <main className={`pl-main${view === 'live' ? ' live' : ''}`}>
         <div className="pl-panel">
           {view === 'settings' ? (
-            <div className="pl-scroll pl-setpage">
-              <AccountView isManager={isManager} onChanged={onRefresh} onAccountGone={onLogout}
-                onLogout={onLogout} tab={settingsTab} onTab={onSettingsTab} hideMenu />
-            </div>
+            <>
+              <div className="pl-scroll pl-setpage">
+                <AccountView isManager={isManager} onChanged={onRefresh} onAccountGone={onLogout}
+                  tab={settingsTab} onTab={onSettingsTab} hideMenu />
+              </div>
+              <SettingsStatus />
+            </>
           ) : view === 'live' ? (
             <div className="pl-scroll">
               <LiveWall cards={liveCards || []} iconFor={iconFor} onDone={() => setView('empty')} />

@@ -3,6 +3,7 @@ import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { Panel, fieldInput } from './Field'
+import { notify } from './settingsMsg'
 
 /**
  * HandshakeRegister — register an EXTERNAL / self-hosted service with the portal.
@@ -44,7 +45,7 @@ export default function HandshakeRegister({ onChanged }) {
         document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove()
       } catch { /* selectable */ }
     }
-    if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1500) }
+    if (ok) { setCopied(true); notify(t('portal_guide_copied'), 'ok'); setTimeout(() => setCopied(false), 1500) }
   }
 
   const blankReg = {
@@ -70,7 +71,7 @@ export default function HandshakeRegister({ onChanged }) {
 
   async function load() {
     try { setHs((await launcher.get('/admin/handshake-info')).data) }
-    catch (e) { setErr(e?.response?.data?.detail || t('portal_admin_load_fail')) }
+    catch (e) { const m = e?.response?.data?.detail || t('portal_admin_load_fail'); setErr(m); notify(m, 'bad') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -92,8 +93,8 @@ export default function HandshakeRegister({ onChanged }) {
         url: reg.mode === 'external' ? reg.url.trim() : undefined,
         token: reg.mode === 'external' ? (reg.token.trim() || undefined) : undefined,
       })
-      setReg(blankReg); setProbe(null); setRegMsg(t('portal_ext_added')); onChanged?.()
-    } catch (e) { setRegMsg(e?.response?.data?.detail || t('portal_ext_fail')) }
+      setReg(blankReg); setProbe(null); setRegMsg(''); notify(t('portal_ext_added'), 'ok'); onChanged?.()
+    } catch (e) { const m = e?.response?.data?.detail || t('portal_ext_fail'); setRegMsg(m); notify(m, 'bad') }
   }
 
   return (

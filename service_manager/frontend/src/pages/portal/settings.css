@@ -25,13 +25,20 @@
   background: var(--surface-2);
   padding: 16px 20px 24px;
 }
-/* One button, one input, everywhere. The kit sets height and radius inline, so
-   this has to out-rank it — the one place !important earns its keep. */
+/* One button, one input, everywhere. The kit sets border, height and radius
+   inline, so this has to out-rank it — the one place !important earns its keep.
+   The border is `currentColor`: the kit already colours a button's TEXT by what
+   it does (blue primary, red danger, grey secondary), so the outline inherits
+   that and every button is legible as a button without inventing a palette. */
 .pl-setpage button:not(.set-plain) {
+  border: 1px solid currentColor !important;
   border-radius: var(--radius-lg, 5px) !important;
   min-height: 32px;
   padding: 0 13px !important;
 }
+/* Hovered, the kit fills the button solid and flips the text white — a white
+   outline on a solid fill is the same shape, one shade lighter. */
+.pl-setpage button:not(.set-plain):hover { border-color: currentColor !important; }
 .pl-setpage :is(input, select, textarea) {
   font-size: var(--fs-medium, 14px);
   min-height: 32px;
@@ -130,18 +137,6 @@
 .set-pill.warn { background: var(--warning-bg, #fef3c7); color: var(--warning-text, #b45309); }
 .set-pill.bad { background: var(--danger-bg, #fee2e2); color: var(--danger-text, #b91c1c); }
 
-/* ── a form laid out as rows, for a panel that is one big form ───────────── */
-.set-form {
-  display: grid;
-  grid-template-columns: 170px 1fr;
-  align-items: center;
-}
-.set-form > * { padding: 9px 16px; min-width: 0; }
-.set-form > *:nth-child(n + 3) { border-top: 1px solid var(--border-default); }
-.set-form > *:nth-child(odd) { color: var(--text-secondary); padding-right: 0; }
-.set-form > *:nth-child(even) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.set-form > .set-span { grid-column: 1 / -1; }
-
 /* ── a list of collapsible records inside a panel ────────────────────────── */
 /* ExpandBox brings its own border, radius and gap — inside a panel the panel
    already draws the edge, so the boxes become plain rows separated by a rule.
@@ -176,10 +171,35 @@
    stacks: name on its own line, value under it, rule still between rows. */
 @media (max-width: 639px) {
   .pl-setpage { padding: 12px 12px 20px; }
-  .set-card, .set-form { grid-template-columns: 1fr; }
+  .set-card { grid-template-columns: 1fr; }
   .set-card > *:nth-child(even) { border-top: 0; padding-top: 0; }
-  .set-form > *:nth-child(even) { padding-top: 0; }
-  .set-form > *:nth-child(odd) { padding-right: 16px; }
-  .set-form > *:nth-child(n + 3) { border-top: 0; }
-  .set-form > *:nth-child(odd):not(:first-child) { border-top: 1px solid var(--border-default); }
+}
+
+/* ── the one status line ─────────────────────────────────────────────────── */
+/* Always present, even when empty: a strip that came and went would shove the
+   page up and down on every click. */
+.set-status {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 8px;
+  height: 34px; padding: 0 20px;
+  font-size: var(--fs-medium, 14px);
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border-strong);
+}
+.set-status .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-muted); flex-shrink: 0;
+}
+.set-status .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-status.ok .dot { background: var(--ok-text, #2f9e44); }
+.set-status.ok .txt { color: var(--text-primary); }
+.set-status.bad .dot { background: var(--danger-text); }
+.set-status.bad .txt { color: var(--danger-text); }
+
+/* The ✕ that removes a chip is part of the chip, not a button on the page: it
+   takes no outline of its own. */
+.pl-setpage .set-x {
+  border: 0; background: none; padding: 0 2px; margin-left: 2px;
+  font: inherit; line-height: 1; color: var(--danger-text); cursor: pointer;
 }

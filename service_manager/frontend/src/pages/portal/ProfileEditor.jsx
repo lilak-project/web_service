@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Avatar, AVATAR_ICONS, AVATAR_COLORS, randomAvatar, MANAGER_COLOR, Button, Icon, searchIcons } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
+import { notify } from './settingsMsg'
 
 /**
  * ProfileEditor — the portal account's avatar (profile_shape icon + profile_colour),
@@ -52,30 +53,34 @@ export default function ProfileEditor({ me, onSaved }) {
         profile_shape: shape || null,
         ...(locked ? {} : { profile_color: color || null }),
       })
-      setMsg(L('저장됨', 'saved')); onSaved?.()
-    } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+      setMsg(L('저장됨', 'saved')); notify(L('아바타 저장됨', 'avatar saved'), 'ok'); onSaved?.()
+    } catch (e) { const m = e?.response?.data?.detail || L('실패', 'failed'); setMsg(m); notify(m, 'bad') }
     finally { setBusy(false) }
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* The icon's NAME sits on the line above the buttons. Beside them it made
+          the buttons jump left and right as you picked (`ufo` vs `game-controller`),
+          so you could not click Random twice without chasing it. */}
       <div style={rowS}>
         <Avatar icon={shape} color={effColor} seed={me.username} size={40} />
-        {shape && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>{shape}</span>}
-        <Button size="sm" variant="secondary" onClick={roll}><Icon name="refresh" size={13} /> {L('랜덤', 'Random')}</Button>
-        <Button size="sm" variant={open ? 'primary' : 'ghost'} onClick={() => { setQ(''); setOpen((o) => !o) }}>{open ? L('닫기', 'Close') : L('고르기', 'Pick')}</Button>
-        <Button size="sm" variant="primary" disabled={!dirty || busy} onClick={save}>{L('저장', 'Save')}</Button>
-        {locked && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{isManager ? L('관리자는 검은색 고정', 'managers locked to black') : L('부분 관리자는 짙은 회색 고정', 'scoped admins locked to grey')}</span>}
-        {dirty && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('저장 안 됨', 'unsaved')}</span>}
-        {msg && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{msg}</span>}
+        {shape && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{shape}</span>}
+        {locked && <span style={{ color: 'var(--text-secondary)' }}>{isManager ? L('관리자는 검은색 고정', 'managers locked to black') : L('부분 관리자는 짙은 회색 고정', 'scoped admins locked to grey')}</span>}
+        {dirty && <span style={{ color: 'var(--warning-text, #b45309)' }}>{L('저장 안 됨', 'unsaved')}</span>}
+      </div>
+      <div style={rowS}>
+        <Button variant="secondary" onClick={roll}><Icon name="refresh" size={13} /> {L('랜덤', 'Random')}</Button>
+        <Button variant={open ? 'warning' : 'info'} onClick={() => { setQ(''); setOpen((o) => !o) }}>{open ? L('닫기', 'Close') : L('고르기', 'Pick')}</Button>
+        <Button variant="primary" disabled={!dirty || busy} onClick={save}>{L('저장', 'Save')}</Button>
       </div>
       {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, border: '1px solid var(--border-default)', borderRadius: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)' }}>
           {/* colour — only non-admins choose; admins are fixed to black */}
           {!locked && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {AVATAR_COLORS.map((c) => (
-                <button key={c} type="button" onClick={() => pick(shape, c)} title={c}
+                <button key={c} type="button" className="set-plain" onClick={() => pick(shape, c)} title={c}
                   style={{ width: 22, height: 22, borderRadius: '50%', backgroundColor: c, cursor: 'pointer',
                     border: color === c ? '2px solid var(--text-primary)' : '1px solid var(--border-default)' }} />
               ))}
@@ -84,13 +89,13 @@ export default function ProfileEditor({ me, onSaved }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
               placeholder={L('검색 (이름 또는 태그: nut, ufo…)', 'search (name or tag: nut, ufo…)')}
-              style={{ flex: 1, height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px',
-                backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }} />
-            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{shown.length}</span>
+              style={{ flex: 1, backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
+                border: '1px solid var(--input-border)' }} />
+            <span style={{ color: 'var(--text-secondary)' }}>{shown.length}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 4, maxHeight: 170, overflowY: 'auto' }}>
             {shown.map((ic) => (
-              <button key={ic} type="button" title={ic} onClick={() => pick(ic, color)}
+              <button key={ic} type="button" className="set-plain" title={ic} onClick={() => pick(ic, color)}
                 style={{ display: 'grid', placeItems: 'center', padding: 3, borderRadius: 8, cursor: 'pointer',
                   border: shape === ic ? '2px solid var(--btn-primary-bg)' : '1px solid transparent',
                   background: shape === ic ? 'var(--surface-2)' : 'transparent' }}>
@@ -98,7 +103,7 @@ export default function ProfileEditor({ me, onSaved }) {
               </button>
             ))}
             {shown.length === 0 && (
-              <span style={{ gridColumn: '1 / -1', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', padding: 4 }}>
+              <span style={{ gridColumn: '1 / -1', color: 'var(--text-secondary)', padding: 4 }}>
                 {L('결과 없음', 'no match')}
               </span>
             )}

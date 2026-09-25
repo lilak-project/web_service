@@ -4,6 +4,7 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import ExpandBox from './ExpandBox'
 import { Panel, Row, Pill, fieldInput } from './Field'
+import { notify } from './settingsMsg'
 
 /**
  * FeedbackView — bug reports, recommendations and inquiries.
@@ -17,8 +18,7 @@ const KIND = {
   recommendation: { icon: 'lightbulb',      color: '#ca8a04', ko: '제안',      en: 'Recommendation' },
   inquiry:        { icon: 'chats',          color: '#2563eb', ko: '문의',      en: 'Inquiry' } }
 const input = fieldInput
-// The label above a block inside an opened report — grey, same size as the rest.
-const secLbl = { color: 'var(--text-secondary)', marginBottom: 4 }
+const textarea = { ...fieldInput, width: '100%', height: 'auto', minHeight: 0, padding: '9px 10px', resize: 'vertical', lineHeight: 1.5 }
 
 export default function FeedbackView({ isManager }) {
   const { lang } = useLang()
@@ -28,19 +28,18 @@ export default function FeedbackView({ isManager }) {
   const [all, setAll] = useState([])
   const [open, setOpen] = useState(null)
   const [drafts, setDrafts] = useState({})   // report id -> reply text being edited
-  const [msg, setMsg] = useState('')
 
   async function load() {
     try {
       setMine((await launcher.get('/reports/mine')).data)
       if (isManager) setAll((await launcher.get('/admin/reports')).data)
-    } catch (e) { setMsg(e?.response?.data?.detail || 'load failed') }
+    } catch (e) { notify(e?.response?.data?.detail || 'load failed', 'bad') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
-  async function run(p, ok) { try { const r = await p; if (ok) setMsg(ok(r)); await load() } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) } }
+  async function run(p, ok) { try { const r = await p; if (ok) notify(ok(r), 'ok'); await load() } catch (e) { notify(e?.response?.data?.detail || L('실패', 'failed'), 'bad') } }
 
   const submit = () => {
-    if (!f.subject.trim() && !f.body.trim()) { setMsg(L('내용을 입력하세요.', 'Write something first.')); return }
+    if (!f.subject.trim() && !f.body.trim()) { notify(L('내용을 입력하세요.', 'Write something first.'), 'bad'); return }
     run(launcher.post('/reports', f), () => { setF({ kind: 'inquiry', subject: '', body: '' }); return L('보냈습니다. 감사합니다!', 'Sent — thank you!') })
   }
   const sendReply = (r) => run(launcher.post(`/admin/reports/${r.id}/reply`, { reply: drafts[r.id] ?? r.reply ?? '' }), () => L('답장 저장됨', 'Reply saved'))
@@ -68,18 +67,11 @@ export default function FeedbackView({ isManager }) {
         subtitle={(admin ? (r.username + ' · ') : '') + fmt(r.created_at)}
       >
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div>
-            <div style={secLbl}>{L('내용', 'Message')}</div>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{r.body || '—'}</div>
-          </div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{r.body || '—'}</div>
           {admin ? (
             <>
-              <div>
-                <div style={secLbl}>{L('답장', 'Reply')}</div>
-                <textarea value={drafts[r.id] ?? r.reply ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
-                  rows={3} placeholder={L('답장을 입력…', 'write a reply…')}
-                  style={{ ...input, width: '100%', height: 'auto', padding: '8px 10px', resize: 'vertical' }} />
-              </div>
+              <textarea value={drafts[r.id] ?? r.reply ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
+                rows={3} placeholder={L('답장을 입력…', 'write a reply…')} style={textarea} />
               <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
                 <Button variant="secondary" onClick={() => sendReply(r)}>{L('답장 저장', 'Save reply')}</Button>
                 <Button variant={r.status === 'resolved' ? 'ghost' : 'primary'} onClick={() => toggleResolve(r)}>
@@ -90,11 +82,9 @@ export default function FeedbackView({ isManager }) {
               </div>
             </>
           ) : (
-            <div>
-              <div style={secLbl}>{L('관리자 답장', 'Admin reply')}</div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>
-                {r.reply || L('아직 답장이 없습니다.', 'No reply yet.')}
-              </div>
+            <div style={{ whiteSpace: 'pre-wrap', borderTop: '1px solid var(--border-default)', paddingTop: 10,
+              color: r.reply ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+              {r.reply || L('아직 답장이 없습니다.', 'No reply yet.')}
             </div>
           )}
         </div>
@@ -105,8 +95,6 @@ export default function FeedbackView({ isManager }) {
   const rows = isManager ? all : mine
   return (
     <>
-      {msg && <div className="set-msg">{msg}</div>}
-
       {/* compose — everyone */}
       <Panel bare title={L('새 리포트', 'New report')}
         hint={L('버그 신고 · 제안 · 문의', 'bug · recommendation · inquiry')}>
@@ -118,7 +106,7 @@ export default function FeedbackView({ isManager }) {
                   cursor: 'pointer', fontSize: 'var(--fs-medium, 14px)',
                   border: `1px solid ${f.kind === k ? m.color : 'var(--border-default)'}`,
                   background: f.kind === k ? m.color : 'transparent',
-                  color: f.kind === k ? '#fff' : 'var(--text-primary)' }}>
+                  color: f.kind === k ? '#fff' : m.color }}>
                 <Icon name={m.icon} size={16} color={f.kind === k ? '#fff' : m.color} /> {L(m.ko, m.en)}
               </button>
             ))}
@@ -126,8 +114,7 @@ export default function FeedbackView({ isManager }) {
           <input value={f.subject} onChange={(e) => setF((s) => ({ ...s, subject: e.target.value }))}
             placeholder={L('제목', 'Subject')} style={{ ...input, width: '100%' }} />
           <textarea value={f.body} onChange={(e) => setF((s) => ({ ...s, body: e.target.value }))}
-            rows={4} placeholder={L('내용을 자세히 적어주세요…', 'Describe it in detail…')}
-            style={{ ...input, width: '100%', height: 'auto', resize: 'vertical' }} />
+            rows={4} placeholder={L('내용을 자세히 적어주세요…', 'Describe it in detail…')} style={textarea} />
           <div style={{ display: 'flex' }}><div style={{ flex: 1 }} />
             <Button variant="primary" onClick={submit}>{L('보내기', 'Send')}</Button>
           </div>

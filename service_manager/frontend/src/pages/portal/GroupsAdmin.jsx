@@ -6,6 +6,7 @@ import IconPick, { ICON_CHOICES } from './IconPick'
 import GroupMark from './GroupMark'
 import ExpandBox from './ExpandBox'
 import { Field, FieldActions, Panel, Row, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
+import { notify } from './settingsMsg'
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
@@ -16,11 +17,10 @@ function GroupProfile({ group, onSaved }) {
   const [name, setName] = useState(group.name)
   const [icon, setIcon] = useState(group.icon || 'users')
   const [color, setColor] = useState(group.color || '#64748b')
-  const [msg, setMsg] = useState('')
   const dirty = name.trim() !== group.name || icon !== (group.icon || 'users') || color !== (group.color || '#64748b')
   const save = async () => {
-    try { await launcher.put(`/admin/groups/${group.id}`, { name: name.trim() || undefined, icon, color }); setMsg('✓'); onSaved?.() }
-    catch (e) { setMsg(e?.response?.data?.detail || '✕') }
+    try { await launcher.put(`/admin/groups/${group.id}`, { name: name.trim() || undefined, icon, color }); notify(L(`그룹 저장됨: ${name.trim()}`, `group saved: ${name.trim()}`), 'ok'); onSaved?.() }
+    catch (e) { notify(e?.response?.data?.detail || L('실패', 'failed'), 'bad') }
   }
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -30,7 +30,6 @@ function GroupProfile({ group, onSaved }) {
       <ColorPicker value={color} onChange={setColor} />
       <Button variant="secondary" onClick={() => { setIcon(rnd(ICON_CHOICES)); setColor(rnd(AVATAR_COLORS)) }} title={L('랜덤', 'random')}><Icon name="refresh" size={13} /></Button>
       <Button variant="primary" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
-      {msg && <span style={fieldMuted}>{msg}</span>}
     </div>
   )
 }
@@ -53,14 +52,13 @@ export default function GroupsAdmin({ users, services, onChanged }) {
   const [projCache, setProjCache] = useState({})    // svc -> [projects]
   const [add, setAdd] = useState({ uid: '', svc: '', proj: '', admin: false })
   const [mSearch, setMSearch] = useState('')          // member add: search accounts by text
-  const [msg, setMsg] = useState('')
 
   async function load() {
     try { setGroups((await launcher.get('/admin/groups')).data) }
-    catch (e) { setMsg(e?.response?.data?.detail || 'load failed') }
+    catch (e) { notify(e?.response?.data?.detail || 'load failed', 'bad') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
-  async function run(p, ok) { try { const r = await p; if (ok) setMsg(ok(r)); await load(); onChanged?.() } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) } }
+  async function run(p, ok) { try { const r = await p; if (ok) notify(ok(r), 'ok'); await load(); onChanged?.() } catch (e) { notify(e?.response?.data?.detail || L('실패', 'failed'), 'bad') } }
 
   const createGroup = () => newName.trim() && run(launcher.post('/admin/groups', { name: newName.trim(), icon: rnd(ICON_CHOICES), color: rnd(AVATAR_COLORS) }), () => { setNewName(''); return L('그룹 생성됨', 'group created') })
   const delGroup = (g) => { if (window.confirm(L(`그룹 '${g.name}' 삭제?`, `Delete group '${g.name}'?`))) run(launcher.delete(`/admin/groups/${g.id}`), () => L('삭제됨', 'deleted')) }
@@ -85,7 +83,6 @@ export default function GroupsAdmin({ users, services, onChanged }) {
 
   return (
     <>
-      {msg && <div className="set-msg">{msg}</div>}
       <Panel title={L('새 그룹', 'New group')}>
         <Field label={L('이름', 'Name')}>
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={L('예: cens, lab-a', 'e.g. cens, lab-a')} style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && createGroup()} />
@@ -153,7 +150,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                               <span style={{ color: 'var(--text-primary)' }}>{u.email}</span>
                               {u.is_active === false && <span style={{ color: 'var(--danger-text)' }}>{L('비활성', 'inactive')}</span>}
                               <div style={{ flex: 1 }} />
-                              <Button variant="ghost" onClick={() => removeMember(g.id, u.id)}>{L('제외', 'Remove')}</Button>
+                              <Button variant="dangerSoft" onClick={() => removeMember(g.id, u.id)}>{L('제외', 'Remove')}</Button>
                             </div>))}
                         </div>}
                   </Field>
@@ -164,7 +161,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                       const hits = nonMembers(g.id).filter((u) => u.username.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)).slice(0, 12)
                       return hits.length === 0 ? <span style={fieldMuted}>{L('일치하는 계정 없음', 'no match')}</span>
                         : hits.map((u) => (
-                            <Button key={u.id} variant="ghost" onClick={() => { addMember(g.id, u.id); setMSearch('') }}>
+                            <Button key={u.id} variant="success" onClick={() => { addMember(g.id, u.id); setMSearch('') }}>
                               <Icon name="plus" size={12} /> {u.username}
                             </Button>))
                     })()}
@@ -195,11 +192,13 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                     <Button variant="primary" disabled={!add.svc} onClick={() => grantPerm(g.id)}>{L('권한 부여', 'Grant')}</Button>
                   </FieldActions>
 
-                  <Field label={L('그룹', 'Group')} />
+                  <Field label={L('그룹 전체', 'Whole group')}>
+                    {L('아래 동작은 이 그룹의 멤버 전원에게 적용됩니다.', 'These apply to every member of this group.')}
+                  </Field>
                   <FieldActions>
-                    <Button variant="ghost" onClick={() => deactivateGroup(g)}>{L('멤버 전체 비활성화', 'Deactivate all members')}</Button>
-                    <Button variant="ghost" onClick={() => resetGroupPerms(g)}>{L('직접 부여 권한 지우기', 'Clear direct permissions')}</Button>
-                    <Button variant="ghost" onClick={() => clearGroupPerms(g)}>{L('그룹 상속 권한 지우기', 'Clear inherited permissions')}</Button>
+                    <Button variant="warning" onClick={() => deactivateGroup(g)}>{L('멤버 전체 비활성화', 'Deactivate all members')}</Button>
+                    <Button variant="warning" onClick={() => resetGroupPerms(g)}>{L('직접 부여 권한 지우기', 'Clear direct permissions')}</Button>
+                    <Button variant="warning" onClick={() => clearGroupPerms(g)}>{L('그룹 상속 권한 지우기', 'Clear inherited permissions')}</Button>
                     <Button variant="dangerSoft" onClick={() => delGroup(g)}><Icon name="trash" size={13} /> {L('그룹 삭제', 'Delete group')}</Button>
                   </FieldActions>
                 </div>

@@ -41,7 +41,7 @@ export default function GuideView({ onChanged }) {
   }
 
   const tab = (id, label) => (
-    <Button variant={doc === id ? 'primary' : 'ghost'} onClick={() => setDoc(id)}>{label}</Button>
+    <Button variant={doc === id ? 'primary' : 'secondary'} onClick={() => setDoc(id)}>{label}</Button>
   )
 
   return (

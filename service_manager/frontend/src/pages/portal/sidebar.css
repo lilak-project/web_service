@@ -358,3 +358,10 @@
 @media (max-width: 639px) {
   .pl-bar2 { position: absolute; inset: 0 auto 0 0; z-index: 26; width: 214px; box-shadow: 0 8px 30px rgba(15, 23, 42, .18); }
 }
+
+/* Log out lives at the FOOT of the settings bar, pushed there by a spring, so it
+   is plainly not one of the settings pages above it. */
+.pl-spring { flex: 1 1 auto; min-height: 8px; }
+.pl-c2.out { gap: 9px; color: var(--danger-text); }
+.pl-c2.out:hover { border-color: var(--danger-text); background: var(--danger-bg); }
+.pl-c2.out .pl-txt { color: var(--danger-text); }
