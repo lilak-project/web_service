@@ -7,6 +7,11 @@
  * kit's tokens, so the theme still drives them.
  */
 .pl-root {
+  /* The mockup picks these deliberately — less round than the kit's default, so
+     the cards read as panels rather than pills. Pinned here (not a fallback) or
+     the theme's larger radii win. */
+  --radius-md: 3px;
+  --radius-lg: 5px;
   position: fixed;
   inset: 0;
   display: flex;
@@ -98,7 +103,7 @@
   font-size: 11px; font-weight: 400;
   color: var(--text-secondary);
 }
-.pl-chev { flex-shrink: 0; transition: transform .15s; display: inline-flex; }
+.pl-chev { flex-shrink: 0; transition: transform .12s; display: inline-flex; }
 .pl-card.open .pl-chev { transform: rotate(90deg); }
 
 /* The "open in a new tab" arrow only appears on hover or on the selected card,
@@ -129,6 +134,7 @@
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md, 3px);
+  box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
   font-size: 13px; font-weight: 500;
   color: var(--text-primary);
 }
@@ -142,10 +148,10 @@
 /* Slide, not fade: the box grows/shrinks (--h is measured in JS right before the
    animation) while the cards inside travel down from under the card above. */
 .pl-projs.enter, .pl-projs.leave { overflow: hidden; }
-.pl-projs.enter { animation: pl-grow .24s cubic-bezier(.2, .7, .3, 1); }
-.pl-projs.enter > * { animation: pl-down .24s cubic-bezier(.2, .7, .3, 1); }
-.pl-projs.leave { animation: pl-shrink .2s cubic-bezier(.5, 0, .8, .4) forwards; }
-.pl-projs.leave > * { animation: pl-up .2s cubic-bezier(.5, 0, .8, .4) forwards; }
+.pl-projs.enter { animation: pl-grow .15s cubic-bezier(.2, .7, .3, 1); }
+.pl-projs.enter > * { animation: pl-down .15s cubic-bezier(.2, .7, .3, 1); }
+.pl-projs.leave { animation: pl-shrink .12s cubic-bezier(.5, 0, .8, .4) forwards; }
+.pl-projs.leave > * { animation: pl-up .12s cubic-bezier(.5, 0, .8, .4) forwards; }
 /* Enter and leave MUST be separate keyframes. One name played in reverse never
    fires animationend, and the list stayed in the DOM for good. */
 @keyframes pl-grow { from { max-height: 0 } to { max-height: var(--h) } }
@@ -226,3 +232,41 @@
     color: var(--text-emphasis);
   }
 }
+
+/* ── group bands ─────────────────────────────────────────────────────────── */
+/* The band covers the bar's full width, gutters included: an indented box made
+   the collapsed 64px bar wider, which is why the strip won. */
+.pl-band {
+  flex: 0 0 auto;
+  margin: 4px -10px 0;
+  background: rgba(148, 163, 184, .16);
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+}
+.pl-grp {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; height: 40px; padding: 0 10px;
+}
+/* The box stays put and only the caret inside it turns, so the title does not
+   shift as a group opens. */
+.pl-gchev {
+  flex-shrink: 0;
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  transition: transform .12s;
+}
+.pl-gchev.open { transform: rotate(90deg); }
+.pl-grp .pl-txt { font-weight: 700; color: var(--text-secondary); }
+.pl-gcount { flex-shrink: 0; font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); }
+.pl-grp:focus-visible { outline: none; }
+.pl-grp:focus-visible .pl-gchev {
+  border-radius: var(--radius-md, 3px);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, .35);
+}
+/* Collapsed: drop the fill, keep the top rule and the caret box so groups can
+   still be opened from the 64px bar. */
+.pl-root.mini .pl-band { background: transparent; border-bottom-color: transparent; }
+.pl-root.mini .pl-grp .pl-txt, .pl-root.mini .pl-gcount { opacity: 0; pointer-events: none; }
+
+/* A group's members are not indented — only projects are. */
+.pl-projs.pl-gitems { margin-left: 0; }

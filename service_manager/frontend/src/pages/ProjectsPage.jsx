@@ -17,7 +17,7 @@ import AccountMenu from './portal/AccountMenu'
 import { MasonryGrid } from './portal/MasonryGrid'
 import HomeModeMenu, { HOME_MODES } from './portal/HomeModeMenu'
 import SidebarPortal from './portal/SidebarPortal'
-import { usePortalLayout } from '../portalLayout'
+import { usePortalLayout, setPortalLayout } from '../portalLayout'
 import ServiceGroupBand from './portal/ServiceGroupBand'
 import LiveWall from './portal/LiveWall'
 import useFlip from './portal/useFlip'
@@ -836,11 +836,18 @@ export default function ProjectsPage() {
   // The sidebar cover owns the whole window (no CoverPage header), so it replaces
   // this render entirely rather than living inside it. Logged out we still fall
   // through to the classic screen, which carries the login/sign-up card.
+  // Manage mode edits cards — renaming, icons, visibility, drag to arrange — none
+  // of which the sidebar does yet, so picking it hands over to the card view with
+  // manage already on, rather than pretending to offer it here.
+  const enterManageOnCards = () => { setMode('manage'); setPortalLayout('classic') }
+
   if (sidebar && authReady && user) {
     return (
       <SidebarPortal
-        user={user} isManager={isManager} services={projects || []}
+        user={user} isManager={isManager} services={projects || []} iconFor={iconFor}
+        groups={groups} liveCards={liveCards}
         onLogout={logout} onRefresh={refresh}
+        onEnterManage={enterManageOnCards}
         settingsTab={settingsTab} onSettingsTab={setSettingsTab}
       />
     )
