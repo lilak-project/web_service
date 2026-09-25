@@ -1,0 +1,81 @@
+/*
+ * Settings pages — the card vocabulary from mockups/portal-settings-a.html, so
+ * the content beside the settings bar is built from the same pieces as the bars.
+ *
+ * A stylesheet rather than style props because the pieces need what the style
+ * prop cannot express: a divider on every row EXCEPT the last, and hover states.
+ */
+
+/* A card of fact rows: label column, value column, a rule between rows. */
+.set-card {
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg, 5px);
+  box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
+  overflow: hidden;
+}
+/* The rule goes on TOP of a row, not under it, so a row can opt out of the one
+   above it — which is how an actions row joins the field it belongs to instead of
+   being fenced off as a row of its own with an empty label. */
+.set-card > * {
+  padding: 11px 14px;
+  border-top: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+.set-card > *:nth-child(-n + 2) { border-top: 0; }
+.set-card > .set-actions { border-top: 0; padding-top: 0; }
+/* The label cell owns the left padding; the value cell should not double it. */
+.set-card > *:nth-child(odd) { padding-right: 0; }
+
+/* A heading above a card — the name of the group of facts under it. */
+.set-head {
+  display: flex; align-items: center; gap: 8px;
+  margin: 14px 0 2px;
+  font-size: var(--fs-small, 12px);
+}
+.set-head h2 {
+  margin: 0;
+  font-size: var(--fs-medium, 13px); font-weight: 700;
+  color: var(--text-emphasis);
+}
+.set-head .sp { flex: 1; }
+.set-head .hint { color: var(--text-muted); }
+
+/* The status vocabulary, used the same way on every page. */
+.set-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--fs-tiny, 11px); font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text-secondary);
+  white-space: nowrap;
+}
+.set-pill.ok { background: var(--success-bg, #d1fae5); color: var(--success-text, #065f46); }
+.set-pill.warn { background: var(--warning-bg, #fef3c7); color: var(--warning-text, #92400e); }
+.set-pill.bad { background: var(--danger-bg, #fee2e2); color: var(--danger-text, #b91c1c); }
+
+/* A table of records (accounts, sessions) in the same skin as the row card. */
+.set-table {
+  width: 100%; border-collapse: collapse;
+  font-size: var(--fs-small, 12px);
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg, 5px);
+  box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
+  overflow: hidden;
+}
+.set-table th {
+  text-align: left; font-weight: 600;
+  color: var(--text-secondary);
+  padding: 9px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-default);
+}
+.set-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+.set-table tr:last-child td { border-bottom: 0; }

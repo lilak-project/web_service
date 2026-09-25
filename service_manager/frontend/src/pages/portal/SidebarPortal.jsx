@@ -49,24 +49,23 @@ const writeSet = (key, set) => {
  *  19px, not 17: inside a 30px plate a smaller glyph leaves so much margin that
  *  the icon reads as shrunken. */
 /** Running / stopped, drawn the same way wherever it appears — the corner of a
- *  service tile and the head of a project card. Running is a green play button;
+ *  head of a project card. Running is a green play button;
  *  stopped is a tiny grey dot, which only has to say "nothing here is running".
  *  Sizes live in the stylesheet so the two can differ — the button needs room the
  *  dot does not. */
-function RunDot({ on, ring }) {
+function RunDot({ on }) {
   return (
-    <span className={`pl-run${on ? ' up' : ''}${ring ? ' ring' : ''}`}>
+    <span className={`pl-run${on ? ' up' : ''}`}>
       {on && <Icon name="play" size={7} weight="fill" color="#fff" />}
     </span>
   )
 }
 
-function Tile({ icon, color, on, dot }) {
+function Tile({ icon, color, on }) {
   const c = color || 'var(--text-secondary)'
   return (
     <span className={`pl-av${on ? ' round' : ''}`} style={{ background: c }}>
       <Icon name={icon} size={19} weight="fill" color="#fff" />
-      {dot !== undefined && <RunDot on={!!dot} ring />}
     </span>
   )
 }
@@ -304,7 +303,7 @@ export default function SidebarPortal({
               toggleProj(s.name)
             }}>
             <Tile icon={iconFor ? iconFor(s.name, s.icon) : (s.icon || 'circle')}
-              color={s.color} on={on} dot={s.running} />
+              color={s.color} on={on} />
             <span className="pl-txt">
               {s.label || s.name}
               {multi && s.projects_count != null && <small>({s.projects_count})</small>}
@@ -410,7 +409,7 @@ export default function SidebarPortal({
               <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
             </button>
           </Slider>
-          <div className={`pl-card${modesOpen ? ' open' : ''}`}>
+          <div className={`pl-card pl-up${modesOpen ? ' open' : ''}`}>
             <button type="button" className="pl-row"
               onClick={() => {
                 // Collapsed, the list is hidden — so asking for it expands the bar
@@ -433,10 +432,6 @@ export default function SidebarPortal({
               </span>
               <span className="pl-txt">{user?.username}</span>
             </button>
-            <span className="pl-out" role="button" tabIndex={0} title={L('로그아웃', 'Log out')}
-              onClick={(e) => { e.stopPropagation(); onLogout?.() }}>
-              <Icon name="logout" size={14} color="var(--text-muted)" />
-            </span>
           </div>
         </div>
       </aside>
@@ -469,7 +464,7 @@ export default function SidebarPortal({
           {view === 'settings' ? (
             <div className="pl-scroll pl-setpage">
               <AccountView isManager={isManager} onChanged={onRefresh} onAccountGone={onLogout}
-                tab={settingsTab} onTab={onSettingsTab} hideMenu />
+                onLogout={onLogout} tab={settingsTab} onTab={onSettingsTab} hideMenu />
             </div>
           ) : view === 'live' ? (
             <div className="pl-scroll">

@@ -5,7 +5,7 @@ import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_CHOICES } from './IconPick'
 import GroupMark from './GroupMark'
 import ExpandBox from './ExpandBox'
-import { Field, FieldActions, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT } from './Field'
+import { Field, FieldActions, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
 
 const rnd = (a) => a[Math.floor(Math.random() * a.length)]
 
@@ -101,7 +101,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
             title={L('관리자', 'Administrators')}
             subtitle={`${admins.length} ${L('명', 'members')}`}
           >
-            <div style={{ padding: '12px 14px', ...fieldGrid }}>
+            <div className={FIELD_CARD_CLASS}>
               <Field label={L('구성', 'Membership')}>
                 <span style={fieldMuted}>{L('역할이 manager인 계정을 자동으로 모아 보여줍니다 (읽기 전용).', 'Auto-collected accounts with role = manager (read-only).')}</span>
               </Field>
@@ -131,7 +131,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
               title={g.name}
               subtitle={`${g.members} ${L('명', 'members')} · ${g.permissions.length} ${L('권한', 'perms')}`}
             >
-                <div style={{ padding: '12px 14px', ...fieldGrid }}>
+                <div className={FIELD_CARD_CLASS}>
                   <Field label={L('그룹 아이콘 · 색상', 'Group icon · colour')} align="start">
                     <GroupProfile group={g} onSaved={load} />
                   </Field>

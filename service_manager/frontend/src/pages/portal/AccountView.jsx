@@ -4,7 +4,7 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
-import { Field, FieldActions, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT } from './Field'
+import { Field, FieldActions, fieldGrid, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
 import SystemAdmin from './SystemAdmin'
 import FeedbackView from './FeedbackView'
 import GuideView from './GuideView'
@@ -18,7 +18,8 @@ import ExpandBox from './ExpandBox'
  * (The vertical menu is intentionally distinct from the horizontal main nav tabs.)
  */
 
-const card = { border: '1px solid var(--border-default)', borderRadius: 8, padding: 12, marginBottom: 10 }
+// Card chrome moved to .set-card (settings.css); this is just the gap below one.
+const card = { marginBottom: 10 }
 const rowS = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
 const input = { height: 32, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', minWidth: 0 }
 const badge = { ...FIELD_TEXT, padding: '1px 7px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }
@@ -66,7 +67,7 @@ export function settingsMenu(isManager, lang) {
 
 // tab/onTab make the active sub-tab controllable from the header; hideMenu drops
 // the left sidebar (the header dropdown navigates instead) on narrow screens.
-export default function AccountView({ isManager, onChanged, onAccountGone, tab: tabProp, onTab, hideMenu = false }) {
+export default function AccountView({ isManager, onChanged, onAccountGone, onLogout, tab: tabProp, onTab, hideMenu = false }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [me, setMe] = useState(null)
@@ -187,7 +188,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   ))
 
   const MyAccount = (
-    <div style={{ ...card, ...fieldGrid }}>
+    <div className={FIELD_CARD_CLASS} style={card}>
       {/* Identity only — avatar/email/role/verified live in their own fields below. */}
       <Field label={L('계정', 'Account')}>
         <b>{me.display_name || me.username}</b>
@@ -270,6 +271,19 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
         <Button size="sm" variant="secondary" disabled={!f.email.trim()} onClick={requestEmail}>{L('요청', 'Request')}</Button>
       </FieldActions>
 
+      {/* Signing out belongs with the account, not on the cover's account card:
+          it is something you do TO this account, like changing its password. */}
+      {onLogout && (
+        <>
+          <Field label={L('로그아웃', 'Log out')} />
+          <FieldActions>
+            <Button size="sm" variant="secondary" onClick={onLogout}>
+              <Icon name="logout" size={14} /> {L('로그아웃', 'Log out')}
+            </Button>
+          </FieldActions>
+        </>
+      )}
+
       <Field label={L('계정 삭제', 'Delete account')} />
       <FieldActions>
         <Button size="sm" variant="dangerSoft" onClick={deleteSelf}>{L('계정 삭제', 'Delete account')}</Button>
@@ -313,7 +327,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
             {u.is_active === false && <span style={{ ...badge, background: 'var(--danger-bg)', color: 'var(--danger-text)' }}>{L('비활성', 'inactive')}</span>}
           </>}
         >
-            <div style={{ padding: '12px 14px', ...fieldGrid }}>
+            <div className={FIELD_CARD_CLASS}>
               <Field label={L('이메일 · 인증', 'Email · verification')}>
                 {u.email} · {u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
                   : (u.verify_days_left != null ? L(`인증됨 · ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}

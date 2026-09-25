@@ -17,18 +17,38 @@
  * children of a `fieldGrid` container (FieldActions leaves the label cell empty).
  */
 
+import './settings.css'
+
 export const FIELD_TEXT = { fontSize: 'var(--fs-small, 12px)' }
 
-export const fieldGrid = {
-  display: 'grid', gridTemplateColumns: '100px 1fr', gap: '8px 10px', alignItems: 'center',
+/** The card the rows live in. Kept as a style object for the call sites that
+ *  spread it, but the look now comes from `.set-card` (settings.css) — a grid
+ *  needs a stylesheet to put a rule between rows and not after the last one. */
+export const fieldGrid = {}
+export const FIELD_CARD_CLASS = 'set-card'
+
+/** A heading above a card, and the status pill both used across the pages. */
+export function SettingsHead({ title, hint, children }) {
+  return (
+    <div className="set-head">
+      <h2>{title}</h2>
+      <span className="sp" />
+      {hint && <span className="hint">{hint}</span>}
+      {children}
+    </div>
+  )
+}
+
+export function Pill({ tone, children }) {
+  return <span className={`set-pill${tone ? ` ${tone}` : ''}`}>{children}</span>
 }
 
 /** Label cell + value cell. `align="start"` for a tall value (a wrapping chip list). */
 export function Field({ label, align, children }) {
   return (
     <>
-      <span style={{ ...FIELD_TEXT, color: 'var(--text-secondary)', alignSelf: align === 'start' ? 'start' : undefined,
-        paddingTop: align === 'start' ? 4 : undefined }}>{label}</span>
+      <span style={{ ...FIELD_TEXT, color: 'var(--text-secondary)',
+        alignSelf: align === 'start' ? 'start' : undefined }}>{label}</span>
       <div style={{ ...FIELD_TEXT, color: 'var(--text-primary)', minWidth: 0,
         display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{children}</div>
     </>
@@ -39,8 +59,8 @@ export function Field({ label, align, children }) {
 export function FieldActions({ children }) {
   return (
     <>
-      <span />
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>{children}</div>
+      <span className="set-actions" />
+      <div className="set-actions" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>{children}</div>
     </>
   )
 }

@@ -127,13 +127,6 @@
 .pl-run:not(.up) { width: 5px; height: 5px; background: var(--text-muted); }
 /* Running: a green play button. */
 .pl-run.up { width: 10px; height: 10px; background: #10b981; }
-/* In a tile's corner both need a ring to hold against the fill; the 5px dot takes
-   a thinner one, or the ring becomes the bigger half of the mark. */
-.pl-run.ring { position: absolute; right: -2px; bottom: -2px; }
-.pl-run.up.ring { right: -3px; bottom: -3px; box-shadow: 0 0 0 2px var(--surface); }
-.pl-run:not(.up).ring { box-shadow: 0 0 0 1.5px var(--surface); }
-.pl-root.mini .pl-run.up.ring { box-shadow: 0 0 0 2px var(--surface-2); }
-.pl-root.mini .pl-run:not(.up).ring { box-shadow: 0 0 0 1.5px var(--surface-2); }
 .pl-txt {
   flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -147,6 +140,9 @@
 }
 .pl-chev { flex-shrink: 0; transition: transform .12s; display: inline-flex; }
 .pl-card.open .pl-chev { transform: rotate(90deg); }
+/* A card whose list opens UPWARDS points its caret up, not down — the caret says
+   where the rows will appear. */
+.pl-card.pl-up.open .pl-chev { transform: rotate(-90deg); }
 
 /* The "open in a new tab" arrow only appears on hover or on the selected card,
    so the sidebar is not a wall of icons. */
