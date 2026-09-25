@@ -119,17 +119,22 @@
   font-size: 14px; font-weight: 700;
 }
 
-/* Run state — see RunDot. Grey dot when stopped, green play button when up. */
-.pl-run {
-  flex-shrink: 0;
-  display: grid; place-items: center;
+/* Run state — see RunDot. */
+.pl-run { flex-shrink: 0; display: grid; place-items: center; }
+/* Stopped: a small grey dot. */
+.pl-run:not(.up) {
+  width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--text-muted);
 }
-.pl-run.up { background: #10b981; }
-/* In a tile's corner it needs a ring to stay legible against the fill. */
-.pl-run.ring { position: absolute; right: -3px; bottom: -3px; box-shadow: 0 0 0 2px var(--surface); }
-.pl-root.mini .pl-run.ring { box-shadow: 0 0 0 2px var(--surface-2); }
+/* Running: the play triangle on its own, no plate around it. */
+.pl-run.up { width: 11px; height: 11px; }
+/* In a tile's corner: the dot gets a ring against the fill, and the bare glyph a
+   white halo, since it has no plate to separate it from the colour behind. */
+.pl-run.ring { position: absolute; right: -2px; bottom: -3px; }
+.pl-run:not(.up).ring { box-shadow: 0 0 0 2px var(--surface); }
+.pl-root.mini .pl-run:not(.up).ring { box-shadow: 0 0 0 2px var(--surface-2); }
+.pl-run.up.ring { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff); }
 .pl-txt {
   flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
