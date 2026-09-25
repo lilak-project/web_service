@@ -366,14 +366,7 @@ export default function SidebarPortal({
         {/* Modes and the account sit together at the foot of the bar: both are
             about this portal rather than about a service. */}
         <div className="pl-user">
-          <div className={`pl-card${modesOpen ? ' open' : ''}`}>
-            <button type="button" className="pl-row" onClick={() => setModesOpen((o) => !o)}>
-              <Tile icon="squares-four" on={modesOpen} />
-              <span className="pl-txt">{L('모드', 'Modes')}<small>({modes.length})</small></span>
-              <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>
-            </button>
-          </div>
-          <Slider open={modesOpen} className="pl-mlist">
+          <Slider open={modesOpen} className="pl-mlist up">
             {modes.map((m) => (
               <button key={m.id} type="button"
                 className={`pl-proj${view === 'live' && m.id === 'live' ? ' on' : ''}`}
@@ -391,6 +384,13 @@ export default function SidebarPortal({
               <span className="pl-txt">{L('그룹으로 보기', 'Show groups')}</span>
             </button>
           </Slider>
+          <div className={`pl-card${modesOpen ? ' open' : ''}`}>
+            <button type="button" className="pl-row" onClick={() => setModesOpen((o) => !o)}>
+              <Tile icon="squares-four" on={modesOpen} />
+              <span className="pl-txt">{L('모드', 'Modes')}<small>({modes.length})</small></span>
+              <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>
+            </button>
+          </div>
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"
               onClick={() => { setView('settings'); onSettingsTab?.('me'); if (window.innerWidth < PHONE) setMini(true) }}>

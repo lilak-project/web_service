@@ -189,12 +189,26 @@
 @keyframes pl-shrink { from { max-height: var(--h) } to { max-height: 0 } }
 @keyframes pl-down { from { transform: translateY(calc(var(--h) * -1)) } to { transform: none } }
 @keyframes pl-up { from { transform: none } to { transform: translateY(calc(var(--h) * -1)) } }
+/* Anchored at the foot of the bar, a list has to grow UPWARDS: the box still
+   changes height, but its cards rise from under the card below instead of
+   dropping from the one above. */
+@keyframes pl-rise { from { transform: translateY(var(--h)) } to { transform: none } }
+@keyframes pl-sink { from { transform: none } to { transform: translateY(var(--h)) } }
+.pl-projs.up.enter > * { animation: pl-rise .15s cubic-bezier(.2, .7, .3, 1); }
+.pl-projs.up.leave > * { animation: pl-sink .12s cubic-bezier(.5, 0, .8, .4) forwards; }
 @media (prefers-reduced-motion: reduce) {
   .pl-projs.enter, .pl-projs.leave, .pl-projs.enter > *, .pl-projs.leave > * { animation-duration: 1ms; }
 }
 
-/* ── user card ───────────────────────────────────────────────────────────── */
-.pl-user { border-top: 1px solid var(--border-default); padding: 10px; }
+/* ── foot (modes + account) ──────────────────────────────────────────────── */
+/* The same box as .pl-nav — 10px gutters, 4px between cards — so the cards down
+   here sit on the same grid as the service cards above. */
+.pl-user {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px;
+  border-top: 1px solid var(--border-default);
+}
 .pl-user .pl-av { flex-shrink: 0; }   /* without this the avatar squeezed when collapsed */
 
 /* ── right panel ─────────────────────────────────────────────────────────── */
