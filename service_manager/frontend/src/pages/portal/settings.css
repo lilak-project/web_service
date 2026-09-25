@@ -80,7 +80,16 @@
   background: var(--info-bg);
   border-bottom: 1px solid var(--border-strong);
 }
-.set-bar > b { font-weight: 700; color: var(--text-emphasis); }
+.set-bar b { font-weight: 700; color: var(--text-emphasis); }
+/* A foldable panel's strip IS the handle: the title and a caret, nothing else
+   moves. */
+.set-bar .set-fold {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.set-bar .set-fold svg { transition: transform .12s; flex-shrink: 0; }
+.set-bar .set-fold.open svg { transform: rotate(90deg); }
 .set-bar .sp { flex: 1; }
 .set-bar .hint { color: var(--info-text); }
 /* Irreversible things get their own panel, one per page, at the bottom. */
@@ -89,7 +98,7 @@
   background: var(--danger-bg, #fee2e2);
   border-bottom-color: var(--danger-border, #fca5a5);
 }
-.set-panel.danger > .set-bar > b { color: var(--danger-text, #b91c1c); }
+.set-panel.danger > .set-bar b { color: var(--danger-text, #b91c1c); }
 
 /* ── rows of facts: label column, value column ───────────────────────────── */
 .set-card {
@@ -268,6 +277,7 @@
   background: var(--text-primary);
   border-bottom-color: var(--text-primary);
 }
-.pl-toolpage .set-bar > b { color: var(--text-inverse, #fff); }
+.pl-toolpage .set-bar b { color: var(--text-inverse, #fff); }
+.pl-toolpage .set-bar .set-fold svg { color: var(--text-inverse, #fff); }
 .pl-toolpage .set-bar .hint { color: var(--text-muted); }
 .pl-toolpage .set-panel.danger > .set-bar { background: var(--danger-bg, #fee2e2); }

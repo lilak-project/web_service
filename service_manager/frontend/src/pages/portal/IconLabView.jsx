@@ -221,38 +221,38 @@ export default function IconLabView() {
 
   return (
     <div className="svc-mg">
-      <Panel bare title={L('프리셋', 'Presets')} hint={String(allPresets.length)}>
-        <Row>
-          {allPresets.map((p) => (
-            <span key={p.id} title={p.fixed ? L(p.name_ko, p.name_en) : p.name}
-              style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: 54 }}>
-              <button type="button" className="set-plain" onClick={() => loadPreset(p)}
-                style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
-                <MiniIcon cfg={normCfg(p.config)} px={36} />
-              </button>
-              <span style={{ fontSize: 'var(--fs-small, 12px)', color: p.fixed ? 'var(--btn-primary-bg)' : 'var(--text-muted)',
-                maxWidth: 54, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
-                {p.fixed ? L(p.name_ko, p.name_en) : p.name}
-              </span>
-              {!p.fixed && (
-                <button type="button" className="set-plain" onClick={() => deletePreset(p.id)} title={L('삭제', 'delete')}
-                  style={{ position: 'absolute', top: -4, right: 2, width: 16, height: 16, lineHeight: '14px', borderRadius: 999,
-                    border: '1px solid var(--border-default)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, padding: 0 }}>×</button>
-              )}
-            </span>
-          ))}
-          <button type="button" className="set-plain" onClick={saveCurrent} disabled={presets.length >= 10}
-            title={L('현재 설정을 프리셋으로 저장', 'save current as preset')}
-            style={{ width: 36, height: 36, borderRadius: 'var(--radius-lg, 5px)', border: '1px dashed var(--border-strong)',
-              background: 'var(--surface)', color: 'var(--text-muted)', cursor: presets.length >= 10 ? 'default' : 'pointer',
-              fontSize: 18, opacity: presets.length >= 10 ? 0.4 : 1 }}>+</button>
-        </Row>
-      </Panel>
 
       {/* The preview and its exports on the left, the numbers on the right —
           two columns of the same panels, so the page reads like the rest. */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ width: 300, flexShrink: 0 }}>
+          <Panel bare title={L('프리셋', 'Presets')} hint={String(allPresets.length)}>
+            <Row>
+              {allPresets.map((p) => (
+                <span key={p.id} title={p.fixed ? L(p.name_ko, p.name_en) : p.name}
+                  style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: 54 }}>
+                  <button type="button" className="set-plain" onClick={() => loadPreset(p)}
+                    style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
+                    <MiniIcon cfg={normCfg(p.config)} px={36} />
+                  </button>
+                  <span style={{ fontSize: 'var(--fs-small, 12px)', color: p.fixed ? 'var(--btn-primary-bg)' : 'var(--text-muted)',
+                    maxWidth: 54, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                    {p.fixed ? L(p.name_ko, p.name_en) : p.name}
+                  </span>
+                  {!p.fixed && (
+                    <button type="button" className="set-plain" onClick={() => deletePreset(p.id)} title={L('삭제', 'delete')}
+                      style={{ position: 'absolute', top: -4, right: 2, width: 16, height: 16, lineHeight: '14px', borderRadius: 999,
+                        border: '1px solid var(--border-default)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, padding: 0 }}>×</button>
+                  )}
+                </span>
+              ))}
+              <button type="button" className="set-plain" onClick={saveCurrent} disabled={presets.length >= 10}
+                title={L('현재 설정을 프리셋으로 저장', 'save current as preset')}
+                style={{ width: 36, height: 36, borderRadius: 'var(--radius-lg, 5px)', border: '1px dashed var(--border-strong)',
+                  background: 'var(--surface)', color: 'var(--text-muted)', cursor: presets.length >= 10 ? 'default' : 'pointer',
+                  fontSize: 18, opacity: presets.length >= 10 ? 0.4 : 1 }}>+</button>
+            </Row>
+          </Panel>
           <Panel bare title={L('미리보기', 'Preview')}>
             <Row><Preview px={250} checker /></Row>
             <Row>
@@ -262,10 +262,34 @@ export default function IconLabView() {
             </Row>
           </Panel>
 
+          {/* Under the preview: applying and exporting are what you do once the
+              picture is right, so they follow the picture. */}
+          {/* bare rows, not label/value: at 300px a 170px label column left the
+              four buttons stacked one per line. */}
+          <Panel bare title={L('아이콘으로 적용', 'Apply as')}>
+            <Row>
+              <Button variant="primary" disabled={busy === 'favicon'} onClick={() => act('favicon')} title={L('favicon으로 만들기', 'Set as favicon')}>favicon</Button>
+              <Button variant="primary" disabled={busy === 'appicon'} onClick={() => act('appicon')} title={L('앱 아이콘으로 만들기', 'Set as app icon')}>{L('앱', 'app')}</Button>
+              <Button variant="primary" disabled={busy === 'header'} onClick={() => act('header')} title={L('헤더 아이콘으로 만들기', 'Set as header icon')}>{L('헤더', 'header')}</Button>
+              <Button variant="primary" disabled={busy === 'webicon'} onClick={() => act('webicon')} title={L('PWA(앱 설치) 아이콘 — 모든 OS', 'PWA install icon — all OSes')}>{L('웹앱', 'web')}</Button>
+            </Row>
+            <Row>
+              <Button variant="secondary" onClick={exportSVG}>SVG</Button>
+              <Button variant="secondary" onClick={exportPNG}>PNG</Button>
+              <Button variant="secondary" disabled={busy === 'pdf'} onClick={() => exportVector('pdf')}>PDF</Button>
+              <Button variant="secondary" disabled={busy === 'eps'} onClick={() => exportVector('eps')}>EPS</Button>
+              <select value={pngSize} onChange={(e) => setPngSize(Number(e.target.value))} style={{ ...fieldInput, width: 84 }}>
+                {[256, 512, 1024].map((v) => <option key={v} value={v}>{v}px</option>)}
+              </select>
+            </Row>
+            <Row>
+              <Button variant="secondary" disabled={busy === 'save'} onClick={saveWorking}>{L('작업 저장', 'Save working copy')}</Button>
+            </Row>
+          </Panel>
         </div>
 
         <div style={{ flex: 1, minWidth: 320 }}>
-          <Panel title={L('박스', 'Box')}>
+          <Panel fold title={L('박스', 'Box')}>
             <Field label={L('배경', 'Background')}>
               <span className="set-pick"><ColorPicker value={c.bg} onChange={(v) => upd({ bg: v, bgTransparent: false })} size={22} title={L('배경색', 'Background color')} /></span>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
@@ -279,7 +303,7 @@ export default function IconLabView() {
             <NumField label={L('모서리', 'Corner')} value={c.radius} min={0} max={50} onChange={(v) => upd({ radius: v })} suffix="%" />
           </Panel>
 
-          <Panel title={L('전체: 위치 · 크기 · 회전', 'Whole: position · size · rotation')}
+          <Panel fold title={L('전체: 위치 · 크기 · 회전', 'Whole: position · size · rotation')}
             right={<Button variant="secondary" onClick={() => upd({ size: 80, offsetX: 0, offsetY: 35, rotation: 0 })}>{L('가운데로', 'Recenter')}</Button>}>
             <NumField label={L('크기', 'Size')} value={c.size} min={20} max={110} onChange={(v) => upd({ size: v })} suffix="%" />
             <NumField label={L('가로', 'X')} value={c.offsetX} min={-300} max={300} onChange={(v) => upd({ offsetX: v })} />
@@ -287,7 +311,7 @@ export default function IconLabView() {
             <NumField label={L('회전', 'Rotate')} value={c.rotation} min={-180} max={180} onChange={(v) => upd({ rotation: v })} suffix="°" />
           </Panel>
 
-          <Panel bare title={L('선', 'Lines')} hint={L('굵기 · 색상 · 회전 · 위치', 'width · colour · rotation · x/y')}>
+          <Panel fold bare title={L('선', 'Lines')} hint={L('굵기 · 색상 · 회전 · 위치', 'width · colour · rotation · x/y')}>
             <Row className="cols head" style={LINE_COLS}>
               <span /><span /><span />
               <span>{L('굵기', 'width')}</span>
@@ -311,7 +335,7 @@ export default function IconLabView() {
             ))}
           </Panel>
 
-          <Panel title={L('전체 선', 'All lines')}>
+          <Panel fold title={L('전체 선', 'All lines')}>
             <Field label={L('색', 'Colour')}>
               <span className="set-pick"><ColorPicker value={c.lines[0].color} onChange={(v) => allLines({ color: v })} size={22} title={L('전체 색', 'all color')} /></span>
               <button type="button" className="set-plain" onClick={() => allLines({ color: '#111827' })} title="#111827"
@@ -325,28 +349,6 @@ export default function IconLabView() {
         </div>
       </div>
 
-      {/* Full width under both columns: four buttons on a line need the room,
-          and applying or exporting is what you do AFTER the numbers are right. */}
-      <Panel title={L('아이콘으로 적용', 'Apply as')}>
-        <Field label={L('포털', 'Portal')}>
-          <Button variant="primary" disabled={busy === 'favicon'} onClick={() => act('favicon')} title={L('favicon으로 만들기', 'Set as favicon')}>favicon</Button>
-          <Button variant="primary" disabled={busy === 'appicon'} onClick={() => act('appicon')} title={L('앱 아이콘으로 만들기', 'Set as app icon')}>{L('앱', 'app')}</Button>
-          <Button variant="primary" disabled={busy === 'header'} onClick={() => act('header')} title={L('헤더 아이콘으로 만들기', 'Set as header icon')}>{L('헤더', 'header')}</Button>
-          <Button variant="primary" disabled={busy === 'webicon'} onClick={() => act('webicon')} title={L('PWA(앱 설치) 아이콘 — 모든 OS', 'PWA install icon — all OSes')}>{L('웹앱', 'web')}</Button>
-        </Field>
-        <Field label={L('내보내기', 'Export')}>
-          <Button variant="secondary" onClick={exportSVG}>SVG</Button>
-          <Button variant="secondary" onClick={exportPNG}>PNG</Button>
-          <Button variant="secondary" disabled={busy === 'pdf'} onClick={() => exportVector('pdf')}>PDF</Button>
-          <Button variant="secondary" disabled={busy === 'eps'} onClick={() => exportVector('eps')}>EPS</Button>
-          <select value={pngSize} onChange={(e) => setPngSize(Number(e.target.value))} style={{ ...fieldInput, width: 84 }}>
-                {[256, 512, 1024].map((v) => <option key={v} value={v}>{v}px</option>)}
-              </select>
-        </Field>
-        <FieldActions>
-          <Button variant="secondary" disabled={busy === 'save'} onClick={saveWorking}>{L('작업 저장', 'Save working copy')}</Button>
-        </FieldActions>
-      </Panel>
     </div>
   )
 }

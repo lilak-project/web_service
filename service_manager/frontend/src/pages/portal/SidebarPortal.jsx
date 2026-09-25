@@ -25,6 +25,10 @@ const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.name)
 const SYSTEM_KEYS = ['@iconlab', '@newservice', '@store']
 const SYSTEM_ID = '@system'
 const NOGROUP_ID = '@none'
+// The name a materialised System band is stored under. Until something is
+// dragged into it the band is synthetic — there is nothing to store, because
+// its members are the same three builtins on every portal.
+const SYSTEM_NAME = 'System'
 
 /** The order list with `key` lifted out and dropped next to `target`. */
 function movedOrder(base, key, target, after) {
@@ -328,13 +332,18 @@ export default function SidebarPortal({
     const byKey = new Map(list.map((c) => [cardKey(c), c]))
     const taken = new Set()
     const out = []
-    // System first, and always: the portal's own tools are not filed by hand.
-    const sys = SYSTEM_KEYS.map((k) => byKey.get(k)).filter(Boolean)
-    sys.forEach((c) => taken.add(cardKey(c)))
-    if (sys.length) out.push({ g: { id: SYSTEM_ID, name: L('시스템', 'System'), fixed: true }, items: sys })
+    // System first, and always: the portal's own tools are not filed by hand —
+    // unless an admin drags a service in, at which point the band is a stored
+    // group like any other and the loop below draws it.
+    const stored = (groups || []).find((g) => g.name === SYSTEM_NAME)
+    if (!stored) {
+      const sys = SYSTEM_KEYS.map((k) => byKey.get(k)).filter(Boolean)
+      sys.forEach((c) => taken.add(cardKey(c)))
+      if (sys.length) out.push({ g: { id: SYSTEM_ID, name: L('시스템', 'System'), fixed: true }, items: sys })
+    }
     const gs = [...(groups || [])]
       .filter((g) => !g.hidden || (manage && isManager))
-      .sort((a, b) => (a.order ?? 1000) - (b.order ?? 1000))
+      .sort((a, b) => (a.name === SYSTEM_NAME ? -1 : b.name === SYSTEM_NAME ? 1 : (a.order ?? 1000) - (b.order ?? 1000)))
     for (const g of gs) {
       const items = (g.members || []).map((k) => byKey.get(k)).filter((c) => c && !taken.has(cardKey(c)))
       items.forEach((c) => taken.add(cardKey(c)))
@@ -356,6 +365,11 @@ export default function SidebarPortal({
     const at = dropAt
     setDrag(null); setDropAt(null)
     if (!key || !at) return
+    if (at.gid === SYSTEM_ID) {
+      const present = SYSTEM_KEYS.filter((k) => (cards || []).some((c) => cardKey(c) === k))
+      try { await onCreateGroup?.(SYSTEM_NAME, [...present, key]) } catch { await onRefresh?.() }
+      return
+    }
     let gid = null
     let keys = null
     if (at.gid !== undefined) {
@@ -391,9 +405,13 @@ export default function SidebarPortal({
     onDragOver: (e) => { if (!drag) return; e.preventDefault(); setDropAt({ gid }) },
     onDrop: (e) => { e.preventDefault(); onDrop() },
   })
-  /** Where a band's drop puts a card: a real group, or out of every group. */
-  const bandDrop = (g) => (g.fixed ? {} : bandProps(g.loose ? null : g.id))
-  const dropCls = (key) => (dropAt?.key === key ? (dropAt.after ? ' drop-after' : ' drop-before') : '')
+  /** Where a band's drop puts a card: a real group, or out of every group.
+   *  The synthetic System band takes drops too — the first one turns it into a
+   *  stored group holding the builtins plus what you dropped. */
+  const bandDrop = (g) => bandProps(g.fixed ? SYSTEM_ID : g.loose ? null : g.id)
+  /** The line drawn in the gap where a dragged card would land. */
+  const dropLine = (key, after) =>
+    (dropAt?.key === key && !!dropAt.after === after ? <div className="pl-dropline" /> : null)
 
   // One button, two jobs: while anything is open it closes everything; once
   // everything is shut it becomes the way back. (Opening deliberately only
@@ -455,8 +473,9 @@ export default function SidebarPortal({
     const multi = s.multi_project && !manage
     return (
       <div key={key} style={{ display: 'contents' }}>
+        {dropLine(key, false)}
         <div className={`pl-card${on ? ' on' : ''}${projOpen(key) ? ' open' : ''}`
-            + `${manage ? ' mg' : ''}${drag === key ? ' dragging' : ''}${dropCls(key)}`
+            + `${manage ? ' mg' : ''}${drag === key ? ' dragging' : ''}`
             + `${s.hidden ? ' off' : ''}`}
           {...dragProps(key)}>
           <button type="button" className="pl-row"
@@ -486,6 +505,7 @@ export default function SidebarPortal({
           <ProjectList svc={s.name} color={s.color} sel={view === 'service' ? sel : null}
             open={projOpen(key)} onPick={(p) => pickProject(s, p)} />
         )}
+        {dropLine(key, true)}
       </div>
     )
   }
@@ -600,7 +620,7 @@ export default function SidebarPortal({
                they had simply been indented under a heading. */
             <div key={g.id} className={`pl-group${g.fixed || g.loose ? ' auto' : ''}`
                 + `${sel?.svc === `#g:${g.id}` && view === 'manage' ? ' on' : ''}`
-                + `${dropAt?.gid === (g.loose ? null : g.id) && !g.fixed ? ' drop' : ''}`}
+                + `${dropAt?.gid === (g.fixed ? SYSTEM_ID : g.loose ? null : g.id) ? ' drop' : ''}`}
               {...bandDrop(g)}>
               <div className="pl-band">
                 <button type="button" className="pl-grp"
@@ -618,7 +638,7 @@ export default function SidebarPortal({
                   included — leaving that one behind made the band look broken. */}
               <Slider open={groupOpen(g.id) || (manage && isManager)} className="pl-gitems">
                 {items.map(serviceCard)}
-                {manage && isManager && items.length === 0 && !g.fixed && (
+                {manage && isManager && items.length === 0 && (
                   <div className="pl-gempty" {...bandDrop(g)}>{L('여기로 끌어다 놓으세요', 'drop things here')}</div>
                 )}
               </Slider>

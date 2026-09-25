@@ -89,7 +89,7 @@ export default function StoreView({ onChanged }) {
           <span />
           <span>{L('서비스', 'Service')}</span>
           <span>{L('상태', 'State')}</span>
-          <span>{L('설명', 'What it is')}</span>
+          <span>{L('상세', 'Detail')}</span>
           <span />
         </Row>
         {items === null && <Row className="empty">…</Row>}
@@ -108,7 +108,9 @@ export default function StoreView({ onChanged }) {
               {stateBadge(s)}
               {s.private && <Pill tone="warn">{L('비공개', 'private')}</Pill>}
             </span>
-            <span className="sub ell">{L(s.ko, s.en)}</span>
+            {/* Truncated with an ellipsis rather than wrapping the row; the
+                whole sentence is on the cell's own tooltip. */}
+            <span className="sub ell" title={L(s.ko, s.en)}>{L(s.ko, s.en)}</span>
             {s.registered ? (
               <Button variant="secondary" disabled={running} onClick={() => update(s.name)}
                 title={L('git pull 후 다시 빌드', 'git pull, then rebuild')}>

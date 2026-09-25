@@ -735,9 +735,15 @@ export default function ProjectsPage() {
     ;[keys[i], keys[j]] = [keys[j], keys[i]]
     await saveOrder(keys)
   }
-  async function createGroup() {
-    try { await launcher.post('/admin/service-groups', { name: lang === 'ko' ? `그룹 ${groups.length + 1}` : `Group ${groups.length + 1}` }); await refresh() }
-    catch (e) { setError(errText(e, 'failed')) }
+  async function createGroup(name, members) {
+    try {
+      const body = { name: name || (lang === 'ko' ? `그룹 ${groups.length + 1}` : `Group ${groups.length + 1}`) }
+      const { data } = await launcher.post('/admin/service-groups', body)
+      // A group made WITH members (the System band materialising, say) needs a
+      // second call: create takes the name, membership is a patch.
+      if (members?.length && data?.id) await launcher.put(`/admin/service-groups/${data.id}`, { members })
+      await refresh()
+    } catch (e) { setError(errText(e, 'failed')) }
   }
 
   // Live mode shows ONLY live-capable service cards (no builtins, nothing hidden,
