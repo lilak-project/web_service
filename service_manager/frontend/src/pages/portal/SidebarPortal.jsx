@@ -41,27 +41,26 @@ const writeSet = (key, set) => {
   try { localStorage.setItem(key, JSON.stringify([...set])) } catch { /* private mode */ }
 }
 
-/** Tiles invert to show selection: normally the plate carries the colour with the
- *  icon in white, and the PICKED one drops to the bar's own background so the
- *  plate disappears and the icon is left in its colour. One indicator that works
- *  expanded and collapsed — unlike a ring, which sits against the 64px clip edge
- *  and reads as a cut-off box.
+/** Tiles invert to show selection: an unpicked one is transparent with its colour
+ *  as an outline, and the PICKED one fills with that colour and turns the icon
+ *  white. One indicator that works expanded and collapsed — unlike an outer ring,
+ *  which sits against the 64px clip edge and reads as a cut-off box.
+ *
+ *  Transparent rather than a light fill, so whatever is behind shows through and
+ *  the plate reads as empty on a white card and on the grey bar alike. The outline
+ *  is an INSET shadow, not a border, so it cannot change the 30px box or spill
+ *  past the collapsed bar's clip edge.
  *
  *  19px, not 17: inside a 30px plate a smaller glyph leaves so much margin that
- *  the icon reads as shrunken, which is exactly how it looked. */
+ *  the icon reads as shrunken. */
 function Tile({ icon, color, on, dot }) {
   const c = color || 'var(--text-secondary)'
   return (
     <span className="pl-av"
-      // Transparent, not a light fill: whatever is behind the tile shows through,
-      // so the plate reads as empty on a white card and on the grey bar alike.
-      // The outline is an INSET shadow rather than a border, so it cannot change
-      // the 30px box or spill past the collapsed bar's clip edge the way an outer
-      // ring did.
       style={on
-        ? { background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${c}` }
-        : { background: c }}>
-      <Icon name={icon} size={19} weight="fill" color={on ? c : '#fff'} />
+        ? { background: c }
+        : { background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${c}` }}>
+      <Icon name={icon} size={19} weight="fill" color={on ? '#fff' : c} />
       {dot !== undefined && <i className={dot ? 'up' : ''} />}
     </span>
   )
