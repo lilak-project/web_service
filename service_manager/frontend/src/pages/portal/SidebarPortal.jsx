@@ -48,12 +48,25 @@ const writeSet = (key, set) => {
  *
  *  19px, not 17: inside a 30px plate a smaller glyph leaves so much margin that
  *  the icon reads as shrunken. */
+/** Running / stopped, drawn the same way wherever it appears — the corner of a
+ *  service tile and the head of a project card. On is a green play button; off is
+ *  a plain grey dot, which says "nothing is running" without pretending to be a
+ *  control. */
+function RunDot({ on, size = 12, ring }) {
+  return (
+    <span className={`pl-run${on ? ' up' : ''}${ring ? ' ring' : ''}`}
+      style={{ width: size, height: size }}>
+      {on && <Icon name="play" size={Math.round(size * 0.6)} weight="fill" color="#fff" />}
+    </span>
+  )
+}
+
 function Tile({ icon, color, on, dot }) {
   const c = color || 'var(--text-secondary)'
   return (
     <span className={`pl-av${on ? ' round' : ''}`} style={{ background: c }}>
       <Icon name={icon} size={19} weight="fill" color="#fff" />
-      {dot !== undefined && <i className={dot ? 'up' : ''} />}
+      {dot !== undefined && <RunDot on={!!dot} size={13} ring />}
     </span>
   )
 }
@@ -131,7 +144,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
         return (
           <button key={p.name} type="button" className={`pl-proj${on ? ' on' : ''}`}
             onClick={() => onPick(p.name)}>
-            <span className="dot" style={{ background: on ? '#fff' : (color || 'var(--text-muted)') }} />
+            <RunDot on={!!p.running} size={13} />
             <span className="pl-txt">{p.name}</span>
             <span className="pl-out" role="button" tabIndex={-1} title={L('새 창', 'new tab')}
               onClick={(e) => { e.stopPropagation(); window.open(`/pp/${svc}/${p.name}/`, '_blank') }}>
@@ -412,7 +425,9 @@ export default function SidebarPortal({
         </div>
       </aside>
 
-      <main className="pl-main">
+      {/* Live takes the whole right side — no panel inset, because a wall wants
+          every pixel it can get. */}
+      <main className={`pl-main${view === 'live' ? ' live' : ''}`}>
         <div className="pl-panel">
           {view === 'settings' ? (
             <div className="pl-scroll">

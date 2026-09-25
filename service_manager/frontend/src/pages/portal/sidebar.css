@@ -119,13 +119,17 @@
   font-size: 14px; font-weight: 700;
 }
 
-.pl-av i {
-  position: absolute; right: -3px; bottom: -3px;
-  width: 9px; height: 9px; border-radius: 50%;
-  border: 2px solid var(--surface);
+/* Run state — see RunDot. Grey dot when stopped, green play button when up. */
+.pl-run {
+  flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 50%;
   background: var(--text-muted);
 }
-.pl-av i.up { background: #10b981; }
+.pl-run.up { background: #10b981; }
+/* In a tile's corner it needs a ring to stay legible against the fill. */
+.pl-run.ring { position: absolute; right: -4px; bottom: -4px; box-shadow: 0 0 0 2px var(--surface); }
+.pl-root.mini .pl-run.ring { box-shadow: 0 0 0 2px var(--surface-2); }
 .pl-txt {
   flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -174,8 +178,7 @@
 }
 .pl-proj:hover { border-color: var(--border-focus); }
 .pl-proj.on { background: var(--accent, #2563eb); border-color: var(--accent, #2563eb); color: #fff; }
-.pl-proj .dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 1px; }
-.pl-proj.on .dot { box-shadow: 0 0 0 1.5px #fff; }
+.pl-proj.on .pl-run { box-shadow: 0 0 0 1.5px #fff; }
 .pl-proj .pl-txt { font-weight: 500; color: inherit; }
 .pl-proj:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 
@@ -216,6 +219,8 @@
 
 /* ── right panel ─────────────────────────────────────────────────────────── */
 .pl-main { flex: 1; min-width: 0; padding: 10px; display: flex; }
+.pl-main.live { padding: 0; }
+.pl-main.live .pl-panel { border: 0; border-radius: 0; box-shadow: none; }
 .pl-panel {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column;
