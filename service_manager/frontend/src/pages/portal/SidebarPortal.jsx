@@ -52,7 +52,15 @@ const writeSet = (key, set) => {
 function Tile({ icon, color, on, dot }) {
   const c = color || 'var(--text-secondary)'
   return (
-    <span className="pl-av" style={{ background: on ? 'var(--surface-2)' : c }}>
+    <span className="pl-av"
+      // Transparent, not a light fill: whatever is behind the tile shows through,
+      // so the plate reads as empty on a white card and on the grey bar alike.
+      // The outline is an INSET shadow rather than a border, so it cannot change
+      // the 30px box or spill past the collapsed bar's clip edge the way an outer
+      // ring did.
+      style={on
+        ? { background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${c}` }
+        : { background: c }}>
       <Icon name={icon} size={19} weight="fill" color={on ? c : '#fff'} />
       {dot !== undefined && <i className={dot ? 'up' : ''} />}
     </span>
