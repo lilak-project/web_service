@@ -16,8 +16,12 @@
 
 /* ── the ground ──────────────────────────────────────────────────────────── */
 /* Everything here is ONE text size. A settings page is a list of facts, and a
-   size change should mean something — only the page heading gets one. */
-.pl-setpage {
+   size change should mean something — only the page heading gets one.
+   The manage pages (.pl-mgpage, and .svc-mg wherever a manage panel is used
+   outside the sidebar) are the same kind of page and take the same rules —
+   they were reading as a different product because only the selectors below
+   were scoped to the settings page. */
+.pl-setpage, .pl-mgpage {
   font-size: var(--fs-medium, 14px);
   color: var(--text-primary);
   /* The ground is grey and the panel strips are LIGHTER than it, so a panel
@@ -30,7 +34,7 @@
    The border is `currentColor`: the kit already colours a button's TEXT by what
    it does (blue primary, red danger, grey secondary), so the outline inherits
    that and every button is legible as a button without inventing a palette. */
-.pl-setpage button:not(.set-plain) {
+:is(.pl-setpage, .pl-mgpage, .svc-mg) button:not(.set-plain) {
   border: 1px solid currentColor !important;
   border-radius: var(--radius-lg, 5px) !important;
   min-height: 32px;
@@ -38,15 +42,15 @@
 }
 /* Hovered, the kit fills the button solid and flips the text white — a white
    outline on a solid fill is the same shape, one shade lighter. */
-.pl-setpage button:not(.set-plain):hover { border-color: currentColor !important; }
-.pl-setpage :is(input, select, textarea) {
+:is(.pl-setpage, .pl-mgpage, .svc-mg) button:not(.set-plain):hover { border-color: currentColor !important; }
+:is(.pl-setpage, .pl-mgpage, .svc-mg) :is(input, select, textarea) {
   font-size: var(--fs-medium, 14px);
   min-height: 32px;
   padding: 0 10px;
   border-radius: var(--radius-lg, 5px);
 }
-.pl-setpage textarea { padding: 8px 10px; }
-.pl-setpage :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 16px 0 6px; }
+:is(.pl-setpage, .pl-mgpage, .svc-mg) textarea { padding: 8px 10px; }
+:is(.pl-setpage, .pl-mgpage, .svc-mg) :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 16px 0 6px; }
 
 /* ── the panel ───────────────────────────────────────────────────────────── */
 /* White on the grey ground. The edge is one step stronger than the rules
@@ -168,20 +172,20 @@
    of them read across in a row — so it is the same size, 15px. Panels stop
    before the screen does: a fact row read edge-to-edge on a wide monitor is a
    fact row nobody reads. */
-.pl-setpage .set-title {
+:is(.pl-setpage, .pl-mgpage) .set-title {
   margin: 2px 0 14px;
   font-size: 15px;
   font-weight: 700;
   color: var(--text-emphasis);
 }
-.pl-setpage .set-msg { margin-bottom: 10px; color: var(--text-secondary); }
-.pl-setpage .set-panel, .pl-setpage .set-title, .pl-setpage .set-msg { max-width: 940px; }
+:is(.pl-setpage, .pl-mgpage) .set-msg { margin-bottom: 10px; color: var(--text-secondary); }
+:is(.pl-setpage, .pl-mgpage) :is(.set-panel, .set-title, .set-msg) { max-width: 940px; }
 
 /* ── phone ───────────────────────────────────────────────────────────────── */
 /* A 170px label column leaves nothing for the value on a phone, so the row
    stacks: name on its own line, value under it, rule still between rows. */
 @media (max-width: 639px) {
-  .pl-setpage { padding: 12px 12px 20px; }
+  .pl-setpage, .pl-mgpage { padding: 12px 12px 20px; }
   .set-card { grid-template-columns: 1fr; }
   .set-card > *:nth-child(even) { border-top: 0; padding-top: 0; }
 }
@@ -210,7 +214,7 @@
 
 /* The ✕ that removes a chip is part of the chip, not a button on the page: it
    takes no outline of its own. */
-.pl-setpage .set-x {
+:is(.pl-setpage, .pl-mgpage, .svc-mg) .set-x {
   display: inline-flex; align-items: center; justify-content: center;
   border: 0; background: none; padding: 0; margin-left: 4px;
   width: 16px; height: 16px; flex-shrink: 0;

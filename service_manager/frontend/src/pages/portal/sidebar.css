@@ -473,13 +473,8 @@
 }
 .pl-root.mini .pl-gempty { display: none; }
 
-/* The manage / builtin panel is a settings page by another name — same ground,
-   same width, same one size change for its title. */
-.pl-mgpage {
-  background: var(--surface-2);
-  padding: 16px 20px 24px;
-  font-size: var(--fs-medium, 14px);
-}
+/* The manage / builtin panel IS a settings page — its ground, padding, buttons
+   and inputs come from settings.css, which names it alongside .pl-setpage. */
 .pl-mgtitle {
   margin: 2px 0 14px;
   font-size: 15px; font-weight: 700;
