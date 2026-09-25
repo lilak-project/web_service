@@ -353,7 +353,6 @@
 .pl-c2:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 /* Sections are a rule, not a heading — the names labelled a split the items make. */
 .pl-sep { flex: 0 0 auto; height: 1px; margin: 6px 2px; background: var(--border-strong); }
-.pl-setpage { padding: 16px 18px; }
 
 /* Phone: one bar at a time — the settings bar takes the drawer's place. */
 @media (max-width: 639px) {
