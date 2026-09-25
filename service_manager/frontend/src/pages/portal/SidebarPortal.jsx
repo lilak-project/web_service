@@ -383,15 +383,14 @@ export default function SidebarPortal({
                 <span className="pl-txt">{lang === 'ko' ? m.ko : m.en}</span>
               </button>
             ))}
-            {/* A setting, not a mode: it rearranges the sidebar and leaves the
-                panel alone, so it does not belong with manage / live. The label is
-                the action it performs, so it flips with the state instead of
-                asking the reader to decode a switch. */}
-            <button type="button" className="pl-proj" onClick={() => setFlat((f) => !f)}>
-              <Icon name={flat ? 'folder-plus' : 'browse'} size={14} />
-              <span className="pl-txt">
-                {flat ? L('그룹으로 보기', 'Group them') : L('그룹 없이 보기', 'Ungroup')}
-              </span>
+            {/* Group mode reads like the other two: a fixed name that fills when
+                it is on. (It only rearranges the sidebar and leaves the panel
+                alone, but a switch that changed its own label made the reader
+                work out which way it pointed.) */}
+            <button type="button" className={`pl-proj${flat ? '' : ' on'}`}
+              onClick={() => setFlat((f) => !f)}>
+              <Icon name="tree" size={14} />
+              <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
             </button>
           </Slider>
           <div className={`pl-card${modesOpen ? ' open' : ''}`}>
