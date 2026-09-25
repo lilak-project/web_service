@@ -1,0 +1,144 @@
+{
+  "id": "stark_0330",
+  "name": "STARK 0330",
+  "note": "시트 STARK 0330 배치 — 16/X6 @140, 12E/X6 @180, 12dE/X6 @190, Q/QQQ5 @210",
+  "setup": {
+    "name": "STARK 0330",
+    "beamSlots": [
+      {
+        "id": "beam_0",
+        "name": "Beam A",
+        "nuc": "7Li",
+        "energy": 5,
+        "eUnit": "MeV/u",
+        "intensity": 100000,
+        "sx": 2,
+        "sy": 2,
+        "x0": 0,
+        "y0": 0,
+        "divx": 0,
+        "divy": 0,
+        "active": true
+      }
+    ],
+    "targetSlots": [
+      {
+        "id": "targ_1",
+        "name": "CD2 1.0 mg/cm2",
+        "material": "CD2",
+        "nuc": "2H",
+        "thickUnit": "mg/cm2",
+        "thick": 1,
+        "radius": 7.5,
+        "z": 0,
+        "x0": 0,
+        "y0": 0,
+        "active": true
+      }
+    ],
+    "collimators": [
+      {
+        "id": "coll_2",
+        "name": "Collimator 1",
+        "r": 5,
+        "z": -60,
+        "thick": 3,
+        "enabled": true
+      }
+    ],
+    "rings": [
+      {
+        "id": "ring_3",
+        "kind": "ring",
+        "name": "Ring 16",
+        "type": "16",
+        "z": 140,
+        "div": 16,
+        "r": 140.5,
+        "off": -52.75,
+        "offMode": "center",
+        "z1": 0,
+        "z2": 50,
+        "rmin": 136.5,
+        "rmax": 152.5,
+        "dir": 1,
+        "det": "X6",
+        "phi0": 11.25,
+        "flip": false,
+        "enabled": true
+      },
+      {
+        "id": "ring_4",
+        "kind": "ring",
+        "name": "Ring 12E",
+        "type": "12E",
+        "z": 180,
+        "div": 12,
+        "r": 109.2,
+        "off": -52.75,
+        "offMode": "center",
+        "z1": 0,
+        "z2": 15,
+        "rmin": 105.2,
+        "rmax": 121.2,
+        "dir": 1,
+        "det": "X6",
+        "phi0": 15,
+        "flip": false,
+        "enabled": true
+      },
+      {
+        "id": "ring_5",
+        "kind": "ring",
+        "name": "Ring 12dE",
+        "type": "12dE",
+        "z": 190,
+        "div": 12,
+        "r": 91.7,
+        "off": -70.75,
+        "offMode": "center",
+        "z1": 0,
+        "z2": 15,
+        "rmin": 87.7,
+        "rmax": 103.7,
+        "dir": 1,
+        "det": "X6",
+        "phi0": 15,
+        "flip": false,
+        "enabled": true
+      },
+      {
+        "id": "ring_6",
+        "kind": "ring",
+        "name": "Ring Q",
+        "type": "Q",
+        "z": 210,
+        "div": 4,
+        "r": 110,
+        "off": -53.8,
+        "offMode": "center",
+        "z1": 60,
+        "z2": 15,
+        "rmin": 106,
+        "rmax": 122,
+        "dir": 2,
+        "det": "QQQ5",
+        "phi0": 45,
+        "flip": false,
+        "enabled": true
+      }
+    ],
+    "singles": [],
+    "reaction": {
+      "ejectile": "1H",
+      "Ex": 0
+    },
+    "view": {
+      "zedit": false,
+      "showRings": true,
+      "showBeam": true,
+      "showLabels": true,
+      "showRuler": true
+    }
+  }
+}

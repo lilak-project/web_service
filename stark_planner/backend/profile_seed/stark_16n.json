@@ -1,0 +1,97 @@
+{
+  "id": "stark_16n",
+  "name": "STARK 16N",
+  "note": "16N(d,p)17N — 프레임 없는 검출기 링 3개, 콜리메이터·QQQ5 없음. 빔은 아직 기본값입니다.",
+  "setup": {
+    "name": "STARK 16N",
+    "beamSlots": [
+      {
+        "id": "beam_0",
+        "name": "Beam A",
+        "nuc": "7Li",
+        "energy": 5,
+        "eUnit": "MeV/u",
+        "intensity": 100000,
+        "sx": 2,
+        "sy": 2,
+        "x0": 0,
+        "y0": 0,
+        "divx": 0,
+        "divy": 0,
+        "active": true
+      }
+    ],
+    "targetSlots": [
+      {
+        "id": "targ_1",
+        "name": "CD2 1.0 mg/cm2",
+        "material": "CD2",
+        "nuc": "2H",
+        "thickUnit": "mg/cm2",
+        "thick": 1,
+        "radius": 7.5,
+        "z": 0,
+        "x0": 0,
+        "y0": 0,
+        "active": true
+      }
+    ],
+    "collimators": [],
+    "rings": [
+      {
+        "id": "ring_3",
+        "kind": "ring",
+        "name": "Ring 16",
+        "type": "16",
+        "z": 87.25,
+        "div": 16,
+        "r": 140.5,
+        "dir": 1,
+        "det": "X6",
+        "phi0": 11.25,
+        "enabled": true,
+        "mount": "bare"
+      },
+      {
+        "id": "ring_4",
+        "kind": "ring",
+        "name": "Ring 12E",
+        "type": "12E",
+        "z": 127.25,
+        "div": 12,
+        "r": 109.2,
+        "dir": 1,
+        "det": "X6",
+        "phi0": 15,
+        "enabled": true,
+        "mount": "bare"
+      },
+      {
+        "id": "ring_5",
+        "kind": "ring",
+        "name": "Ring 12dE",
+        "type": "12dE",
+        "z": 119.25,
+        "div": 12,
+        "r": 91.7,
+        "dir": 1,
+        "det": "X6",
+        "phi0": 15,
+        "enabled": true,
+        "mount": "bare"
+      }
+    ],
+    "singles": [],
+    "reaction": {
+      "ejectile": "1H",
+      "Ex": 0
+    },
+    "view": {
+      "zedit": false,
+      "showRings": true,
+      "showBeam": true,
+      "showLabels": true,
+      "showRuler": true
+    }
+  }
+}

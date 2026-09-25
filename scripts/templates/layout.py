@@ -24,7 +24,6 @@ Config shape:
 GET returns the stored config RECONCILED with `defaults` (a tab added in code shows
 up without wiping the user's arrangement). PUT/reset are manager-only.
 """
-from __future__ import annotations
 
 import json
 import os

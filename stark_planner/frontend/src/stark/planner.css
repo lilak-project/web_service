@@ -1,0 +1,249 @@
+/* Planner-specific dock chrome. The stage, rail and .simpanel shell come from
+   nptoy's g4/styles.css; these are the bits only this service has.
+   Use THAT file's token names (--line / --fg / --muted / --field / --hover):
+   they are the ones .stage.darkui redefines, and --border / --text do not exist
+   here at all — a shorthand referencing them is dropped whole. */
+
+.plannerpanel, .kinpanel { display: flex; flex-direction: column; gap: 10px; }
+
+.paddrow { display: flex; flex-wrap: wrap; gap: 4px; }
+.pviewrow { display: flex; gap: 12px; font-size: 11px; color: var(--muted); }
+.pviewrow label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+
+.psec { display: flex; flex-direction: column; gap: 4px; }
+.psechead {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font: 600 10px/1 var(--font-mono, monospace); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+  padding: 4px 0 2px; border-bottom: 1px solid var(--line);
+}
+.psechead em { font-style: normal; opacity: .7; }
+.psechead select {
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  border-radius: 5px; padding: 2px 5px; font: 500 11px var(--font-mono, monospace);
+  text-transform: none; letter-spacing: 0;
+}
+
+/* one component row (header + expanding body) */
+.pitem { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.pitem.sel { border-color: var(--accent, #2673c2); }
+.pitem.bad { border-color: #d1495b; }
+.phead { display: flex; align-items: center; gap: 6px; padding: 5px 7px; cursor: pointer; }
+.phead:hover { background: rgba(127, 127, 127, .09); }
+.pdot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.pname { font-weight: 600; font-size: 12px; white-space: nowrap; }
+.psub {
+  flex: 1; min-width: 0; text-align: right; font: 400 10.5px var(--font-mono, monospace);
+  color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pitem.bad .pname::after { content: " ⚠"; color: #d1495b; }
+.px {
+  background: none; border: 0; cursor: pointer; color: var(--muted);
+  font-size: 13px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+}
+.px:hover { color: #d1495b; background: rgba(127, 127, 127, .14); }
+.pbody { padding: 7px 8px 9px; border-top: 1px solid var(--line); }
+
+/* label / input / unit */
+.pfrow { display: grid; grid-template-columns: minmax(0, 92px) minmax(0, 1fr) auto; align-items: center; gap: 6px; margin-bottom: 4px; }
+.pfrow > label { font-size: 11px; color: var(--muted); }
+.pfin { min-width: 0; }
+.pfu { font: 400 10px var(--font-mono, monospace); color: var(--muted); }
+.pfrow input, .pfrow select {
+  width: 100%; min-width: 0; border: 1px solid var(--line); background: var(--surface);
+  color: var(--fg); border-radius: 5px; padding: 3px 5px;
+  font: 500 11.5px var(--font-mono, monospace);
+}
+.pfrow input[type=checkbox] { width: 15px; height: 15px; padding: 0; accent-color: var(--accent, #2673c2); }
+.pfrow input:focus, .pfrow select:focus { outline: 2px solid var(--accent, #2673c2); outline-offset: -1px; }
+
+/* computed numbers */
+.pfkv { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; }
+.pfkv > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 7px; align-items: baseline; font-size: 11px; }
+.pfkv b { font-weight: 500; color: var(--muted); }
+.pfkv span {
+  font: 500 11px/1.4 var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.pfkv .ok { color: #2e9e6b; }
+.pfkv .warn { color: #c68a1c; }
+.pfkv .bad { color: #d1495b; }
+
+.psaverow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.psaverow input[type=text], .psaverow input:not([type]) {
+  flex: 1; min-width: 80px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--fg); border-radius: 5px; padding: 3px 5px; font: 500 11.5px var(--font-mono, monospace);
+}
+.psaverow select {
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  border-radius: 5px; padding: 3px 5px; font: 500 11px var(--font-mono, monospace);
+}
+.psaved { display: flex; flex-direction: column; gap: 1px; }
+.psaved > div { display: flex; align-items: center; gap: 3px; }
+.plink {
+  flex: 1; text-align: left; background: none; border: 0; cursor: pointer; border-radius: 4px;
+  padding: 3px 4px; font: 500 11.5px var(--font-mono, monospace); color: var(--fg);
+}
+.plink:hover { background: rgba(127, 127, 127, .12); color: var(--accent, #2673c2); }
+
+.piobox { display: flex; flex-direction: column; gap: 5px; }
+.piobox textarea {
+  width: 100%; height: 150px; resize: vertical; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--surface); color: var(--fg); padding: 6px;
+  font: 400 11px/1.5 var(--font-mono, monospace);
+}
+.pflash { font: 600 11px var(--font-mono, monospace); color: var(--accent, #2673c2); }
+
+.kplot { width: 100%; height: 240px; display: block; }
+
+.displaypanel { display: flex; flex-direction: column; gap: 4px; }
+
+/* The readouts are two columns of numbers and the kinematics plot needs room —
+   both are wider than nptoy's 330px default dock. */
+.simpanel.planner, .simpanel.kinematics { width: 420px; }
+@media (max-width: 860px) { .simpanel.planner, .simpanel.kinematics { width: calc(100vw - 100px); } }
+
+/* profiles dock */
+.profpanel { display: flex; flex-direction: column; gap: 10px; }
+.profrow { display: flex; align-items: center; gap: 4px; padding: 1px 0; }
+.profrow.on { background: rgba(38, 115, 194, .10); border-radius: 5px; }
+.profrow.on .plink { color: var(--accent, #2673c2); font-weight: 600; }
+.proftime { font: 400 10px var(--font-mono, monospace); color: var(--muted); white-space: nowrap; }
+.profshare {
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 5px; padding: 1px 6px; cursor: pointer;
+  font: 500 10px var(--font-mono, monospace);
+}
+.profshare.on { border-color: var(--accent, #2673c2); color: var(--accent, #2673c2); }
+.px.danger { color: #d1495b; font: 600 10px var(--font-mono, monospace); }
+.filebtn { cursor: pointer; }
+.dnote.warn { color: #c68a1c; }
+.simpanel.profiles { width: 420px; }
+@media (max-width: 860px) { .simpanel.profiles { width: calc(100vw - 100px); } }
+
+/* profiles dock */
+.profpanel { display: flex; flex-direction: column; gap: 10px; }
+.profrow { display: flex; align-items: center; gap: 4px; padding: 1px 0; }
+.profrow.on { background: rgba(38, 115, 194, .10); border-radius: 5px; }
+.profrow.on .plink { color: var(--accent, #2673c2); font-weight: 600; }
+.proftime { font: 400 10px var(--font-mono, monospace); color: var(--muted); white-space: nowrap; }
+.profshare {
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 5px; padding: 1px 6px; cursor: pointer;
+  font: 500 10px var(--font-mono, monospace);
+}
+.profshare.on { border-color: var(--accent, #2673c2); color: var(--accent, #2673c2); }
+.px.danger { color: #d1495b; font: 600 10px var(--font-mono, monospace); }
+.filebtn { cursor: pointer; }
+.dnote.warn { color: #c68a1c; }
+.simpanel.profiles { width: 420px; }
+@media (max-width: 860px) { .simpanel.profiles { width: calc(100vw - 100px); } }
+
+/* ── z-edit dock ─────────────────────────────────────────────────────────────
+   Every component on one shared z scale, so the rows read as a side elevation
+   of the beamline and a drag shows what it collides with. */
+.zeditpanel { display: flex; flex-direction: column; gap: 3px; }
+.zopt { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.zopt select {
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  border-radius: 5px; padding: 2px 4px; font: 500 11px var(--font-mono, monospace);
+}
+
+.zscale {
+  position: relative; height: 14px; margin: 4px 0 2px;
+  border-bottom: 1px solid var(--line);
+}
+.zscale span {
+  position: absolute; transform: translateX(-50%); bottom: 1px;
+  font: 400 9px var(--font-mono, monospace); color: var(--muted); white-space: nowrap;
+}
+
+.zrow { padding: 3px 4px; border-radius: 6px; border: 1px solid transparent; }
+.zrow:hover { background: rgba(127, 127, 127, .07); }
+.zrow.sel { border-color: var(--accent, #2673c2); background: rgba(38, 115, 194, .08); }
+.zrow.bad { border-color: #d1495b; }
+.zrow.off { opacity: .45; }
+.zhead { display: flex; align-items: center; gap: 5px; }
+.znote {
+  flex: 1; min-width: 0; text-align: right; font: 400 10px var(--font-mono, monospace);
+  color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.znum {
+  width: 66px; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  border-radius: 5px; padding: 2px 4px; font: 500 11px var(--font-mono, monospace);
+  text-align: right;
+}
+.znum:focus { outline: 2px solid var(--accent, #2673c2); outline-offset: -1px; }
+
+.ztrack { position: relative; height: 20px; margin-top: 2px; }
+/* the rail the handle slides along — also what makes the rows read as one axis */
+.zline {
+  position: absolute; left: 0; right: 0; top: 9px; height: 2px; border-radius: 1px;
+  background: var(--line); pointer-events: none;
+}
+/* the bar the component's body occupies */
+.zspan {
+  position: absolute; top: 7px; height: 6px; border-radius: 2px; opacity: .55;
+  pointer-events: none;
+}
+.zspan.bad { background: #d1495b !important; opacity: .8; }
+/* detector centre inside that body */
+.zmark {
+  position: absolute; top: 3px; height: 14px; width: 1px; background: var(--fg);
+  opacity: .5; pointer-events: none;
+}
+.zzero, .ztgt { position: absolute; top: 0; height: 20px; width: 1px; pointer-events: none; }
+.zzero { background: var(--muted); opacity: .35; }
+.ztgt { background: #d1495b; opacity: .5; }
+
+/* the handle rides on top; the native track is hidden so .zspan shows through */
+.ztrack input[type=range] {
+  position: absolute; inset: 0; width: 100%; height: 20px; margin: 0;
+  background: transparent; -webkit-appearance: none; appearance: none; cursor: ew-resize;
+}
+.ztrack input[type=range]:focus-visible { outline: 2px solid var(--accent, #2673c2); border-radius: 4px; }
+.ztrack input[type=range]::-webkit-slider-runnable-track { height: 20px; background: transparent; }
+.ztrack input[type=range]::-moz-range-track { height: 20px; background: transparent; }
+.ztrack input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 11px; height: 18px; border-radius: 3px;
+  background: var(--surface); border: 2px solid var(--accent, #2673c2); margin-top: 1px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+}
+.ztrack input[type=range]::-moz-range-thumb {
+  width: 11px; height: 18px; border-radius: 3px; border: 2px solid var(--accent, #2673c2);
+  background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+}
+.simpanel.zedit { width: 460px; }
+@media (max-width: 860px) { .simpanel.zedit { width: calc(100vw - 100px); } }
+
+/* kinematics opens independently, on the right, so it can sit beside the dock
+   you are editing in */
+.simpanel.kinematics.right { left: auto; right: 12px; width: 560px; }
+@media (max-width: 1360px) { .simpanel.kinematics.right { width: 460px; } }
+@media (max-width: 1100px) { .simpanel.kinematics.right { width: 390px; } }
+@media (max-width: 860px) { .simpanel.kinematics.right { left: 86px; right: 12px; width: auto; } }
+
+/* axis range + export, boxed so it reads as the plot's controls rather than
+   more body text */
+.krange {
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 6px;
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
+}
+.krange span { font: 600 10px var(--font-mono, monospace); color: var(--muted); }
+.krange span + input { margin-left: 1px; }
+.krange em { font-style: normal; color: var(--muted); }
+.krange input {
+  width: 58px; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  border-radius: 5px; padding: 2px 5px; font: 500 11px var(--font-mono, monospace); text-align: right;
+}
+.krange input:focus { outline: 2px solid var(--accent, #2673c2); outline-offset: -1px; }
+.krange .mini { margin-left: auto; }
+.krange .mini + .mini { margin-left: 0; }
+
+/* telescope pairing */
+.pairbox {
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px; margin: 4px 0 2px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.pairbox .pfkv { margin-top: 0; }
+.dim { color: var(--muted); }

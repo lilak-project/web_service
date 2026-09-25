@@ -23,7 +23,6 @@ Anon messages carry an opaque author key; the real name is returned ONLY to
 managers. The anon name pool (surnames × given names) is editable at runtime
 via set_anon_names() (wire an admin settings screen to it).
 """
-from __future__ import annotations
 
 import hashlib
 import json

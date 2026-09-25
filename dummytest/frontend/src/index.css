@@ -1,2 +1,5 @@
+/* Kit components size themselves assuming border-box. */
+* { box-sizing: border-box; }
+
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--app-bg); color: var(--text-primary); font-family: var(--font-sans); }

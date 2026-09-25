@@ -262,6 +262,8 @@ export default function SidebarPortal({
 
   const leaveSettings = useCallback(() => {
     if (miniBefore.current !== null) { setMini(miniBefore.current); miniBefore.current = null }
+    // Whatever was on screen before settings is no longer where we are going.
+    viewBefore.current = null
   }, [])
 
   const openSettings = useCallback((tab) => {
@@ -488,6 +490,18 @@ export default function SidebarPortal({
             onClick={() => {
               if (manage && isManager) { openManage(s); return }
               if (!multi) { openService(s); return }
+              // A multi-project service has no page of its own, so picking it
+              // opens its project list. From SETTINGS that also has to leave
+              // settings: the bar was collapsed, so the click only expanded it
+              // and the panel sat on a settings page nobody was asking for any
+              // more — the service looked like it simply did not open.
+              if (view === 'settings') {
+                leaveSettings()
+                setSel({ svc: key, proj: '' })
+                setView('service')
+                setOpenSvcs((o) => new Set(o).add(key))
+                return
+              }
               // Collapsed, the project list is hidden — so asking for it expands
               // the bar rather than doing nothing visible.
               if (mini) { setMini(false); setOpenSvcs((o) => new Set(o).add(key)); return }

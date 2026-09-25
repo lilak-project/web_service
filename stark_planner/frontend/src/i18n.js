@@ -1,0 +1,36 @@
+// i18n dictionaries for the stark_planner shell — the kit LangProvider consumes this.
+// Labels start identical for ko/en; localise as features land.
+export const DICTS = {
+  ko: {
+    brand: "라일락",
+    svc_name: "stark planner",
+    tab_sim: "설계",
+    tab_set: "설정",
+    placeholder_sim: "설계 — 준비 중",
+    status_idle: '대기',
+    nav_system: '시스템', nav_account: '계정',
+    notif_title: '알림', notif_empty: '알림 없음',
+    set_theme: '테마', set_lang: '언어',
+    cmd_help: '단축키 도움말', cmd_placeholder: '명령 입력…', shortcuts_title: '키보드 단축키',
+    placeholder_menu: '이 메뉴 항목의 내용은 아직 준비 중입니다. 코드(Shell.jsx의 PANELS)에서 연결하세요.',
+    set_account: '계정', set_users: '사용자 관리', set_tabs: '탭', set_anon: '익명 이름',
+    set_account_note: '계정과 비밀번호는 포털에서 관리합니다.', set_users_note: '사용자 관리는 포털에서 합니다.',
+    set_open_portal: '포털 열기',
+  },
+  en: {
+    brand: "lilak",
+    svc_name: "stark planner",
+    tab_sim: "설계",
+    tab_set: "설정",
+    placeholder_sim: "설계 — coming soon",
+    status_idle: 'idle',
+    nav_system: 'System', nav_account: 'Account',
+    notif_title: 'Notifications', notif_empty: 'No notifications',
+    set_theme: 'Theme', set_lang: 'Language',
+    cmd_help: 'Shortcuts help', cmd_placeholder: 'Type a command…', shortcuts_title: 'Keyboard shortcuts',
+    placeholder_menu: 'This menu item has no content yet — wire it up in code (PANELS in Shell.jsx).',
+    set_account: 'Account', set_users: 'Users', set_tabs: 'Tabs', set_anon: 'Anon names',
+    set_account_note: 'Account and password are managed in the portal.', set_users_note: 'User management lives in the portal.',
+    set_open_portal: 'Open portal',
+  },
+}

@@ -14,7 +14,6 @@ Pure Python (only needs parameter_parser.py alongside) — the ROOT-backed "expa
 route from the original tool is intentionally omitted so this drops in anywhere.
 The matching frontend is pages/ParameterEditor.jsx (talks to /api/params/*).
 """
-from __future__ import annotations
 
 import os
 from pathlib import Path
