@@ -110,7 +110,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
   }, [open, svc])  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Slider open={open}>
+    <Slider open={open} className="pl-plist">
       {rows === null && <div className="pl-proj" style={{ color: 'var(--text-muted)' }}>…</div>}
       {rows?.length === 0 && (
         <div className="pl-proj" style={{ color: 'var(--text-muted)' }}>{L('프로젝트 없음', 'no projects')}</div>
@@ -151,27 +151,25 @@ export default function SidebarPortal({
   })
   const [sel, setSel] = useState(readSel)        // { svc, proj } — mirrored in the URL
   const [view, setView] = useState(() => (readSel() ? 'service' : 'empty'))  // service|settings|live|empty
-  const [openSvc, setOpenSvc] = useState(() => readSel()?.svc || null)
-  const [q, setQ] = useState('')
+  // A Set, not one name: opening a service must not close another. Several
+  // project lists can stand open at once.
+  const [openSvcs, setOpenSvcs] = useState(() => {
+    const s0 = readSel()?.svc
+    return new Set(s0 ? [s0] : [])
+  })
   const [flat, setFlat] = useState(() => localStorage.getItem(FLAT_KEY) === '1')
   const [shut, setShut] = useState(() => readSet(SHUT_KEY))
   const [modesOpen, setModesOpen] = useState(false)
-  // Search keeps its OWN open/shut memory, cleared whenever the query changes.
-  // Sharing the normal state made a list the user had just closed spring open again.
-  const [qOpen, setQOpen] = useState(() => new Set())
-  const [qShut, setQShut] = useState(() => new Set())
-  const searchRef = useRef(null)
 
   useEffect(() => {
     localStorage.setItem(MINI_KEY, mini ? '1' : '0')
     // Collapsing hides the project lists; close them too, so expanding again does
     // not reveal a list the user last saw minutes ago.
-    if (mini) setOpenSvc(null)
+    if (mini) setOpenSvcs(new Set())
   }, [mini])
   useEffect(() => { localStorage.setItem(FLAT_KEY, flat ? '1' : '0') }, [flat])
   useEffect(() => { writeSet(SHUT_KEY, shut) }, [shut])
   useEffect(() => { writeSel(view === 'service' ? sel : null) }, [sel, view])
-  useEffect(() => { setQOpen(new Set()); setQShut(new Set()) }, [q])
 
   useEffect(() => {
     const fit = () => {
@@ -201,34 +199,20 @@ export default function SidebarPortal({
     if (window.innerWidth < PHONE) setMini(true)
   }, [])
 
-  const searching = !!q.trim()
-  const hit = useCallback((s) => {
-    if (!searching) return true
-    const n = q.trim().toLowerCase()
-    return (s.label || s.name).toLowerCase().includes(n) || s.name.toLowerCase().includes(n)
-  }, [q, searching])
-
-  // What is open is decided by what is ON SCREEN, not by a separate flag: while
-  // searching a match is open unless the user shut it, and outside search it is
-  // the one expanded service.
-  const projOpen = (name) => (searching ? !qShut.has(name) : openSvc === name)
-  const toggleProj = (name) => {
-    if (!searching) { setOpenSvc((o) => (o === name ? null : name)); return }
-    setQShut((s) => { const n = new Set(s); n.has(name) ? n.delete(name) : n.add(name); return n })
-    setQOpen((s) => { const n = new Set(s); n.has(name) ? n.delete(name) : n.add(name); return n })
-  }
-  const groupOpen = (gid) => (searching ? !qShut.has(`g:${gid}`) : !shut.has(gid))
-  const toggleGroup = (gid) => {
-    const key = searching ? `g:${gid}` : gid
-    const set = searching ? setQShut : setShut
-    set((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n })
-  }
+  const projOpen = (name) => openSvcs.has(name)
+  const toggleProj = (name) => setOpenSvcs((o) => {
+    const n = new Set(o); n.has(name) ? n.delete(name) : n.add(name); return n
+  })
+  const groupOpen = (gid) => !shut.has(gid)
+  const toggleGroup = (gid) => setShut((s) => {
+    const n = new Set(s); n.has(gid) ? n.delete(gid) : n.add(gid); return n
+  })
 
   // Services laid out as bands: each group in its order, then whatever belongs to
   // no group. Members are card keys, so a group may also list builtins (`@links`)
   // that this sidebar does not draw yet — those are simply skipped.
   const bands = useMemo(() => {
-    const list = (services || []).filter(hit)
+    const list = services || []
     if (flat) return [{ g: null, items: list }]
     const byName = new Map(list.map((s) => [s.name, s]))
     const taken = new Set()
@@ -241,11 +225,11 @@ export default function SidebarPortal({
     const rest = list.filter((s) => !taken.has(s.name))
     if (rest.length) out.push({ g: null, items: rest })
     return out
-  }, [services, groups, flat, hit])
+  }, [services, groups, flat])
 
   // Collapse all: every group and every project list. (Expand-all deliberately
   // only reopens the groups — reopening every project list buries the bar.)
-  const allShut = () => { setShut(new Set((groups || []).map((g) => g.id))); setOpenSvc(null) }
+  const allShut = () => { setShut(new Set((groups || []).map((g) => g.id))); setOpenSvcs(new Set()) }
 
   const enterLive = () => {
     setView('live')
@@ -268,7 +252,13 @@ export default function SidebarPortal({
       <div key={s.name} style={{ display: 'contents' }}>
         <div className={`pl-card${on ? ' on' : ''}${projOpen(s.name) ? ' open' : ''}`}>
           <button type="button" className="pl-row"
-            onClick={() => (multi ? toggleProj(s.name) : openService(s))}>
+            onClick={() => {
+              if (!multi) { openService(s); return }
+              // Collapsed, the project list is hidden — so asking for it expands
+              // the bar rather than doing nothing visible.
+              if (mini) { setMini(false); setOpenSvcs((o) => new Set(o).add(s.name)); return }
+              toggleProj(s.name)
+            }}>
             <span className="pl-av" style={{ background: s.color || 'var(--text-secondary)' }}>
               <Icon name={iconFor ? iconFor(s.name, s.icon) : (s.icon || 'circle')}
                 size={17} weight="fill" color="#fff" />
@@ -327,12 +317,6 @@ export default function SidebarPortal({
         </div>
 
         <div className="pl-nav">
-          <div className="pl-card pl-search" onClick={() => { setMini(false); searchRef.current?.focus() }}>
-            <SysTile name="search" />
-            <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder={L('검색', 'Search')} />
-          </div>
-
           <div className={`pl-card${modesOpen ? ' open' : ''}`}>
             <button type="button" className="pl-row" onClick={() => setModesOpen((o) => !o)}>
               <SysTile name="squares-four" />
@@ -340,7 +324,7 @@ export default function SidebarPortal({
               <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>
             </button>
           </div>
-          <Slider open={modesOpen}>
+          <Slider open={modesOpen} className="pl-mlist">
             {modes.map((m) => (
               <button key={m.id} type="button"
                 className={`pl-proj${view === 'live' && m.id === 'live' ? ' on' : ''}`}
@@ -391,7 +375,7 @@ export default function SidebarPortal({
 
           {bands.every((b) => !b.items.length) && (
             <div style={{ padding: '10px 9px', color: 'var(--text-muted)' }}>
-              {searching ? L('결과 없음', 'no matches') : L('서비스가 없습니다', 'no services')}
+              {L('서비스가 없습니다', 'no services')}
             </div>
           )}
         </div>
