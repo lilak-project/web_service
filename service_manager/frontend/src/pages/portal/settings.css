@@ -254,15 +254,17 @@
 .set-row .ell { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Three kinds of page, three strip colours, so you always know which one you
-   are on: settings blue (the default above), manage violet, and mustard for the
+   are on: settings blue (the default above), manage violet, and INK for the
    portal's own tools — Create service, Service Manager, Links, the icon lab.
-   The tools take the mustard SOLID with the text reversed out of it: these are
-   the pages that install, build and rewrite things, so their strips are the
-   loudest label on the screen, not the quietest. */
+   Solid with the text reversed out: these are the pages that install, build and
+   rewrite things, so their strips are the loudest label on the screen. Ink
+   rather than a hue, because it is the portal's own text colour — the tools
+   belong to the portal itself, and a neutral cannot clash with the service
+   colours the catalogue rows are full of. */
 .pl-toolpage .set-bar {
-  background: #854d0e;
-  border-bottom-color: #854d0e;
+  background: var(--text-primary);
+  border-bottom-color: var(--text-primary);
 }
-.pl-toolpage .set-bar > b { color: #ffffff; }
-.pl-toolpage .set-bar .hint { color: #fde68a; }
+.pl-toolpage .set-bar > b { color: var(--text-inverse, #fff); }
+.pl-toolpage .set-bar .hint { color: var(--text-muted); }
 .pl-toolpage .set-panel.danger > .set-bar { background: var(--danger-bg, #fee2e2); }
