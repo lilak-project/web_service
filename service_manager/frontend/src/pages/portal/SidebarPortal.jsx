@@ -265,7 +265,10 @@ export default function SidebarPortal({
     : null
 
   const serviceCard = (s) => {
-    const on = view === 'service' && sel?.svc === s.name
+    // Opening a service's projects counts as picking it: its tile fills, and the
+    // card takes the selected border while the bar is expanded (collapsed, every
+    // card's border is transparent, so the tile carries it alone).
+    const on = (view === 'service' && sel?.svc === s.name) || projOpen(s.name)
     const multi = s.multi_project
     return (
       <div key={s.name} style={{ display: 'contents' }}>
@@ -376,17 +379,26 @@ export default function SidebarPortal({
               </button>
             ))}
             {/* A setting, not a mode: it rearranges the sidebar and leaves the
-                panel alone, so it does not belong with manage / live. */}
+                panel alone, so it does not belong with manage / live. The label is
+                the action it performs, so it flips with the state instead of
+                asking the reader to decode a switch. */}
             <button type="button" className="pl-proj" onClick={() => setFlat((f) => !f)}>
-              <Icon name={flat ? 'toggle-left' : 'toggle-right'} size={14}
-                color={flat ? 'var(--text-muted)' : 'var(--btn-primary-bg)'} />
-              <span className="pl-txt">{L('그룹으로 보기', 'Show groups')}</span>
+              <Icon name={flat ? 'folder-plus' : 'browse'} size={14} />
+              <span className="pl-txt">
+                {flat ? L('그룹으로 보기', 'Group them') : L('그룹 없이 보기', 'Ungroup')}
+              </span>
             </button>
           </Slider>
           <div className={`pl-card${modesOpen ? ' open' : ''}`}>
-            <button type="button" className="pl-row" onClick={() => setModesOpen((o) => !o)}>
+            <button type="button" className="pl-row"
+              onClick={() => {
+                // Collapsed, the list is hidden — so asking for it expands the bar
+                // rather than doing nothing visible, same as a service does.
+                if (mini) { setMini(false); setModesOpen(true); return }
+                setModesOpen((o) => !o)
+              }}>
               <Tile icon="squares-four" on={modesOpen} />
-              <span className="pl-txt">{L('모드', 'Modes')}<small>({modes.length})</small></span>
+              <span className="pl-txt">{L('모드', 'Modes')}</span>
               <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>
             </button>
           </div>
