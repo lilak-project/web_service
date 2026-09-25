@@ -432,18 +432,23 @@
   padding: 2px 10px 10px;
   border-bottom: 1px solid var(--divider);
 }
+/* Both carry manage mode's own colour, so the top of the bar says which mode
+   you are in without the bar itself being repainted. Violet because blue is
+   already "selected" and red is already "danger". */
+.pl-mgbar { --mg: #7c3aed; }
 .pl-mgnew, .pl-mgout {
   display: flex; align-items: center; gap: 8px;
   height: 34px; padding: 0 12px;
-  background: var(--surface);
-  border: 1px solid var(--btn-primary-bg, #2563eb);
+  border: 1px solid var(--mg);
   border-radius: var(--radius-lg, 5px);
-  color: var(--btn-primary-bg, #2563eb);
 }
-.pl-mgnew:hover { background: var(--info-bg); }
-/* The way out is the same shape but neutral: an escape, not an action. */
-.pl-mgout { border-color: var(--border-strong); color: var(--text-primary); }
-.pl-mgout:hover { background: var(--surface-2); }
+/* The way out is filled: in manage mode it is the thing you most need to find,
+   and a solid strip doubles as the badge for the mode. */
+.pl-mgout { background: var(--mg); color: #fff; }
+.pl-mgout:hover { background: #6d28d9; border-color: #6d28d9; }
+/* The action is outlined in the same colour — the two read as one block. */
+.pl-mgnew { background: var(--surface); color: var(--mg); }
+.pl-mgnew:hover { background: #f5f3ff; }
 .pl-root.mini .pl-mgbar { padding: 8px 6px; }
 
 .pl-grip { display: flex; flex: 0 0 auto; cursor: grab; margin-left: -2px; }
@@ -476,20 +481,11 @@
   color: var(--text-emphasis);
 }
 
-/* ── collapsed, with settings open ───────────────────────────────────────── */
-/* The settings bar hangs off the account button, so the two share a colour and
-   the card runs to the bar's edge: one surface, not a card beside a panel. */
-.pl-root.mini.settings .pl-user .pl-card.on {
-  background: var(--surface-3);
-  border-color: transparent;
-  box-shadow: none;
-  border-radius: 0;
-  /* Down to the bar's bottom edge as well as out to its sides: a fill that
-     stopped 10px short left a stripe of bar under it and broke the join. */
-  margin: 0 -10px -10px;
-  padding: 0 10px 10px;
-}
-.pl-root.mini.settings .pl-user .pl-card.on:hover .pl-row { background: transparent; }
+/* The settings bar hangs off the account button and the two share a colour —
+   but that is the PLINTH's job (.pl-user is already --surface-3, the bar's own
+   ground). The card used to carry the fill itself, with negative margins to
+   reach the bar's edges, which meant the account card alone changed shape as
+   the bar collapsed while every other card simply faded. */
 
 /* The fold-all button beside the brand. It had no plate at all, so there was
    nothing to aim at and no sign it had taken the click. */
