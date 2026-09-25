@@ -128,7 +128,7 @@
 }
 .pl-run.up { background: #10b981; }
 /* In a tile's corner it needs a ring to stay legible against the fill. */
-.pl-run.ring { position: absolute; right: -4px; bottom: -4px; box-shadow: 0 0 0 2px var(--surface); }
+.pl-run.ring { position: absolute; right: -3px; bottom: -3px; box-shadow: 0 0 0 2px var(--surface); }
 .pl-root.mini .pl-run.ring { box-shadow: 0 0 0 2px var(--surface-2); }
 .pl-txt {
   flex: 1; min-width: 0;

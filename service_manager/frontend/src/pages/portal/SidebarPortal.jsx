@@ -52,11 +52,11 @@ const writeSet = (key, set) => {
  *  service tile and the head of a project card. On is a green play button; off is
  *  a plain grey dot, which says "nothing is running" without pretending to be a
  *  control. */
-function RunDot({ on, size = 12, ring }) {
+function RunDot({ on, size = 10, ring }) {
   return (
     <span className={`pl-run${on ? ' up' : ''}${ring ? ' ring' : ''}`}
       style={{ width: size, height: size }}>
-      {on && <Icon name="play" size={Math.round(size * 0.6)} weight="fill" color="#fff" />}
+      {on && <Icon name="play" size={Math.round(size * 0.66)} weight="fill" color="#fff" />}
     </span>
   )
 }
@@ -66,7 +66,7 @@ function Tile({ icon, color, on, dot }) {
   return (
     <span className={`pl-av${on ? ' round' : ''}`} style={{ background: c }}>
       <Icon name={icon} size={19} weight="fill" color="#fff" />
-      {dot !== undefined && <RunDot on={!!dot} size={13} ring />}
+      {dot !== undefined && <RunDot on={!!dot} ring />}
     </span>
   )
 }
@@ -144,7 +144,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
         return (
           <button key={p.name} type="button" className={`pl-proj${on ? ' on' : ''}`}
             onClick={() => onPick(p.name)}>
-            <RunDot on={!!p.running} size={13} />
+            <RunDot on={!!p.running} />
             <span className="pl-txt">{p.name}</span>
             <span className="pl-out" role="button" tabIndex={-1} title={L('새 창', 'new tab')}
               onClick={(e) => { e.stopPropagation(); window.open(`/pp/${svc}/${p.name}/`, '_blank') }}>
