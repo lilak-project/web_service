@@ -35,7 +35,7 @@ function pack(cards, heights, cols, areaH, fallbackH) {
   return pages.length ? pages : [Array.from({ length: cols }, () => [])]
 }
 
-export default function LiveWall({ cards, big, onDone, iconFor }) {
+export default function LiveWall({ cards, big, onDone, iconFor, framed = false }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const areaRef = useRef(null)
@@ -127,8 +127,14 @@ export default function LiveWall({ cards, big, onDone, iconFor }) {
 
   const dot = (p) => (p.multi_project ? 'var(--info-text)' : p.running ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)')
 
+  // `framed`: fill the box we are given instead of the window. The sidebar cover
+  // keeps its bar — live takes the right panel, not the screen.
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'var(--app-bg)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{
+      ...(framed
+        ? { flex: 1, minWidth: 0, minHeight: 0 }
+        : { position: 'fixed', inset: 0, zIndex: 900 }),
+      background: 'var(--app-bg)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column' }}>
       {/* the one bar: pager + Done */}
       <div style={{ height: BAR_H, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--border-subtle)' }}>
         <Icon name="broadcast" size={18} color="var(--warning-text, #e67700)" />

@@ -639,8 +639,10 @@ export default function SidebarPortal({
                 </button>
               </div>
             ))}
+            <div className="pl-spring" />
+
             {/* The modes are not pages — they change what the whole cover does —
-                so they sit under the pages, past a rule, in the same cards. */}
+                so they sit at the FOOT, past the spring, with the way out. */}
             <div className="pl-sep" />
             {modes.map((m) => (
               <button key={m.id} type="button"
@@ -660,8 +662,6 @@ export default function SidebarPortal({
               <Icon name="tree" size={15} />
               <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
             </button>
-
-            <div className="pl-spring" />
             {/* Signing out is not a settings page, so it sits under them all,
                 past the spring — the last thing in the bar, not one of the list. */}
             <div className="pl-sep" />
@@ -673,7 +673,7 @@ export default function SidebarPortal({
         </aside>
       )}
 
-      <main className={`pl-main${view === 'live' ? ' live' : ''}`}>
+      <main className="pl-main">
         <div className="pl-panel">
           {view === 'settings' ? (
             <>
@@ -684,9 +684,8 @@ export default function SidebarPortal({
               <SettingsStatus />
             </>
           ) : view === 'live' ? (
-            <div className="pl-scroll">
-              <LiveWall cards={liveCards || []} iconFor={iconFor} onDone={() => setView('empty')} />
-            </div>
+            // Framed, not fixed: the bar stays (collapsed), live fills the panel.
+            <LiveWall framed cards={liveCards || []} iconFor={iconFor} onDone={() => setView('empty')} />
           ) : view === 'manage' ? (
             <div className="pl-scroll pl-mgpage">{managePanel}</div>
           ) : view === 'service' && selSvc?.builtin ? (
