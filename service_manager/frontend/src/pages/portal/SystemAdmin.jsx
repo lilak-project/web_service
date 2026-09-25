@@ -4,9 +4,9 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import ScaleToggle from './ScaleToggle'
 
-const card = { border: '1px solid var(--border)', borderRadius: 10, padding: 14, background: 'var(--card-bg, transparent)' }
+const card = { border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)', padding: 14, background: 'var(--surface)' }
 const lbl = { fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', minWidth: 76 }
-const input = { border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', width: 100, fontSize: 'var(--fs-medium, 14px)' }
+const input = { height: 30, border: '1px solid var(--input-border)', borderRadius: 'var(--radius-md, 3px)', padding: '0 9px', width: 100, fontSize: 'var(--fs-medium, 14px)', boxSizing: 'border-box' }
 
 // Manager-only: the managed-service port window. Widening it lets more sessions
 // run at once (each launched service claims one loopback port from this range).

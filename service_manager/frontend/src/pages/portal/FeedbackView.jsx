@@ -15,8 +15,8 @@ const KIND = {
   bug:            { icon: 'warning-circle', color: '#dc2626', ko: '버그 신고', en: 'Bug' },
   recommendation: { icon: 'lightbulb',      color: '#ca8a04', ko: '제안',      en: 'Recommendation' },
   inquiry:        { icon: 'chats',          color: '#2563eb', ko: '문의',      en: 'Inquiry' } }
-const input = { height: 32, borderRadius: 8, fontSize: 'var(--fs-small, 13px)', padding: '0 10px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', boxSizing: 'border-box' }
-const badge = { fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-primary)', border: '1px solid transparent' }
+const input = { height: 30, borderRadius: 'var(--radius-md, 3px)', fontSize: 'var(--fs-medium, 14px)', padding: '0 9px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', boxSizing: 'border-box' }
+const badge = { fontSize: 'var(--fs-medium, 14px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-primary)', border: '1px solid transparent' }
 const secLbl = { fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-primary)', marginBottom: 4 }
 const secHdr = { fontSize: 'var(--fs-small, 13px)', margin: '0 0 10px', color: 'var(--text-primary)' }
 
@@ -108,7 +108,7 @@ export default function FeedbackView({ isManager }) {
       {msg && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-primary)', marginBottom: 8 }}>{msg}</div>}
 
       {/* compose — everyone */}
-      <div style={{ border: '1px solid var(--border-default)', borderRadius: 12, padding: 14, marginBottom: 20 }}>
+      <div style={{ border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)', padding: 14, marginBottom: 14 }}>
         <div style={{ fontSize: 'var(--fs-small, 13px)', marginBottom: 10 }}>
           {L('버그 신고 · 제안 · 문의', 'Bug report · recommendation · inquiry')}
         </div>

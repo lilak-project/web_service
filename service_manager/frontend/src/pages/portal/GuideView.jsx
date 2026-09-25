@@ -60,7 +60,7 @@ export default function GuideView({ onChanged }) {
         </Button>
       </div>
       {err && <div style={{ color: 'var(--danger-text)', fontSize: 'var(--fs-medium, 14px)' }}>{err}</div>}
-      <div style={{ border: '1px solid var(--border-default)', borderRadius: 8, padding: '6px 14px', background: 'var(--surface)' }}>
+      <div style={{ border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)', padding: '6px 14px', background: 'var(--surface)' }}>
         <Markdown>{md}</Markdown>
       </div>
     </div>

@@ -10,7 +10,7 @@ import { useLang } from '../../context/LangContext'
  *   group   — joins the redeemer to a group, inheriting that group's project grants.
  * The code may be auto-generated or admin-chosen (8–64 chars). Expiry 1–365 days.
  */
-const input = { height: 28, borderRadius: 6, fontSize: 'var(--fs-medium, 14px)', padding: '0 8px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
+const input = { height: 30, borderRadius: 'var(--radius-md, 3px)', fontSize: 'var(--fs-medium, 14px)', padding: '0 9px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)', boxSizing: 'border-box' }
 const gl = { fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)' }
 // One uniform, text-only action button for each issued-code card.
 const codeBtn = { height: 32, borderRadius: 8, padding: '0 14px', fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
@@ -67,8 +67,8 @@ export default function InvitesAdmin({ services, onChanged }) {
       {msg && <div style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', marginBottom: 6 }}>{msg}</div>}
 
       {/* create — one aligned control per row (label column + input column) */}
-      <div style={{ border: '1px solid var(--border-default)', borderRadius: 8, padding: 12, marginBottom: 10,
-        display: 'grid', gridTemplateColumns: '132px 1fr', gap: '8px 10px', alignItems: 'center' }}>
+      <div style={{ border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)', padding: 12, marginBottom: 10,
+        display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 10px', alignItems: 'center' }}>
         <span style={gl}>{L('종류', 'Kind')}</span>
         <select value={f.kind} onChange={setF1('kind')} style={{ ...input, maxWidth: 220 }}>
           <option value="project">{L('프로젝트/서비스', 'project/service')}</option>
@@ -128,7 +128,7 @@ export default function InvitesAdmin({ services, onChanged }) {
       {/* list — one card per issued code */}
       {codes.length === 0 ? <div style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)' }}>{L('코드 없음', 'no codes')}</div>
         : codes.map((c) => (
-          <div key={c.id} style={{ border: '1px solid var(--border-strong, #94a3b8)', borderRadius: 8, padding: '10px 12px', marginBottom: 8, background: 'var(--surface)' }}>
+          <div key={c.id} style={{ border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)', padding: '9px 14px', marginBottom: 5, background: 'var(--surface)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <code style={{ fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>{c.code}</code>
               <span style={{ fontSize: 'var(--fs-medium, 14px)', padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-primary)' }}>
