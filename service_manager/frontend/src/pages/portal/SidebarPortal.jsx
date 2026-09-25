@@ -49,14 +49,14 @@ const writeSet = (key, set) => {
  *  19px, not 17: inside a 30px plate a smaller glyph leaves so much margin that
  *  the icon reads as shrunken. */
 /** Running / stopped, drawn the same way wherever it appears — the corner of a
- *  service tile and the head of a project card. Running is a bare green play
- *  triangle; stopped is a small grey dot, which says "nothing here is running"
- *  without pretending to be a control. Sizes live in the stylesheet so the two
- *  states can differ: a glyph needs room a dot does not. */
+ *  service tile and the head of a project card. Running is a green play button;
+ *  stopped is a tiny grey dot, which only has to say "nothing here is running".
+ *  Sizes live in the stylesheet so the two can differ — the button needs room the
+ *  dot does not. */
 function RunDot({ on, ring }) {
   return (
     <span className={`pl-run${on ? ' up' : ''}${ring ? ' ring' : ''}`}>
-      {on && <Icon name="play" size={11} weight="fill" color="#10b981" />}
+      {on && <Icon name="play" size={7} weight="fill" color="#fff" />}
     </span>
   )
 }

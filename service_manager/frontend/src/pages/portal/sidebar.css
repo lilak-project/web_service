@@ -120,21 +120,18 @@
 }
 
 /* Run state — see RunDot. */
-.pl-run { flex-shrink: 0; display: grid; place-items: center; }
-/* Stopped: a small grey dot. */
-.pl-run:not(.up) {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--text-muted);
-}
-/* Running: the play triangle on its own, no plate around it. */
-.pl-run.up { width: 11px; height: 11px; }
-/* In a tile's corner: the dot gets a ring against the fill, and the bare glyph a
-   white halo, since it has no plate to separate it from the colour behind. */
-.pl-run.ring { position: absolute; right: -2px; bottom: -3px; }
-.pl-run:not(.up).ring { box-shadow: 0 0 0 2px var(--surface); }
-.pl-root.mini .pl-run:not(.up).ring { box-shadow: 0 0 0 2px var(--surface-2); }
-.pl-run.up.ring { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff); }
+.pl-run { flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; }
+/* Stopped: a 5px grey dot — the smallest mark that still reads as deliberate. */
+.pl-run:not(.up) { width: 5px; height: 5px; background: var(--text-muted); }
+/* Running: a green play button. */
+.pl-run.up { width: 10px; height: 10px; background: #10b981; }
+/* In a tile's corner both need a ring to hold against the fill; the 5px dot takes
+   a thinner one, or the ring becomes the bigger half of the mark. */
+.pl-run.ring { position: absolute; right: -2px; bottom: -2px; }
+.pl-run.up.ring { right: -3px; bottom: -3px; box-shadow: 0 0 0 2px var(--surface); }
+.pl-run:not(.up).ring { box-shadow: 0 0 0 1.5px var(--surface); }
+.pl-root.mini .pl-run.up.ring { box-shadow: 0 0 0 2px var(--surface-2); }
+.pl-root.mini .pl-run:not(.up).ring { box-shadow: 0 0 0 1.5px var(--surface-2); }
 .pl-txt {
   flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
