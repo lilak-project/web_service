@@ -193,7 +193,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
         </Field>
         <FieldActions>
           <Button variant={hidden ? 'warning' : 'secondary'} onClick={toggleHidden}>
-            <Icon name={hidden ? 'eye' : 'eye-slash'} size={15} />
+            <Icon name={hidden ? 'eye' : 'eye-off'} size={15} />
             {hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
           </Button>
         </FieldActions>

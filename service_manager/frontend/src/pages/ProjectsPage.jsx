@@ -603,10 +603,13 @@ export default function ProjectsPage() {
   // (dimmed) — hiding it there too would leave no way to bring it back.
   // Non-admins get the links card too — but only once it has something in it.
   const mgmt = manage || groupsMode
-  const cards = isManager
+  // Unfiltered: the sidebar cover has its OWN manage mode and does its own
+  // hiding. Filtering here too meant a card hidden from the sidebar vanished
+  // from the sidebar's manage mode as well, with no way left to bring it back.
+  const cardsAll = isManager
     ? sortByHome([iconCard, linksCard, ...(projects || []), storeCard, createCard], homeCfg?.order || [])
-        .filter((c) => !c.hidden || mgmt)
     : sortByHome([...(linksCard.hidden || !linksCard.count ? [] : [linksCard]), ...(projects || [])], homeCfg?.order || [])
+  const cards = isManager ? cardsAll.filter((c) => !c.hidden || mgmt) : cardsAll
 
   // Service groups: bands on the cover holding member cards. A hidden group takes
   // its cards off the cover with it (managers still see it dimmed in mgmt views).
@@ -839,7 +842,8 @@ export default function ProjectsPage() {
   if (sidebar && authReady && user) {
     // The sidebar gets the SAME cards the cover does — builtins included, in the
     // saved order — so nothing is reachable on one cover and invisible on the other.
-    const sideCards = fullOrder.map((k) => cards.find((c) => cardKey(c) === k)).filter(Boolean)
+    const at = (c) => { const i = fullOrder.indexOf(cardKey(c)); return i < 0 ? 9999 : i }
+    const sideCards = [...cardsAll].sort((a, b) => at(a) - at(b))
     return (
       <SidebarPortal
         user={user} isManager={isManager} cards={sideCards} iconFor={iconFor}

@@ -581,6 +581,7 @@ export default {
   projects_register_hint:  'Register a service in Manage. A multi-project service (like LILAK elog) then lets you create projects inside it.',
   projects_current:        'current',
   projects_running:        (port) => `running · port ${port}`,
+  projects_state: 'State',
   projects_stopped:        'stopped',
   projects_open:           'Open',
   projects_enter:          'Enter',

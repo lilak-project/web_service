@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Button, Icon, copyText } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
-import { useNarrowRef } from './useNarrowRef'
+import { Panel, Field, FieldActions, Pill, fieldMuted } from './Field'
+import { notify } from './settingsMsg'
 
 /**
  * ServiceSingle — inline panel for a single (non-multi-project) service, shown
@@ -15,7 +16,7 @@ export default function ServiceSingle({ service, canManage, manage = false, onRe
   const { t } = useLang()
   const svc = service.name
   const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
+  const setErr = (m) => m && notify(m, 'bad')
   const viewOnly = service.view_only && !service.can_enter
   // No access yet, but the user may ask for it — handled inside the card body.
   const canRequest = !service.can_enter && !viewOnly && service.can_request
@@ -45,41 +46,34 @@ export default function ServiceSingle({ service, canManage, manage = false, onRe
     finally { setBusy(false) }
   }
 
-  // Narrow (multi-column) card → status on line 1, the button(s) on the next line.
-  const [wrapRef, narrow] = useNarrowRef(460)
-  const row = { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '12px 0' }
-  // Enter / Stop sized up to match the larger status line (touch-friendly on mobile).
-  const btn = { height: 40, borderRadius: 10, padding: '0 16px', minWidth: 88,
-    fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }
-
   return (
-    <div ref={wrapRef} style={{ padding: '14px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)' }}>
-      {err && <div style={{ color: 'var(--danger-text)', fontSize: 'var(--fs-small, 12px)', marginBottom: 6 }}>{err}</div>}
-      <div style={row}>
-        <span style={{ flexShrink: 0, width: 11, height: 11, borderRadius: '50%',
-          background: (service.can_enter && service.running) ? 'var(--ok-text, #2f9e44)' : 'var(--border-strong, #bbb)' }} />
-        <span style={{ fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-secondary)' }}>
-          {viewOnly ? t('portal_proj_view_only')
-            : canRequest ? t('projects_request_hint')
-            : service.running ? t('projects_running', service.port) : t('projects_stopped')}
-        </span>
-        {narrow ? <div style={{ flexBasis: '100%', height: 0 }} aria-hidden="true" /> : <div style={{ flex: 1 }} />}
-        {canRequest ? (
-          <Button variant="secondary" disabled={busy || service.requested} style={btn} onClick={request}>
-            {service.requested ? t('projects_requested') : t('projects_request')}
-          </Button>
-        ) : (
-          <Button variant="primary" disabled={busy || viewOnly} style={btn}
-            onClick={() => (service.running ? enter() : start())}>
-            {service.running ? t('portal_proj_open') : t('portal_proj_start')}
-          </Button>
-        )}
-        {/* Stop is a manage-mode action only. */}
-        {manage && service.can_enter && service.running && (
-          <Button variant="secondary" disabled={busy} style={btn} onClick={stop}>{t('projects_stop')}</Button>
-        )}
-      </div>
-      {canManage && <ElogAddress service={service} />}
+    <div className="svc-mg">
+      <Panel title={service.label || service.name} hint={service.name}>
+        <Field label={t('projects_state')}>
+          {viewOnly ? <Pill>{t('portal_proj_view_only')}</Pill>
+            : canRequest ? <Pill tone="warn">{t('projects_request_hint')}</Pill>
+              : service.running ? <Pill tone="ok">{t('projects_running', service.port)}</Pill>
+                : <Pill>{t('projects_stopped')}</Pill>}
+        </Field>
+        <FieldActions>
+          {canRequest ? (
+            <Button variant="secondary" disabled={busy || service.requested} onClick={request}>
+              {service.requested ? t('projects_requested') : t('projects_request')}
+            </Button>
+          ) : (
+            <Button variant="primary" disabled={busy || viewOnly}
+              onClick={() => (service.running ? enter() : start())}>
+              {service.running ? t('portal_proj_open') : t('portal_proj_start')}
+            </Button>
+          )}
+          {/* Stop is a manage-mode action only. */}
+          {manage && service.can_enter && service.running && (
+            <Button variant="warning" disabled={busy} onClick={stop}>{t('projects_stop')}</Button>
+          )}
+        </FieldActions>
+
+        {canManage && <ElogAddress service={service} />}
+      </Panel>
     </div>
   )
 }
@@ -111,18 +105,18 @@ function ElogAddress({ service }) {
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-                  paddingTop: 10, marginTop: 2, borderTop: '1px dashed var(--border-subtle)' }}>
-      <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', flexShrink: 0 }}>
-        {t('elog_addr')}
-      </span>
-      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)',
-                     background: 'var(--surface-2)', color: 'var(--text-primary)',
-                     padding: '3px 8px', borderRadius: 6, minWidth: 0,
-                     overflowWrap: 'anywhere' }}>{addr}</code>
-      <Button variant="ghost" size="sm" onClick={copy} title={t('elog_addr_hint')}>
-        <Icon name={copied ? 'check' : 'copy'} size={14} /> {copied ? t('copied') : t('copy')}
-      </Button>
-    </div>
+    <>
+      <Field label={t('elog_addr')}>
+        <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--surface-2)',
+          color: 'var(--text-primary)', padding: '2px 8px', borderRadius: 'var(--radius-lg, 5px)',
+          minWidth: 0, overflowWrap: 'anywhere' }}>{addr}</code>
+      </Field>
+      <FieldActions>
+        <Button variant="secondary" onClick={copy} title={t('elog_addr_hint')}>
+          <Icon name={copied ? 'check' : 'copy'} size={14} /> {copied ? t('copied') : t('copy')}
+        </Button>
+        <span style={fieldMuted}>{t('elog_addr_hint')}</span>
+      </FieldActions>
+    </>
   )
 }

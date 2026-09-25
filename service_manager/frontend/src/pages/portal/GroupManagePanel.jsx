@@ -98,7 +98,7 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
         <FieldActions>
           <Button variant={group.hidden ? 'warning' : 'secondary'}
             onClick={() => patch({ hidden: !group.hidden }, group.hidden ? L('다시 표시됨', 'shown again') : L('숨김', 'hidden'))}>
-            <Icon name={group.hidden ? 'eye' : 'eye-slash'} size={15} />
+            <Icon name={group.hidden ? 'eye' : 'eye-off'} size={15} />
             {group.hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
           </Button>
         </FieldActions>
@@ -147,6 +147,78 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
         <FieldActions>
           <Button variant="dangerSoft" onClick={remove}><Icon name="trash" size={15} /> {L('그룹 삭제', 'Delete group')}</Button>
         </FieldActions>
+      </Panel>
+    </div>
+  )
+}
+
+/**
+ * FixedGroupPanel — the manage screen for the two bands the portal keeps for
+ * itself, System and No group. Neither is a stored group, so it has no name,
+ * icon or grants of its own and nothing to delete. What its members DO have is
+ * a Home-screen setting each, so that is what this page is: one row per card,
+ * shown or hidden, settable here. Everything else about a card stays on the
+ * card's own page, one click away in the bar.
+ */
+export function FixedGroupPanel({ band, onChanged }) {
+  const { lang } = useLang()
+  const L = (ko, en) => (lang === 'ko' ? ko : en)
+  const system = band.g.fixed
+  const members = band.items || []
+
+  async function setHidden(card, hidden) {
+    const body = card.builtin
+      ? { key: card.builtin, hidden }
+      : { name: card.name, hidden }
+    const url = card.builtin ? '/admin/home-builtin' : '/admin/home-service'
+    try {
+      await launcher.put(url, body)
+      notify(hidden ? L(`${card.label || card.name} 숨김`, `${card.label || card.name} hidden`)
+        : L(`${card.label || card.name} 표시됨`, `${card.label || card.name} shown`), 'ok')
+      onChanged?.()
+    } catch (e) { notify(errText(e, L('실패', 'failed')), 'bad') }
+  }
+
+  return (
+    <div className="svc-mg">
+      <Panel bare title={band.g.name} hint={String(members.length)}>
+        {members.length === 0 && (
+          <Row className="empty">
+            {system ? L('내장 도구가 없습니다.', 'No builtin tools.')
+              : L('그룹에 들어가지 않은 카드가 없습니다.', 'Every card is in a group.')}
+          </Row>
+        )}
+        {members.map((c) => (
+          <Row key={c.name}>
+            <Icon name={c.icon || 'circle'} size={16} color={c.color || 'var(--text-secondary)'} weight="fill" />
+            <span>{c.label || c.name}</span>
+            {c.hidden ? <Pill tone="warn">{L('숨김', 'hidden')}</Pill> : <Pill tone="ok">{L('표시됨', 'shown')}</Pill>}
+            <span className="sp" />
+            <Button variant={c.hidden ? 'warning' : 'secondary'} onClick={() => setHidden(c, !c.hidden)}>
+              <Icon name={c.hidden ? 'eye' : 'eye-off'} size={15} />
+              {c.hidden ? L('다시 표시', 'Show') : L('숨기기', 'Hide')}
+            </Button>
+          </Row>
+        ))}
+      </Panel>
+
+      <Panel title={L('이 묶음에 대하여', 'About this band')}>
+        <Field label={L('이름 · 아이콘', 'Name · icon')}>
+          <span style={fieldMuted}>
+            {system ? L('포털이 직접 들고 있는 도구들이라 이름과 아이콘이 고정입니다.', 'The portal keeps these itself, so the band has a fixed name and icon.')
+              : L('어느 그룹에도 안 들어간 카드가 모이는 자리라 고칠 이름이 없습니다.', 'This is simply where ungrouped cards land, so there is no name to change.')}
+          </span>
+        </Field>
+        <Field label={L('공개 범위 · 접근 권한', 'Visibility · access')}>
+          <span style={fieldMuted}>
+            {system ? L('내장 도구는 서비스가 아니라 포털 자신의 화면이라 공개 범위와 권한이 없습니다. 관리자에게만 보입니다.',
+                'Builtin tools are the portal\u2019s own screens, not services: they have no visibility tier and no grants. Managers see them.')
+              : L('카드마다 다르므로 각 카드의 관리 화면에서 정합니다.', 'They differ per card, so each card sets its own on its own page.')}
+          </span>
+        </Field>
+        <Field label={L('카드별 설정', 'Per card')}>
+          <span style={fieldMuted}>{L('왼쪽에서 카드를 누르면 그 카드의 관리 화면이 열립니다.', 'Press a card on the left for its own page.')}</span>
+        </Field>
       </Panel>
     </div>
   )

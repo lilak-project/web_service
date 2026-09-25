@@ -515,3 +515,13 @@
    bar at the top, the grips and the open bands already announce. */
 .pl-root.managing .pl-card,
 .pl-root.managing .pl-group { border-style: dashed; }
+
+/* Manage mode: what you are editing. The dashed edges say "everything here is
+   editable", so the one you picked has to say more than that — a solid, ink
+   edge, on the card and on the band alike. */
+.pl-root.managing .pl-card.on,
+.pl-root.managing .pl-group.on {
+  border-style: solid;
+  border-color: var(--text-emphasis);
+  box-shadow: 0 0 0 1px var(--text-emphasis);
+}

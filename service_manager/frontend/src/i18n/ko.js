@@ -581,6 +581,7 @@ export default {
   projects_register_hint:  'Manage에서 서비스를 등록하세요. 멀티프로젝트 서비스(예: LILAK elog)는 등록 후 그 안에서 프로젝트를 만들 수 있습니다.',
   projects_current:        '현재',
   projects_running:        (port) => `실행 중 · 포트 ${port}`,
+  projects_state: '상태',
   projects_stopped:        '정지됨',
   projects_open:           '열기',
   projects_enter:          '들어가기',

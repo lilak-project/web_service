@@ -9,7 +9,7 @@ import LiveWall from './LiveWall'
 import ServiceManagePanel from './ServiceManagePanel'
 import ServiceProjects from './ServiceProjects'
 import ServiceSingle from './ServiceSingle'
-import GroupManagePanel from './GroupManagePanel'
+import GroupManagePanel, { FixedGroupPanel } from './GroupManagePanel'
 import LinksView from './LinksView'
 import StoreView from './StoreView'
 import NewServiceView from './NewServiceView'
@@ -483,8 +483,11 @@ export default function SidebarPortal({
   /** Manage mode's right side: everything the classic cover shows inside an
    *  opened card, minus the card. A group selected in the bar shows the group's
    *  own management band instead. */
-  const selGroup = sel?.svc?.startsWith('#g:')
-    ? (groups || []).find((g) => `#g:${g.id}` === sel.svc) : null
+  // Look the band up in `bands`, not in `groups`: System and No group are the
+  // portal's own bands and have no stored group behind them.
+  const selBand = sel?.svc?.startsWith('#g:')
+    ? bands.find((b) => b.g && `#g:${b.g.id}` === sel.svc) : null
+  const selGroup = selBand && !selBand.g.fixed && !selBand.g.loose ? selBand.g : null
   const managePanel = (() => {
     if (!isManager) return null
     if (selGroup) {
@@ -494,6 +497,14 @@ export default function SidebarPortal({
         <>
           <h1 className="pl-mgtitle">{selGroup.name || L('그룹', 'Group')}</h1>
           <GroupManagePanel group={selGroup} members={mem} onChanged={onRefresh} />
+        </>
+      )
+    }
+    if (selBand) {
+      return (
+        <>
+          <h1 className="pl-mgtitle">{selBand.g.name}</h1>
+          <FixedGroupPanel band={selBand} onChanged={onRefresh} />
         </>
       )
     }
@@ -578,12 +589,12 @@ export default function SidebarPortal({
                cards inside it — a tinted title alone left the members looking like
                they had simply been indented under a heading. */
             <div key={g.id} className={`pl-group${g.fixed || g.loose ? ' auto' : ''}`
+                + `${sel?.svc === `#g:${g.id}` && view === 'manage' ? ' on' : ''}`
                 + `${dropAt?.gid === (g.loose ? null : g.id) && !g.fixed ? ' drop' : ''}`}
               {...bandDrop(g)}>
               <div className="pl-band">
                 <button type="button" className="pl-grp"
-                  onClick={() => (manage && isManager && !g.fixed && !g.loose
-                    ? openManageGroup(g) : toggleGroup(g.id))}>
+                  onClick={() => (manage && isManager ? openManageGroup(g) : toggleGroup(g.id))}>
                   {/* Manage mode forces every band open (you cannot drop into a
                       band you cannot see), so the caret has to say so too. */}
                   <span className={`pl-gchev${groupOpen(g.id) || (manage && isManager) ? ' open' : ''}`}>

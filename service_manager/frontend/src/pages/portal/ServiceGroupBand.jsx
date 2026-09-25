@@ -101,7 +101,7 @@ export default function ServiceGroupBand({ group, cards, manageGroups, isManager
             </select>
             <Button variant="ghost" size="sm" onClick={() => setPerm(true)}><Icon name="key" size={14} /> {L('권한', 'Access')}</Button>
             <Button variant="ghost" size="sm" onClick={() => patch({ hidden: !group.hidden })} title={group.hidden ? L('홈에 다시 표시', 'Show on the cover') : L('홈에서 숨기기', 'Hide from the cover')}>
-              <Icon name={group.hidden ? 'eye' : 'eye-slash'} size={14} /> {group.hidden ? L('표시', 'Show') : L('숨김', 'Hide')}
+              <Icon name={group.hidden ? 'eye' : 'eye-off'} size={14} /> {group.hidden ? L('표시', 'Show') : L('숨김', 'Hide')}
             </Button>
             <Button variant="ghost" size="sm" onClick={remove} style={{ color: 'var(--danger-text)' }}><Icon name="trash" size={14} /></Button>
             {msg && <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{msg}</span>}

@@ -221,3 +221,11 @@
    panels, same rows. This is only the stack. */
 .svc-mg { display: flex; flex-direction: column; }
 .svc-mg .set-panel { max-width: 940px; }
+/* A drop target for an imported .zip. */
+.svc-mg.dropping { outline: 2px dashed var(--btn-primary-bg, #2563eb); outline-offset: -4px; }
+
+/* Manage mode's panels wear the mode's own tint on their title strips, so a
+   manage page is never mistaken for a settings page at a glance. */
+.pl-root.managing .pl-mgpage .set-bar { background: #ede9fe; }
+.pl-root.managing .pl-mgpage .set-bar .hint { color: #5b21b6; }
+.pl-root.managing .pl-mgpage .set-panel.danger > .set-bar { background: var(--danger-bg, #fee2e2); }

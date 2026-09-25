@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
-import { useNarrowRef } from './useNarrowRef'
+import { Panel, Field, FieldActions, Row, Pill, fieldInput, fieldMuted } from './Field'
+import { notify } from './settingsMsg'
 
 /**
  * ServiceProjects — INLINE project panel for a multi-project service, expanded
@@ -20,10 +21,9 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   const [projects, setProjects] = useState(null)   // null = loading
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState('')
-  const [err, setErr] = useState('')
+  const setErr = (m) => m && notify(m, 'bad')
   const [drag, setDrag] = useState(false)
   const fileRef = useRef(null)
-  const [wrapRef, narrow] = useNarrowRef(460)   // narrow (multi-col) card → buttons on their own line
 
   async function load() {
     try { setProjects((await launcher.get(`/services/${svc}/projects`)).data) }
@@ -94,77 +94,69 @@ export default function ServiceProjects({ service, canManage, manage = false, on
     },
   } : {}
 
-  const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }
-  // Bigger, touch-friendly action buttons (matching the single-service card). The row
-  // wraps so several buttons never overflow the card on a narrow screen.
-  const btn = { height: 40, borderRadius: 10, padding: '0 16px', minWidth: 84, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }
-  const btnIcon = { height: 40, minWidth: 40, borderRadius: 10, justifyContent: 'center' }
-  const inputStyle = { height: 32, flex: 1, minWidth: 0, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 10px', backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
-
   return (
-    <div {...dropProps} ref={wrapRef}
-      style={{ padding: '16px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)',
-        outline: drag ? '2px dashed var(--btn-primary-bg, #4c6ef5)' : 'none', outlineOffset: -4, borderRadius: 6 }}>
-      {err && <div style={{ color: 'var(--danger-text)', fontSize: 'var(--fs-small, 12px)', marginBottom: 6 }}>{err}</div>}
-
+    <div {...dropProps} className={`svc-mg${drag ? ' dropping' : ''}`}>
       {/* manager: create a project + import a .zip (drag onto this box, or pick) */}
       {canManage && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-          <input placeholder={t('portal_proj_new_ph')} value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') create() }} style={inputStyle} />
-          <Button size="sm" variant="primary" disabled={!newName.trim() || busy === '+'} onClick={create}>{t('portal_proj_create')}</Button>
-          {canIE && (
-            <>
-              <Button size="sm" variant="ghost" disabled={busy === 'import'} onClick={() => fileRef.current?.click()}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Icon name="download" size={14} style={{ transform: 'rotate(180deg)' }} /> {t('portal_proj_import')}
-              </Button>
-              <input ref={fileRef} type="file" accept=".zip" hidden onChange={(e) => importFile(e.target.files?.[0])} />
-            </>
-          )}
-        </div>
-      )}
-      {canManage && canIE && (
-        <div style={{ fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', marginBottom: 6 }}>{t('portal_proj_drop_hint')}</div>
+        <Panel title={t('portal_proj_create')} hint={canIE ? t('portal_proj_drop_hint') : undefined}>
+          <Field label={t('portal_proj_new_ph')}>
+            <input placeholder={t('portal_proj_new_ph')} value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') create() }}
+              style={{ ...fieldInput, flex: 1 }} />
+          </Field>
+          <FieldActions>
+            <Button variant="primary" disabled={!newName.trim() || busy === '+'} onClick={create}>{t('portal_proj_create')}</Button>
+            {canIE && (
+              <>
+                <Button variant="secondary" disabled={busy === 'import'} onClick={() => fileRef.current?.click()}>
+                  <Icon name="download" size={14} style={{ transform: 'rotate(180deg)' }} /> {t('portal_proj_import')}
+                </Button>
+                <input ref={fileRef} type="file" accept=".zip" hidden onChange={(e) => importFile(e.target.files?.[0])} />
+              </>
+            )}
+          </FieldActions>
+        </Panel>
       )}
 
-      {projects === null ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>…</div>
-      ) : projects.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)', padding: '6px 0' }}>{t('portal_proj_empty')}</div>
-      ) : projects.map((p) => {
-        const viewOnly = p.view_only && !p.can_enter
-        return (
-          <div key={p.name} style={row}>
-            <span style={{ flexShrink: 0, width: 11, height: 11, borderRadius: '50%', background: (p.can_enter && p.running) ? 'var(--ok-text, #2f9e44)' : 'var(--border-strong, #bbb)' }} />
-            <span title={p.label ? p.name : undefined} style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)' }}>{p.label || p.name}</span>
-            <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
-              {viewOnly ? t('portal_proj_view_only')
-                : p.can_enter ? (p.running ? t('projects_running', p.port) : t('projects_stopped'))
-                : ''}
-            </span>
-            {/* narrow (multi-col) card: name + status on line 1, buttons on the next line */}
-            {narrow ? <div style={{ flexBasis: '100%', height: 0 }} aria-hidden="true" /> : <div style={{ flex: 1, minWidth: 8 }} />}
-            {p.can_enter ? (
-              <Button variant="primary" disabled={busy === p.name} style={btn}
-                onClick={() => (p.running ? enter(p.name) : start(p.name))}>
-                {p.running ? t('portal_proj_open') : t('portal_proj_start')}
-              </Button>
-            ) : p.can_request ? (
-              <Button variant="secondary" disabled={busy === p.name || p.requested}
-                onClick={() => requestAccess(p.name)} style={{ ...btn, minWidth: 96 }}>
-                {p.requested ? t('projects_requested') : t('projects_request')}
-              </Button>
-            ) : (
-              <Button variant="primary" disabled style={btn}>{t('portal_proj_open')}</Button>
-            )}
-            {manage && p.can_enter && p.running && <Button variant="secondary" disabled={busy === p.name} style={btn} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>}
-            {canManage && manage && <Button variant="dangerSoft" disabled={busy === p.name} style={btnIcon} title={t('portal_proj_delete')} onClick={() => remove(p.name)}><Icon name="trash" size={16} /></Button>}
-            {/* Data download (export) moved to Home "manage mode". */}
-          </div>
-        )
-      })}
+      <Panel bare title={t('portal_proj_title')} hint={projects ? String(projects.length) : '…'}>
+        {projects === null && <Row className="empty">…</Row>}
+        {projects?.length === 0 && <Row className="empty">{t('portal_proj_empty')}</Row>}
+        {(projects || []).map((p) => {
+          const viewOnly = p.view_only && !p.can_enter
+          return (
+            <Row key={p.name}>
+              <span className="mono">{p.label || p.name}</span>
+              {viewOnly ? <Pill>{t('portal_proj_view_only')}</Pill>
+                : p.can_enter ? (p.running
+                    ? <Pill tone="ok">{t('projects_running', p.port)}</Pill>
+                    : <Pill>{t('projects_stopped')}</Pill>)
+                  : null}
+              <span className="sp" />
+              {p.can_enter ? (
+                <Button variant="primary" disabled={busy === p.name}
+                  onClick={() => (p.running ? enter(p.name) : start(p.name))}>
+                  {p.running ? t('portal_proj_open') : t('portal_proj_start')}
+                </Button>
+              ) : p.can_request ? (
+                <Button variant="secondary" disabled={busy === p.name || p.requested}
+                  onClick={() => requestAccess(p.name)}>
+                  {p.requested ? t('projects_requested') : t('projects_request')}
+                </Button>
+              ) : (
+                <Button variant="primary" disabled>{t('portal_proj_open')}</Button>
+              )}
+              {manage && p.can_enter && p.running && (
+                <Button variant="warning" disabled={busy === p.name} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>
+              )}
+              {canManage && manage && (
+                <Button variant="dangerSoft" disabled={busy === p.name} title={t('portal_proj_delete')}
+                  onClick={() => remove(p.name)}><Icon name="trash" size={15} /></Button>
+              )}
+            </Row>
+          )
+        })}
+      </Panel>
     </div>
   )
 }
