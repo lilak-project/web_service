@@ -396,7 +396,7 @@
      starts a whole width to the left and is drawn under the bar (z-index), so
      nothing of it shows until it clears the bar's edge. */
   position: relative; z-index: 1;
-  animation: pl-step-out .22s cubic-bezier(.2, .8, .2, 1);
+  animation: pl-step-out .38s cubic-bezier(.2, .8, .2, 1);
 }
 @keyframes pl-step-out {
   from { transform: translateX(-100%); }
@@ -447,37 +447,6 @@
 /* Pinned at the foot, outside the scrolling list: these act on the whole bar,
    so they do not travel with what is in it, and they belong with the other
    whole-portal controls rather than above the thing they arrange. */
-.pl-mgbar {
-  flex: 0 0 auto;
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 10px;
-  background: var(--surface-3);
-  border-top: 1px solid var(--divider);
-}
-/* Both carry manage mode's own colour, so the top of the bar says which mode
-   you are in without the bar itself being repainted. Violet because blue is
-   already "selected" and red is already "danger" — but TINTED, the way the kit
-   tints its buttons: a solid violet strip was loud enough to be hard to read
-   and drowned out the bar under it. */
-.pl-mgbar { --mg-ink: #5b21b6; --mg-line: #c4b5fd; --mg-fill: #ede9fe; }
-.pl-mgnew, .pl-mgout {
-  display: flex; align-items: center; gap: 8px;
-  height: 34px; padding: 0 12px;
-  border: 1px solid var(--mg-line);
-  border-radius: var(--radius-lg, 5px);
-  color: var(--mg-ink);
-}
-/* The way out is the filled one: in manage mode it is what you most need to
-   find, and the tint doubles as the badge for the mode. */
-.pl-mgout { background: var(--mg-fill); }
-.pl-mgout:hover { background: #ddd6fe; border-color: #a78bfa; }
-/* The action is the same colour on white — the two read as one block. */
-.pl-mgnew { background: var(--surface); }
-.pl-mgnew:hover { background: var(--mg-fill); }
-/* A switch that is ON fills, the way the settings menu's modes do — the label
-   never changes, so the fill is the only thing the reader has to read. */
-.pl-mgnew.on { background: var(--mg-fill); }
-.pl-root.mini .pl-mgbar { padding: 8px 6px; }
 
 .pl-grip { display: flex; flex: 0 0 auto; cursor: grab; margin-left: -2px; }
 .pl-card.mg { cursor: grab; }

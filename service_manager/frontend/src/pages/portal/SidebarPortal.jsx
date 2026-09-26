@@ -696,9 +696,9 @@ export default function SidebarPortal({
 
         {/* The account alone at the foot now: the modes moved into the settings
             bar, which is where the rest of "things about this portal" live.
-            Manage mode has a bar of its own now, so the plinth stays the
-            account's. */}
-        {!signedOut && (
+            Not in manage mode: the account card is not something you manage,
+            and one more card on the plinth is one more thing to mis-drag. */}
+        {!signedOut && !(manage && isManager) && (
         <div className="pl-user">
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"
