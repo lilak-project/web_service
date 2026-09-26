@@ -100,9 +100,10 @@ body {
 .am-dim { color: var(--rk-dim); }
 .am-ink { color: var(--rk-ink); }
 .am-mono { font-family: var(--rk-mono); }
-.am-num { text-align: right; font-family: var(--rk-mono); color: var(--rk-dim); }
-/* A column head is a word, not a number. */
-.am-head .am-num, .am-head .am-mono { font-family: var(--rk-sans); }
+.am-num { text-align: right; color: var(--rk-dim); }
+/* A column head is a word, not a value: never the monospace of what is
+   under it. */
+.am-head .am-mono { font-family: var(--rk-sans); }
 .am-mid { text-align: center; }
 
 /* The row number: the sheet's, and what you say out loud. */
@@ -116,7 +117,6 @@ body {
   font-size: 11px;
   color: var(--rk-mute);
 }
-.am-rule { background: var(--rk-edge); }
 
 /* The head. Sticky, because a column name you have scrolled past is a column
    you have to guess at. */

@@ -592,10 +592,14 @@ export default function SidebarPortal({
     // In manage mode a card is a thing to arrange and edit, never a thing to run:
     // even a multi-project service opens its settings instead of its project list.
     const multi = s.multi_project && !manage && !signedOut
+    // The project list is hidden at 64px (.pl-root.mini .pl-plist), so a card
+    // marked open while the bar is folded is a card that says it is showing
+    // something it is not. One condition drives the chevron AND the list.
+    const listOpen = multi && projOpen(key) && !mini
     return (
       <div key={key} style={{ display: 'contents' }}>
         {dropLine(key, false)}
-        <div className={`pl-card${on ? ' on' : ''}${projOpen(key) ? ' open' : ''}`
+        <div className={`pl-card${on ? ' on' : ''}${listOpen ? ' open' : ''}`
             + `${manage ? ' mg' : ''}${drag === key ? ' dragging' : ''}`
             + `${s.hidden ? ' off' : ''}`}
           data-key={key}
@@ -640,8 +644,7 @@ export default function SidebarPortal({
         </div>
         {multi && (
           <ProjectList svc={s.name} color={s.color} sel={view === 'service' ? sel : null}
-            open={projOpen(key)} onPick={(p) => pickProject(s, p)}
- />
+            open={listOpen} onPick={(p) => pickProject(s, p)} />
         )}
         {dropLine(key, true)}
       </div>

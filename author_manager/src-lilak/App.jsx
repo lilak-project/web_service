@@ -99,7 +99,6 @@ const COLS = [
   { k: 'affil', w: 96, min: 40, label: 'affiliation' },
   { k: 'kor', w: 86, min: 50, label: '이름' },
   { k: 'name', w: 196, min: 90, label: 'name' },
-  { k: 'rule', w: 7, min: 7, fix: true },
   { k: 'nm', w: 112, min: 60, label: 'abv-name', drop: 1040 },
   { k: 'email', w: 214, min: 90, label: 'email' },
   { k: 'pos', w: 176, min: 70, label: 'position', drop: 860 },
@@ -457,7 +456,7 @@ function Table({ cols, onDrag, head, children }) {
       <div className="am-row am-head" style={{ gridTemplateColumns: tmpl }}>
         {cols.map((c) => (
           <span key={c.k}
-            className={`${c.k === 'num' ? 'am-gut' : c.k === 'rule' ? 'am-rule' : 'am-c'}`
+            className={`${c.k === 'num' ? 'am-gut' : 'am-c'}`
               + `${c.num ? ' am-num' : ''}${c.cite ? ' am-cite' : ''}${c.k === 'chk' ? ' am-chk' : ''}`}>
             {c.k === 'chk' && head ? (
               <input type="checkbox" checked={head.all}
@@ -481,9 +480,7 @@ function Row({ cols, cell, className, onClick, onContextMenu }) {
   return (
     <div className={`am-row ${className || ''}`} style={{ gridTemplateColumns: tmpl }}
       onClick={onClick} onContextMenu={onContextMenu}>
-      {cols.map((c) => (c.k === 'rule'
-        ? <i key={c.k} className="am-rule" />
-        : (
+      {cols.map((c) => (
           <span key={c.k}
             className={`${c.k === 'num' ? 'am-gut' : 'am-c'}`
               + `${c.k === 'chk' ? ' am-chk' : ''}${c.num ? ' am-num' : ''}`
@@ -492,7 +489,7 @@ function Row({ cols, cell, className, onClick, onContextMenu }) {
               + `${c.k === 'affil' || c.k === 'pos' || c.k === 'nm' ? ' am-dim' : ''}`}>
             {cell[c.k]}
           </span>
-        )))}
+      ))}
       <span className="am-c" />
     </div>
   )
