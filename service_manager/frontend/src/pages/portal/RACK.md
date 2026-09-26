@@ -29,12 +29,15 @@
 
 색이 화면의 종류를 말합니다.
 
-| 명판 | 값 | 무엇 |
-|---|---|---|
-| 파랑 | `--info-bg` | 설정 — 내 계정, 그룹, 초대, 시스템, 로그인 |
-| 보라 | `--plate-manage` `#ede9fe` | 관리 — 서비스·그룹을 고쳐 쓰는 화면 |
-| 먹색 | `--plate-tool` `#3d4b5f` + 반전 글자 | 도구 — 포털 자신을 다루는 붙박이 |
-| 빨강 | `--danger-bg` | 되돌릴 수 없는 것 |
+색이 아니라 **종류**가 이름입니다 — 색은 언제든 바뀔 수 있고, 아래 목록의 명판
+칸은 그때마다 고쳐 쓸 것이 아니니까요.
+
+| 명판 | 변수 | 지금 색 | 어디에 |
+|---|---|---|---|
+| 설정 | `--plate-settings` | 회색 `--surface-3` | 내 계정 · 그룹 · 초대 · 시스템 · 로그인 |
+| 관리 | `--plate-manage` | 연한 겨자 `#f3e5bb` | 서비스·그룹을 고쳐 쓰는 화면 |
+| 도구 | `--plate-tool` | 파랑 `--info-bg` | 포털 자신을 다루는 붙박이 |
+| 위험 | `--danger-bg` | 빨강 | 되돌릴 수 없는 것 — 계정 삭제 · 서비스 보관 · 그룹 삭제 |
 
 ## 치수
 
@@ -69,23 +72,23 @@
 
 | 화면 | 명판 | 부품 |
 |---|---|---|
-| `ProjectsPage.jsx` | 파랑 | 모듈·표 |
-| `portal/AccountView.jsx` | 파랑 | 모듈·표·채널·표시등 |
-| `portal/FeedbackView.jsx` | 파랑 | 모듈·채널·표시등 |
-| `portal/GroupManagePanel.jsx` | 보라 | 모듈·표·채널·표시등 |
-| `portal/GroupsAdmin.jsx` | 파랑 | 모듈·표·채널 |
-| `portal/GuideView.jsx` | 파랑 | 모듈 |
+| `ProjectsPage.jsx` | 설정 | 모듈·표 |
+| `portal/AccountView.jsx` | 설정 | 모듈·표·채널·표시등 |
+| `portal/FeedbackView.jsx` | 설정 | 모듈·채널·표시등 |
+| `portal/GroupManagePanel.jsx` | 관리 | 모듈·표·채널·표시등 |
+| `portal/GroupsAdmin.jsx` | 설정 | 모듈·표·채널 |
+| `portal/GuideView.jsx` | 설정 | 모듈 |
 | `portal/HandshakeRegister.jsx` | — | 모듈 |
-| `portal/IconLabView.jsx` | 먹색 | 모듈·표·채널 |
-| `portal/InvitesAdmin.jsx` | 파랑 | 모듈·표·채널·표시등 |
-| `portal/LinksView.jsx` | 먹색 | 모듈·채널 |
-| `portal/NewServiceView.jsx` | 먹색 | 모듈·표·채널·표시등 |
-| `portal/RackView.jsx` | 먹색 | 모듈·명판·표·채널·표시등 |
-| `portal/ServiceManagePanel.jsx` | 보라 | 모듈·표·채널·표시등 |
-| `portal/ServiceProjects.jsx` | 보라 | 모듈·표·채널·표시등 |
-| `portal/ServiceSingle.jsx` | 보라 | 모듈·표·표시등 |
-| `portal/StoreView.jsx` | 먹색 | 모듈·표·채널·표시등 |
-| `portal/SystemAdmin.jsx` | 파랑 | 모듈·표·표시등 |
+| `portal/IconLabView.jsx` | 도구 | 모듈·표·채널 |
+| `portal/InvitesAdmin.jsx` | 설정 | 모듈·표·채널·표시등 |
+| `portal/LinksView.jsx` | 도구 | 모듈·채널 |
+| `portal/NewServiceView.jsx` | 도구 | 모듈·표·채널·표시등 |
+| `portal/RackView.jsx` | 도구 | 모듈·명판·표·채널·표시등 |
+| `portal/ServiceManagePanel.jsx` | 관리 | 모듈·표·채널·표시등 |
+| `portal/ServiceProjects.jsx` | 관리 | 모듈·표·채널·표시등 |
+| `portal/ServiceSingle.jsx` | 관리 | 모듈·표·표시등 |
+| `portal/StoreView.jsx` | 도구 | 모듈·표·채널·표시등 |
+| `portal/SystemAdmin.jsx` | 설정 | 모듈·표·표시등 |
 
 <!-- rack:end -->
 

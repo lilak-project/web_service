@@ -16,14 +16,18 @@ import INVENTORY from './rack.json'
  */
 
 const PLATES = [
-  { ko: '파랑', plate: 'var(--info-bg)', fg: 'var(--text-emphasis)', border: 'var(--border-strong)',
-    what: ['설정', 'Settings'], where: ['내 계정 · 그룹 · 초대 · 시스템 · 로그인', 'account · groups · invites · system · sign-in'] },
-  { ko: '보라', plate: 'var(--plate-manage)', fg: 'var(--text-emphasis)', border: 'var(--border-strong)',
-    what: ['관리', 'Manage'], where: ['서비스와 그룹을 고쳐 쓰는 화면', 'the screens that edit services and groups'] },
-  { ko: '먹색', plate: 'var(--plate-tool)', fg: 'var(--text-inverse, #fff)', border: 'var(--plate-tool)',
-    what: ['도구', 'Tool'], where: ['포털 자신을 다루는 붙박이 — 이 화면도 그중 하나', 'the builtins that work on the portal itself — this screen is one'] },
-  { ko: '빨강', plate: 'var(--danger-bg, #fee2e2)', fg: 'var(--danger-text, #b91c1c)', border: 'var(--danger-border, #fca5a5)',
-    what: ['위험', 'Danger'], where: ['되돌릴 수 없는 것. 한 화면에 하나, 맨 아래', 'what cannot be undone: one per screen, at the foot'] },
+  { key: '설정', plate: 'var(--plate-settings)', fg: 'var(--text-emphasis)', border: 'var(--border-strong)',
+    colour: ['회색', 'grey'], what: ['설정', 'Settings'],
+    where: ['내 계정 · 그룹 · 초대 · 시스템 · 로그인', 'account · groups · invites · system · sign-in'] },
+  { key: '관리', plate: 'var(--plate-manage)', fg: 'var(--text-emphasis)', border: 'var(--border-strong)',
+    colour: ['연한 겨자', 'mustard'], what: ['관리', 'Manage'],
+    where: ['서비스와 그룹을 고쳐 쓰는 화면', 'the screens that edit services and groups'] },
+  { key: '도구', plate: 'var(--plate-tool)', fg: 'var(--text-emphasis)', border: 'var(--border-strong)',
+    colour: ['파랑', 'blue'], what: ['도구', 'Tool'],
+    where: ['포털 자신을 다루는 붙박이 — 이 화면도 그중 하나', 'the builtins that work on the portal itself — this screen is one'] },
+  { key: '위험', plate: 'var(--danger-bg, #fee2e2)', fg: 'var(--danger-text, #b91c1c)', border: 'var(--danger-border, #fca5a5)',
+    colour: ['빨강', 'red'], what: ['위험', 'Danger'],
+    where: ['되돌릴 수 없는 것. 계정 삭제 · 서비스 보관 · 그룹 삭제', 'what cannot be undone: delete account, archive service, delete group'] },
 ]
 
 export default function RackView() {
@@ -40,8 +44,8 @@ export default function RackView() {
     ['표시등', '.set-pill', 'Pill', L('상태', 'state')],
   ]
 
-  const byPlate = PLATES.map((p) => [p, INVENTORY.filter((s) => s.plate === p.ko)])
-  const loose = INVENTORY.filter((s) => !PLATES.some((p) => p.ko === s.plate))
+  const byPlate = PLATES.map((p) => [p, INVENTORY.filter((s) => s.plate === p.key)])
+  const loose = INVENTORY.filter((s) => !PLATES.some((p) => p.key === s.plate))
   const cols = { gridTemplateColumns: '1fr 150px' }
 
   return (
@@ -76,7 +80,7 @@ export default function RackView() {
           made the same way every screen makes one. */}
       <h2>{L('명판 색 — 색이 화면의 종류를 말합니다', 'Nameplates — the colour says what kind of screen it is')}</h2>
       {PLATES.map((p) => (
-        <Panel key={p.ko} title={`${p.ko} · ${P(p.what)}`} hint={P(p.where)}
+        <Panel key={p.key} title={`${P(p.what)} · ${P(p.colour)}`} hint={P(p.where)}
           bare style={{ '--plate': p.plate, '--plate-fg': p.fg, '--plate-border': p.border }} />
       ))}
 
@@ -114,9 +118,9 @@ export default function RackView() {
       <Panel title={L('랙에 꽂힌 화면', 'On the rack')} bare
         hint={`${INVENTORY.length}${L('장', '')}`}>
         {byPlate.map(([p, list]) => list.length > 0 && (
-          <div key={p.ko}>
+          <div key={p.key}>
             <Row className="cols head" style={cols}>
-              <span>{p.ko} · {P(p.what)}</span>
+              <span>{P(p.what)} · {P(p.colour)}</span>
               <span>{L('부품', 'Parts')}</span>
             </Row>
             {list.map((s) => (

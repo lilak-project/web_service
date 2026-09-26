@@ -390,7 +390,20 @@
   display: flex; flex-direction: column;
   background: var(--surface-3);
   border-right: 1px solid var(--divider);
+  /* It comes OUT of the service bar. The bar is collapsing to 64px at the same
+     time, so the menu slides right from under it — which is the gesture the
+     account button makes: one bar folds, the next one steps out of it. It
+     starts a whole width to the left and is drawn under the bar (z-index), so
+     nothing of it shows until it clears the bar's edge. */
+  position: relative; z-index: 1;
+  animation: pl-step-out .22s cubic-bezier(.2, .8, .2, 1);
 }
+@keyframes pl-step-out {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
+}
+/* The bar has to be over it for the slide to read as coming from underneath. */
+.pl-side { position: relative; z-index: 2; }
 .pl-b2head { height: 50px; padding: 0 16px; display: flex; align-items: center; white-space: nowrap; }
 .pl-b2head b { font-size: 15px; font-weight: var(--rack-weight, 500); color: var(--text-emphasis); }
 /* "lilak portal", "Settings" and the open page's name are the same rank — the

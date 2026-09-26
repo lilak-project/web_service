@@ -16,8 +16,11 @@
  */
 
 :root {
-  --plate-manage: #ede9fe;   /* 관리 */
-  --plate-tool: #3d4b5f;     /* 도구 — off the ink of --text-primary, not into grey */
+  /* The three nameplates. Light tints, one family: the colour is a label, not
+     a mood, so none of them shouts over the white panel it sits on. */
+  --plate-settings: var(--surface-3);   /* 설정 — 회색 */
+  --plate-manage: #f3e5bb;              /* 관리 — 연한 겨자 */
+  --plate-tool: var(--info-bg);         /* 도구 — 파랑 */
   /* Every corner in the vocabulary, one knob. A rack is bolted metal: square.
      The pill keeps its round ends — that shape IS the part. */
   --rack-radius: 0;
@@ -107,7 +110,7 @@
   /* The nameplate colour is ONE inherited variable, so a page sets it for
      every panel on it and a single panel can still carry its own — which is
      how the RACK screen shows the four plates: real panels, not swatches. */
-  background: var(--plate, var(--info-bg));
+  background: var(--plate, var(--plate-settings));
   border-bottom: 1px solid var(--plate-border, var(--border-strong));
 }
 .set-bar b { font-weight: var(--rack-weight); color: var(--plate-fg, var(--text-emphasis)); }
@@ -291,7 +294,7 @@
 /* Manage mode's panels wear the mode's own tint on their title strips, so a
    manage page is never mistaken for a settings page at a glance. */
 .pl-root.managing .pl-mgpage { --plate: var(--plate-manage); }
-.pl-root.managing .pl-mgpage .set-bar .hint { color: #5b21b6; }
+.pl-root.managing .pl-mgpage .set-bar .hint { color: var(--warning-text, #b45309); }
 
 /* A row that is itself a link. */
 .set-link { text-decoration: none; color: inherit; }
@@ -307,13 +310,9 @@
    rather than a hue, because it is the portal's own text colour — the tools
    belong to the portal itself, and a neutral cannot clash with the service
    colours the catalogue rows are full of. */
-.pl-toolpage {
-  --plate: var(--plate-tool);
-  --plate-border: var(--plate-tool);
-  --plate-fg: var(--text-inverse, #fff);
-}
-.pl-toolpage .set-bar .set-fold svg { color: var(--plate-fg, var(--text-inverse, #fff)); }
-.pl-toolpage .set-bar .hint { color: var(--text-muted); }
+.pl-toolpage { --plate: var(--plate-tool); }
+
+.pl-toolpage .set-bar .hint { color: var(--info-text); }
 
 
 /* The sign-in panel's strip IS the choice between the two things you can do:

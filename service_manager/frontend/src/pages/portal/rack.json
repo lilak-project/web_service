@@ -1,7 +1,7 @@
 [
  {
   "path": "ProjectsPage.jsx",
-  "plate": "파랑",
+  "plate": "설정",
   "parts": [
    "모듈",
    "표"
@@ -10,7 +10,7 @@
  },
  {
   "path": "portal/AccountView.jsx",
-  "plate": "파랑",
+  "plate": "설정",
   "parts": [
    "모듈",
    "표",
@@ -21,7 +21,7 @@
  },
  {
   "path": "portal/FeedbackView.jsx",
-  "plate": "파랑",
+  "plate": "설정",
   "parts": [
    "모듈",
    "채널",
@@ -31,7 +31,7 @@
  },
  {
   "path": "portal/GroupManagePanel.jsx",
-  "plate": "보라",
+  "plate": "관리",
   "parts": [
    "모듈",
    "표",
@@ -42,7 +42,7 @@
  },
  {
   "path": "portal/GroupsAdmin.jsx",
-  "plate": "파랑",
+  "plate": "설정",
   "parts": [
    "모듈",
    "표",
@@ -52,7 +52,7 @@
  },
  {
   "path": "portal/GuideView.jsx",
-  "plate": "파랑",
+  "plate": "설정",
   "parts": [
    "모듈"
   ],
@@ -68,7 +68,7 @@
  },
  {
   "path": "portal/IconLabView.jsx",
-  "plate": "먹색",
+  "plate": "도구",
   "parts": [
    "모듈",
    "표",
@@ -78,7 +78,7 @@
  },
  {
   "path": "portal/InvitesAdmin.jsx",
-  "plate": "파랑",
+  "plate": "설정",
   "parts": [
    "모듈",
    "표",
@@ -89,7 +89,7 @@
  },
  {
   "path": "portal/LinksView.jsx",
-  "plate": "먹색",
+  "plate": "도구",
   "parts": [
    "모듈",
    "채널"
@@ -98,7 +98,7 @@
  },
  {
   "path": "portal/NewServiceView.jsx",
-  "plate": "먹색",
+  "plate": "도구",
   "parts": [
    "모듈",
    "표",
@@ -109,7 +109,7 @@
  },
  {
   "path": "portal/RackView.jsx",
-  "plate": "먹색",
+  "plate": "도구",
   "parts": [
    "모듈",
    "명판",
@@ -121,7 +121,7 @@
  },
  {
   "path": "portal/ServiceManagePanel.jsx",
-  "plate": "보라",
+  "plate": "관리",
   "parts": [
    "모듈",
    "표",
@@ -132,7 +132,7 @@
  },
  {
   "path": "portal/ServiceProjects.jsx",
-  "plate": "보라",
+  "plate": "관리",
   "parts": [
    "모듈",
    "표",
@@ -143,7 +143,7 @@
  },
  {
   "path": "portal/ServiceSingle.jsx",
-  "plate": "보라",
+  "plate": "관리",
   "parts": [
    "모듈",
    "표",
@@ -153,7 +153,7 @@
  },
  {
   "path": "portal/StoreView.jsx",
-  "plate": "먹색",
+  "plate": "도구",
   "parts": [
    "모듈",
    "표",
@@ -164,7 +164,7 @@
  },
  {
   "path": "portal/SystemAdmin.jsx",
-  "plate": "파랑",
+  "plate": "설정",
   "parts": [
    "모듈",
    "표",
