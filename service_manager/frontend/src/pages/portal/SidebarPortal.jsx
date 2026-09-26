@@ -292,19 +292,26 @@ export default function SidebarPortal({
   useEffect(() => { writeSet(SHUT_KEY, shut) }, [shut])
   useEffect(() => { writeSel(view === 'service' ? sel : null) }, [sel, view])
 
+  // What `fit` needs to know without becoming a reason for it to re-run.
+  const manageRef = useRef(false)
+  manageRef.current = manage && isManager
+
   useEffect(() => {
     const fit = () => {
       const w = window.innerWidth
       if (w < PHONE) return                      // drawer: the user's choice stands
       // Managing needs the bar wide, whatever the window does: the grips, the
-      // drop bands and the drag itself are not reachable at 64px.
-      if (manage && isManager) { setMini(false); return }
+      // drop bands and the drag itself are not reachable at 64px. Read through
+      // a ref, so this effect runs ONCE — with `manage` in its deps it re-ran
+      // when the account finally loaded and re-collapsed a bar that a click
+      // had just opened on purpose.
+      if (manageRef.current) { setMini(false); return }
       setMini(w < WIDE)
     }
     fit()
     window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
-  }, [manage, isManager])
+  }, [])
 
   const leaveSettings = useCallback(() => {
     if (miniBefore.current !== null) { setMini(miniBefore.current); miniBefore.current = null }
@@ -593,22 +600,22 @@ export default function SidebarPortal({
             onClick={() => {
               if (manage && isManager) { openManage(s); return }
               if (!multi) { openService(s); return }
-              // A multi-project service has no page of its own, so picking it
-              // opens its project list. From SETTINGS that also has to leave
-              // settings: the bar was collapsed, so the click only expanded it
-              // and the panel sat on a settings page nobody was asking for any
-              // more — the service looked like it simply did not open.
-              if (view === 'settings') {
-                leaveSettings()
-                setSel({ svc: key, proj: '' })
-                setView('service')
-                setOpenSvcs((o) => new Set(o).add(key))
-                return
-              }
-              // Collapsed, the project list is hidden — so asking for it expands
-              // the bar rather than doing nothing visible.
-              if (mini) { setMini(false); setOpenSvcs((o) => new Set(o).add(key)); return }
-              toggleProj(key)
+              // A multi-project service has no page of its own. Picking it drops
+              // its project list in the bar AND puts its projects in the panel —
+              // the same panel manage mode uses, so making a project is where
+              // looking at them already is. (Settings has to be left behind for
+              // that; before, from settings, the click only expanded the bar and
+              // the service looked like it had not opened at all.)
+              const fromSettings = view === 'settings'
+              if (fromSettings) leaveSettings()
+              // Pressing the service already in the panel folds its list again.
+              else if (sel?.svc === key && view === 'service' && projOpen(key)) { toggleProj(key); return }
+              setSel({ svc: key, proj: '' })
+              setView('service')
+              // Collapsed, the project list is invisible — asking for it expands
+              // the bar rather than doing nothing you can see.
+              if (mini) setMini(false)
+              setOpenSvcs((o) => new Set(o).add(key))
             }}>
             {/* Always rendered, opened by manage mode: mounting it moved every
                 icon sideways in one jump, and a width that animates lets the
@@ -954,13 +961,16 @@ export default function SidebarPortal({
               <SettingsStatus />
             </>
           ) : view === 'service' && needProject ? (
-            <div className="pl-empty">
-              <div>
-                <div className="path">/pp/{sel.svc}/…</div>
-                <div className="big">{L('프로젝트를 선택하세요', 'Pick a project')}</div>
-                <div>{L('왼쪽에서 프로젝트를 고르세요.', 'Choose one on the left.')}</div>
+            // Not an empty page telling you to look left: the service's own
+            // projects, managed here, with the same panel manage mode shows.
+            <>
+              <div key={sel.svc} className="pl-scroll pl-mgpage">
+                <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
+                <ServiceProjects service={selSvc} canManage={isManager} manage={isManager}
+                  onChanged={onRefresh} />
               </div>
-            </div>
+              <SettingsStatus />
+            </>
           ) : view === 'service' && src ? (
             <iframe key={src} src={src} title={sel.svc}
               allow="clipboard-read; clipboard-write; fullscreen" />
