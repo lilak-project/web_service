@@ -447,13 +447,30 @@
   box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
 }
 .pl-c2:hover { border-color: var(--divider); background: var(--surface-2); }
-.pl-c2.on { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
+/* PRESSED, not merely selected: on this bar every item is already a raised
+   white tile, so a ring around one was easy to miss. The on state fills. */
+.pl-c2.on { border-color: var(--border-focus); background: var(--info-bg); }
 .pl-c2.on .pl-txt { color: var(--accent, #2563eb); }
 /* The menu is a list of names; weight was making all seven shout at once. */
 .pl-c2 .pl-txt { font-weight: 400; }
 .pl-c2:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 /* Sections are a rule, not a heading — the names labelled a split the items make. */
 .pl-sep { flex: 0 0 auto; height: 1px; margin: 6px 2px; background: var(--divider); }
+
+/* The manage bar's hide target. Dashed, because it is a place rather than a
+   control, and hidden until there is something to drop on it. */
+.pl-b2drop {
+  flex: 0 0 auto; display: none; align-items: center; gap: 8px;
+  min-height: 36px; padding: 7px 11px;
+  border: 1px dashed var(--divider);
+  color: var(--text-secondary); font-size: 12px; line-height: 1.25;
+}
+.pl-b2drop.live { display: flex; }
+.pl-b2drop.over {
+  border-color: var(--danger-text, #b91c1c);
+  background: var(--danger-bg, #fee2e2);
+  color: var(--danger-text, #b91c1c);
+}
 
 /* Phone: one bar at a time — the settings bar takes the drawer's place. */
 @media (max-width: 639px) {

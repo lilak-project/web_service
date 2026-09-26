@@ -471,6 +471,50 @@ export default function SidebarPortal({
     onDragOver: (e) => { if (!drag) return; e.preventDefault(); setDropAt({ gid }) },
     onDrop: (e) => { e.preventDefault(); onDrop() },
   })
+  // Reordering moves the OTHER cards, and a card that teleports to its new row
+  // is a card you have to find again. FLIP: remember where each one was, and
+  // when the order changes put it back there for a frame and let it travel.
+  // Only when the ORDER changed — a band opening or the grips appearing move
+  // cards too, and those have animations of their own.
+  const navRef = useRef(null)
+  const posRef = useRef(new Map())
+  const seqRef = useRef('')
+  useLayoutEffect(() => {
+    const nodes = [...(navRef.current?.querySelectorAll('.pl-card[data-key]') || [])]
+    const next = new Map(nodes.map((n) => [n.dataset.key, n.getBoundingClientRect().top]))
+    const seq = nodes.map((n) => n.dataset.key).join('|')
+    const reordered = seq !== seqRef.current && seqRef.current !== ''
+    seqRef.current = seq
+    if (reordered && manage && isManager) {
+      for (const n of nodes) {
+        const was = posRef.current.get(n.dataset.key)
+        const now = next.get(n.dataset.key)
+        // The one under the cursor is already where the hand put it.
+        if (was == null || was === now || n.dataset.key === drag) continue
+        n.style.transition = 'none'
+        n.style.transform = `translateY(${was - now}px)`
+        requestAnimationFrame(() => {
+          n.style.transition = 'transform .18s ease'
+          n.style.transform = ''
+        })
+      }
+    }
+    posRef.current = next
+  })
+
+  /** Dropped on the manage bar's target: the card leaves the cover. Same call
+   *  the Hide button makes, so a card hidden by dragging is hidden the same way
+   *  and comes back the same way. */
+  const hideDropped = async () => {
+    const card = (cards || []).find((c) => cardKey(c) === drag)
+    setDrag(null); setDropAt(null)
+    if (!card) return
+    try {
+      if (card.builtin) await launcher.put('/admin/home-builtin', { key: card.builtin, hidden: true })
+      else await launcher.put('/admin/home-service', { name: card.name, hidden: true })
+    } finally { await onRefresh?.() }
+  }
+
   /** Where a band's drop puts a card: a real group, or out of every group.
    *  The synthetic System band takes drops too — the first one turns it into a
    *  stored group holding the builtins plus what you dropped. */
@@ -537,6 +581,7 @@ export default function SidebarPortal({
         <div className={`pl-card${on ? ' on' : ''}${projOpen(key) ? ' open' : ''}`
             + `${manage ? ' mg' : ''}${drag === key ? ' dragging' : ''}`
             + `${s.hidden ? ' off' : ''}`}
+          data-key={key}
           {...dragProps(key)}>
           <button type="button" className="pl-row"
             onClick={() => {
@@ -692,7 +737,7 @@ export default function SidebarPortal({
           </button>
         </div>
 
-        <div className="pl-nav">
+        <div className="pl-nav" ref={navRef}>
           {bands.map(({ g, items }) => (g ? (
             /* A group is one tinted REGION spanning the bar's full width, with its
                cards inside it — a tinted title alone left the members looking like
@@ -782,6 +827,17 @@ export default function SidebarPortal({
               <Icon name="folder-plus" size={15} />
               <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
             </button>
+            {/* Shown only while a card is in the air: an empty target is a
+                button that does nothing. Dropping here is the Hide button,
+                reached by the hand that is already holding the card. */}
+            <div className={`pl-b2drop${drag ? ' live' : ''}${dropAt?.hide ? ' over' : ''}`}
+              onDragOver={(e) => { if (!drag) return; e.preventDefault(); setDropAt({ hide: true }) }}
+              onDragLeave={() => setDropAt((d) => (d?.hide ? null : d))}
+              onDrop={(e) => { e.preventDefault(); hideDropped() }}>
+              <Icon name="eye-off" size={14} />
+              <span>{L('여기로 끌어다 놓으면 숨김', 'drop a card here to hide it')}</span>
+            </div>
+
             <div className="pl-spring" />
 
             {/* Last of all, like Log out in the settings bar: leaving is not
