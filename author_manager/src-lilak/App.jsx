@@ -224,6 +224,7 @@ export default function App() {
   const [fcol, setFcol] = useState(null)       // the column being picked from
   const [fsel, setFsel] = useState({})         // { column: [values] }
   const [fon, setFon] = useState(false)        // applied
+  const [outOpen, setOutOpen] = useState(false)   // the listing drawer
   const findRef = useRef(null)
   const lastHit = useRef(null)      // for shift-click: where the range starts
 
@@ -530,9 +531,12 @@ export default function App() {
               })}
               {!fmode && rows.length === 0 && <p className="am-msg">해당하는 저자가 없습니다.</p>}
             </Table>
-            {tab.id === 'mylist' && (
+            {/* The listing belongs to any tab that is already a chosen set of
+                people — My List, or one group's or affiliation's tab. Not
+                total: a paper is never everyone. */}
+            {(tab.id === 'mylist' || tab.grp || tab.aff) && (
               <MyListOut list={scope} doc={doc} say={setNote}
-                onDrop={(id) => setMyList((l) => l.filter((x) => x !== id))}
+                open={outOpen} setOpen={setOutOpen} canGroup={tab.id === 'mylist'}
                 group={groupForm} setGroup={setGroupForm}
                 onMakeGroup={(form) => {
                   const name = String(form.shortName || form.fullName || '').trim()
@@ -666,7 +670,7 @@ function Row({ cols, cell, className, onClick, onContextMenu }) {
 }
 
 // ─── My List's output: the reason the list exists ───────────────────────────
-function MyListOut({ list, doc, onDrop, onMakeGroup, group, setGroup, say }) {
+function MyListOut({ list, doc, onMakeGroup, group, setGroup, say, open, setOpen, canGroup }) {
   const [sep, setSep] = useState(', ')
   const [tpl, setTpl] = useState(PRESETS[0][1])
   const [paper, setPaper] = useState(false)   // the LaTeX block is not a template
@@ -704,7 +708,16 @@ function MyListOut({ list, doc, onDrop, onMakeGroup, group, setGroup, say }) {
   const none = list.length === 0
   return (
     <div className="am-out">
-      {group && (
+      {/* Folded by default: the list is what you came for, the text it makes is
+          what you leave with. */}
+      <button type="button" className={`am-outhead${open ? ' on' : ''}`} onClick={() => setOpen(!open)}
+        aria-expanded={open}>
+        <i className="am-caret">{open ? '▾' : '▸'}</i>
+        <span>나열</span>
+        <span className="am-hint">{list.length}명</span>
+      </button>
+      {open && (<>
+      {group && canGroup && (
         <div className="am-rec am-newgrp">
           <span className="am-fl">새 그룹</span>
           <div className="am-fv">
@@ -750,20 +763,8 @@ function MyListOut({ list, doc, onDrop, onMakeGroup, group, setGroup, say }) {
       </div>
 
       <textarea className="am-outbox" value={out} readOnly
-        placeholder={none ? 'My List가 비어 있습니다 — 표에서 고르고 add to my list.' : ''} />
-      {!none && (
-        <div className="am-outbar am-outfoot">
-          <span className="am-hint">My List {list.length}명 — ×로 한 명씩 뺍니다.</span>
-          <span className="am-sp" />
-          {list.map((a) => (
-            <span key={a.id} className="am-chip">
-              {citeShort(a) || anyName(a)}
-              <button type="button" className="am-x" title="빼기"
-                onClick={() => onDrop(a.id)} aria-label={`${anyName(a)} 빼기`}>×</button>
-            </span>
-          ))}
-        </div>
-      )}
+        placeholder={none ? '이 탭에 사람이 없습니다.' : ''} />
+      </>)}
     </div>
   )
 }
