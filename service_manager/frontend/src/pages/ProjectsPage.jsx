@@ -891,7 +891,7 @@ export default function ProjectsPage() {
     >
       {/* Login-first; then one of three logged-in screens — no popups. */}
       {!authReady ? null : !user ? (
-        <AuthCard t={t} info={portalInfo} needsSetup={!!portalInfo?.needs_setup}
+        <AuthCard t={t} needsSetup={!!portalInfo?.needs_setup}
           onAuthed={(u) => { setAnimateHeader(true); setUser(u); setView('home'); refresh() }} />
       ) : view === 'settings' ? (
         <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout}
