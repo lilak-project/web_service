@@ -100,7 +100,7 @@ const COLS = [
   { k: 'kor', w: 86, min: 50, label: '이름' },
   { k: 'name', w: 196, min: 90, label: 'name' },
   { k: 'rule', w: 7, min: 7, fix: true },
-  { k: 'nm', w: 112, min: 60, label: 'nm.', drop: 1040 },
+  { k: 'nm', w: 112, min: 60, label: 'abv-name', drop: 1040 },
   { k: 'email', w: 214, min: 90, label: 'email' },
   { k: 'pos', w: 176, min: 70, label: 'position', drop: 860 },
   { k: 'core', w: 44, min: 34, label: 'core', num: true },
@@ -125,7 +125,7 @@ const TOKENS = {
   affiliation: (a) => currentAff(a)?.tag || '',
   이름: (a) => korName(a),
   name: (a) => engName(a),
-  'nm.': (a) => citeShort(a),
+  'abv-name': (a) => citeShort(a),
   email: (a) => repEmail(a),
   position: (a) => currentAff(a)?.position || '',
   core: (a) => coreOf(a) ?? '',
@@ -141,7 +141,7 @@ const fill = (tpl, a) => tpl.replace(/\{([^{}]+)\}/g, (m, k) => {
 const PRESETS = [
   ['이름 나열', '{이름}'],
   ['full names', '{name}'],
-  ['abv. names', '{nm.}'],
+  ['abv. names', '{abv-name}'],
   ['email list', '"{이름}" <{email}>'],
 ]
 
