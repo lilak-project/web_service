@@ -77,7 +77,7 @@ export default function RackView() {
           <Row key={p.ko} className="cols" style={{ gridTemplateColumns: '108px 90px 1fr' }}>
             {/* The swatch is a nameplate, at its real height. */}
             <span style={{ display: 'grid', placeItems: 'center', height: '100%', background: p.bg,
-              color: p.fg, border: '1px solid var(--border-strong)', fontWeight: 700 }}>
+              color: p.fg, border: '1px solid var(--border-strong)' }}>
               {P(p.what)}
             </span>
             <span>{p.ko}</span>
@@ -112,8 +112,8 @@ export default function RackView() {
           <span style={{ color: 'var(--text-secondary)' }}>{L('한 크기. 버튼과 태그도 예외가 아닙니다', 'one size — buttons and tags included')}</span>
         </Field>
         <Field label={L('굵기', 'Weight')}>
-          <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-weight</span> = 500
-          <span style={{ color: 'var(--text-secondary)' }}>{L('가장 무거운 값. 나머지는 전부 보통 굵기', 'the heaviest it gets; everything else is regular')}</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-weight</span> = 400
+          <span style={{ color: 'var(--text-secondary)' }}>{L('굵게 쓰지 않습니다. 서체가 400과 700만 실어서, 500은 브라우저가 700으로 그립니다', 'no bold: the face ships 400 and 700 only, so 500 was being rendered as 700')}</span>
         </Field>
       </Panel>
 

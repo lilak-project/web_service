@@ -31,9 +31,10 @@
      input grows and shrinks with the slot it is in rather than floating at a
      size of its own. */
   --rack-ctl: calc(var(--rack-row) - 8px);
-  /* Bold is a last resort here: the nameplate already has a colour strip and a
-     page title already stands alone. Medium is as heavy as this gets. */
-  --rack-weight: 500;
+  /* No bold. The nameplate has a colour strip and a page title stands alone,
+     so neither needs weight to be found — and the portal's face only ships 400
+     and 700, so anything in between was being rendered AS 700. */
+  --rack-weight: 400;
 }
 
 /* ── the ground ──────────────────────────────────────────────────────────── */
