@@ -464,21 +464,15 @@ export default function SidebarPortal({
    *  Manage always runs in GROUP mode: a flat list has no bands, so there is
    *  nothing to drop a card into and nowhere for a new group to appear. The
    *  reader's own setting is put back on the way out. */
-  const flatBefore = useRef(null)
   const toggleManage = () => {
     leaveSettings()
     setManage((m) => {
       const next = !m
       setSel(null)
       setView(next ? 'manage' : 'empty')
-      if (next) {
-        setMini(false); setOpenSvcs(new Set())
-        flatBefore.current = flat
-        setFlat(false)
-      } else if (flatBefore.current !== null) {
-        setFlat(flatBefore.current)
-        flatBefore.current = null
-      }
+      // Group mode is the reader's choice, not a condition of managing: it is
+      // offered on the plinth below, the way the settings menu offers it.
+      if (next) { setMini(false); setOpenSvcs(new Set()) }
       return next
     })
   }
@@ -709,6 +703,12 @@ export default function SidebarPortal({
                 way out sits closest to where the eye ends up. */}
             <button type="button" className="pl-mgnew" onClick={onCreateGroup}>
               <Icon name="folder-plus" size={14} /> <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
+            </button>
+            {/* Same switch as in the settings menu, in the place the account
+                card leaves free: fills when it is on, fixed label either way. */}
+            <button type="button" className={`pl-mgnew${flat ? '' : ' on'}`}
+              onClick={() => setFlat((f) => !f)}>
+              <Icon name="tree" size={14} /> <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
             </button>
             <button type="button" className="pl-mgout" onClick={toggleManage}>
               <Icon name="close" size={14} /> <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>

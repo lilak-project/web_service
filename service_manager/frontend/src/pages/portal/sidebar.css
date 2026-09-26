@@ -474,6 +474,9 @@
 /* The action is the same colour on white — the two read as one block. */
 .pl-mgnew { background: var(--surface); }
 .pl-mgnew:hover { background: var(--mg-fill); }
+/* A switch that is ON fills, the way the settings menu's modes do — the label
+   never changes, so the fill is the only thing the reader has to read. */
+.pl-mgnew.on { background: var(--mg-fill); }
 .pl-root.mini .pl-mgbar { padding: 8px 6px; }
 
 .pl-grip { display: flex; flex: 0 0 auto; cursor: grab; margin-left: -2px; }
