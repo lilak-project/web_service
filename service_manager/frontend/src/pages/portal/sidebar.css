@@ -464,9 +464,13 @@
 .pl-grip {
   display: flex; flex: 0 0 auto; cursor: grab;
   width: 0; overflow: hidden; opacity: 0;
-  transition: width .2s ease, opacity .2s ease, margin-left .2s ease;
+  /* A zero-width child still earns the row's 10px gap, which pushed every tile
+     off centre in the collapsed rail. The negative margin eats that gap back
+     while the grip is closed, and animates away with it. */
+  margin-right: -10px;
+  transition: width .2s ease, opacity .2s ease, margin .2s ease;
 }
-.pl-grip.on { width: 14px; opacity: 1; margin-left: -2px; }
+.pl-grip.on { width: 14px; opacity: 1; margin-left: -2px; margin-right: 0; }
 .pl-card.mg { cursor: grab; }
 .pl-card.dragging { opacity: .4; }
 /* The drop line is its own element in the gap BETWEEN two cards, not a stripe
