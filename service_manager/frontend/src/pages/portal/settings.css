@@ -1,6 +1,7 @@
 /*
- * Settings pages — direction C ("묶음"), the vocabulary chosen from
- * the three-direction canvas. Three rules, and every page obeys them:
+ * RACK — the portal's screen vocabulary (RACK.md, beside this file, lists
+ * every screen built on it and how to change the rules without missing one).
+ * Three rules, and every page obeys them:
  *
  *   1. The page is a grey GROUND. Content never sits on it directly — it sits
  *      on white PANELS.
