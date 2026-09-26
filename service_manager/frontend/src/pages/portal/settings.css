@@ -17,7 +17,10 @@
 
 :root {
   --plate-manage: #ede9fe;   /* 관리 */
-  --plate-tool: #334155;     /* 도구 — one step off the ink of --text-primary */
+  --plate-tool: #3d4b5f;     /* 도구 — off the ink of --text-primary, not into grey */
+  /* Every corner in the vocabulary, one knob. A rack is bolted metal: square.
+     The pill keeps its round ends — that shape IS the part. */
+  --rack-radius: 0;
 }
 
 /* ── the ground ──────────────────────────────────────────────────────────── */
@@ -43,7 +46,7 @@
    that and every button is legible as a button without inventing a palette. */
 :is(.set-panel, .set-card, .set-row) button:not(.set-plain):not(.set-pick *) {
   border: 1px solid currentColor !important;
-  border-radius: var(--radius-lg, 5px) !important;
+  border-radius: var(--rack-radius, 0) !important;
   min-height: 28px;
   padding: 0 11px !important;
 }
@@ -57,7 +60,7 @@
   font-size: var(--fs-medium, 14px);
   min-height: 28px;
   padding: 0 9px;
-  border-radius: var(--radius-lg, 5px);
+  border-radius: var(--rack-radius, 0);
 }
 :is(.set-panel, .set-card, .set-row) textarea { padding: 7px 9px; }
 :is(.pl-setpage, .pl-mgpage, .svc-mg) :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 12px 0 5px; }
@@ -68,7 +71,7 @@
 .set-panel {
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg, 5px);
+  border-radius: var(--rack-radius, 0);
   overflow: hidden;
   margin-bottom: 8px;
 }
@@ -118,7 +121,7 @@
 /* Standalone it carries its own edge; inside a panel the panel already has one. */
 .set-card {
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg, 5px);
+  border-radius: var(--rack-radius, 0);
   overflow: hidden;
 }
 .set-panel > .set-card { border: 0; border-radius: 0; }
@@ -319,3 +322,11 @@
   font-family: var(--font-mono); font-size: var(--fs-medium, 14px);
   color: var(--text-secondary);
 }
+
+/* The RACK screen stands square. A rack is bolted metal, not a stack of cards,
+   and the one screen that documents the vocabulary is the right place to show
+   the vocabulary can be read without its corners. The pills keep their round
+   ends: squaring them here would document a part that does not exist. */
+/* Centred, and no wider than it needs: a rack has a width, and stretching these
+   modules across a 1600px panel would make the rules harder to read, not easier. */
+.rack-doc { max-width: 760px; margin: 0 auto; }

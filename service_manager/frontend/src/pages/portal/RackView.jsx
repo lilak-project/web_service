@@ -45,7 +45,7 @@ export default function RackView() {
   const cols = { gridTemplateColumns: '1fr 150px' }
 
   return (
-    <>
+    <div className="rack-doc">
       <Panel title={L('규칙 셋', 'Three rules')}
         hint={L('모든 화면이 지킵니다', 'every screen obeys them')}>
         <Field label="1">{L('화면은 회색 바닥입니다. 내용이 바닥에 직접 놓이지 않고 흰 모듈 위에 놓입니다.',
@@ -77,7 +77,7 @@ export default function RackView() {
           <Row key={p.ko} className="cols" style={{ gridTemplateColumns: '108px 90px 1fr' }}>
             {/* The swatch is a nameplate, at its real height. */}
             <span style={{ display: 'grid', placeItems: 'center', height: 34, background: p.bg,
-              color: p.fg, border: '1px solid var(--border-strong)', borderRadius: 3, fontWeight: 700 }}>
+              color: p.fg, border: '1px solid var(--border-strong)', fontWeight: 700 }}>
               {P(p.what)}
             </span>
             <b>{p.ko}</b>
@@ -89,7 +89,11 @@ export default function RackView() {
       <Panel title={L('치수', 'Dimensions')}>
         <Field label={L('명판', 'Nameplate')}>34px</Field>
         <Field label={L('줄', 'Row')}>{L('위아래 7px · 좌우 13px', '7px vertical · 13px horizontal')}</Field>
-        <Field label={L('컨트롤', 'Controls')}>{L('버튼과 입력 28px · 모서리 5px', 'buttons and inputs 28px · radius 5px')}</Field>
+        <Field label={L('컨트롤', 'Controls')}>{L('버튼과 입력 28px', 'buttons and inputs 28px')}</Field>
+        <Field label={L('모서리', 'Corners')}>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-radius</span> = 0
+          <span style={{ color: 'var(--text-secondary)' }}>{L('전부 직각. 표시등만 둥근 끝 — 그 모양이 곧 그 부품이라서.', 'square throughout; only the pill keeps its round ends, because that shape IS the part.')}</span>
+        </Field>
         <Field label={L('모듈 사이', 'Between modules')}>8px</Field>
         <Field label={L('글자', 'Text')}>{L('한 크기', 'one size')} <span style={{ fontFamily: 'var(--font-mono)' }}>--fs-medium</span></Field>
       </Panel>
@@ -143,6 +147,6 @@ export default function RackView() {
           <span style={{ fontFamily: 'var(--font-mono)' }}>frontend/src/pages/portal/RACK.md</span>
         </Field>
       </Panel>
-    </>
+    </div>
   )
 }

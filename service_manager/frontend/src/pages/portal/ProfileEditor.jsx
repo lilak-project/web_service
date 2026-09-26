@@ -75,7 +75,7 @@ export default function ProfileEditor({ me, onSaved }) {
         <Button variant="primary" disabled={!dirty || busy} onClick={save}>{L('저장', 'Save')}</Button>
       </div>
       {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg, 5px)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, border: '1px solid var(--border-strong)', borderRadius: 'var(--rack-radius, 0)' }}>
           {/* colour — only non-admins choose; admins are fixed to black */}
           {!locked && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

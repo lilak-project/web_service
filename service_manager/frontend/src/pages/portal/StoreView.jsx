@@ -147,7 +147,7 @@ export default function StoreView({ onChanged }) {
           <pre ref={logBox} style={{
             margin: 14, maxHeight: 240, overflow: 'auto', fontSize: 'var(--fs-small, 13px)', lineHeight: 1.5,
             backgroundColor: 'var(--surface-2)', color: 'var(--text-secondary)',
-            borderRadius: 'var(--radius-lg, 5px)', padding: 10, whiteSpace: 'pre-wrap',
+            borderRadius: 'var(--rack-radius, 0)', padding: 10, whiteSpace: 'pre-wrap',
           }}>{(job.log || []).join('\n') || '…'}</pre>
         </Panel>
       )}

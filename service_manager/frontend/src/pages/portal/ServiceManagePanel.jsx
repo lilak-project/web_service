@@ -143,7 +143,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
             said nothing about which one did what. */}
         <Field label={L('아이콘', 'Icon')}>
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
-            borderRadius: 'var(--radius-lg, 5px)', border: '1px solid var(--border-strong)' }}>
+            borderRadius: 'var(--rack-radius, 0)', border: '1px solid var(--border-strong)' }}>
             <Icon name={icon} size={20} weight={ICON_WEIGHT} color={color} />
           </span>
           <IconPick value={icon} onChange={setIcon} color={color} />

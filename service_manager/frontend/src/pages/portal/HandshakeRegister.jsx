@@ -110,7 +110,7 @@ export default function HandshakeRegister({ onChanged }) {
           </Button>}>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>{t('portal_hs_desc')}</div>
-          <pre style={{ margin: 0, padding: 12, borderRadius: 'var(--radius-lg, 5px)', background: 'var(--surface-2)',
+          <pre style={{ margin: 0, padding: 12, borderRadius: 'var(--rack-radius, 0)', background: 'var(--surface-2)',
             fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 13px)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
             color: 'var(--text-primary)' }}>{hsSnippet || '…'}</pre>
           <div style={{ color: 'var(--text-secondary)' }}>{t('portal_hs_guide_hint')}</div>

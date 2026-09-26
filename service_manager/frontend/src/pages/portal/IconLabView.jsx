@@ -248,7 +248,7 @@ export default function IconLabView() {
               ))}
               <button type="button" className="set-plain" onClick={saveCurrent} disabled={presets.length >= 10}
                 title={L('현재 설정을 프리셋으로 저장', 'save current as preset')}
-                style={{ width: 36, height: 36, borderRadius: 'var(--radius-lg, 5px)', border: '1px dashed var(--border-strong)',
+                style={{ width: 36, height: 36, borderRadius: 'var(--rack-radius, 0)', border: '1px dashed var(--border-strong)',
                   display: 'grid', placeItems: 'center', lineHeight: 1,
                   background: 'var(--surface)', color: 'var(--text-muted)', cursor: presets.length >= 10 ? 'default' : 'pointer',
                   fontSize: 18, opacity: presets.length >= 10 ? 0.4 : 1 }}>+</button>

@@ -105,7 +105,7 @@ export default function NewServiceView({ onCreated }) {
 
         <Field label={t('newsvc_icon')}>
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
-            borderRadius: 'var(--radius-lg, 5px)', border: '1px solid var(--border-strong)' }}>
+            borderRadius: 'var(--rack-radius, 0)', border: '1px solid var(--border-strong)' }}>
             <Icon name={icon} size={20} weight="fill" color={color} />
           </span>
           <IconPick value={icon} onChange={setIcon} disabled={!!job} color={color} />
@@ -187,7 +187,7 @@ export default function NewServiceView({ onCreated }) {
               <pre ref={logBox} style={{
                 margin: 14, maxHeight: 200, overflow: 'auto', fontSize: 'var(--fs-small, 13px)', lineHeight: 1.5,
                 backgroundColor: 'var(--surface-2)', color: 'var(--text-secondary)',
-                borderRadius: 'var(--radius-lg, 5px)', padding: 10, whiteSpace: 'pre-wrap',
+                borderRadius: 'var(--rack-radius, 0)', padding: 10, whiteSpace: 'pre-wrap',
               }}>{(job.log || []).join('\n') || '…'}</pre>
               <div className="set-row">
                 {done && <Button variant="primary" onClick={() => window.open(`/p/${job.name}/`, '_blank')}>
