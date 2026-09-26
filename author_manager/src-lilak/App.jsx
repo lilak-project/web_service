@@ -175,7 +175,11 @@ export default function App() {
   const [affiliations, setAffiliations] = useState(() => readJson(K('affiliations'), []))
   const [groups, setGroups] = useState(() => readJson(K('groups'), []))
   const [myList, setMyList] = useState(() => readJson(K('myList'), []))
-  const [tab, setTab] = useState(() => localStorage.getItem(K('tab')) || 'authors')
+  // The list IS the service's front page: pressing the service in the portal
+  // lands on it, every time. Restoring the last tab meant the service opened on
+  // whatever you happened to look at last — GROUP, usually — and the list you
+  // came for was one more tap away.
+  const [tab, setTab] = useState('authors')
   const [query, setQuery] = useState('')
   const [expandedId, setExpandedId] = useState('')
   const [notice, setNotice] = useState('')
@@ -198,7 +202,6 @@ export default function App() {
     root.style.setProperty('--border-default', '#9dc4bd')
     root.style.setProperty('--border-subtle', '#c2ded9')
   }, [])
-  useEffect(() => { localStorage.setItem(K('tab'), tab) }, [tab])
   useEffect(() => { writeJson(K('myList'), myList) }, [myList])
   useEffect(() => {
     writeJson(K('authors'), authors); writeJson(K('affiliations'), affiliations); writeJson(K('groups'), groups)
