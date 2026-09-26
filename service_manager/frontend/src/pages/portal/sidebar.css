@@ -600,6 +600,3 @@
   background: var(--surface-2);
   padding: 10vh 24px 24px;
 }
-/* Keeps the "Manage projects" row's text on the same left edge as the project
-   names above it, where their running-dot sits. */
-.pl-runsp { flex: 0 0 auto; width: 7px; }
