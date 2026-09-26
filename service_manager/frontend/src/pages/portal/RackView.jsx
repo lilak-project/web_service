@@ -16,13 +16,13 @@ import INVENTORY from './rack.json'
  */
 
 const PLATES = [
-  { ko: '파랑', bg: 'var(--info-bg)', fg: 'var(--text-emphasis)',
+  { ko: '파랑', plate: 'var(--info-bg)', fg: 'var(--text-emphasis)', border: 'var(--border-strong)',
     what: ['설정', 'Settings'], where: ['내 계정 · 그룹 · 초대 · 시스템 · 로그인', 'account · groups · invites · system · sign-in'] },
-  { ko: '보라', bg: 'var(--plate-manage)', fg: 'var(--text-emphasis)',
+  { ko: '보라', plate: 'var(--plate-manage)', fg: 'var(--text-emphasis)', border: 'var(--border-strong)',
     what: ['관리', 'Manage'], where: ['서비스와 그룹을 고쳐 쓰는 화면', 'the screens that edit services and groups'] },
-  { ko: '먹색', bg: 'var(--plate-tool)', fg: 'var(--text-inverse, #fff)',
-    what: ['도구', 'Tool'], where: ['포털 자신을 다루는 붙박이', 'the builtins that work on the portal itself'] },
-  { ko: '빨강', bg: 'var(--danger-bg, #fee2e2)', fg: 'var(--danger-text, #b91c1c)',
+  { ko: '먹색', plate: 'var(--plate-tool)', fg: 'var(--text-inverse, #fff)', border: 'var(--plate-tool)',
+    what: ['도구', 'Tool'], where: ['포털 자신을 다루는 붙박이 — 이 화면도 그중 하나', 'the builtins that work on the portal itself — this screen is one'] },
+  { ko: '빨강', plate: 'var(--danger-bg, #fee2e2)', fg: 'var(--danger-text, #b91c1c)', border: 'var(--danger-border, #fca5a5)',
     what: ['위험', 'Danger'], where: ['되돌릴 수 없는 것. 한 화면에 하나, 맨 아래', 'what cannot be undone: one per screen, at the foot'] },
 ]
 
@@ -71,20 +71,14 @@ export default function RackView() {
         ))}
       </Panel>
 
-      <Panel title={L('명판 색', 'Nameplates')} bare
-        hint={L('색이 화면의 종류를 말합니다', 'the colour says what kind of screen it is')}>
-        {PLATES.map((p) => (
-          <Row key={p.ko} className="cols" style={{ gridTemplateColumns: '108px 90px 1fr' }}>
-            {/* The swatch is a nameplate, at its real height. */}
-            <span style={{ display: 'grid', placeItems: 'center', height: '100%', background: p.bg,
-              color: p.fg, border: '1px solid var(--border-strong)' }}>
-              {P(p.what)}
-            </span>
-            <span>{p.ko}</span>
-            <span style={{ color: 'var(--text-secondary)' }}>{P(p.where)}</span>
-          </Row>
-        ))}
-      </Panel>
+      {/* Not a table of colour chips: four real panels, each wearing its own
+          plate. The colour is a thing you can point at, and the specimen is
+          made the same way every screen makes one. */}
+      <h2>{L('명판 색 — 색이 화면의 종류를 말합니다', 'Nameplates — the colour says what kind of screen it is')}</h2>
+      {PLATES.map((p) => (
+        <Panel key={p.ko} title={`${p.ko} · ${P(p.what)}`} hint={P(p.where)}
+          bare style={{ '--plate': p.plate, '--plate-fg': p.fg, '--plate-border': p.border }} />
+      ))}
 
       <Panel title={L('치수', 'Dimensions')}>
         <Field label={L('한 줄', 'One line')}>

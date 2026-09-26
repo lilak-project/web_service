@@ -234,8 +234,13 @@ export default function SidebarPortal({
   // A Set, not one name: opening a service must not close another. Several
   // project lists can stand open at once.
   const [openSvcs, setOpenSvcs] = useState(() => {
-    const s0 = readSel()?.svc
-    return new Set(s0 ? [s0] : [])
+    // Only a restored PROJECT has a list to reopen. Seeding on the service
+    // alone pinned that card lit for the rest of the session: projOpen() is
+    // half of what draws a card's ring, and a card with no project list has
+    // nothing that ever takes it back out of this set — so the card selected
+    // at load stayed pressed however many others you opened after it.
+    const s0 = readSel()
+    return new Set(s0?.svc && s0.proj ? [s0.svc] : [])
   })
   const [flat, setFlat] = useState(() => localStorage.getItem(FLAT_KEY) === '1')
   const [shut, setShut] = useState(() => readSet(SHUT_KEY))
@@ -709,8 +714,11 @@ export default function SidebarPortal({
         )}
 
         {/* The account alone at the foot now: the modes moved into the settings
-            bar, which is where the rest of "things about this portal" live. */}
-        {!signedOut && (
+            bar, which is where the rest of "things about this portal" live.
+            In manage mode the plinth belongs to the two manage buttons instead:
+            settings is not what you are doing, and the account card would only
+            be one more thing to mis-drag. */}
+        {!signedOut && !(manage && isManager) && (
         <div className="pl-user">
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"

@@ -104,10 +104,13 @@
   flex: 0 0 auto;
   height: var(--rack-row);
   padding: 0 13px;
-  background: var(--info-bg);
-  border-bottom: 1px solid var(--border-strong);
+  /* The nameplate colour is ONE inherited variable, so a page sets it for
+     every panel on it and a single panel can still carry its own — which is
+     how the RACK screen shows the four plates: real panels, not swatches. */
+  background: var(--plate, var(--info-bg));
+  border-bottom: 1px solid var(--plate-border, var(--border-strong));
 }
-.set-bar b { font-weight: var(--rack-weight); color: var(--text-emphasis); }
+.set-bar b { font-weight: var(--rack-weight); color: var(--plate-fg, var(--text-emphasis)); }
 /* A foldable panel's strip IS the handle: the title and a caret, nothing else
    moves. */
 .set-bar .set-fold {
@@ -121,11 +124,11 @@
 .set-bar .hint { color: var(--info-text); }
 /* Irreversible things get their own panel, one per page, at the bottom. */
 .set-panel.danger { border-color: var(--danger-border, #fca5a5); }
-.set-panel.danger > .set-bar {
-  background: var(--danger-bg, #fee2e2);
-  border-bottom-color: var(--danger-border, #fca5a5);
+.set-panel.danger {
+  --plate: var(--danger-bg, #fee2e2);
+  --plate-border: var(--danger-border, #fca5a5);
+  --plate-fg: var(--danger-text, #b91c1c);
 }
-.set-panel.danger > .set-bar b { color: var(--danger-text, #b91c1c); }
 
 /* ── rows of facts: label column, value column ───────────────────────────── */
 .set-card {
@@ -287,9 +290,9 @@
 
 /* Manage mode's panels wear the mode's own tint on their title strips, so a
    manage page is never mistaken for a settings page at a glance. */
-.pl-root.managing .pl-mgpage .set-bar { background: var(--plate-manage); }
+.pl-root.managing .pl-mgpage { --plate: var(--plate-manage); }
 .pl-root.managing .pl-mgpage .set-bar .hint { color: #5b21b6; }
-.pl-root.managing .pl-mgpage .set-panel.danger > .set-bar { background: var(--danger-bg, #fee2e2); }
+
 /* A row that is itself a link. */
 .set-link { text-decoration: none; color: inherit; }
 .set-link:hover { background: var(--surface-2); }
@@ -304,14 +307,14 @@
    rather than a hue, because it is the portal's own text colour — the tools
    belong to the portal itself, and a neutral cannot clash with the service
    colours the catalogue rows are full of. */
-.pl-toolpage .set-bar {
-  background: var(--plate-tool);
-  border-bottom-color: var(--plate-tool);
+.pl-toolpage {
+  --plate: var(--plate-tool);
+  --plate-border: var(--plate-tool);
+  --plate-fg: var(--text-inverse, #fff);
 }
-.pl-toolpage .set-bar b { color: var(--text-inverse, #fff); }
-.pl-toolpage .set-bar .set-fold svg { color: var(--text-inverse, #fff); }
+.pl-toolpage .set-bar .set-fold svg { color: var(--plate-fg, var(--text-inverse, #fff)); }
 .pl-toolpage .set-bar .hint { color: var(--text-muted); }
-.pl-toolpage .set-panel.danger > .set-bar { background: var(--danger-bg, #fee2e2); }
+
 
 /* The sign-in panel's strip IS the choice between the two things you can do:
    two halves, the chosen one white so it reads as the front tab of a folder.
