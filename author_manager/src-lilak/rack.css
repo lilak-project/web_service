@@ -374,3 +374,14 @@ body.am-resizing .am-hit:hover { background: transparent; }
 .am-tok:disabled { color: var(--rk-mute); cursor: default; }
 /* The preset you are on fills, like the portal's own switches. */
 .am-btn.on { background: var(--rk-cite); border-color: var(--rk-cite-t); color: var(--rk-cite-t); }
+
+/* A tab you opened, against the four that are always there. Blue is the
+   portal's "this one is yours / selected" tint; when it is the front sheet it
+   goes white like any other tab, with a blue cap so the family still reads. */
+.am-tab.am-opened { background: var(--rk-cite); color: var(--rk-cite-t); }
+.am-tab.am-opened.on {
+  background: var(--rk-panel);
+  color: var(--rk-ink);
+  box-shadow: inset 0 2px 0 var(--rk-cite-t);
+}
+.am-tab.am-opened .am-x { color: var(--rk-cite-t); }

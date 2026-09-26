@@ -339,15 +339,21 @@ export default function App() {
         </div>
 
         <div className="am-tabs">
-          {tabs.map((t) => (
-            <span key={t.id} className={`am-tab${t.id === active ? ' on' : ''}`}>
-              <button type="button" className="am-tabname" onClick={() => setActive(t.id)}>{t.label}</button>
-              {!FIXED.some((f) => f.id === t.id) && (
-                <button type="button" className="am-x" title="닫기"
-                  onClick={() => closeTab(t.id)} aria-label={`${t.label} 닫기`}>×</button>
-              )}
-            </span>
-          ))}
+          {tabs.map((t) => {
+            // The four that are always there against the ones you opened: the
+            // × already says which is which once you look, the colour says it
+            // before you do.
+            const fixed = FIXED.some((f) => f.id === t.id)
+            return (
+              <span key={t.id} className={`am-tab${fixed ? '' : ' am-opened'}${t.id === active ? ' on' : ''}`}>
+                <button type="button" className="am-tabname" onClick={() => setActive(t.id)}>{t.label}</button>
+                {!fixed && (
+                  <button type="button" className="am-x" title="닫기"
+                    onClick={() => closeTab(t.id)} aria-label={`${t.label} 닫기`}>×</button>
+                )}
+              </span>
+            )
+          })}
         </div>
 
         {err && <p className="am-msg">{err}</p>}
