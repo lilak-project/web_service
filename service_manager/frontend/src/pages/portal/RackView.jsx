@@ -34,7 +34,7 @@ export default function RackView() {
   // The parts, each row carrying a live specimen of itself.
   const parts = [
     ['모듈', '.set-panel', 'Panel', L('회색 바닥 위의 흰 상자', 'the white box on the grey ground')],
-    ['명판', '.set-bar', 'Panel title', L('모듈의 제목이자 종류 표시. 화면에서 굵은 글자는 이것뿐', 'the title AND the kind: the only bold text on a screen')],
+    ['명판', '.set-bar', 'Panel title', L('모듈의 제목이자 종류. 화면에서 유일한 굵은 글자', 'the title and the kind — the only bold text')],
     ['표', '.set-card', 'Field', L('이름/값 두 칸 격자', 'the label/value grid')],
     ['채널', '.set-row', 'Row', L('기록 한 건', 'one record')],
     ['표시등', '.set-pill', 'Pill', L('상태', 'state')],
@@ -45,7 +45,7 @@ export default function RackView() {
   const cols = { gridTemplateColumns: '1fr 150px' }
 
   return (
-    <div className="rack-doc">
+    <>
       <Panel title={L('규칙 셋', 'Three rules')}
         hint={L('모든 화면이 지킵니다', 'every screen obeys them')}>
         <Field label="1">{L('화면은 회색 바닥입니다. 내용이 바닥에 직접 놓이지 않고 흰 모듈 위에 놓입니다.',
@@ -76,7 +76,7 @@ export default function RackView() {
         {PLATES.map((p) => (
           <Row key={p.ko} className="cols" style={{ gridTemplateColumns: '108px 90px 1fr' }}>
             {/* The swatch is a nameplate, at its real height. */}
-            <span style={{ display: 'grid', placeItems: 'center', height: 34, background: p.bg,
+            <span style={{ display: 'grid', placeItems: 'center', height: '100%', background: p.bg,
               color: p.fg, border: '1px solid var(--border-strong)', fontWeight: 700 }}>
               {P(p.what)}
             </span>
@@ -88,7 +88,14 @@ export default function RackView() {
 
       <Panel title={L('치수', 'Dimensions')}>
         <Field label={L('명판', 'Nameplate')}>34px</Field>
-        <Field label={L('줄', 'Row')}>{L('위아래 7px · 좌우 13px', '7px vertical · 13px horizontal')}</Field>
+        <Field label={L('줄', 'Row')}>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-row</span> = 32px
+          <span style={{ color: 'var(--text-secondary)' }}>{L('채널에는 바닥, 표 줄에는 고정 — 넘치면 말줄임', 'a floor for record rows, fixed for table rows, ellipsised when it overruns')}</span>
+        </Field>
+        <Field label={L('칸', 'Column')}>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-col</span> = 760px
+          <span style={{ color: 'var(--text-secondary)' }}>{L('모든 랙 화면이 이 칸으로 가운데 정렬됩니다', 'every rack screen is this column, centred')}</span>
+        </Field>
         <Field label={L('컨트롤', 'Controls')}>{L('버튼과 입력 28px', 'buttons and inputs 28px')}</Field>
         <Field label={L('모서리', 'Corners')}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-radius</span> = 0
@@ -147,6 +154,6 @@ export default function RackView() {
           <span style={{ fontFamily: 'var(--font-mono)' }}>frontend/src/pages/portal/RACK.md</span>
         </Field>
       </Panel>
-    </div>
+    </>
   )
 }

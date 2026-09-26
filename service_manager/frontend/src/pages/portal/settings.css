@@ -21,6 +21,12 @@
   /* Every corner in the vocabulary, one knob. A rack is bolted metal: square.
      The pill keeps its round ends — that shape IS the part. */
   --rack-radius: 0;
+  /* A rack has a width: the ground can be 2000px wide, a line of text cannot.
+     Every RACK page is this column, centred. */
+  --rack-col: 760px;
+  /* And its slots are milled, not grown to fit: one height per line. */
+  --rack-row: 32px;
+  --rack-head: 24px;
 }
 
 /* ── the ground ──────────────────────────────────────────────────────────── */
@@ -146,7 +152,7 @@
 .set-row {
   display: flex; align-items: center; gap: 9px;
   padding: 6px 13px;
-  min-height: 36px;
+  min-height: var(--rack-row);
   flex-wrap: wrap;
 }
 .set-row + .set-row { border-top: 1px solid var(--border-default); }
@@ -162,7 +168,7 @@
 /* The column names. A head is a label, not a record: shorter, quieter, and it
    takes the rule under it rather than one of its own above. */
 .set-row.head {
-  min-height: 26px;
+  min-height: var(--rack-head);
   background: var(--surface-2);
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-default);
@@ -327,9 +333,27 @@
    and the one screen that documents the vocabulary is the right place to show
    the vocabulary can be read without its corners. The pills keep their round
    ends: squaring them here would document a part that does not exist. */
-/* Centred, and no wider than it needs: a rack has a width, and stretching these
-   modules across a 1600px panel would make the rules harder to read, not easier. */
-.rack-doc { max-width: 760px; margin: 0 auto; }
+
+
+/* The column. Padding rather than a wrapper, because the pages have no single
+   element to wrap — and this way the page's title lands on the column's edge
+   instead of off at the far left of a wide screen. */
+.pl-setpage, .pl-mgpage {
+  padding-inline: max(16px, calc((100% - var(--rack-col)) / 2));
+}
+/* Both names a page can have for itself — the tool pages' and the settings
+   pages' — sit centred over that column. */
+:is(.pl-mgtitle, .set-title) { text-align: center; }
+
+/* One height per line. A record row still grows when its content genuinely
+   wraps (a chip list, a long message) — that is a floor. A TABLE row (.cols)
+   is fixed: a column of milled slots, with anything too long cut short rather
+   than allowed to push its row taller than its neighbours. */
+.set-row.cols {
+  height: var(--rack-row); min-height: 0; padding-top: 0; padding-bottom: 0;
+}
+.set-row.cols.head { height: var(--rack-head); }
+.set-row.cols > * { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* RACK reaches the whole portal, not just the panels: a kit control rendered
    outside one — in the bar, in a menu, on the classic cover — carries the kit's
