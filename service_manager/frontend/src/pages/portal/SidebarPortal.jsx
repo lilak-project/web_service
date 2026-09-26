@@ -312,6 +312,11 @@ export default function SidebarPortal({
   manageRef.current = manage && isManager
 
   useEffect(() => {
+    // The width rule only ever FOLDS. A window too narrow for 260px cannot show
+    // the bar, so it closes — but it must not UNFOLD a bar the reader folded on
+    // purpose, and it must not run on mount at all: doing both is what threw
+    // the remembered choice away on every reload. The saved value is already
+    // read by useState above, narrow first visits included.
     const fit = () => {
       const w = window.innerWidth
       if (w < PHONE) return                      // drawer: the user's choice stands
@@ -321,9 +326,8 @@ export default function SidebarPortal({
       // when the account finally loaded and re-collapsed a bar that a click
       // had just opened on purpose.
       if (manageRef.current) { setMini(false); return }
-      setMini(w < WIDE)
+      if (w < WIDE) setMini(true)
     }
-    fit()
     window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
   }, [])
