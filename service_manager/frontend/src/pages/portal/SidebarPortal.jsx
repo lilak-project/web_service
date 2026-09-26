@@ -293,12 +293,15 @@ export default function SidebarPortal({
     const fit = () => {
       const w = window.innerWidth
       if (w < PHONE) return                      // drawer: the user's choice stands
+      // Managing needs the bar wide, whatever the window does: the grips, the
+      // drop bands and the drag itself are not reachable at 64px.
+      if (manage && isManager) { setMini(false); return }
       setMini(w < WIDE)
     }
     fit()
     window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
-  }, [])
+  }, [manage, isManager])
 
   const leaveSettings = useCallback(() => {
     if (miniBefore.current !== null) { setMini(miniBefore.current); miniBefore.current = null }
@@ -670,8 +673,11 @@ export default function SidebarPortal({
 
       <aside className="pl-side">
         <div className="pl-brand">
-          <button type="button" className="pl-logo" onClick={() => setMini((m) => !m)}
-            title={L('사이드바 접기/펼치기', 'collapse / expand')}>
+          <button type="button" className="pl-logo" disabled={manage && isManager}
+            onClick={() => setMini((m) => !m)}
+            title={manage && isManager
+              ? L('관리 모드에서는 접을 수 없습니다', 'not while managing')
+              : L('사이드바 접기/펼치기', 'collapse / expand')}>
             <span className="pl-mark"><Icon name="lilak" size={26} /></span>
             <b>lilak</b><span className="sub">portal</span>
           </button>
