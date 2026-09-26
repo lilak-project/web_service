@@ -171,6 +171,21 @@ function useSlide(open) {
     for (const kid of el.children) ro.observe(kid)
     return () => ro.disconnect()
   }, [phase, shown])
+  // A BACKSTOP, because the open list's height must not depend on an event.
+  // `.enter` holds max-height at the animation's first keyframe — 0 — and only
+  // animationend takes the class off again. Any frame the browser does not
+  // paint (a background tab, a hidden pane, a window that was never composited
+  // since the click) leaves the animation at t=0 and the event never fires:
+  // the card says open, the chevron turns, and the list sits at zero height.
+  // The timer ends the phase whatever the compositor did.
+  useEffect(() => {
+    if (!phase) return
+    const t = setTimeout(() => {
+      if (phase === 'leave') setShown(false)
+      setPhase(null)
+    }, 400)
+    return () => clearTimeout(t)
+  }, [phase])
   const onAnimEnd = (e) => {
     // Children animate too and their animationend bubbles — only the container's
     // own end means the transition is over.
