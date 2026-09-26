@@ -869,11 +869,15 @@ export default function SidebarPortal({
                 — so they sit past the spring, under the pages. */}
             <div className="pl-sep" />
             {/* The same thing the logo does, named: from in here the logo is two
-                bars away, and this is where the other switches live. Fixed
-                label, filled while the bar IS folded, like the modes below. */}
+                bars away, and this is where the other switches live. Unlike the
+                modes below it, this one says what pressing it will DO — the
+                caret points the way the bar is about to move. */}
             <button type="button" className={`pl-c2${mini ? ' on' : ''}`}
               onClick={() => setMini((m) => !m)}>
-              <span className="pl-txt">{L('사이드바 접기', 'Collapse sidebar')}</span>
+              <Icon name={mini ? 'caret-right' : 'caret-left'} size={15} />
+              <span className="pl-txt">
+                {mini ? L('사이드바 펼치기', 'Expand sidebar') : L('사이드바 접기', 'Collapse sidebar')}
+              </span>
             </button>
             {modes.map((m) => (
               <button key={m.id} type="button"
