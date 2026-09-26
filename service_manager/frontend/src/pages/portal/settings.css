@@ -292,7 +292,7 @@
 .set-bar.tabs { padding: 0; gap: 0; }
 .set-bar.tabs .set-plain {
   flex: 1 1 0; align-self: stretch; padding: 0;
-  background: none; color: var(--info-text);
+  background: var(--surface-2); color: var(--text-secondary);
   font-size: var(--fs-medium, 14px); text-align: center;
   justify-content: center;
 }
