@@ -330,3 +330,14 @@
 /* Centred, and no wider than it needs: a rack has a width, and stretching these
    modules across a 1600px panel would make the rules harder to read, not easier. */
 .rack-doc { max-width: 760px; margin: 0 auto; }
+
+/* RACK reaches the whole portal, not just the panels: a kit control rendered
+   outside one — in the bar, in a menu, on the classic cover — carries the kit's
+   own rounded corners inline, so it takes the same knob here. Left alone on
+   purpose: anything that DRAWS a rounded object rather than being chrome — the
+   icon lab's app-icon previews, avatars, and the pill, whose round ends are the
+   part itself. */
+.pl-root :is(button, input, select, textarea),
+.pl-home :is(button, input, select, textarea) {
+  border-radius: var(--rack-radius, 0) !important;
+}

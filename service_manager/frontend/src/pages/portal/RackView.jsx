@@ -92,7 +92,7 @@ export default function RackView() {
         <Field label={L('컨트롤', 'Controls')}>{L('버튼과 입력 28px', 'buttons and inputs 28px')}</Field>
         <Field label={L('모서리', 'Corners')}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-radius</span> = 0
-          <span style={{ color: 'var(--text-secondary)' }}>{L('전부 직각. 표시등만 둥근 끝 — 그 모양이 곧 그 부품이라서.', 'square throughout; only the pill keeps its round ends, because that shape IS the part.')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{L('포털 전체가 직각입니다. 둥근 물건을 그리는 것만 예외 — 표시등의 둥근 끝, 아바타, 아이콘 미리보기.', 'the whole portal is square. The exceptions draw a rounded object rather than being chrome: the pill, avatars, icon previews.')}</span>
         </Field>
         <Field label={L('모듈 사이', 'Between modules')}>8px</Field>
         <Field label={L('글자', 'Text')}>{L('한 크기', 'one size')} <span style={{ fontFamily: 'var(--font-mono)' }}>--fs-medium</span></Field>

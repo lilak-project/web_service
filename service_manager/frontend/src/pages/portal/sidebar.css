@@ -12,11 +12,12 @@
      separators. A step past --border-strong, which the cards inside the bars
      already use — the chrome's own lines have to beat the cards'. */
   --divider: var(--text-muted);
-  /* The mockup picks these deliberately — less round than the kit's default, so
-     the cards read as panels rather than pills. Pinned here (not a fallback) or
-     the theme's larger radii win. */
-  --radius-md: 3px;
-  --radius-lg: 5px;
+  /* RACK is square, and the bar is part of the rack — so the kit's radii are
+     pinned to --rack-radius here (pinned, not a fallback, or the theme's
+     larger radii win). One knob, in settings.css, turns every corner in the
+     portal back on. */
+  --radius-md: var(--rack-radius, 0);
+  --radius-lg: var(--rack-radius, 0);
   position: fixed;
   inset: 0;
   display: flex;
