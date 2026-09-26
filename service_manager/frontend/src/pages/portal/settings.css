@@ -302,6 +302,10 @@
 }
 .set-bar.tabs .set-plain[disabled] { cursor: default; }
 
+/* The submit button is the end of the form, not another row of it: give it air
+   above so it does not read as attached to the last input. */
+.set-auth .set-card > .set-actions { padding-top: 10px; padding-bottom: 11px; }
+
 /* 420px of panel cannot spare the settings pages' 170px label column. */
 .set-auth .set-card { grid-template-columns: 92px 1fr; }
 .set-auth .set-host {

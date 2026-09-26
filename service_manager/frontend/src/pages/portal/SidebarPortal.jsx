@@ -678,12 +678,6 @@ export default function SidebarPortal({
               {items.map(serviceCard)}
             </div>
           )))}
-
-          {bands.every((b) => !b.items.length) && (
-            <div style={{ padding: '10px 9px', color: 'var(--text-muted)' }}>
-              {L('서비스가 없습니다', 'no services')}
-            </div>
-          )}
         </div>
 
         {/* Outside .pl-nav so it stays put while the list scrolls: these two act on
