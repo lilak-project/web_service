@@ -388,7 +388,9 @@
   width: 214px;
   flex-shrink: 0;
   display: flex; flex-direction: column;
-  background: var(--surface-3);
+  /* The same ground as the bar it came out of: it is one more bar, not a sheet
+     laid over the page, and a lighter column beside the first read as white. */
+  background: var(--surface-2);
   border-right: 1px solid var(--divider);
   /* It comes OUT of the service bar. The bar is collapsing to 64px at the same
      time, so the menu slides right from under it — which is the gesture the
@@ -401,6 +403,12 @@
 @keyframes pl-step-out {
   from { transform: translateX(-100%); }
   to { transform: none; }
+}
+/* And folds back the same way it came. */
+.pl-bar2.folding { animation: pl-fold-in .38s cubic-bezier(.2, .8, .2, 1) forwards; }
+@keyframes pl-fold-in {
+  from { transform: none; }
+  to { transform: translateX(-100%); }
 }
 /* The bar has to be over it for the slide to read as coming from underneath. */
 .pl-side { position: relative; z-index: 2; }

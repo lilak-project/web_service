@@ -31,6 +31,23 @@ const NOGROUP_ID = '@none'
 // its members are the same three builtins on every portal.
 const SYSTEM_NAME = 'System'
 
+/** The second bar: it steps out of the service bar, and folds back into it.
+ *  Kept mounted through the fold — with the last contents it had, since the
+ *  caller has already stopped passing them by then. */
+function StepOut({ open, children }) {
+  const [shown, setShown] = useState(open)
+  const last = useRef(children)
+  if (open) last.current = children
+  useEffect(() => { if (open) setShown(true) }, [open])
+  if (!shown) return null
+  return (
+    <aside className={`pl-bar2${open ? '' : ' folding'}`}
+      onAnimationEnd={() => { if (!open) setShown(false) }}>
+      {last.current}
+    </aside>
+  )
+}
+
 /** The order list with `key` lifted out and dropped next to `target`. */
 function movedOrder(base, key, target, after) {
   const keys = base.filter((k) => k !== key)
@@ -720,8 +737,9 @@ export default function SidebarPortal({
       {/* Settings is a SECOND bar of the same shape one step in, not a page that
           replaces the first: the service bar stays, so there is always a way out
           and you can still see what is running. */}
-      {manage && isManager && (
-        <aside className="pl-bar2">
+      <StepOut open={(manage && isManager) || view === 'settings'}>
+        {manage && isManager ? (
+          <>
           <div className="pl-b2head"><b>{L('관리', 'Manage')}</b></div>
           <div className="pl-nav2">
             {/* What the cover DOES, then what you can do to it. Same items the
@@ -744,16 +762,19 @@ export default function SidebarPortal({
               <Icon name="folder-plus" size={15} />
               <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
             </button>
+            <div className="pl-spring" />
+
+            {/* Last of all, like Log out in the settings bar: leaving is not
+                one of the things you do while you are here. */}
+            <div className="pl-sep" />
             <button type="button" className="pl-c2 out" onClick={toggleManage}>
               <Icon name="close" size={15} />
               <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
             </button>
           </div>
-        </aside>
-      )}
-
-      {view === 'settings' && (
-        <aside className="pl-bar2">
+          </>
+        ) : (
+          <>
           <div className="pl-b2head"><b>{L('설정', 'Settings')}</b></div>
           <div className="pl-nav2">
             {settingsMenu(isManager, lang).map(([key, , label], i, arr) => (
@@ -768,16 +789,8 @@ export default function SidebarPortal({
             ))}
             <div className="pl-spring" />
 
-            {/* Signing out is not a settings page, so it sits under them all,
-                past the spring. */}
-            <div className="pl-sep" />
-            <button type="button" className="pl-c2 out" onClick={onLogout}>
-              <Icon name="logout" size={15} />
-              <span className="pl-txt">{L('로그아웃', 'Log out')}</span>
-            </button>
-
-            {/* The modes are not pages either — they change what the whole cover
-                does — and they are the last thing in the bar. */}
+            {/* The modes are not pages — they change what the whole cover does
+                — so they sit past the spring, under the pages. */}
             <div className="pl-sep" />
             {modes.map((m) => (
               <button key={m.id} type="button"
@@ -797,9 +810,17 @@ export default function SidebarPortal({
               <Icon name="tree" size={15} />
               <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
             </button>
+
+            {/* Last of all: leaving is not a page and not a mode. */}
+            <div className="pl-sep" />
+            <button type="button" className="pl-c2 out" onClick={onLogout}>
+              <Icon name="logout" size={15} />
+              <span className="pl-txt">{L('로그아웃', 'Log out')}</span>
+            </button>
           </div>
-        </aside>
-      )}
+          </>
+        )}
+      </StepOut>
 
       <main className="pl-main">
         <div className="pl-panel">
