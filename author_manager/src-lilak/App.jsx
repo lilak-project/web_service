@@ -1,21 +1,22 @@
 /**
- * author manager — the table, with tabs, a selection and an edit view.
- *
- * The shape of the screen:
+ * author manager — the table, its tabs, the selection, and My List's output.
  *
  *   저자 ─────────────────────────────── nameplate (the module's name)
- *   add  clear  select all      [search] command line — acts on the selection
+ *   add to my list  clear      [search]  command line — acts on the selection
  *   total │ my list │ affiliation │ groups │ CENS ×   tabs
- *   # ☐ affil. 이름 name │ nm. email …    the head, sticky
- *   …rows…                                26px each
+ *   ☐ # affil. 이름 name │ nm. email …   the head: sticky, and draggable edges
+ *   …rows…                               26px each
  *
  * A tab is either a list of AUTHORS (total, my list, or one affiliation/group),
  * a list of CLASSES (the affiliations or the groups themselves), or one record
  * being EDITED. Picking a class opens a tab of its authors; right-clicking any
- * row opens a tab that edits it. Tabs you opened carry an ×; the four fixed
- * ones do not.
+ * row opens a tab that edits it. Tabs you opened carry an ×.
+ *
+ * Column widths live in one place (COLS + the `widths` state, remembered), and
+ * both the head and every row read the same template — so a column is a column
+ * all the way down, whatever the reader drags it to.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './rack.css'
 
 // ─── Portal integration (same contract as the rest of the services) ─────────
@@ -23,6 +24,12 @@ const PORTAL_BASE = (typeof window !== 'undefined' && window.__PORTAL_BASE__) ||
 const PORTAL_PARTS = PORTAL_BASE.split('/').filter(Boolean)
 const PORTAL_PROJECT = PORTAL_PARTS.length ? PORTAL_PARTS[PORTAL_PARTS.length - 1] : ''
 const MYLIST_KEY = `am.mylist.${PORTAL_PROJECT}`
+const WIDTH_KEY = `am.cols.${PORTAL_PROJECT}`
+
+const load = (k, fallback) => {
+  try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback } catch { return fallback }
+}
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* private mode */ } }
 
 function portalToken() {
   try { return localStorage.getItem('lilak_portal_token') || localStorage.getItem('elog_token') || '' }
@@ -52,6 +59,7 @@ async function putDoc(baseVersion, body) {
 // English parts rather than stored, so they cannot drift from `name`.
 const korName = (a) => `${a.korFamily || ''}${a.korGiven || ''}`.trim()
 const engName = (a) => [a.engFirst, a.engMiddle, a.engLast].filter(Boolean).join(' ')
+const anyName = (a) => a.nick || korName(a) || engName(a) || '(이름 없음)'
 const citeLast = (a) => a.engLast || ''
 const citeFirst = (a) => [a.engFirst, a.engMiddle].filter(Boolean).join(' ')
 const citeInit = (a) => [a.engFirst, a.engMiddle, a.engLast]
@@ -74,10 +82,38 @@ function coreOf(a) {
   const cores = (a.groups || []).map((g) => Number(g.core)).filter((n) => Number.isFinite(n) && n >= 1)
   return cores.length ? Math.min(...cores) : null
 }
+// An author's affiliation entry keys its affiliation as `tag`; its group entry
+// keys the group as `group`. The class records carry `name` (and `shortName`).
 const inAff = (a, tag) => (a.affiliations || []).some((x) => x.tag === tag)
 const inGrp = (a, name) => (a.groups || []).some((g) => g.group === name)
 
 const D = '·'   // a cell with nothing in it still shows its column
+
+// ─── The columns ────────────────────────────────────────────────────────────
+// One list, read by the head and by every row. `min` is as narrow as dragging
+// may take it; `drop` is the width below which the column leaves rather than
+// the table scrolling sideways.
+const COLS = [
+  { k: 'chk', w: 26, min: 26, fix: true },
+  { k: 'num', w: 34, min: 26, fix: true, label: '#' },
+  { k: 'affil', w: 60, min: 40, label: 'affil.' },
+  { k: 'kor', w: 86, min: 50, label: '이름' },
+  { k: 'name', w: 196, min: 90, label: 'name' },
+  { k: 'rule', w: 7, min: 7, fix: true },
+  { k: 'nm', w: 112, min: 60, label: 'nm.', drop: 1040 },
+  { k: 'email', w: 214, min: 90, label: 'email' },
+  { k: 'pos', w: 176, min: 70, label: 'position', drop: 860 },
+  { k: 'core', w: 44, min: 34, label: 'core', num: true },
+  { k: 'last', w: 100, min: 50, label: 'last', cite: true, drop: 1280 },
+  { k: 'first', w: 100, min: 50, label: 'first', cite: true, drop: 1280 },
+  { k: 'init', w: 48, min: 34, label: 'init', cite: true, drop: 1280 },
+]
+const CLS_COLS = [
+  { k: 'num', w: 34, min: 26, fix: true, label: '#' },
+  { k: 'name', w: 200, min: 80, label: 'name' },
+  { k: 'count', w: 70, min: 46, label: 'people', num: true },
+  { k: 'full', w: 280, min: 90, label: 'full name' },
+]
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const FIXED = [
@@ -95,26 +131,65 @@ export default function App() {
   const [active, setActive] = useState('total')
   const [picked, setPicked] = useState(() => new Set())     // selected author ids
   const [query, setQuery] = useState('')
-  const [myList, setMyList] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(MYLIST_KEY) || '[]') } catch { return [] }
-  })
+  const [widths, setWidths] = useState(() => load(WIDTH_KEY, {}))
+  const [vw, setVw] = useState(() => (typeof window === 'undefined' ? 1400 : window.innerWidth))
+  const [myList, setMyList] = useState(() => load(MYLIST_KEY, []))
+  const findRef = useRef(null)
+  const lastHit = useRef(null)      // for shift-click: where the range starts
 
   useEffect(() => {
     if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
     fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
   }, [])
+  useEffect(() => { save(MYLIST_KEY, myList) }, [myList])
+  useEffect(() => { save(WIDTH_KEY, widths) }, [widths])
   useEffect(() => {
-    try { localStorage.setItem(MYLIST_KEY, JSON.stringify(myList)) } catch { /* private mode */ }
-  }, [myList])
+    const on = () => setVw(window.innerWidth)
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [])
   // One line of status, and it clears itself.
   useEffect(() => {
     if (!note) return
     const t = setTimeout(() => setNote(''), 4000)
     return () => clearTimeout(t)
   }, [note])
+  // ⌘F / Ctrl+F belongs to the table's own search, not the browser's — the
+  // browser would only find the rows already painted anyway.
+  useEffect(() => {
+    const on = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault()
+        findRef.current?.focus()
+        findRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', on)
+    return () => window.removeEventListener('keydown', on)
+  }, [])
 
   const authors = doc?.authors || []
   const tab = tabs.find((t) => t.id === active) || tabs[0]
+
+  const cols = useMemo(
+    () => COLS.filter((c) => !(c.drop && vw < c.drop)).map((c) => ({ ...c, w: widths[c.k] ?? c.w })),
+    [vw, widths])
+  const clsCols = useMemo(() => CLS_COLS.map((c) => ({ ...c, w: widths[`c:${c.k}`] ?? c.w })), [widths])
+  const drag = useCallback((prefix) => (key, startX, startW) => {
+    const move = (e) => {
+      const col = [...COLS, ...CLS_COLS].find((c) => c.k === key)
+      const w = Math.max(col?.min ?? 34, Math.round(startW + (e.clientX - startX)))
+      setWidths((s) => ({ ...s, [prefix + key]: w }))
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      document.body.classList.remove('am-resizing')
+    }
+    document.body.classList.add('am-resizing')
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }, [])
 
   // Which authors this tab is about, before the search narrows them.
   const scope = useMemo(() => {
@@ -126,11 +201,7 @@ export default function App() {
     let list = authors
     if (tab.aff) list = list.filter((a) => inAff(a, tab.aff))
     if (tab.grp) list = list.filter((a) => inGrp(a, tab.grp))
-    // Paper order: by core, then by the name a paper would print.
-    return [...list].sort((a, b) => {
-      const c = (coreOf(a) ?? 99) - (coreOf(b) ?? 99)
-      return c !== 0 ? c : engName(a).localeCompare(engName(b))
-    })
+    return [...list].sort(byPaperOrder)
   }, [tab, authors, myList])
 
   const rows = useMemo(() => {
@@ -146,7 +217,7 @@ export default function App() {
     const recs = (tab.of === 'affiliation' ? doc?.affiliations : doc?.groups) || []
     return recs.map((r) => ({
       name: r.name,
-      note: r.note || r.label || '',
+      full: r.fullName || '',
       count: authors.filter((a) => (tab.of === 'affiliation' ? inAff(a, r.name) : inGrp(a, r.name))).length,
     })).sort((x, y) => x.name.localeCompare(y.name))
   }, [tab, doc, authors])
@@ -162,32 +233,52 @@ export default function App() {
   }
 
   // ── the selection ──
-  const toggle = (id) => setPicked((s) => {
-    const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n
-  })
+  /** Click picks one; shift-click picks everything between it and the last. */
+  function hit(i, shift) {
+    const from = shift && lastHit.current != null ? lastHit.current : i
+    const [lo, hi] = from <= i ? [from, i] : [i, from]
+    const span = rows.slice(lo, hi + 1).map((a) => a.id)
+    // The row you started from decides: shift-click extends a selection, and
+    // a plain click on a picked row unpicks it.
+    const turningOn = shift ? true : !picked.has(rows[i].id)
+    setPicked((s) => {
+      const n = new Set(s)
+      span.forEach((id) => (turningOn ? n.add(id) : n.delete(id)))
+      return n
+    })
+    if (!shift) lastHit.current = i
+  }
+  const allPicked = rows.length > 0 && rows.every((a) => picked.has(a.id))
+  const somePicked = rows.some((a) => picked.has(a.id))
+  function toggleAll() {
+    setPicked((s) => {
+      const n = new Set(s)
+      if (allPicked) rows.forEach((a) => n.delete(a.id))
+      else rows.forEach((a) => n.add(a.id))
+      return n
+    })
+  }
   function addToMyList() {
     if (!picked.size) { setNote('선택된 저자가 없습니다.'); return }
-    setMyList((l) => [...l, ...[...picked].filter((id) => !l.includes(id))])
-    setNote(`My List에 ${picked.size}명 담았습니다.`)
+    const fresh = [...picked].filter((id) => !myList.includes(id))
+    setMyList((l) => [...l, ...fresh])
+    setNote(fresh.length ? `My List에 ${fresh.length}명 담았습니다.` : '이미 다 담겨 있습니다.')
   }
 
-  // ── editing one record ──
-  async function save(patch) {
+  // ── saving one record ──
+  async function commit(patch, said) {
     if (!doc) return
-    const body = {
-      authors: patch.authors || doc.authors,
-      affiliations: patch.affiliations || doc.affiliations,
-      groups: patch.groups || doc.groups,
-    }
     try {
-      const r = await putDoc(doc.version, body)
+      const r = await putDoc(doc.version, {
+        authors: patch.authors || doc.authors,
+        affiliations: patch.affiliations || doc.affiliations,
+        groups: patch.groups || doc.groups,
+      })
       if (r.conflict) { setNote('다른 사람이 먼저 저장했습니다 — 새로 읽어주세요.'); return }
       setDoc(r.doc)
-      setNote('저장했습니다.')
+      setNote(said || '저장했습니다.')
     } catch (e) { setNote(String(e.message || e)) }
   }
-
-  const allPicked = rows.length > 0 && rows.every((a) => picked.has(a.id))
 
   return (
     <div className="am">
@@ -199,25 +290,17 @@ export default function App() {
           <span className="am-n">{PORTAL_PROJECT}</span>
         </header>
 
-        {/* What the selection can do, then the one search line on the right. */}
         <div className="am-cmd">
-          <button type="button" className="am-btn" onClick={addToMyList}>add</button>
+          <button type="button" className="am-btn" onClick={addToMyList}>add to my list</button>
           <button type="button" className="am-btn" disabled={!picked.size}
-            onClick={() => setPicked(new Set())}>clear</button>
-          <button type="button" className="am-btn" disabled={tab?.kind !== 'authors' || !rows.length}
-            onClick={() => setPicked((s) => {
-              const n = new Set(s)
-              if (allPicked) rows.forEach((a) => n.delete(a.id))
-              else rows.forEach((a) => n.add(a.id))
-              return n
-            })}>{allPicked ? 'select none' : 'select all'}</button>
+            onClick={() => { setPicked(new Set()); lastHit.current = null }}>clear</button>
           {picked.size > 0 && <span className="am-n">{picked.size} 선택</span>}
           <span className="am-sp" />
-          <input type="search" className="am-find" value={query} placeholder="이름 · 이메일 · 소속 · 그룹"
+          <input ref={findRef} type="search" className="am-find" value={query}
+            placeholder="이름 · 이메일 · 소속 · 그룹   (⌘F)"
             onChange={(e) => setQuery(e.target.value)} />
         </div>
 
-        {/* The tabs sit ON the table, the way a folder's tabs sit on the folder. */}
         <div className="am-tabs">
           {tabs.map((t) => (
             <span key={t.id} className={`am-tab${t.id === active ? ' on' : ''}`}>
@@ -234,26 +317,87 @@ export default function App() {
         {!err && !doc && <p className="am-msg">읽는 중…</p>}
 
         {doc && tab?.kind === 'authors' && (
-          <AuthorTable rows={rows} picked={picked} onToggle={toggle}
-            onEdit={(a) => openTab({ id: `edit:${a.id}`, kind: 'edit', label: korName(a) || engName(a) || 'author', who: a.id })} />
+          <>
+            <Table cols={cols} onDrag={drag('')}
+              head={{ all: allPicked, some: somePicked, onAll: toggleAll }}>
+              {rows.map((a, i) => {
+                const cur = currentAff(a)
+                const on = picked.has(a.id)
+                return (
+                  <Row key={a.id || i} cols={cols} className={`am-hit${on ? ' on' : ''}`}
+                    onClick={(e) => hit(i, e.shiftKey)}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      openTab({ id: `edit:${a.id}`, kind: 'edit', label: anyName(a), who: a.id })
+                    }}
+                    cell={{
+                      chk: <input type="checkbox" checked={on} tabIndex={-1} readOnly
+                        aria-label={`${anyName(a)} 선택`} />,
+                      num: i + 1,
+                      affil: cur?.tag || D,
+                      kor: korName(a) || D,
+                      name: engName(a) || a.nick || D,
+                      nm: citeShort(a) || D,
+                      email: repEmail(a) || D,
+                      pos: cur?.position || D,
+                      core: coreOf(a) ?? D,
+                      last: citeLast(a) || D,
+                      first: citeFirst(a) || D,
+                      init: citeInit(a) || D,
+                    }} />
+                )
+              })}
+              {rows.length === 0 && <p className="am-msg">해당하는 저자가 없습니다.</p>}
+            </Table>
+            {tab.id === 'mylist' && (
+              <MyListOut list={scope} doc={doc}
+                onClear={() => { setMyList([]); setNote('My List를 비웠습니다.') }}
+                onDrop={(id) => setMyList((l) => l.filter((x) => x !== id))}
+                onMakeGroup={(form) => {
+                  const name = String(form.shortName || form.fullName || '').trim()
+                  if (!name) { setNote('그룹 이름이 필요합니다.'); return false }
+                  if ((doc.groups || []).some((g) => g.name === name)) { setNote('같은 이름의 그룹이 있습니다.'); return false }
+                  const ids = new Set(scope.map((a) => a.id))
+                  commit({
+                    groups: [...(doc.groups || []), { ...form, name, shortName: name }],
+                    authors: doc.authors.map((a) => (ids.has(a.id) && !inGrp(a, name)
+                      ? { ...a, groups: [...(a.groups || []), { group: name, role: '', core: 10 }] }
+                      : a)),
+                  }, `'${name}' 그룹 생성 · ${ids.size}명 추가`)
+                  return true
+                }}
+                say={setNote} />
+            )}
+          </>
         )}
+
         {doc && tab?.kind === 'classes' && (
-          <ClassTable rows={classes} of={tab.of}
-            onOpen={(r) => openTab({
-              id: `${tab.of}:${r.name}`, kind: 'authors', label: r.name,
-              ...(tab.of === 'affiliation' ? { aff: r.name } : { grp: r.name }),
-            })}
-            onEdit={(r) => openTab({ id: `editcls:${tab.of}:${r.name}`, kind: 'editcls', label: r.name, of: tab.of, who: r.name })} />
+          <Table cols={clsCols} onDrag={drag('c:')}>
+            {classes.map((r, i) => (
+              <Row key={r.name} cols={clsCols} className="am-hit"
+                onClick={() => openTab({
+                  id: `${tab.of}:${r.name}`, kind: 'authors', label: r.name,
+                  ...(tab.of === 'affiliation' ? { aff: r.name } : { grp: r.name }),
+                })}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  openTab({ id: `editcls:${tab.of}:${r.name}`, kind: 'editcls', label: r.name, of: tab.of, who: r.name })
+                }}
+                cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
+            ))}
+            {classes.length === 0 && <p className="am-msg">등록된 항목이 없습니다.</p>}
+          </Table>
         )}
+
         {doc && tab?.kind === 'edit' && (
-          <EditAuthor author={authors.find((a) => a.id === tab.who)} doc={doc} onSave={save} />
+          <EditAuthor author={authors.find((a) => a.id === tab.who)} doc={doc} onSave={commit} />
         )}
         {doc && tab?.kind === 'editcls' && (
-          <EditClass name={tab.who} of={tab.of} doc={doc} onSave={save} />
+          <EditClass name={tab.who} of={tab.of} doc={doc} onSave={commit} />
         )}
 
         <footer className="am-foot">
-          <span>{note || '왼쪽 클릭으로 선택, 오른쪽 클릭으로 편집.'}</span>
+          <span>{note || '왼쪽 클릭으로 선택, shift로 범위, 오른쪽 클릭으로 편집.'}</span>
           <span className="am-sp" />
           <span className="am-mono">{rows.length ? `${rows.length}줄` : ''}</span>
         </footer>
@@ -262,77 +406,152 @@ export default function App() {
   )
 }
 
-// ─── The author table ───────────────────────────────────────────────────────
-function AuthorTable({ rows, picked, onToggle, onEdit }) {
+function byPaperOrder(a, b) {
+  const c = (coreOf(a) ?? 99) - (coreOf(b) ?? 99)
+  return c !== 0 ? c : (citeShort(a) || engName(a) || anyName(a))
+    .localeCompare(citeShort(b) || engName(b) || anyName(b))
+}
+
+// ─── The table shell: one template, a sticky head, draggable edges ──────────
+function Table({ cols, onDrag, head, children }) {
+  const tmpl = `${cols.map((c) => `${c.w}px`).join(' ')} 1fr`
   return (
     <div className="am-tab-body">
-      <div className="am-row am-head">
-        <span className="am-chk" />
-        <span className="am-gut">#</span>
-        <span className="am-c">affil.</span>
-        <span className="am-c">이름</span>
-        <span className="am-c">name</span>
-        <i className="am-rule" />
-        <span className="am-c am-nm">nm.</span>
-        <span className="am-c">email</span>
-        <span className="am-c am-pos">position</span>
-        <span className="am-c am-num">core</span>
-        <span className="am-c am-cite">last</span>
-        <span className="am-c am-cite">first</span>
-        <span className="am-c am-cite">init</span>
+      <div className="am-row am-head" style={{ gridTemplateColumns: tmpl }}>
+        {cols.map((c) => (
+          <span key={c.k}
+            className={`${c.k === 'num' ? 'am-gut' : c.k === 'rule' ? 'am-rule' : 'am-c'}`
+              + `${c.num ? ' am-num' : ''}${c.cite ? ' am-cite' : ''}${c.k === 'chk' ? ' am-chk' : ''}`}>
+            {c.k === 'chk' && head ? (
+              <input type="checkbox" checked={head.all}
+                ref={(el) => { if (el) el.indeterminate = !head.all && head.some }}
+                onChange={head.onAll} aria-label="전체 선택" />
+            ) : c.label}
+            {!c.fix && <i className="am-grip" onMouseDown={(e) => {
+              e.preventDefault(); e.stopPropagation(); onDrag(c.k, e.clientX, c.w)
+            }} />}
+          </span>
+        ))}
+        <span className="am-c" />
       </div>
-      {rows.length === 0 && <p className="am-msg">해당하는 저자가 없습니다.</p>}
-      {rows.map((a, i) => {
-        const cur = currentAff(a)
-        const on = picked.has(a.id)
-        return (
-          <div key={a.id || i} className={`am-row am-hit${on ? ' on' : ''}`}
-            onClick={() => onToggle(a.id)}
-            onContextMenu={(e) => { e.preventDefault(); onEdit(a) }}>
-            <span className="am-chk">
-              <input type="checkbox" checked={on} tabIndex={-1} readOnly
-                aria-label={`${korName(a) || engName(a)} 선택`} />
-            </span>
-            <span className="am-gut">{i + 1}</span>
-            <span className="am-c am-dim">{cur?.tag || D}</span>
-            <span className="am-c">{korName(a) || D}</span>
-            <span className="am-c am-ink">{engName(a) || a.nick || D}</span>
-            <i className="am-rule" />
-            <span className="am-c am-mono am-dim am-nm">{citeShort(a) || D}</span>
-            <span className="am-c am-mono">{repEmail(a) || D}</span>
-            <span className="am-c am-dim am-pos">{cur?.position || D}</span>
-            <span className="am-c am-num">{coreOf(a) ?? D}</span>
-            <span className="am-c am-cite">{citeLast(a) || D}</span>
-            <span className="am-c am-cite">{citeFirst(a) || D}</span>
-            <span className="am-c am-cite am-mono">{citeInit(a) || D}</span>
-          </div>
-        )
-      })}
+      {children}
     </div>
   )
 }
 
-// ─── The affiliations / groups themselves ───────────────────────────────────
-function ClassTable({ rows, of, onOpen, onEdit }) {
+function Row({ cols, cell, className, onClick, onContextMenu }) {
+  const tmpl = `${cols.map((c) => `${c.w}px`).join(' ')} 1fr`
   return (
-    <div className="am-tab-body">
-      <div className="am-row am-crow am-head">
-        <span className="am-gut">#</span>
-        <span className="am-c">{of === 'affiliation' ? 'affiliation' : 'group'}</span>
-        <span className="am-c am-num">people</span>
-        <span className="am-c am-dim">note</span>
+    <div className={`am-row ${className || ''}`} style={{ gridTemplateColumns: tmpl }}
+      onClick={onClick} onContextMenu={onContextMenu}>
+      {cols.map((c) => (c.k === 'rule'
+        ? <i key={c.k} className="am-rule" />
+        : (
+          <span key={c.k}
+            className={`${c.k === 'num' ? 'am-gut' : 'am-c'}`
+              + `${c.k === 'chk' ? ' am-chk' : ''}${c.num ? ' am-num' : ''}`
+              + `${c.cite ? ' am-cite' : ''}${c.k === 'name' ? ' am-ink' : ''}`
+              + `${c.k === 'nm' || c.k === 'email' || c.k === 'init' ? ' am-mono' : ''}`
+              + `${c.k === 'affil' || c.k === 'pos' || c.k === 'nm' ? ' am-dim' : ''}`}>
+            {cell[c.k]}
+          </span>
+        )))}
+      <span className="am-c" />
+    </div>
+  )
+}
+
+// ─── My List's output: the reason the list exists ───────────────────────────
+function MyListOut({ list, doc, onClear, onDrop, onMakeGroup, say }) {
+  const [sep, setSep] = useState(', ')
+  const [out, setOut] = useState('')
+  const [group, setGroup] = useState(null)   // the new-group form, when open
+
+  const real = sep.replaceAll('⏎', '\n')
+  const joined = (fn) => list.map(fn).filter(Boolean).join(real)
+
+  /** The LaTeX author block: core order, then superscript per affiliation. */
+  function paperAuthors() {
+    const ordered = [...list].sort(byPaperOrder)
+    const idx = new Map()
+    for (const a of ordered) {
+      const tag = currentAff(a)?.tag
+      if (tag && !idx.has(tag)) idx.set(tag, idx.size + 1)
+    }
+    const line = (tag) => {
+      const rec = (doc.affiliations || []).find((x) => x.name === tag)
+      return rec ? [rec.fullName || rec.name, rec.address].filter(Boolean).join(', ') : tag
+    }
+    const names = ordered.map((a) => {
+      const tag = currentAff(a)?.tag
+      return `  ${citeShort(a) || engName(a) || anyName(a)}${tag ? `$^{${idx.get(tag)}}$` : ''}`
+    })
+    const affs = [...idx.entries()].map(([tag, i]) => `$^{${i}}$ ${line(tag)}\\\\`)
+    return `\\author{%\n${names.join(',\n')}\n}\n\n% affiliations\n${affs.join('\n')}`
+  }
+
+  async function copy() {
+    if (!out) { say('먼저 아래 버튼으로 명단을 만드세요.'); return }
+    try { await navigator.clipboard.writeText(out); say('복사했습니다.') }
+    catch { say('복사 실패 — 직접 선택해 복사하세요.') }
+  }
+
+  const none = list.length === 0
+  return (
+    <div className="am-out">
+      <div className="am-outbar">
+        <button type="button" className="am-btn" disabled={none}
+          onClick={() => setOut(joined((a) => korName(a) || anyName(a)))}>이름 나열</button>
+        <button type="button" className="am-btn" disabled={none}
+          onClick={() => setOut(joined((a) => engName(a) || anyName(a)))}>full names</button>
+        <button type="button" className="am-btn" disabled={none}
+          onClick={() => setOut(joined((a) => citeShort(a) || engName(a) || anyName(a)))}>abv. names</button>
+        <button type="button" className="am-btn am-go" disabled={none}
+          onClick={() => setOut(paperAuthors())}>paper authors</button>
+        <span className="am-gap" />
+        <input className="am-in am-mono" style={{ width: 76 }} value={sep}
+          onChange={(e) => setSep(e.target.value)} title="구분기호" />
+        <button type="button" className="am-btn" title="줄바꿈 추가"
+          onClick={() => setSep((s) => `${s}⏎`)}>+⏎</button>
+        <span className="am-sp" />
+        <button type="button" className="am-btn" disabled={!out} onClick={copy}>copy</button>
+        <button type="button" className="am-btn" disabled={none}
+          onClick={() => setGroup(group ? null : {})}>make group</button>
+        <button type="button" className="am-btn" disabled={none} onClick={onClear}>empty my list</button>
       </div>
-      {rows.length === 0 && <p className="am-msg">{of === 'affiliation' ? '소속이' : '그룹이'} 없습니다.</p>}
-      {rows.map((r, i) => (
-        <div key={r.name} className="am-row am-crow am-hit"
-          onClick={() => onOpen(r)}
-          onContextMenu={(e) => { e.preventDefault(); onEdit(r) }}>
-          <span className="am-gut">{i + 1}</span>
-          <span className="am-c am-ink">{r.name}</span>
-          <span className="am-c am-num">{r.count}</span>
-          <span className="am-c am-dim">{r.note || D}</span>
+
+      {group && (
+        <div className="am-rec am-newgrp">
+          <span className="am-fl">새 그룹</span>
+          <div className="am-fv">
+            <input className="am-in" style={{ width: 150 }} placeholder="short name *"
+              value={group.shortName || ''} onChange={(e) => setGroup((g) => ({ ...g, shortName: e.target.value }))} />
+            <input className="am-in" style={{ width: 240 }} placeholder="full name"
+              value={group.fullName || ''} onChange={(e) => setGroup((g) => ({ ...g, fullName: e.target.value }))} />
+            <button type="button" className="am-btn am-go"
+              onClick={() => { if (onMakeGroup(group)) setGroup(null) }}>save</button>
+            <button type="button" className="am-btn" onClick={() => setGroup(null)}>cancel</button>
+            <span className="am-hint">My List의 {list.length}명이 이 그룹에 들어갑니다 (core 10).</span>
+          </div>
         </div>
-      ))}
+      )}
+
+      <textarea className="am-outbox" value={out} readOnly
+        placeholder={none ? 'My List가 비어 있습니다 — 표에서 고르고 add to my list.'
+          : '위 버튼으로 명단을 만드세요.'} />
+      {!none && (
+        <div className="am-outbar am-outfoot">
+          <span className="am-hint">My List {list.length}명 — 오른쪽 ×로 한 명씩 뺍니다.</span>
+          <span className="am-sp" />
+          {list.map((a) => (
+            <span key={a.id} className="am-chip">
+              {citeShort(a) || anyName(a)}
+              <button type="button" className="am-x" title="빼기"
+                onClick={() => onDrop(a.id)} aria-label={`${anyName(a)} 빼기`}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -340,7 +559,6 @@ function ClassTable({ rows, of, onOpen, onEdit }) {
 // ─── Editing ────────────────────────────────────────────────────────────────
 // The record reads at the readable size, not the list's: finding is dense,
 // reading and typing are not.
-function Rowset({ children }) { return <div className="am-rec">{children}</div> }
 function Fld({ label, children }) {
   return (<><span className="am-fl">{label}</span><div className="am-fv">{children}</div></>)
 }
@@ -355,15 +573,16 @@ function EditAuthor({ author, doc, onSave }) {
   // entry rather than adding a new one.
   const setAff = (k) => (e) => setF((s) => {
     const list = [...(s.affiliations || [])]
-    if (!list.length) list.push({ tag: '', position: '', since: '' })
-    const i = list.indexOf([...list].sort((x, y) =>
-      String(x.since || '').localeCompare(String(y.since || ''))).at(-1))
+    if (!list.length) list.push({ tag: '', position: '', email: '', since: '' })
+    const latest = [...list].sort((x, y) =>
+      String(x.since || '').localeCompare(String(y.since || ''))).at(-1)
+    const i = list.indexOf(latest)
     list[i] = { ...list[i], [k]: e.target.value }
     return { ...s, affiliations: list }
   })
   return (
     <div className="am-tab-body">
-      <Rowset>
+      <div className="am-rec">
         <Fld label="한글 이름">
           <input className="am-in" style={{ width: 90 }} value={f.korFamily || ''} onChange={set('korFamily')} placeholder="성" />
           <input className="am-in" style={{ width: 120 }} value={f.korGiven || ''} onChange={set('korGiven')} placeholder="이름" />
@@ -372,6 +591,9 @@ function EditAuthor({ author, doc, onSave }) {
           <input className="am-in" style={{ width: 130 }} value={f.engFirst || ''} onChange={set('engFirst')} placeholder="first" />
           <input className="am-in" style={{ width: 110 }} value={f.engMiddle || ''} onChange={set('engMiddle')} placeholder="middle" />
           <input className="am-in" style={{ width: 140 }} value={f.engLast || ''} onChange={set('engLast')} placeholder="last" />
+        </Fld>
+        <Fld label="별명">
+          <input className="am-in" style={{ width: 200 }} value={f.nick || ''} onChange={set('nick')} />
         </Fld>
         <Fld label="줄임 이름">
           <input className="am-in am-mono" style={{ width: 160 }} value={f.abvName || ''} onChange={set('abvName')}
@@ -399,7 +621,7 @@ function EditAuthor({ author, doc, onSave }) {
             onClick={() => onSave({ authors: doc.authors.map((a) => (a.id === f.id ? f : a)) })}>save</button>
           <button type="button" className="am-btn" onClick={() => setF(author)}>revert</button>
         </Fld>
-      </Rowset>
+      </div>
     </div>
   )
 }
@@ -413,14 +635,29 @@ function EditClass({ name, of, doc, onSave }) {
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   return (
     <div className="am-tab-body">
-      <Rowset>
+      <div className="am-rec">
         <Fld label="이름">
-          <input className="am-in" style={{ width: 220 }} value={f.name || ''} onChange={set('name')} />
-          <span className="am-hint">이름을 고치면 이 이름을 쓰는 저자들도 같이 고쳐집니다.</span>
+          {/* name is what the authors point at, shortName is what the record
+              shows: they are the same string, so they move together. */}
+          <input className="am-in" style={{ width: 220 }} value={f.name || ''}
+            onChange={(e) => setF((s) => ({ ...s, name: e.target.value, shortName: e.target.value }))} />
+          <span className="am-hint">고치면 이 이름을 쓰는 저자들도 같이 고쳐집니다.</span>
         </Fld>
-        <Fld label="설명">
-          <input className="am-in" style={{ width: 360 }} value={f.note || ''} onChange={set('note')} />
+        <Fld label="full name">
+          <input className="am-in" style={{ width: 360 }} value={f.fullName || ''} onChange={set('fullName')} />
         </Fld>
+        {of === 'affiliation' ? (
+          <Fld label="주소 · 전화">
+            <input className="am-in" style={{ width: 360 }} value={f.address || ''} onChange={set('address')} placeholder="address" />
+            <input className="am-in am-mono" style={{ width: 150 }} value={f.phone || ''} onChange={set('phone')} placeholder="phone" />
+          </Fld>
+        ) : (
+          <Fld label="설명 · 기간">
+            <input className="am-in" style={{ width: 300 }} value={f.description || ''} onChange={set('description')} placeholder="description" />
+            <input className="am-in am-mono" style={{ width: 110 }} value={f.creationDate || ''} onChange={set('creationDate')} placeholder="2025-01-01" />
+            <input className="am-in am-mono" style={{ width: 110 }} value={f.endDate || ''} onChange={set('endDate')} placeholder="end" />
+          </Fld>
+        )}
         <Fld label="">
           <button type="button" className="am-btn am-go" onClick={() => {
             const renamed = f.name !== rec.name
@@ -440,7 +677,7 @@ function EditClass({ name, of, doc, onSave }) {
           }}>save</button>
           <button type="button" className="am-btn" onClick={() => setF(rec)}>revert</button>
         </Fld>
-      </Rowset>
+      </div>
     </div>
   )
 }

@@ -86,19 +86,6 @@ body {
 }
 .am-row {
   display: grid;
-  grid-template-columns:
-    34px          /* # */
-    54px          /* affil. */
-    82px          /* 이름 */
-    minmax(150px, 1fr)  /* name */
-    7px           /* the rule between who someone is and what we know */
-    104px         /* nm. */
-    210px         /* email */
-    170px         /* position */
-    40px          /* core */
-    96px          /* last */
-    98px          /* first */
-    46px;         /* init */
   height: var(--rk-row);
 }
 .am-row + .am-row { border-top: 1px solid var(--rk-line); }
@@ -161,18 +148,6 @@ body {
 /* Narrower than the design width, columns LEAVE rather than the table
    scrolling sideways — a name scrolled away from its own row is worse than a
    column you can read somewhere else. Reverse order of need. */
-@media (max-width: 1279px) {
-  .am-row { grid-template-columns: 34px 54px 82px minmax(140px, 1fr) 7px 104px 210px 170px 40px; }
-  .am-cite { display: none; }
-}
-@media (max-width: 1039px) {
-  .am-row { grid-template-columns: 34px 54px 82px minmax(130px, 1fr) 7px 210px 170px 40px; }
-  .am-nm { display: none; }
-}
-@media (max-width: 859px) {
-  .am-row { grid-template-columns: 34px 50px 78px minmax(120px, 1fr) 7px 210px 40px; }
-  .am-pos { display: none; }
-}
 
 /* ── the command line ─────────────────────────────────────────────────────
    What the selection can do, and the one search field. Buttons are 22px —
@@ -271,23 +246,7 @@ body {
 .am-chk { display: grid; place-items: center; }
 .am-chk input { width: 12px; height: 12px; margin: 0; accent-color: var(--rk-cite-t); }
 
-/* The author table gains a checkbox column in front of the number. */
-.am-row {
-  grid-template-columns:
-    26px 34px 54px 82px minmax(150px, 1fr) 7px 104px 210px 170px 40px 96px 98px 46px;
-}
-/* The classes are four columns, not thirteen. */
-.am-row.am-crow { grid-template-columns: 34px minmax(160px, 1fr) 70px minmax(160px, 2fr); }
 
-@media (max-width: 1279px) {
-  .am-row { grid-template-columns: 26px 34px 54px 82px minmax(140px, 1fr) 7px 104px 210px 170px 40px; }
-}
-@media (max-width: 1039px) {
-  .am-row { grid-template-columns: 26px 34px 54px 82px minmax(130px, 1fr) 7px 210px 170px 40px; }
-}
-@media (max-width: 859px) {
-  .am-row { grid-template-columns: 26px 34px 50px 78px minmax(120px, 1fr) 7px 210px 40px; }
-}
 
 /* ── one record, at the readable size ─────────────────────────────────────
    Finding is dense; reading and typing are not. */
@@ -324,3 +283,68 @@ body {
   color: var(--rk-text);
 }
 .am-hint { color: var(--rk-mute); }
+
+/* ── a draggable column edge ───────────────────────────────────────────────
+   The head cell holds it; it is 7px wide so it can be caught without being
+   seen, and only shows itself under the pointer. */
+.am-head .am-c, .am-head .am-gut { position: relative; }
+.am-grip {
+  position: absolute;
+  top: 0; right: -3px; bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 2;
+}
+.am-grip:hover { background: var(--rk-cite-t); opacity: .35; }
+/* While a column is being dragged nothing else should select or hover. */
+body.am-resizing { cursor: col-resize; user-select: none; }
+body.am-resizing .am-hit:hover { background: transparent; }
+
+/* ── My List's output ─────────────────────────────────────────────────────
+   Under the table, because it is what the table is FOR: the list goes in, a
+   paper's author block comes out. */
+.am-out {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--rk-edge);
+  background: var(--rk-gut);
+}
+.am-outbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 7px 11px;
+}
+.am-outfoot { border-top: 1px solid var(--rk-line); }
+.am-gap { width: 10px; }
+.am-outbox {
+  margin: 0 11px 9px;
+  min-height: 92px;
+  max-height: 200px;
+  padding: 7px 9px;
+  border: 1px solid var(--rk-edge);
+  border-radius: 0;
+  background: var(--rk-panel);
+  font-family: var(--rk-mono);
+  font-size: var(--rk-fs);
+  line-height: 1.5;
+  color: var(--rk-text);
+  resize: vertical;
+  white-space: pre;
+}
+.am-newgrp { margin: 0 11px 4px; background: var(--rk-panel); border: 1px solid var(--rk-edge); }
+/* One name in My List, with the way to take it out again. */
+.am-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 19px;
+  padding: 0 2px 0 7px;
+  border: 1px solid var(--rk-edge);
+  background: var(--rk-panel);
+  color: var(--rk-dim);
+  white-space: nowrap;
+}
+.am-chip .am-x { width: 15px; height: 100%; margin: 0; font-size: 12px; }
