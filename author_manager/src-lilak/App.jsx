@@ -146,6 +146,18 @@ function repEmail(a) {
   if (cur?.email) return cur.email
   return (a.emails || [])[0] || ''
 }
+// Citation forms. The sheet keeps nm./last/first/initial as their own columns;
+// here they are derived, so there is one place a name is spelled.
+const citeLast = (a) => a.engLast || ''
+const citeFirst = (a) => [a.engFirst, a.engMiddle].filter(Boolean).join(' ')
+const citeInitial = (a) => [a.engFirst, a.engMiddle, a.engLast]
+  .filter(Boolean).map((w) => w[0].toUpperCase()).join('')
+// "J. W. Lee" — the short form a paper prints.
+const citeShort = (a) => {
+  const given = [a.engFirst, a.engMiddle].filter(Boolean).map((w) => `${w[0].toUpperCase()}.`).join(' ')
+  return a.engLast ? [given, a.engLast].filter(Boolean).join(' ') : ''
+}
+
 // Smallest core number across the author's groups (10 = least important default).
 function coreOf(a) {
   const cores = (a.groups || []).map((g) => Number(g.core)).filter((n) => Number.isFinite(n) && n >= 1)
@@ -406,21 +418,53 @@ export default function App() {
       <main className="page" ref={pageRef}>
         {tab === 'authors' && (
           <div className="stack">
-            <Card>
-              <div className="search-box">
-                <span className="mylist-icon-cell"><MagnifyingGlass size={18} weight="fill" color={BRAND} /></span>
-                <Input size="md" value={query} placeholder="이름 · 이메일 · 소속 · 그룹 검색" onChange={(e) => setQuery(e.target.value)} />
+            {!query.trim() && <NewAuthorCard onCreate={createAuthor} affOptions={affOptions} grpOptions={grpOptions} />}
+            {/* One dense module: nameplate, one filter line, the column head,
+                then 26px rows. The whole point of the list is scanning it, so
+                nothing here is taller than it has to be. */}
+            <section className="rk">
+              <header className="rk-bar">
+                <b>저자</b>
+                <span className="rk-hint">{filteredAuthors.length}명</span>
+                <span className="rk-sp" />
+                <span className="rk-pill rk-pill-blue">인용 표기</span>
+                <span className="rk-pill rk-pill-must">My List {myList.length}</span>
+              </header>
+              <div className="rk-filter">
+                <span className="rk-find"><MagnifyingGlass size={13} weight="bold" color="#94a3b8" /></span>
+                <input
+                  type="search"
+                  className="rk-input"
+                  value={query}
+                  placeholder="이름 · 이메일 · 소속 · 그룹 검색"
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <span className="rk-sp" />
+                <span className="rk-hint">{filteredAuthors.length} / {authors.length}</span>
               </div>
-            </Card>
-            <div className="list-toolbar">
-              <span className="list-count">총 {filteredAuthors.length}명</span>
-            </div>
-            <div className="result-list result-list-full">
-              {!query.trim() && <NewAuthorCard onCreate={createAuthor} affOptions={affOptions} grpOptions={grpOptions} />}
-              {filteredAuthors.length === 0 && <Card><p className="muted">일치하는 저자가 없습니다.</p></Card>}
-              {filteredAuthors.map((a) => (
+              <div className="rk-scroll">
+              <div className="rk-row rk-head">
+                <span className="rk-gut">#</span>
+                <div className="rk-cells">
+                  <span className="rk-c">affil.</span>
+                  <span className="rk-c">이름</span>
+                  <span className="rk-c">name</span>
+                  <i className="rk-freeze" />
+                  <span className="rk-c rk-nm">nm.</span>
+                  <span className="rk-c rk-em">email</span>
+                  <span className="rk-c rk-pos">position</span>
+                  <span className="rk-c rk-n rk-core">core</span>
+                  <span className="rk-c rk-grp">last</span>
+                  <span className="rk-c rk-grp">first</span>
+                  <span className="rk-c rk-grp">init</span>
+                </div>
+                <span className="rk-c rk-my">my</span>
+              </div>
+              {filteredAuthors.length === 0 && <p className="rk-empty">일치하는 저자가 없습니다.</p>}
+              {filteredAuthors.map((a, i) => (
                 <AuthorRow
                   key={a.id}
+                  n={i + 1}
                   author={a}
                   expanded={expandedId === a.id}
                   onToggle={() => setExpandedId(expandedId === a.id ? '' : a.id)}
@@ -433,7 +477,13 @@ export default function App() {
                   isAdmin={isAdmin}
                 />
               ))}
-            </div>
+              </div>
+              <footer className="rk-foot">
+                <span>core = 그룹 안의 저자 순서. 한 줄을 누르면 그 아래에서 펼쳐집니다.</span>
+                <span className="rk-sp" />
+                <span className="rk-mono">{authors.length}명</span>
+              </footer>
+            </section>
           </div>
         )}
         {tab === 'mylist' && (
@@ -679,7 +729,7 @@ function AuthorForm({ form, setForm, affOptions, grpOptions }) {
 }
 
 // ─── Author cards ────────────────────────────────────────────────────────────
-function AuthorRow({ author, expanded, onToggle, inMyList, onToggleMyList, onUpdate, onDelete, affOptions, grpOptions, isAdmin }) {
+function AuthorRow({ n, author, expanded, onToggle, inMyList, onToggleMyList, onUpdate, onDelete, affOptions, grpOptions, isAdmin }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState(author)
   const rowRef = useRef(null)
@@ -694,23 +744,31 @@ function AuthorRow({ author, expanded, onToggle, inMyList, onToggleMyList, onUpd
   const affsSorted = [...(author.affiliations || [])].sort((x, y) => String(y.since || '').localeCompare(String(x.since || '')))
   return (
     <div ref={rowRef} className={`asset-row${expanded ? ' is-open' : ''}`}>
-      <div className="asset-row-head">
-        <div className="asset-photo">
-          {author.photo ? <img src={author.photo} alt="" /> : <Users size={22} weight="fill" color="#c2c8d2" />}
-        </div>
-        <div className="asset-row-open" role="button" tabIndex={0} onClick={onToggle}>
-          <div className="asset-row-main">
-            <strong>{displayName(author)}</strong>
-            <span className="history-meta">{cur ? `${cur.tag}${cur.position ? ` · ${cur.position}` : ''}` : ''}</span>
-          </div>
-        </div>
+      {/* One line, 26px. The whole row is the button that opens it — a photo
+          and a pill do not fit at this height, and both are in the body below. */}
+      <div className={`rk-row${expanded ? ' rk-on' : ''}`}>
+        <span className="rk-gut">{n}</span>
+        <button type="button" className="rk-open" onClick={onToggle}
+          title={expanded ? '접기' : '펼치기'}>
+          <span className="rk-c rk-dim">{cur?.tag || '·'}</span>
+          <span className="rk-c">{korName(author) || '·'}</span>
+          <span className="rk-c rk-strong">{engName(author) || displayName(author)}</span>
+          <i className="rk-freeze" />
+          <span className="rk-c rk-mono rk-dim rk-nm">{citeShort(author) || '·'}</span>
+          <span className="rk-c rk-mono rk-em">{repEmail(author) || '·'}</span>
+          <span className="rk-c rk-dim rk-pos">{cur?.position || '·'}</span>
+          <span className="rk-c rk-n rk-mono rk-core">{coreOf(author) === 10 ? '·' : coreOf(author)}</span>
+          <span className="rk-c rk-grp">{citeLast(author) || '·'}</span>
+          <span className="rk-c rk-grp">{citeFirst(author) || '·'}</span>
+          <span className="rk-c rk-grp rk-mono">{citeInitial(author) || '·'}</span>
+        </button>
         <button
           type="button"
-          className={`asset-add${inMyList ? ' is-on' : ''}`}
+          className={`rk-dot${inMyList ? ' is-on' : ''}`}
           title={inMyList ? 'My List에서 제거' : 'My List에 추가'}
           onClick={(e) => { e.stopPropagation(); onToggleMyList() }}
         >
-          {inMyList ? <Minus size={22} weight="bold" color="#ffffff" /> : <Plus size={22} weight="bold" color="#ffffff" />}
+          <i />
         </button>
       </div>
       {expanded && (

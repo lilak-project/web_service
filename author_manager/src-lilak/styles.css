@@ -2417,3 +2417,142 @@ button.asset-row-open {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ══ RACK, dense — the author list ═══════════════════════════════════════
+   The portal's own vocabulary (grey ground, white module, the nameplate IS
+   the title, square corners, no bold, one text size) at spreadsheet density:
+   26px lines and 12px text instead of 36 and 14. Only the LIST is dense —
+   the record body below a row keeps the readable size. */
+.rk {
+  --rk-row: 26px;
+  --rk-fs: 12px;
+  --rk-mid: 54px 82px minmax(140px, 1fr) 7px 104px 210px 170px 40px 96px 98px 46px;
+  display: flex; flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  overflow: hidden;
+  font-size: var(--rk-fs);
+  color: #1e293b;
+}
+/* The nameplate keeps the portal's 36px: a denser table does not make the
+   module's own name smaller. */
+.rk-bar {
+  display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+  height: 36px; padding: 0 11px;
+  background: #e2e8f0; border-bottom: 1px solid #cbd5e1;
+}
+.rk-bar b { font-weight: 400; color: #0f172a; }
+.rk-sp { flex: 1; }
+.rk-hint { color: #475569; }
+.rk-pill {
+  display: inline-flex; align-items: center; height: 17px; padding: 0 7px;
+  border-radius: 999px; border: 1px solid currentColor;
+  font-size: 11px; color: #475569; background: #f1f5f9;
+}
+.rk-pill-blue { background: #dbeafe; color: #1d4ed8; }
+.rk-pill-must { background: #f3e5bb; color: #92400e; }
+
+/* One filter line, instead of the sheet's chevron on every column. */
+.rk-filter {
+  display: flex; align-items: center; gap: 7px; flex-shrink: 0;
+  height: 32px; padding: 0 11px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.rk-find { display: flex; align-items: center; }
+.rk-input {
+  width: 260px; height: 22px; padding: 0 7px; box-sizing: border-box;
+  border: 1px solid #cbd5e1; border-radius: 0; background: #ffffff;
+  font: inherit; font-size: var(--rk-fs); color: #1e293b;
+}
+
+/* A line. Gutter, the scrollable middle, the one 0/1 column. */
+.rk-row {
+  display: grid; grid-template-columns: 34px 1fr 44px;
+  height: var(--rk-row);
+  border-top: 1px solid #e2e8f0;
+}
+.rk-row:first-of-type { border-top: 0; }
+.rk-row.rk-on { background: #dbeafe; }
+.rk-open, .rk-cells {
+  display: grid; grid-template-columns: var(--rk-mid);
+  min-width: 0; border: 0; background: none; padding: 0; font: inherit; color: inherit;
+}
+.rk-open { cursor: pointer; text-align: left; }
+.rk-open:hover { background: #f8fafc; }
+.rk-row.rk-on .rk-open:hover { background: #cfe0fb; }
+.rk-open:focus-visible { outline: 1px solid #2563eb; outline-offset: -1px; }
+/* Cells clip rather than wrap: a line is one line. */
+.rk-c {
+  display: block; padding: 0 6px;
+  line-height: calc(var(--rk-row) - 1px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rk-dim { color: #475569; }
+.rk-strong { color: #0f172a; }
+.rk-mono { font-family: 'D2 coding', ui-monospace, Menlo, monospace; }
+.rk-n { text-align: right; font-family: 'D2 coding', ui-monospace, Menlo, monospace; color: #475569; }
+/* The row number: the sheet's, and what you say on the phone. */
+.rk-gut {
+  display: block; padding: 0 6px; text-align: right;
+  line-height: calc(var(--rk-row) - 1px);
+  background: #f8fafc; border-right: 1px solid #e2e8f0;
+  font-family: 'D2 coding', ui-monospace, Menlo, monospace;
+  font-size: 11px; color: #94a3b8;
+}
+/* The rule between who someone is and what we know about them. */
+.rk-freeze { background: #cbd5e1; }
+
+/* Narrower than the design width, columns LEAVE rather than the table
+   scrolling sideways: sticky columns inside a row that is one button do not
+   hold, and a name scrolled away from its own row is worse than a column you
+   can still read in the record below. They go in reverse order of need — the
+   citation forms first, since they are spelled out of `name` anyway. */
+@media (max-width: 1279px) {
+  .rk { --rk-mid: 54px 82px minmax(140px, 1fr) 7px 104px 210px 170px 40px; }
+  .rk-grp { display: none; }
+  .rk-head .rk-my { background: #f3e5bb; }
+}
+@media (max-width: 1039px) {
+  .rk { --rk-mid: 54px 82px minmax(130px, 1fr) 7px 210px 170px 40px; }
+  .rk-nm { display: none; }
+}
+@media (max-width: 859px) {
+  .rk { --rk-mid: 50px 78px minmax(120px, 1fr) 7px 210px 40px; }
+  .rk-pos { display: none; }
+}
+
+/* Column groups wear the colour on their HEAD only. Painting the whole column
+   the way the sheet does turns a third of a 137-line screen into fill. */
+.rk-head { height: var(--rk-row); background: #e2e8f0; border-bottom: 1px solid #cbd5e1; border-top: 0; }
+.rk-head .rk-c { color: #475569; }
+.rk-head .rk-grp { background: #dbeafe; color: #1d4ed8; }
+.rk-head .rk-my { background: #f3e5bb; color: #92400e; }
+.rk-head .rk-gut { color: #475569; }
+
+/* 0/1 at 26px is a dot, not a pill: 137 pills is 137 of nothing. */
+.rk-dot {
+  display: grid; place-items: center;
+  border: 0; background: none; cursor: pointer; padding: 0;
+}
+.rk-dot i {
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 1px solid #cbd5e1; background: transparent;
+}
+.rk-dot:hover i { border-color: #92400e; }
+.rk-dot.is-on i { border-color: #92400e; background: #92400e; }
+.rk-dot:focus-visible { outline: 1px solid #2563eb; outline-offset: -2px; }
+
+.rk-foot {
+  display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+  height: var(--rk-row); padding: 0 11px;
+  background: #f8fafc; border-top: 1px solid #cbd5e1; color: #475569;
+}
+.rk-empty { margin: 0; padding: 14px 11px; color: #94a3b8; }
+
+/* A row opens in place; the body keeps the readable size, not the list's. */
+.rk + .result-list, .rk .asset-row-body { font-size: 14px; }
+.rk .asset-row { border: 0; }
+.rk .asset-row.is-open { background: #f8fafc; }
+.rk .asset-row-body { padding: 10px 12px 14px; border-top: 1px solid #cbd5e1; }
+
+.rk-scroll { min-width: 0; }
