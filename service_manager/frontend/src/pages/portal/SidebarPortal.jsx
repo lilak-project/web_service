@@ -34,15 +34,22 @@ const SYSTEM_NAME = 'System'
 /** The second bar: it steps out of the service bar, and folds back into it.
  *  Kept mounted through the fold — with the last contents it had, since the
  *  caller has already stopped passing them by then. */
-function StepOut({ open, children }) {
-  const [shown, setShown] = useState(open)
+function StepOut({ open, kind, children }) {
+  // `live` is what is ON SCREEN, which lags `kind` by one fold: asked for a
+  // different bar, this one folds away first and the next steps out after it,
+  // so settings closing and manage opening read as two motions rather than a
+  // column whose contents changed under you.
+  const [live, setLive] = useState(open ? kind : null)
   const last = useRef(children)
-  if (open) last.current = children
-  useEffect(() => { if (open) setShown(true) }, [open])
-  if (!shown) return null
+  if (open && live === kind) last.current = children
+  useEffect(() => { if (open && live === null) setLive(kind) }, [open, kind, live])
+  if (live === null) return null
+  const folding = !open || live !== kind
   return (
-    <aside className={`pl-bar2${open ? '' : ' folding'}`}
-      onAnimationEnd={() => { if (!open) setShown(false) }}>
+    // Keyed on what it holds, so swapping remounts it and the step-out plays
+    // again instead of the browser reusing a finished animation.
+    <aside key={live} className={`pl-bar2${folding ? ' folding' : ''}`}
+      onAnimationEnd={() => { if (folding) setLive(open ? kind : null) }}>
       {last.current}
     </aside>
   )
@@ -546,8 +553,11 @@ export default function SidebarPortal({
               if (mini) { setMini(false); setOpenSvcs((o) => new Set(o).add(key)); return }
               toggleProj(key)
             }}>
-            {manage && isManager && (
-              <span className="pl-grip" title={L('끌어서 정렬', 'drag to arrange')}>
+            {/* Always rendered, opened by manage mode: mounting it moved every
+                icon sideways in one jump, and a width that animates lets the
+                row make room instead. */}
+            {isManager && (
+              <span className={`pl-grip${manage ? ' on' : ''}`} title={L('끌어서 정렬', 'drag to arrange')}>
                 <Icon name="drag-handle" size={14} color="var(--text-muted)" />
               </span>
             )}
@@ -737,7 +747,8 @@ export default function SidebarPortal({
       {/* Settings is a SECOND bar of the same shape one step in, not a page that
           replaces the first: the service bar stays, so there is always a way out
           and you can still see what is running. */}
-      <StepOut open={(manage && isManager) || view === 'settings'}>
+      <StepOut open={(manage && isManager) || view === 'settings'}
+        kind={manage && isManager ? 'manage' : 'settings'}>
         {manage && isManager ? (
           <>
           <div className="pl-b2head"><b>{L('관리', 'Manage')}</b></div>

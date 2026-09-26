@@ -271,7 +271,10 @@
 .pl-panel {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column;
-  background: var(--surface);
+  /* Grey, not white. It is the RACK ground, so the empty panel already looks
+     like the pages that will fill it, and the strip a second bar uncovers as it
+     steps out is not a flash of white. A framed service paints over it. */
+  background: var(--surface-2);
   overflow: hidden;
 }
 .pl-panel > iframe { flex: 1; width: 100%; border: 0; display: block; }
@@ -388,9 +391,9 @@
   width: 214px;
   flex-shrink: 0;
   display: flex; flex-direction: column;
-  /* The same ground as the bar it came out of: it is one more bar, not a sheet
-     laid over the page, and a lighter column beside the first read as white. */
-  background: var(--surface-2);
+  /* The account plinth's ground: this bar is the same kind of surface — the
+     portal talking about itself rather than about a service. */
+  background: var(--surface-3);
   border-right: 1px solid var(--divider);
   /* It comes OUT of the service bar. The bar is collapsing to 64px at the same
      time, so the menu slides right from under it — which is the gesture the
@@ -456,7 +459,13 @@
    so they do not travel with what is in it, and they belong with the other
    whole-portal controls rather than above the thing they arrange. */
 
-.pl-grip { display: flex; flex: 0 0 auto; cursor: grab; margin-left: -2px; }
+/* Closed it takes no room; manage mode opens it and the row slides over. */
+.pl-grip {
+  display: flex; flex: 0 0 auto; cursor: grab;
+  width: 0; overflow: hidden; opacity: 0;
+  transition: width .2s ease, opacity .2s ease, margin-left .2s ease;
+}
+.pl-grip.on { width: 14px; opacity: 1; margin-left: -2px; }
 .pl-card.mg { cursor: grab; }
 .pl-card.dragging { opacity: .4; }
 /* The drop line is its own element in the gap BETWEEN two cards, not a stripe
