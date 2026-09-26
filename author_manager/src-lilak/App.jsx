@@ -157,6 +157,33 @@ const fill = (tpl, a) => tpl.replace(/\{([^{}]+)\}/g, (m, k) => {
   const f = TOKENS[k.trim()]
   return f ? String(f(a) ?? '') : m
 })
+// What a column sorts by. The same accessors the cells use, so the order you
+// get is the order you can see.
+const SORTERS = {
+  affil: (a) => currentAff(a)?.tag || '',
+  kor: (a) => korName(a),
+  name: (a) => engName(a) || a.nick || '',
+  nm: (a) => citeShort(a),
+  email: (a) => repEmail(a),
+  pos: (a) => currentAff(a)?.position || '',
+  core: (a) => coreOf(a),
+  last: (a) => citeLast(a),
+  first: (a) => citeFirst(a),
+  init: (a) => citeInit(a),
+}
+/** Blanks last whichever way the arrow points: an empty cell is not a value. */
+function byColumn(k, dir, group) {
+  const get = k === 'core' && group ? (a) => coreIn(a, group) : SORTERS[k]
+  return (a, b) => {
+    const x = get(a), y = get(b)
+    const xe = x === null || x === undefined || x === ''
+    const ye = y === null || y === undefined || y === ''
+    if (xe || ye) return xe && ye ? 0 : (xe ? 1 : -1)
+    if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir
+    return String(x).localeCompare(String(y), 'ko') * dir
+  }
+}
+
 const PRESETS = [
   ['이름 나열', '{이름}'],
   ['full names', '{name}'],
@@ -184,6 +211,8 @@ export default function App() {
   const [vw, setVw] = useState(() => (typeof window === 'undefined' ? 1400 : window.innerWidth))
   const [myList, setMyList] = useState(() => load(MYLIST_KEY, []))
   const [groupForm, setGroupForm] = useState(null)   // the new-group form, when open
+  // null = the tab's own order: 한글 이름, or My List's own sequence.
+  const [sort, setSort] = useState(null)
   const findRef = useRef(null)
   const lastHit = useRef(null)      // for shift-click: where the range starts
 
@@ -249,14 +278,17 @@ export default function App() {
     if (tab?.kind !== 'authors') return []
     if (tab.id === 'mylist') {
       const order = new Map(myList.map((id, i) => [id, i]))
-      return authors.filter((a) => order.has(a.id)).sort((x, y) => order.get(x.id) - order.get(y.id))
+      const mine = authors.filter((a) => order.has(a.id))
+      // My List's own order is the order you added them in — a paper's list is
+      // often built that way — so it stands until a column is clicked.
+      return sort ? mine.sort(byColumn(sort.k, sort.dir, tab.grp))
+        : mine.sort((x, y) => order.get(x.id) - order.get(y.id))
     }
     let list = authors
     if (tab.aff) list = list.filter((a) => inAff(a, tab.aff))
     if (tab.grp) list = list.filter((a) => inGrp(a, tab.grp))
-    // In a group's tab, that group's core is the order.
-    return [...list].sort(byPaperOrder(tab.grp ? (a) => coreIn(a, tab.grp) : coreOf))
-  }, [tab, authors, myList])
+    return [...list].sort(byColumn(sort?.k || 'kor', sort?.dir ?? 1, tab.grp))
+  }, [tab, authors, myList, sort])
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -389,6 +421,14 @@ export default function App() {
         {doc && tab?.kind === 'authors' && (
           <>
             <Table cols={cols} onDrag={drag('')}
+              sort={sort || { k: tab.id === 'mylist' ? null : 'kor', dir: 1 }}
+              onSort={(k) => setSort((s2) => {
+                // The implicit order counts as the current one, so the first
+                // press on the column already sorted turns it over instead of
+                // doing nothing you can see.
+                const now = s2 || (tab.id === 'mylist' ? null : { k: 'kor', dir: 1 })
+                return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
+              })}
               head={{ all: allPicked, some: somePicked, onAll: toggleAll }}>
               {rows.map((a, i) => {
                 const cur = currentAff(a)
@@ -465,6 +505,7 @@ export default function App() {
               closeTab('new')
               openTab({ id: `edit:${id}`, kind: 'edit', label, who: id })
             }}
+            onDone={(id) => closeTab(`edit:${id}`)}
             onDeleted={(id) => {
               closeTab(`edit:${id}`)
               setMyList((l) => l.filter((x) => x !== id))
@@ -492,7 +533,7 @@ const byPaperOrder = (core = coreOf) => (a, b) => {
 }
 
 // ─── The table shell: one template, a sticky head, draggable edges ──────────
-function Table({ cols, onDrag, head, children }) {
+function Table({ cols, onDrag, head, sort, onSort, children }) {
   const tmpl = `${cols.map((c) => `${c.w}px`).join(' ')} 1fr`
   return (
     <div className="am-tab-body">
@@ -505,6 +546,13 @@ function Table({ cols, onDrag, head, children }) {
               <input type="checkbox" checked={head.all}
                 ref={(el) => { if (el) el.indeterminate = !head.all && head.some }}
                 onChange={head.onAll} aria-label="전체 선택" />
+            ) : onSort && !c.fix ? (
+              // The label IS the sort control: press it again and the arrow
+              // turns over.
+              <button type="button" className="am-sort" onClick={() => onSort(c.k)}>
+                {c.label}
+                {sort?.k === c.k && <i className="am-arrow">{sort.dir > 0 ? '↑' : '↓'}</i>}
+              </button>
             ) : c.label}
             {!c.fix && <i className="am-grip" onMouseDown={(e) => {
               e.preventDefault(); e.stopPropagation(); onDrag(c.k, e.clientX, c.w)
@@ -647,7 +695,7 @@ function Fld({ label, children }) {
   return (<><span className="am-fl">{label}</span><div className="am-fv">{children}</div></>)
 }
 
-function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted }) {
+function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone }) {
   // No author means a DRAFT: the same form, and saving puts it in the document
   // rather than over one. One form, two jobs, so a field added here is added to
   // both at once.
@@ -678,8 +726,13 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted }) {
     const a = { ...f, id: newId(), createdAt: now, updatedAt: now }
     if (await onSave({ authors: [a, ...doc.authors] }, `${anyName(a)} 등록됨`)) onCreated?.(a.id, anyName(a))
   }
-  function update() {
-    onSave({ authors: doc.authors.map((a) => (a.id === f.id ? { ...f, updatedAt: new Date().toISOString() } : a)) })
+  async function update() {
+    const ok = await onSave({
+      authors: doc.authors.map((a) => (a.id === f.id ? { ...f, updatedAt: new Date().toISOString() } : a)),
+    })
+    // The record was an errand, not a destination: a save that landed closes
+    // the tab it came from. A save that lost the race keeps it, edits and all.
+    if (ok) onDone?.(f.id)
   }
   async function remove() {
     if (await onSave({ authors: doc.authors.filter((a) => a.id !== f.id) }, `${anyName(f)} 삭제됨`)) onDeleted?.(f.id)
@@ -733,7 +786,7 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted }) {
             </>
           ) : (
             <>
-              <button type="button" className="am-btn am-go" onClick={update}>save</button>
+              <button type="button" className="am-btn am-go" onClick={update}>save and exit</button>
               <button type="button" className="am-btn" onClick={() => setF(author)}>revert</button>
               {isAdmin && (
                 <>

@@ -23,6 +23,7 @@
   --rk-mute: #94a3b8;
   --rk-ink: #0f172a;
   --rk-gut: #f8fafc;
+  --rk-hover: #e9eef5;   /* a row under the pointer */
   --rk-cite: #dbeafe;      /* the citation columns wear it on the HEAD only */
   --rk-cite-t: #1d4ed8;
   --rk-mono: 'D2 coding', ui-monospace, Menlo, Consolas, monospace;
@@ -242,7 +243,7 @@ body {
    portal's own selected blue. */
 .am-tab-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .am-hit { cursor: default; }
-.am-hit:hover { background: var(--rk-gut); }
+.am-hit:hover { background: var(--rk-hover); }
 .am-hit.on { background: var(--rk-cite); }
 .am-hit.on:hover { background: #cfe0fb; }
 .am-chk { display: grid; place-items: center; }
@@ -389,3 +390,13 @@ body.am-resizing .am-hit:hover { background: transparent; }
 /* Deleting is the one thing here that cannot be undone. */
 .am-btn.am-danger { border-color: #b91c1c; color: #b91c1c; }
 .am-btn.am-danger:hover:not(:disabled) { background: #fee2e2; border-color: #b91c1c; color: #b91c1c; }
+
+/* The column label is the sort button; the arrow says which way it went. */
+.am-sort {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  max-width: 100%; padding: 0; border: 0; background: none;
+  font: inherit; color: inherit; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.am-sort:hover { color: var(--rk-ink); }
+.am-arrow { font-style: normal; font-size: 10px; color: var(--rk-cite-t); }
