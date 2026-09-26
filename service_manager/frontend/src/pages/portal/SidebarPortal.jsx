@@ -817,7 +817,6 @@ export default function SidebarPortal({
                 label, filled while the bar IS folded, like the modes below. */}
             <button type="button" className={`pl-c2${mini ? ' on' : ''}`}
               onClick={() => setMini((m) => !m)}>
-              <Icon name="caret-left" size={15} />
               <span className="pl-txt">{L('사이드바 접기', 'Collapse sidebar')}</span>
             </button>
             {modes.map((m) => (
