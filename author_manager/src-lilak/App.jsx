@@ -96,7 +96,7 @@ const D = '·'   // a cell with nothing in it still shows its column
 const COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
   { k: 'num', w: 34, min: 26, fix: true, label: '#' },
-  { k: 'affil', w: 60, min: 40, label: 'affil.' },
+  { k: 'affil', w: 96, min: 40, label: 'affiliation' },
   { k: 'kor', w: 86, min: 50, label: '이름' },
   { k: 'name', w: 196, min: 90, label: 'name' },
   { k: 'rule', w: 7, min: 7, fix: true },
@@ -113,6 +113,36 @@ const CLS_COLS = [
   { k: 'name', w: 200, min: 80, label: 'name' },
   { k: 'count', w: 70, min: 46, label: 'people', num: true },
   { k: 'full', w: 280, min: 90, label: 'full name' },
+]
+
+// ─── The listing rule ───────────────────────────────────────────────────────
+// A "나열" button does not produce text: it fills in a TEMPLATE, and the
+// template is what produces the text. So a preset is a starting point you can
+// then edit — `"{이름}" <{email}>` is a rule, not a button somebody has to
+// come and add. The tokens are the column names, which is what the reader
+// already has in front of them.
+const TOKENS = {
+  affiliation: (a) => currentAff(a)?.tag || '',
+  이름: (a) => korName(a),
+  name: (a) => engName(a),
+  'nm.': (a) => citeShort(a),
+  email: (a) => repEmail(a),
+  position: (a) => currentAff(a)?.position || '',
+  core: (a) => coreOf(a) ?? '',
+  last: (a) => citeLast(a),
+  first: (a) => citeFirst(a),
+  init: (a) => citeInit(a),
+  nick: (a) => a.nick || '',
+}
+const fill = (tpl, a) => tpl.replace(/\{([^{}]+)\}/g, (m, k) => {
+  const f = TOKENS[k.trim()]
+  return f ? String(f(a) ?? '') : m
+})
+const PRESETS = [
+  ['이름 나열', '{이름}'],
+  ['full names', '{name}'],
+  ['abv. names', '{nm.}'],
+  ['email list', '"{이름}" <{email}>'],
 ]
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────
@@ -134,6 +164,7 @@ export default function App() {
   const [widths, setWidths] = useState(() => load(WIDTH_KEY, {}))
   const [vw, setVw] = useState(() => (typeof window === 'undefined' ? 1400 : window.innerWidth))
   const [myList, setMyList] = useState(() => load(MYLIST_KEY, []))
+  const [groupForm, setGroupForm] = useState(null)   // the new-group form, when open
   const findRef = useRef(null)
   const lastHit = useRef(null)      // for shift-click: where the range starts
 
@@ -295,6 +326,13 @@ export default function App() {
           <button type="button" className="am-btn" disabled={!picked.size}
             onClick={() => { setPicked(new Set()); lastHit.current = null }}>clear</button>
           {picked.size > 0 && <span className="am-n">{picked.size} 선택</span>}
+          {tab?.id === 'mylist' && <>
+            <span className="am-gap" />
+            <button type="button" className="am-btn" disabled={!scope.length}
+              onClick={() => setGroupForm((g) => (g ? null : {}))}>make group</button>
+            <button type="button" className="am-btn" disabled={!myList.length}
+              onClick={() => { setMyList([]); setNote('My List를 비웠습니다.') }}>empty my list</button>
+          </>}
           <span className="am-sp" />
           <input ref={findRef} type="search" className="am-find" value={query}
             placeholder="이름 · 이메일 · 소속 · 그룹   (⌘F)"
@@ -350,9 +388,9 @@ export default function App() {
               {rows.length === 0 && <p className="am-msg">해당하는 저자가 없습니다.</p>}
             </Table>
             {tab.id === 'mylist' && (
-              <MyListOut list={scope} doc={doc}
-                onClear={() => { setMyList([]); setNote('My List를 비웠습니다.') }}
+              <MyListOut list={scope} doc={doc} say={setNote}
                 onDrop={(id) => setMyList((l) => l.filter((x) => x !== id))}
+                group={groupForm} setGroup={setGroupForm}
                 onMakeGroup={(form) => {
                   const name = String(form.shortName || form.fullName || '').trim()
                   if (!name) { setNote('그룹 이름이 필요합니다.'); return false }
@@ -365,8 +403,7 @@ export default function App() {
                       : a)),
                   }, `'${name}' 그룹 생성 · ${ids.size}명 추가`)
                   return true
-                }}
-                say={setNote} />
+                }} />
             )}
           </>
         )}
@@ -462,16 +499,13 @@ function Row({ cols, cell, className, onClick, onContextMenu }) {
 }
 
 // ─── My List's output: the reason the list exists ───────────────────────────
-function MyListOut({ list, doc, onClear, onDrop, onMakeGroup, say }) {
+function MyListOut({ list, doc, onDrop, onMakeGroup, group, setGroup, say }) {
   const [sep, setSep] = useState(', ')
-  const [out, setOut] = useState('')
-  const [group, setGroup] = useState(null)   // the new-group form, when open
+  const [tpl, setTpl] = useState(PRESETS[0][1])
+  const [paper, setPaper] = useState(false)   // the LaTeX block is not a template
 
-  const real = sep.replaceAll('⏎', '\n')
-  const joined = (fn) => list.map(fn).filter(Boolean).join(real)
-
-  /** The LaTeX author block: core order, then superscript per affiliation. */
-  function paperAuthors() {
+  /** The LaTeX author block: core order, then a superscript per affiliation. */
+  const paperOut = () => {
     const ordered = [...list].sort(byPaperOrder)
     const idx = new Map()
     for (const a of ordered) {
@@ -490,8 +524,12 @@ function MyListOut({ list, doc, onClear, onDrop, onMakeGroup, say }) {
     return `\\author{%\n${names.join(',\n')}\n}\n\n% affiliations\n${affs.join('\n')}`
   }
 
+  // Derived, not stored: editing the rule changes the text under your hands.
+  const out = paper ? paperOut()
+    : list.map((a) => fill(tpl, a)).filter(Boolean).join(sep.replaceAll('⏎', '\n'))
+
   async function copy() {
-    if (!out) { say('먼저 아래 버튼으로 명단을 만드세요.'); return }
+    if (!out) { say('나열할 것이 없습니다.'); return }
     try { await navigator.clipboard.writeText(out); say('복사했습니다.') }
     catch { say('복사 실패 — 직접 선택해 복사하세요.') }
   }
@@ -499,27 +537,6 @@ function MyListOut({ list, doc, onClear, onDrop, onMakeGroup, say }) {
   const none = list.length === 0
   return (
     <div className="am-out">
-      <div className="am-outbar">
-        <button type="button" className="am-btn" disabled={none}
-          onClick={() => setOut(joined((a) => korName(a) || anyName(a)))}>이름 나열</button>
-        <button type="button" className="am-btn" disabled={none}
-          onClick={() => setOut(joined((a) => engName(a) || anyName(a)))}>full names</button>
-        <button type="button" className="am-btn" disabled={none}
-          onClick={() => setOut(joined((a) => citeShort(a) || engName(a) || anyName(a)))}>abv. names</button>
-        <button type="button" className="am-btn am-go" disabled={none}
-          onClick={() => setOut(paperAuthors())}>paper authors</button>
-        <span className="am-gap" />
-        <input className="am-in am-mono" style={{ width: 76 }} value={sep}
-          onChange={(e) => setSep(e.target.value)} title="구분기호" />
-        <button type="button" className="am-btn" title="줄바꿈 추가"
-          onClick={() => setSep((s) => `${s}⏎`)}>+⏎</button>
-        <span className="am-sp" />
-        <button type="button" className="am-btn" disabled={!out} onClick={copy}>copy</button>
-        <button type="button" className="am-btn" disabled={none}
-          onClick={() => setGroup(group ? null : {})}>make group</button>
-        <button type="button" className="am-btn" disabled={none} onClick={onClear}>empty my list</button>
-      </div>
-
       {group && (
         <div className="am-rec am-newgrp">
           <span className="am-fl">새 그룹</span>
@@ -536,12 +553,40 @@ function MyListOut({ list, doc, onClear, onDrop, onMakeGroup, say }) {
         </div>
       )}
 
+      <div className="am-outbar">
+        {PRESETS.map(([label, t]) => (
+          <button key={label} type="button" className={`am-btn${!paper && tpl === t ? ' on' : ''}`}
+            disabled={none} onClick={() => { setPaper(false); setTpl(t) }}>{label}</button>
+        ))}
+        <button type="button" className={`am-btn am-go${paper ? ' on' : ''}`} disabled={none}
+          onClick={() => setPaper(true)}>paper authors</button>
+        <span className="am-sp" />
+        <button type="button" className="am-btn" disabled={!out} onClick={copy}>copy</button>
+      </div>
+
+      {/* The rule itself, editable. The tokens are the column names. */}
+      <div className="am-rule-line">
+        <span className="am-hint">나열 규칙</span>
+        <input className="am-in am-mono" style={{ flex: 1, minWidth: 180 }} value={tpl}
+          disabled={paper} onChange={(e) => { setPaper(false); setTpl(e.target.value) }} />
+        <span className="am-hint">사이</span>
+        <input className="am-in am-mono" style={{ width: 66 }} value={sep} disabled={paper}
+          onChange={(e) => setSep(e.target.value)} title="구분기호" />
+        <button type="button" className="am-btn" title="줄바꿈 추가" disabled={paper}
+          onClick={() => setSep((v) => `${v}⏎`)}>+⏎</button>
+      </div>
+      <div className="am-tokens">
+        {Object.keys(TOKENS).map((k) => (
+          <button key={k} type="button" className="am-tok" disabled={paper}
+            onClick={() => { setPaper(false); setTpl((v) => `${v}{${k}}`) }}>{`{${k}}`}</button>
+        ))}
+      </div>
+
       <textarea className="am-outbox" value={out} readOnly
-        placeholder={none ? 'My List가 비어 있습니다 — 표에서 고르고 add to my list.'
-          : '위 버튼으로 명단을 만드세요.'} />
+        placeholder={none ? 'My List가 비어 있습니다 — 표에서 고르고 add to my list.' : ''} />
       {!none && (
         <div className="am-outbar am-outfoot">
-          <span className="am-hint">My List {list.length}명 — 오른쪽 ×로 한 명씩 뺍니다.</span>
+          <span className="am-hint">My List {list.length}명 — ×로 한 명씩 뺍니다.</span>
           <span className="am-sp" />
           {list.map((a) => (
             <span key={a.id} className="am-chip">

@@ -348,3 +348,27 @@ body.am-resizing .am-hit:hover { background: transparent; }
   white-space: nowrap;
 }
 .am-chip .am-x { width: 15px; height: 100%; margin: 0; font-size: 12px; }
+
+/* ── the listing rule ─────────────────────────────────────────────────────
+   The buttons above only fill this in; this is what makes the text. */
+.am-rule-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px 6px;
+}
+.am-tokens { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 0 11px 7px; }
+.am-tok {
+  height: 18px;
+  padding: 0 6px;
+  border: 1px dashed var(--rk-edge);
+  background: var(--rk-panel);
+  font-family: var(--rk-mono);
+  font-size: 11px;
+  color: var(--rk-dim);
+  cursor: pointer;
+}
+.am-tok:hover:not(:disabled) { border-style: solid; border-color: var(--rk-cite-t); color: var(--rk-cite-t); }
+.am-tok:disabled { color: var(--rk-mute); cursor: default; }
+/* The preset you are on fills, like the portal's own switches. */
+.am-btn.on { background: var(--rk-cite); border-color: var(--rk-cite-t); color: var(--rk-cite-t); }
