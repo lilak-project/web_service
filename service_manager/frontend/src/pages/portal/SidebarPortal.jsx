@@ -376,10 +376,14 @@ export default function SidebarPortal({
   const pickProject = useCallback((s, proj) => {
     leaveSettings()
     if (s.open === 'window') { window.open(`/pp/${s.name}/${proj}/`, '_blank'); return }
+    // Opening a project gives it the screen, exactly as opening a service does:
+    // the bar folds to the rail, and pressing the project you are already in
+    // brings the bar back — then folds it again.
+    if (view === 'service' && sel?.svc === s.name && sel?.proj === proj) { setMini((m) => !m); return }
     setSel({ svc: s.name, proj })
     setView('service')
-    if (window.innerWidth < PHONE) setMini(true)
-  }, [])
+    setMini(true)
+  }, [view, sel, leaveSettings])
 
   const projOpen = (name) => openSvcs.has(name)
   const toggleProj = (name) => setOpenSvcs((o) => {
