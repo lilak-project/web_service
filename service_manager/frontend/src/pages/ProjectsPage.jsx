@@ -115,7 +115,7 @@ const LINKS_SERVICE = { name: 'links', kind: 'tool', builtin: 'links', icon: 'li
 // Manager-only builtin: the RACK rules — how every screen in this portal is
 // built — read inside the portal itself, with the screen list that scripts/
 // rack.py keeps current.
-const RACK_SERVICE = { name: 'rack', kind: 'tool', builtin: 'rack', icon: 'gauge', can_enter: true }
+const RACK_SERVICE = { name: 'rack', kind: 'tool', builtin: 'rack', icon: 'wall', can_enter: true }
 
 // The mark next to the title. Uses the editable /lilak-header.svg (set from the
 // icon editor); falls back to the kit logo when that file isn't there yet.

@@ -15,6 +15,11 @@
  * hover states.
  */
 
+:root {
+  --plate-manage: #ede9fe;   /* 관리 */
+  --plate-tool: #334155;     /* 도구 — one step off the ink of --text-primary */
+}
+
 /* ── the ground ──────────────────────────────────────────────────────────── */
 /* Everything here is ONE text size. A settings page is a list of facts, and a
    size change should mean something — only the page heading gets one.
@@ -261,7 +266,7 @@
 
 /* Manage mode's panels wear the mode's own tint on their title strips, so a
    manage page is never mistaken for a settings page at a glance. */
-.pl-root.managing .pl-mgpage .set-bar { background: #ede9fe; }
+.pl-root.managing .pl-mgpage .set-bar { background: var(--plate-manage); }
 .pl-root.managing .pl-mgpage .set-bar .hint { color: #5b21b6; }
 .pl-root.managing .pl-mgpage .set-panel.danger > .set-bar { background: var(--danger-bg, #fee2e2); }
 /* A row that is itself a link. */
@@ -279,8 +284,8 @@
    belong to the portal itself, and a neutral cannot clash with the service
    colours the catalogue rows are full of. */
 .pl-toolpage .set-bar {
-  background: var(--text-primary);
-  border-bottom-color: var(--text-primary);
+  background: var(--plate-tool);
+  border-bottom-color: var(--plate-tool);
 }
 .pl-toolpage .set-bar b { color: var(--text-inverse, #fff); }
 .pl-toolpage .set-bar .set-fold svg { color: var(--text-inverse, #fff); }

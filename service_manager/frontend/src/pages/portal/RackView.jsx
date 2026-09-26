@@ -18,9 +18,9 @@ import INVENTORY from './rack.json'
 const PLATES = [
   { ko: '파랑', bg: 'var(--info-bg)', fg: 'var(--text-emphasis)',
     what: ['설정', 'Settings'], where: ['내 계정 · 그룹 · 초대 · 시스템 · 로그인', 'account · groups · invites · system · sign-in'] },
-  { ko: '보라', bg: '#ede9fe', fg: 'var(--text-emphasis)',
+  { ko: '보라', bg: 'var(--plate-manage)', fg: 'var(--text-emphasis)',
     what: ['관리', 'Manage'], where: ['서비스와 그룹을 고쳐 쓰는 화면', 'the screens that edit services and groups'] },
-  { ko: '먹색', bg: 'var(--text-primary)', fg: 'var(--text-inverse, #fff)',
+  { ko: '먹색', bg: 'var(--plate-tool)', fg: 'var(--text-inverse, #fff)',
     what: ['도구', 'Tool'], where: ['포털 자신을 다루는 붙박이', 'the builtins that work on the portal itself'] },
   { ko: '빨강', bg: 'var(--danger-bg, #fee2e2)', fg: 'var(--danger-text, #b91c1c)',
     what: ['위험', 'Danger'], where: ['되돌릴 수 없는 것. 한 화면에 하나, 맨 아래', 'what cannot be undone: one per screen, at the foot'] },
