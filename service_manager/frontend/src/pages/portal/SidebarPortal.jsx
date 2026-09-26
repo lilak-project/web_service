@@ -249,8 +249,9 @@ export default function SidebarPortal({
   const [manage, setManage] = useState(false)
   const [drag, setDrag] = useState(null)        // key being dragged
   const [dropAt, setDropAt] = useState(null)    // { key, after } | { gid } | { end: true }
-  // Settings collapses the service bar to make room for its own; remember what the
-  // bar was so leaving settings puts it back rather than stranding it at 64px.
+  // Opening settings leaves the service bar as it is — the menu steps out beside
+  // it, it does not take its room. Only a phone, where the menu is a drawer over
+  // everything, still folds the bar; miniBefore is what it folded FROM.
   const miniBefore = useRef(null)
   const viewBefore = useRef(null)
 
@@ -282,9 +283,11 @@ export default function SidebarPortal({
   }, [])
 
   const openSettings = useCallback((tab) => {
-    if (miniBefore.current === null) miniBefore.current = mini
     viewBefore.current = { view, sel }
-    setMini(true)
+    if (window.innerWidth < PHONE) {
+      if (miniBefore.current === null) miniBefore.current = mini
+      setMini(true)
+    }
     // Settings and manage are two different jobs, and manage needs the bar wide:
     // leaving one for the other rather than stacking them keeps the bar readable.
     setManage(false)
