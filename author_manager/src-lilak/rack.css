@@ -400,3 +400,9 @@ body.am-resizing .am-hit:hover { background: transparent; }
 }
 .am-sort:hover { color: var(--rk-ink); }
 .am-arrow { font-style: normal; font-size: 10px; color: var(--rk-cite-t); }
+
+/* A line between the labels — only in the head. The rows stay clean (a table
+   of people is not a grid of cells), but the head is where a column begins and
+   ends, and it is also where the edge is dragged: the line shows where to
+   take hold. */
+.am-head > .am-c + .am-c { border-left: 1px solid var(--rk-edge); }

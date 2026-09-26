@@ -172,8 +172,7 @@ const SORTERS = {
   init: (a) => citeInit(a),
 }
 /** Blanks last whichever way the arrow points: an empty cell is not a value. */
-function byColumn(k, dir, group) {
-  const get = k === 'core' && group ? (a) => coreIn(a, group) : SORTERS[k]
+function bySome(get, dir) {
   return (a, b) => {
     const x = get(a), y = get(b)
     const xe = x === null || x === undefined || x === ''
@@ -183,6 +182,10 @@ function byColumn(k, dir, group) {
     return String(x).localeCompare(String(y), 'ko') * dir
   }
 }
+const byColumn = (k, dir, group) =>
+  bySome(k === 'core' && group ? (a) => coreIn(a, group) : SORTERS[k], dir)
+// The classes' own columns. Same machinery, three keys.
+const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r.full }
 
 const PRESETS = [
   ['이름 나열', '{이름}'],
@@ -213,6 +216,7 @@ export default function App() {
   const [groupForm, setGroupForm] = useState(null)   // the new-group form, when open
   // null = the tab's own order: 한글 이름, or My List's own sequence.
   const [sort, setSort] = useState(null)
+  const [clsSort, setClsSort] = useState({ k: 'name', dir: 1 })
   const findRef = useRef(null)
   const lastHit = useRef(null)      // for shift-click: where the range starts
 
@@ -305,8 +309,8 @@ export default function App() {
       name: r.name,
       full: r.fullName || '',
       count: authors.filter((a) => (tab.of === 'affiliation' ? inAff(a, r.name) : inGrp(a, r.name))).length,
-    })).sort((x, y) => x.name.localeCompare(y.name))
-  }, [tab, doc, authors])
+    })).sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
+  }, [tab, doc, authors, clsSort])
 
   // ── tabs ──
   function openTab(t) {
@@ -481,7 +485,8 @@ export default function App() {
         )}
 
         {doc && tab?.kind === 'classes' && (
-          <Table cols={clsCols} onDrag={drag('c:')}>
+          <Table cols={clsCols} onDrag={drag('c:')} sort={clsSort}
+            onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}>
             {classes.map((r, i) => (
               <Row key={r.name} cols={clsCols} className="am-hit"
                 onClick={() => openTab({
