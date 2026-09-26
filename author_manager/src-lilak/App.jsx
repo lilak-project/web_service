@@ -37,6 +37,19 @@ function portalToken() {
 }
 const authHeaders = () => (portalToken() ? { Authorization: `Bearer ${portalToken()}` } : {})
 
+/** The portal's own token says who this is; deleting is a manager's job. */
+function portalUser() {
+  try {
+    const t = portalToken()
+    if (!t) return null
+    const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return { email: p.email || p.username || '', role: String(p.role || p.prole || '') }
+  } catch { return null }
+}
+const IS_ADMIN = ['manager', 'admin'].includes((portalUser()?.role || '').toLowerCase())
+const newId = () => (crypto.randomUUID ? crypto.randomUUID()
+  : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+
 async function fetchDoc() {
   const r = await fetch(`${PORTAL_BASE}/api/data`, { headers: authHeaders() })
   if (!r.ok) throw new Error(`GET /api/data → ${r.status}`)
@@ -308,17 +321,18 @@ export default function App() {
 
   // ── saving one record ──
   async function commit(patch, said) {
-    if (!doc) return
+    if (!doc) return false
     try {
       const r = await putDoc(doc.version, {
         authors: patch.authors || doc.authors,
         affiliations: patch.affiliations || doc.affiliations,
         groups: patch.groups || doc.groups,
       })
-      if (r.conflict) { setNote('다른 사람이 먼저 저장했습니다 — 새로 읽어주세요.'); return }
+      if (r.conflict) { setNote('다른 사람이 먼저 저장했습니다 — 새로 읽어주세요.'); return false }
       setDoc(r.doc)
       setNote(said || '저장했습니다.')
-    } catch (e) { setNote(String(e.message || e)) }
+      return true
+    } catch (e) { setNote(String(e.message || e)); return false }
   }
 
   return (
@@ -332,6 +346,8 @@ export default function App() {
         </header>
 
         <div className="am-cmd">
+          <button type="button" className="am-btn am-go"
+            onClick={() => openTab({ id: 'new', kind: 'edit', label: '새 저자', who: null })}>+ 새 저자</button>
           <button type="button" className="am-btn" onClick={addToMyList}>add to my list</button>
           <button type="button" className="am-btn" disabled={!picked.size}
             onClick={() => { setPicked(new Set()); lastHit.current = null }}>clear</button>
@@ -443,7 +459,17 @@ export default function App() {
         )}
 
         {doc && tab?.kind === 'edit' && (
-          <EditAuthor author={authors.find((a) => a.id === tab.who)} doc={doc} onSave={commit} />
+          <EditAuthor author={tab.who ? authors.find((a) => a.id === tab.who) : null}
+            doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+            onCreated={(id, label) => {
+              closeTab('new')
+              openTab({ id: `edit:${id}`, kind: 'edit', label, who: id })
+            }}
+            onDeleted={(id) => {
+              closeTab(`edit:${id}`)
+              setMyList((l) => l.filter((x) => x !== id))
+              setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
+            }} />
         )}
         {doc && tab?.kind === 'editcls' && (
           <EditClass name={tab.who} of={tab.of} doc={doc} onSave={commit} />
@@ -621,10 +647,15 @@ function Fld({ label, children }) {
   return (<><span className="am-fl">{label}</span><div className="am-fv">{children}</div></>)
 }
 
-function EditAuthor({ author, doc, onSave }) {
-  const [f, setF] = useState(author || {})
-  useEffect(() => { setF(author || {}) }, [author])
-  if (!author) return <p className="am-msg">그 저자를 찾을 수 없습니다.</p>
+function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted }) {
+  // No author means a DRAFT: the same form, and saving puts it in the document
+  // rather than over one. One form, two jobs, so a field added here is added to
+  // both at once.
+  const draft = !author
+  const blank = { id: null, korFamily: '', korGiven: '', engFirst: '', engMiddle: '', engLast: '' }
+  const [f, setF] = useState(author || blank)
+  const [sure, setSure] = useState(false)   // delete asks once, in place
+  useEffect(() => { setF(author || blank); setSure(false) }, [author])  // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const cur = currentAff(f) || {}
   // The current affiliation is the last entry by date; editing it edits THAT
@@ -638,6 +669,22 @@ function EditAuthor({ author, doc, onSave }) {
     list[i] = { ...list[i], [k]: e.target.value }
     return { ...s, affiliations: list }
   })
+
+  const named = () => (f.nick || '').trim() || korName(f) || engName(f)
+
+  async function create() {
+    if (!named()) return   // the button is disabled, but a stray Enter is not
+    const now = new Date().toISOString()
+    const a = { ...f, id: newId(), createdAt: now, updatedAt: now }
+    if (await onSave({ authors: [a, ...doc.authors] }, `${anyName(a)} 등록됨`)) onCreated?.(a.id, anyName(a))
+  }
+  function update() {
+    onSave({ authors: doc.authors.map((a) => (a.id === f.id ? { ...f, updatedAt: new Date().toISOString() } : a)) })
+  }
+  async function remove() {
+    if (await onSave({ authors: doc.authors.filter((a) => a.id !== f.id) }, `${anyName(f)} 삭제됨`)) onDeleted?.(f.id)
+  }
+
   return (
     <div className="am-tab-body">
       <div className="am-rec">
@@ -660,24 +707,53 @@ function EditAuthor({ author, doc, onSave }) {
         </Fld>
         <Fld label="대표 email">
           <input className="am-in" style={{ width: 260 }} value={f.repEmail || ''} onChange={set('repEmail')}
-            placeholder={repEmail(author) || 'name@ibs.re.kr'} />
+            placeholder={(author && repEmail(author)) || 'name@ibs.re.kr'} />
         </Fld>
         <Fld label="현재 소속">
           <input className="am-in" style={{ width: 110 }} value={cur.tag || ''} onChange={setAff('tag')} placeholder="affil." />
           <input className="am-in" style={{ width: 200 }} value={cur.position || ''} onChange={setAff('position')} placeholder="position" />
-          <input className="am-in am-mono" style={{ width: 90 }} value={cur.since || ''} onChange={setAff('since')} placeholder="2020-01" />
+          <input className="am-in" style={{ width: 90 }} value={cur.since || ''} onChange={setAff('since')} placeholder="2020-01" />
         </Fld>
-        <Fld label="그룹">
-          <span className="am-hint">
-            {(f.groups || []).length
-              ? (f.groups || []).map((g) => `${g.group}${g.core ? ` (core ${g.core})` : ''}`).join(' · ')
-              : '없음'} — 아직 여기서 고칠 수 없습니다.
-          </span>
-        </Fld>
+        {!draft && (
+          <Fld label="그룹">
+            <span className="am-hint">
+              {(f.groups || []).length
+                ? (f.groups || []).map((g) => `${g.group}${g.core ? ` (core ${g.core})` : ''}`).join(' · ')
+                : '없음'} — 아직 여기서 고칠 수 없습니다.
+            </span>
+          </Fld>
+        )}
         <Fld label="">
-          <button type="button" className="am-btn am-go"
-            onClick={() => onSave({ authors: doc.authors.map((a) => (a.id === f.id ? f : a)) })}>save</button>
-          <button type="button" className="am-btn" onClick={() => setF(author)}>revert</button>
+          {draft ? (
+            <>
+              <button type="button" className="am-btn am-go" disabled={!named()} onClick={create}>등록</button>
+              <span className="am-hint">
+                {named() ? '' : '별명이나 이름 하나는 있어야 합니다.'}
+              </span>
+            </>
+          ) : (
+            <>
+              <button type="button" className="am-btn am-go" onClick={update}>save</button>
+              <button type="button" className="am-btn" onClick={() => setF(author)}>revert</button>
+              {isAdmin && (
+                <>
+                  <span className="am-gap" />
+                  {/* Asked in place: window.confirm never appears inside the
+                      portal's frame, so a dialog would delete with no question
+                      asked at all. */}
+                  {sure ? (
+                    <>
+                      <span className="am-hint">되돌릴 수 없습니다.</span>
+                      <button type="button" className="am-btn am-danger" onClick={remove}>정말 삭제</button>
+                      <button type="button" className="am-btn" onClick={() => setSure(false)}>취소</button>
+                    </>
+                  ) : (
+                    <button type="button" className="am-btn am-danger" onClick={() => setSure(true)}>delete</button>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </Fld>
       </div>
     </div>

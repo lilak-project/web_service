@@ -55,13 +55,26 @@ open('dist/_check.html', 'w').write('''<!doctype html>
 <link rel="stylesheet" href="assets/%s">
 <script>
   window.__PORTAL_BASE__ = '/pp/author_manager/check';
-  localStorage.setItem('lilak_portal_token', %s);
+  // ?role=user checks what a non-manager sees.
+  var ROLE = new URLSearchParams(location.search).get('role') || 'manager';
+  var b64 = function (o) { return btoa(JSON.stringify(o)).replace(/[+]/g, '-').replace(/[/]/g, '_').replace(/=+$/, ''); };
+  localStorage.setItem('lilak_portal_token', 'x.' + b64({ email: 'check@local', role: ROLE }) + '.y');
   const DOC = %s;
+  // A stand-in for the backend, version guard included, so create/delete can
+  // be exercised without the portal.
   const real = window.fetch;
-  window.fetch = (u, o) => (String(u).includes('/api/data')
-    ? Promise.resolve(new Response(JSON.stringify(DOC), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-    : real(u, o));
+  const json = (v, status) => Promise.resolve(new Response(JSON.stringify(v),
+    { status: status || 200, headers: { 'Content-Type': 'application/json' } }));
+  window.fetch = (u, o) => {
+    if (!String(u).includes('/api/data')) return real(u, o);
+    if ((o && o.method || 'GET').toUpperCase() !== 'PUT') return json(DOC);
+    const b = JSON.parse(o.body);
+    if (b.baseVersion !== DOC.version) return json({ detail: 'conflict', current: DOC }, 409);
+    for (const k of ['authors', 'affiliations', 'groups', 'settings']) if (b[k] != null) DOC[k] = b[k];
+    DOC.version += 1;
+    return json(DOC);
+  };
 </script>
 </head><body><div id="root"></div><script type="module" src="assets/%s"></script></body></html>
-''' % (css, json.dumps(TOK), json.dumps(DOC, ensure_ascii=False), js))
+''' % (css, json.dumps(DOC, ensure_ascii=False), js))
 print('harness ready:', css, js)
