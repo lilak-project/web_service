@@ -1,0 +1,175 @@
+/* ══ author manager — RACK at sheet density ═══════════════════════════════
+ *
+ * Started from nothing on purpose: the old layout's top bar, tab bar and cards
+ * were a second set of chrome inside the portal's panel. This service is one
+ * table, and the table is the whole screen.
+ *
+ * The portal's vocabulary, denser: grey ground, white module, the nameplate IS
+ * the title, square corners, no bold, one text size — 26px lines and 12px text
+ * instead of the portal's 36 and 14, because the job here is scanning 137
+ * people rather than reading eight facts.
+ */
+
+:root {
+  --rk-row: 26px;          /* one height for every line: head and record alike */
+  --rk-fs: 12px;           /* one size */
+  --rk-ground: #f1f5f9;
+  --rk-panel: #ffffff;
+  --rk-head: #e2e8f0;
+  --rk-line: #e2e8f0;      /* between rows */
+  --rk-edge: #cbd5e1;      /* the module's own edge, a step stronger */
+  --rk-text: #1e293b;
+  --rk-dim: #475569;
+  --rk-mute: #94a3b8;
+  --rk-ink: #0f172a;
+  --rk-gut: #f8fafc;
+  --rk-cite: #dbeafe;      /* the citation columns wear it on the HEAD only */
+  --rk-cite-t: #1d4ed8;
+  --rk-mono: 'D2 coding', ui-monospace, Menlo, Consolas, monospace;
+  --rk-sans: Pretendard, 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
+             system-ui, 'Apple SD Gothic Neo', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--rk-ground);
+  color: var(--rk-text);
+  font-family: var(--rk-sans);
+  font-size: var(--rk-fs);
+  /* Inside the portal's panel there is nothing to scroll but the table. */
+  overflow: hidden;
+}
+
+.am {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+}
+
+/* The module. One per screen, filling it. */
+.am-mod {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--rk-panel);
+  border: 1px solid var(--rk-edge);
+  overflow: hidden;
+}
+
+/* The nameplate keeps the portal's 36px: a denser table does not make the
+   module's own name smaller. */
+.am-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  padding: 0 11px;
+  background: var(--rk-head);
+  border-bottom: 1px solid var(--rk-edge);
+}
+.am-bar b { font-weight: 400; color: var(--rk-ink); }
+.am-bar .am-n { color: var(--rk-dim); font-family: var(--rk-mono); }
+
+/* The table. One grid template, shared by the head and every row, so a column
+   is a column all the way down. */
+.am-tab {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.am-row {
+  display: grid;
+  grid-template-columns:
+    34px          /* # */
+    54px          /* affil. */
+    82px          /* 이름 */
+    minmax(150px, 1fr)  /* name */
+    7px           /* the rule between who someone is and what we know */
+    104px         /* nm. */
+    210px         /* email */
+    170px         /* position */
+    40px          /* core */
+    96px          /* last */
+    98px          /* first */
+    46px;         /* init */
+  height: var(--rk-row);
+}
+.am-row + .am-row { border-top: 1px solid var(--rk-line); }
+
+.am-c {
+  padding: 0 6px;
+  line-height: calc(var(--rk-row) - 1px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.am-dim { color: var(--rk-dim); }
+.am-ink { color: var(--rk-ink); }
+.am-mono { font-family: var(--rk-mono); }
+.am-num { text-align: right; font-family: var(--rk-mono); color: var(--rk-dim); }
+.am-mid { text-align: center; }
+
+/* The row number: the sheet's, and what you say out loud. */
+.am-gut {
+  padding: 0 6px;
+  text-align: right;
+  line-height: calc(var(--rk-row) - 1px);
+  background: var(--rk-gut);
+  border-right: 1px solid var(--rk-line);
+  font-family: var(--rk-mono);
+  font-size: 11px;
+  color: var(--rk-mute);
+}
+.am-rule { background: var(--rk-edge); }
+
+/* The head. Sticky, because a column name you have scrolled past is a column
+   you have to guess at. */
+.am-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--rk-head);
+  border-bottom: 1px solid var(--rk-edge);
+}
+.am-head .am-c { color: var(--rk-dim); }
+.am-head .am-gut { color: var(--rk-dim); background: var(--rk-gut); }
+/* Column groups wear the colour on their head only: painting whole columns the
+   way the sheet does turns a third of a 137-line screen into fill. */
+.am-head .am-cite { background: var(--rk-cite); color: var(--rk-cite-t); }
+
+.am-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: var(--rk-row);
+  padding: 0 11px;
+  background: var(--rk-gut);
+  border-top: 1px solid var(--rk-edge);
+  color: var(--rk-dim);
+}
+.am-sp { flex: 1; }
+.am-msg { padding: 14px 11px; color: var(--rk-mute); }
+
+/* Narrower than the design width, columns LEAVE rather than the table
+   scrolling sideways — a name scrolled away from its own row is worse than a
+   column you can read somewhere else. Reverse order of need. */
+@media (max-width: 1279px) {
+  .am-row { grid-template-columns: 34px 54px 82px minmax(140px, 1fr) 7px 104px 210px 170px 40px; }
+  .am-cite { display: none; }
+}
+@media (max-width: 1039px) {
+  .am-row { grid-template-columns: 34px 54px 82px minmax(130px, 1fr) 7px 210px 170px 40px; }
+  .am-nm { display: none; }
+}
+@media (max-width: 859px) {
+  .am-row { grid-template-columns: 34px 50px 78px minmax(120px, 1fr) 7px 210px 40px; }
+  .am-pos { display: none; }
+}
