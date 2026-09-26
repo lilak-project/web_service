@@ -60,7 +60,7 @@
 .pl-root.mini .pl-brand { padding: 0 10px; }
 .pl-root.mini .pl-logo { width: 44px; padding: 7px; margin-left: 0; border-radius: var(--radius-lg, 5px); }
 .pl-mark { width: 30px; height: 23px; color: var(--text-emphasis); flex-shrink: 0; }
-.pl-brand b { font-size: 15px; font-weight: 700; color: var(--text-emphasis); }
+.pl-brand b { font-size: 15px; font-weight: var(--rack-weight, 500); color: var(--text-emphasis); }
 .pl-brand .sub { font-size: 15px; color: var(--text-secondary); }
 
 /* Collapsed is the SAME layout clipped to 64px — nothing is re-centred, the
@@ -134,7 +134,7 @@
   border-radius: var(--radius-md, 3px);
   color: #fff;
   display: grid; place-items: center;
-  font-size: 14px; font-weight: 700;
+  font-size: 14px; font-weight: var(--rack-weight, 500);
 }
 
 /* Run state — see RunDot. */
@@ -146,7 +146,7 @@
 .pl-txt {
   flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-size: 13px; font-weight: 600; color: var(--text-emphasis);
+  font-size: 13px; font-weight: var(--rack-weight, 500); color: var(--text-emphasis);
 }
 .pl-txt small {
   margin-left: 4px;
@@ -166,10 +166,10 @@
 .pl-search input {
   flex: 1; min-width: 0; height: 24px; padding: 0;
   border: 0; outline: 0; background: transparent;
-  font: inherit; font-size: 13px; font-weight: 600;
+  font: inherit; font-size: 13px; font-weight: var(--rack-weight, 500);
   color: var(--text-emphasis);
 }
-.pl-search input::placeholder { color: var(--text-secondary); font-weight: 600; }
+.pl-search input::placeholder { color: var(--text-secondary); font-weight: var(--rack-weight, 500); }
 .pl-card.pl-search:focus-within { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
 
 /* Keyboard focus rings the whole card, not the inner button. */
@@ -283,7 +283,7 @@
   padding: 24px;
 }
 .pl-empty .path { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
-.pl-empty .big { font-size: 17px; font-weight: 700; color: var(--text-emphasis); margin: 6px 0 4px; }
+.pl-empty .big { font-size: 17px; font-weight: var(--rack-weight, 500); color: var(--text-emphasis); margin: 6px 0 4px; }
 .pl-scroll { flex: 1; min-width: 0; overflow: auto; }
 
 /* ── narrow ──────────────────────────────────────────────────────────────── */
@@ -363,7 +363,7 @@
   transition: transform .12s;
 }
 .pl-gchev.open { transform: rotate(90deg); }
-.pl-grp .pl-txt { font-weight: 700; color: var(--text-secondary); }
+.pl-grp .pl-txt { font-weight: var(--rack-weight, 500); color: var(--text-secondary); }
 .pl-gcount { flex-shrink: 0; font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); }
 .pl-grp:focus-visible { outline: none; }
 .pl-grp:focus-visible .pl-gchev {
@@ -392,7 +392,7 @@
   border-right: 1px solid var(--divider);
 }
 .pl-b2head { height: 50px; padding: 0 16px; display: flex; align-items: center; white-space: nowrap; }
-.pl-b2head b { font-size: 15px; font-weight: 700; color: var(--text-emphasis); }
+.pl-b2head b { font-size: 15px; font-weight: var(--rack-weight, 500); color: var(--text-emphasis); }
 /* "lilak portal", "Settings" and the open page's name are the same rank — the
    same three words in three columns — so they are one size, 15px. */
 .pl-nav2 { flex: 1; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
@@ -491,7 +491,7 @@
    and inputs come from settings.css, which names it alongside .pl-setpage. */
 .pl-mgtitle {
   margin: 0 0 10px;
-  font-size: 15px; font-weight: 700;
+  font-size: 15px; font-weight: var(--rack-weight, 500);
   color: var(--text-emphasis);
 }
 

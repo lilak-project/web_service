@@ -34,7 +34,7 @@ export default function RackView() {
   // The parts, each row carrying a live specimen of itself.
   const parts = [
     ['모듈', '.set-panel', 'Panel', L('회색 바닥 위의 흰 상자', 'the white box on the grey ground')],
-    ['명판', '.set-bar', 'Panel title', L('모듈의 제목이자 종류. 화면에서 유일한 굵은 글자', 'the title and the kind — the only bold text')],
+    ['명판', '.set-bar', 'Panel title', L('모듈의 제목이자 종류. 줄과 같은 높이', 'the title and the kind, at the height of a row')],
     ['표', '.set-card', 'Field', L('이름/값 두 칸 격자', 'the label/value grid')],
     ['채널', '.set-row', 'Row', L('기록 한 건', 'one record')],
     ['표시등', '.set-pill', 'Pill', L('상태', 'state')],
@@ -50,8 +50,8 @@ export default function RackView() {
         hint={L('모든 화면이 지킵니다', 'every screen obeys them')}>
         <Field label="1">{L('화면은 회색 바닥입니다. 내용이 바닥에 직접 놓이지 않고 흰 모듈 위에 놓입니다.',
           'A screen is a grey ground. Content never sits on it directly — it sits on white modules.')}</Field>
-        <Field label="2">{L('모듈의 제목은 위에 떠 있는 제목이 아니라 명판입니다.',
-          "A module's title is its nameplate, not a heading floating above it.")}</Field>
+        <Field label="2">{L('모듈의 제목은 위에 떠 있는 제목이 아니라 명판입니다. 띠 색이 종류를 말하므로 굵게 쓰지 않습니다.',
+          "A module's title is its nameplate, not a heading floating above it. The strip's colour says the kind, so the text is not bold.")}</Field>
         <Field label="3">{L('모듈 안은 전부 한 크기의 줄입니다. 세로줄은 긋지 않습니다.',
           'Inside a module everything is a row of one text size. No vertical rules.')}</Field>
       </Panel>
@@ -63,7 +63,7 @@ export default function RackView() {
         </Row>
         {parts.map(([name, cls, jsx, what]) => (
           <Row key={cls} className="cols" style={{ gridTemplateColumns: '90px 110px 110px 1fr' }}>
-            <b>{name}</b>
+            <span>{name}</span>
             <span style={{ fontFamily: 'var(--font-mono)' }}>{cls}</span>
             <span style={{ fontFamily: 'var(--font-mono)' }}>{jsx}</span>
             <span style={{ color: 'var(--text-secondary)' }}>{what}</span>
@@ -80,29 +80,41 @@ export default function RackView() {
               color: p.fg, border: '1px solid var(--border-strong)', fontWeight: 700 }}>
               {P(p.what)}
             </span>
-            <b>{p.ko}</b>
+            <span>{p.ko}</span>
             <span style={{ color: 'var(--text-secondary)' }}>{P(p.where)}</span>
           </Row>
         ))}
       </Panel>
 
       <Panel title={L('치수', 'Dimensions')}>
-        <Field label={L('명판', 'Nameplate')}>34px</Field>
-        <Field label={L('줄', 'Row')}>
-          <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-row</span> = 32px
-          <span style={{ color: 'var(--text-secondary)' }}>{L('채널에는 바닥, 표 줄에는 고정 — 넘치면 말줄임', 'a floor for record rows, fixed for table rows, ellipsised when it overruns')}</span>
+        <Field label={L('한 줄', 'One line')}>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-row</span> = 36px
+          <span style={{ color: 'var(--text-secondary)' }}>{L('명판 · 머리줄 · 기록줄이 모두 같은 높이', 'nameplate, column head and record are all this height')}</span>
+        </Field>
+        <Field label={L('줄의 규칙', 'How a line behaves')}>
+          <span style={{ color: 'var(--text-secondary)' }}>{L('채널에는 바닥(늘어날 수 있음), 표 줄에는 고정 — 넘치면 말줄임', 'a floor for record rows, fixed for table rows, ellipsised when it overruns')}</span>
         </Field>
         <Field label={L('칸', 'Column')}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-col</span> = 760px
           <span style={{ color: 'var(--text-secondary)' }}>{L('모든 랙 화면이 이 칸으로 가운데 정렬됩니다', 'every rack screen is this column, centred')}</span>
         </Field>
-        <Field label={L('컨트롤', 'Controls')}>{L('버튼과 입력 28px', 'buttons and inputs 28px')}</Field>
+        <Field label={L('컨트롤', 'Controls')}>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-ctl</span> = 28px
+          <span style={{ color: 'var(--text-secondary)' }}>{L('줄에서 한 단계 안쪽 — 줄 높이를 바꾸면 같이 움직입니다', 'one step inside the line, so it moves when the line does')}</span>
+        </Field>
         <Field label={L('모서리', 'Corners')}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-radius</span> = 0
           <span style={{ color: 'var(--text-secondary)' }}>{L('포털 전체가 직각입니다. 둥근 물건을 그리는 것만 예외 — 표시등의 둥근 끝, 아바타, 아이콘 미리보기.', 'the whole portal is square. The exceptions draw a rounded object rather than being chrome: the pill, avatars, icon previews.')}</span>
         </Field>
         <Field label={L('모듈 사이', 'Between modules')}>8px</Field>
-        <Field label={L('글자', 'Text')}>{L('한 크기', 'one size')} <span style={{ fontFamily: 'var(--font-mono)' }}>--fs-medium</span></Field>
+        <Field label={L('글자', 'Text')}>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>--fs-medium</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{L('한 크기. 버튼과 태그도 예외가 아닙니다', 'one size — buttons and tags included')}</span>
+        </Field>
+        <Field label={L('굵기', 'Weight')}>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-weight</span> = 500
+          <span style={{ color: 'var(--text-secondary)' }}>{L('가장 무거운 값. 나머지는 전부 보통 굵기', 'the heaviest it gets; everything else is regular')}</span>
+        </Field>
       </Panel>
 
       <Panel title={L('랙에 꽂힌 화면', 'On the rack')} bare

@@ -24,9 +24,16 @@
   /* A rack has a width: the ground can be 2000px wide, a line of text cannot.
      Every RACK page is this column, centred. */
   --rack-col: 760px;
-  /* And its slots are milled, not grown to fit: one height per line. */
-  --rack-row: 32px;
-  --rack-head: 24px;
+  /* And its slots are milled, not grown to fit: ONE height for every line the
+     rack draws — nameplate, column head, record. */
+  --rack-row: 36px;
+  /* What sits INSIDE a line is inset from it by one step, so a button or an
+     input grows and shrinks with the slot it is in rather than floating at a
+     size of its own. */
+  --rack-ctl: calc(var(--rack-row) - 8px);
+  /* Bold is a last resort here: the nameplate already has a colour strip and a
+     page title already stands alone. Medium is as heavy as this gets. */
+  --rack-weight: 500;
 }
 
 /* ── the ground ──────────────────────────────────────────────────────────── */
@@ -53,8 +60,12 @@
 :is(.set-panel, .set-card, .set-row) button:not(.set-plain):not(.set-pick *) {
   border: 1px solid currentColor !important;
   border-radius: var(--rack-radius, 0) !important;
-  min-height: 28px;
+  min-height: var(--rack-ctl);
   padding: 0 11px !important;
+  /* The kit sizes its buttons at --fs-small/500: inside the rack everything is
+     one size and one weight, and a button is not an exception to that. */
+  font-size: var(--fs-medium, 14px) !important;
+  font-weight: 400 !important;
 }
 /* Hovered, the kit fills the button solid and flips the text white — a white
    outline on a solid fill is the same shape, one shade lighter. */
@@ -64,12 +75,12 @@
    has to keep its own shape inside a panel. */
 :is(.set-panel, .set-card, .set-row) :is(input, select, textarea):not([type="range"], [type="checkbox"], [type="radio"], .set-pick *) {
   font-size: var(--fs-medium, 14px);
-  min-height: 28px;
+  min-height: var(--rack-ctl);
   padding: 0 9px;
   border-radius: var(--rack-radius, 0);
 }
 :is(.set-panel, .set-card, .set-row) textarea { padding: 7px 9px; }
-:is(.pl-setpage, .pl-mgpage, .svc-mg) :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: 700; margin: 12px 0 5px; }
+:is(.pl-setpage, .pl-mgpage, .svc-mg) :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: var(--rack-weight); margin: 12px 0 5px; }
 
 /* ── the panel ───────────────────────────────────────────────────────────── */
 /* White on the grey ground. The edge is one step stronger than the rules
@@ -90,12 +101,12 @@
   /* A FIXED height, not a minimum: the Accounts strip holds a select and grew
      12px taller than every other strip on the same page. */
   flex: 0 0 auto;
-  height: 34px;
+  height: var(--rack-row);
   padding: 0 13px;
   background: var(--info-bg);
   border-bottom: 1px solid var(--border-strong);
 }
-.set-bar b { font-weight: 700; color: var(--text-emphasis); }
+.set-bar b { font-weight: var(--rack-weight); color: var(--text-emphasis); }
 /* A foldable panel's strip IS the handle: the title and a caret, nothing else
    moves. */
 .set-bar .set-fold {
@@ -168,7 +179,7 @@
 /* The column names. A head is a label, not a record: shorter, quieter, and it
    takes the rule under it rather than one of its own above. */
 .set-row.head {
-  min-height: var(--rack-head);
+  min-height: var(--rack-row);
   background: var(--surface-2);
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-default);
@@ -216,7 +227,7 @@
 :is(.pl-setpage, .pl-mgpage) .set-title {
   margin: 0 0 10px;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: var(--rack-weight);
   color: var(--text-emphasis);
 }
 :is(.pl-setpage, .pl-mgpage) .set-msg { margin-bottom: 10px; color: var(--text-secondary); }
@@ -313,7 +324,7 @@
 }
 .set-bar.tabs .set-plain + .set-plain { border-left: 1px solid var(--border-strong); }
 .set-bar.tabs .set-plain[aria-pressed="true"] {
-  background: var(--surface); font-weight: 700; color: var(--text-emphasis);
+  background: var(--surface); font-weight: var(--rack-weight); color: var(--text-emphasis);
 }
 .set-bar.tabs .set-plain[disabled] { cursor: default; }
 
@@ -352,7 +363,7 @@
 .set-row.cols {
   height: var(--rack-row); min-height: 0; padding-top: 0; padding-bottom: 0;
 }
-.set-row.cols.head { height: var(--rack-head); }
+.set-row.cols.head { height: var(--rack-row); }
 .set-row.cols > * { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* RACK reaches the whole portal, not just the panels: a kit control rendered
