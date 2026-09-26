@@ -599,7 +599,9 @@ export default function ProjectsPage() {
   // hiding. Filtering here too meant a card hidden from the sidebar vanished
   // from the sidebar's manage mode as well, with no way left to bring it back.
   const cardsAll = isManager
-    ? sortByHome([iconCard, linksCard, ...(projects || []), storeCard, createCard], homeCfg?.order || [])
+    // Service Manager leads: it is where a portal gets its services, so it is the
+    // first thing a new portal needs and the first card of the System band.
+    ? sortByHome([storeCard, iconCard, linksCard, ...(projects || []), createCard], homeCfg?.order || [])
     : sortByHome([...(linksCard.hidden || !linksCard.count ? [] : [linksCard]), ...(projects || [])], homeCfg?.order || [])
   const cards = isManager ? cardsAll.filter((c) => !c.hidden || mgmt) : cardsAll
 
