@@ -60,6 +60,7 @@
 | `portal/InvitesAdmin.jsx` | 파랑 | 모듈·표·채널·표시등 |
 | `portal/LinksView.jsx` | 먹색 | 모듈·채널 |
 | `portal/NewServiceView.jsx` | 먹색 | 모듈·표·채널·표시등 |
+| `portal/RackView.jsx` | 먹색 | 모듈·명판·표·채널·표시등 |
 | `portal/ServiceManagePanel.jsx` | 보라 | 모듈·표·채널·표시등 |
 | `portal/ServiceProjects.jsx` | 보라 | 모듈·표·채널·표시등 |
 | `portal/ServiceSingle.jsx` | 보라 | 모듈·표·표시등 |

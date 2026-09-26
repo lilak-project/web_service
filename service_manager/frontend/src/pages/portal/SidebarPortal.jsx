@@ -14,6 +14,7 @@ import LinksView from './LinksView'
 import StoreView from './StoreView'
 import NewServiceView from './NewServiceView'
 import IconLabView from './IconLabView'
+import RackView from './RackView'
 import './sidebar.css'
 
 /** A card's stable key — the same one the cover and the saved order use, so a
@@ -22,7 +23,7 @@ const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.name)
 
 /** The portal's own tools always band together: they are things you do TO the
  *  portal, not services it runs, and an admin should not have to file them. */
-const SYSTEM_KEYS = ['@iconlab', '@newservice', '@store']
+const SYSTEM_KEYS = ['@iconlab', '@newservice', '@store', '@rack']
 const SYSTEM_ID = '@system'
 const NOGROUP_ID = '@none'
 // The name a materialised System band is stored under. Until something is
@@ -361,8 +362,18 @@ export default function SidebarPortal({
     const gs = [...(groups || [])]
       .filter((g) => !g.hidden || (manage && isManager))
       .sort((a, b) => (a.name === SYSTEM_NAME ? -1 : b.name === SYSTEM_NAME ? 1 : (a.order ?? 1000) - (b.order ?? 1000)))
+    const filed = new Set(gs.flatMap((g) => g.members || []))
     for (const g of gs) {
       const items = (g.members || []).map((k) => byKey.get(k)).filter((c) => c && !taken.has(cardKey(c)))
+      // A builtin that did not exist when the System band was materialised is
+      // still a system tool. Without this it lands in "No group", which no
+      // admin asked for and which looks like a bug in the new tool.
+      if (g.name === SYSTEM_NAME) {
+        for (const k of SYSTEM_KEYS) {
+          const c = !filed.has(k) && byKey.get(k)
+          if (c && !taken.has(cardKey(c))) items.push(c)
+        }
+      }
       items.forEach((c) => taken.add(cardKey(c)))
       // An empty group still shows in manage mode — otherwise a group you just
       // made vanishes and there is nothing to drag onto.
@@ -606,6 +617,7 @@ export default function SidebarPortal({
       : b === 'links' ? <LinksView links={links || []} onChanged={onRefresh} />
         : b === 'store' ? <StoreView onChanged={onRefresh} />
           : b === 'newservice' ? <NewServiceView onCreated={onRefresh} />
+          : b === 'rack' ? <RackView />
             : null
   )
 

@@ -652,6 +652,8 @@ export default {
   newsvc_card_hint:        'New-service tool',
   store_title:             'Service Manager',
   store_card_hint:         'Install services · build the portal',
+  rack_title:              'RACK',
+  rack_card_hint:          'The screen design rules and inventory',
   elog_addr:               'elog address',
   elog_addr_hint:          'Register this service in elog under this address.',
   copy:                    'Copy',

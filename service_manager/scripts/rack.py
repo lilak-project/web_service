@@ -12,6 +12,7 @@ screen nobody walks.
                              nameplate column
   scripts/rack.py --selftest the classifier's own check
 """
+import json
 import re
 import sys
 from pathlib import Path
@@ -19,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = ROOT / "frontend/src/pages"
 DOC = PAGES / "portal/RACK.md"
+JSON = PAGES / "portal/rack.json"   # the same table, for the in-portal RACK screen
 BEGIN, END = "<!-- rack:begin -->", "<!-- rack:end -->"
 
 # component  → the part's RACK name          CSS class → the same
@@ -64,6 +66,12 @@ def table(rows, plates):
     return "\n".join(lines)
 
 
+def as_json(rows, plates):
+    """The inventory as the in-portal RACK screen reads it."""
+    return [{"path": p, "plate": plates.get(p, "?"), "parts": used, "handrolled": hand}
+            for p, (used, hand) in rows.items()]
+
+
 def read_doc():
     """The nameplate each screen is filed under, as RACK.md has it."""
     if not DOC.exists():
@@ -94,7 +102,8 @@ def main():
     if arg == "--write":
         new = f"{BEGIN}\n\n{table(rows, plates)}\n\n{END}"
         DOC.write_text(re.sub(re.escape(BEGIN) + r".*?" + re.escape(END), lambda _: new, text, flags=re.S))
-        print(f"{DOC.relative_to(ROOT)}: {len(rows)} screens")
+        JSON.write_text(json.dumps(as_json(rows, plates), ensure_ascii=False, indent=1) + "\n")
+        print(f"{DOC.relative_to(ROOT)} + {JSON.relative_to(ROOT)}: {len(rows)} screens")
         return 0
 
     print(table(rows, plates))
@@ -102,10 +111,12 @@ def main():
         gone = [p for p in plates if p not in rows]
         new = [p for p in rows if p not in plates]
         unfiled = [p for p in rows if plates.get(p, "?") == "?"]
+        stale = [] if (JSON.exists() and json.loads(JSON.read_text()) == as_json(rows, plates)) else ["rack.json"]
         hand = [p for p, (_, h) in rows.items() if h]
         bad = False
         for label, items in (("RACK.md에만 있음", gone), ("RACK.md에 없음", new),
-                             ("명판 미정", unfiled), ("부품 대신 직접 마크업", hand)):
+                             ("명판 미정", unfiled), ("부품 대신 직접 마크업", hand),
+                             ("포털 화면이 읽는 사본이 낡음", stale)):
             if items:
                 bad = True
                 print(f"\n{label}:", *("  " + i for i in items), sep="\n", file=sys.stderr)

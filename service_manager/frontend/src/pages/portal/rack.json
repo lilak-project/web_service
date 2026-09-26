@@ -1,0 +1,175 @@
+[
+ {
+  "path": "ProjectsPage.jsx",
+  "plate": "파랑",
+  "parts": [
+   "모듈",
+   "표"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/AccountView.jsx",
+  "plate": "파랑",
+  "parts": [
+   "모듈",
+   "표",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/FeedbackView.jsx",
+  "plate": "파랑",
+  "parts": [
+   "모듈",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/GroupManagePanel.jsx",
+  "plate": "보라",
+  "parts": [
+   "모듈",
+   "표",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/GroupsAdmin.jsx",
+  "plate": "파랑",
+  "parts": [
+   "모듈",
+   "표",
+   "채널"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/GuideView.jsx",
+  "plate": "파랑",
+  "parts": [
+   "모듈"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/HandshakeRegister.jsx",
+  "plate": "—",
+  "parts": [
+   "모듈"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/IconLabView.jsx",
+  "plate": "먹색",
+  "parts": [
+   "모듈",
+   "표",
+   "채널"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/InvitesAdmin.jsx",
+  "plate": "파랑",
+  "parts": [
+   "모듈",
+   "표",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/LinksView.jsx",
+  "plate": "먹색",
+  "parts": [
+   "모듈",
+   "채널"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/NewServiceView.jsx",
+  "plate": "먹색",
+  "parts": [
+   "모듈",
+   "표",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/RackView.jsx",
+  "plate": "먹색",
+  "parts": [
+   "모듈",
+   "명판",
+   "표",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/ServiceManagePanel.jsx",
+  "plate": "보라",
+  "parts": [
+   "모듈",
+   "표",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/ServiceProjects.jsx",
+  "plate": "보라",
+  "parts": [
+   "모듈",
+   "표",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/ServiceSingle.jsx",
+  "plate": "보라",
+  "parts": [
+   "모듈",
+   "표",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/StoreView.jsx",
+  "plate": "먹색",
+  "parts": [
+   "모듈",
+   "표",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/SystemAdmin.jsx",
+  "plate": "파랑",
+  "parts": [
+   "모듈",
+   "표",
+   "표시등"
+  ],
+  "handrolled": false
+ }
+]

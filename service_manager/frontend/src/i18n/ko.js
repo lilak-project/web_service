@@ -652,6 +652,8 @@ export default {
   newsvc_card_hint:        '새 서비스 생성 도구',
   store_title:             '서비스 매니저',
   store_card_hint:         '서비스 설치 · 포털 빌드 도구',
+  rack_title:              'RACK',
+  rack_card_hint:          '화면 디자인 규칙과 목록',
   elog_addr:               'elog 연결 주소',
   elog_addr_hint:          'elog 에서 이 서비스를 등록할 때 쓰는 주소입니다.',
   copy:                    '복사',

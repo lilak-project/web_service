@@ -7,6 +7,7 @@ import AccountView, { settingsMenu } from './portal/AccountView'
 import ArchivePanel from './portal/ArchivePanel'
 import ServiceManagePanel from './portal/ServiceManagePanel'
 import IconLabView from './portal/IconLabView'
+import RackView from './portal/RackView'
 import LinksView from './portal/LinksView'
 import NewServiceView from './portal/NewServiceView'
 import StoreView from './portal/StoreView'
@@ -111,6 +112,10 @@ const STORE_SERVICE = { name: 'service manager', kind: 'tool', builtin: 'store',
 // run (an instrument's own page, a wiki, a PDF elsewhere). Admins edit it in
 // manage mode; the list itself lives in data/_portal/links.json.
 const LINKS_SERVICE = { name: 'links', kind: 'tool', builtin: 'links', icon: 'link', can_enter: true }
+// Manager-only builtin: the RACK rules — how every screen in this portal is
+// built — read inside the portal itself, with the screen list that scripts/
+// rack.py keeps current.
+const RACK_SERVICE = { name: 'rack', kind: 'tool', builtin: 'rack', icon: 'gauge', can_enter: true }
 
 // The mark next to the title. Uses the editable /lilak-header.svg (set from the
 // icon editor); falls back to the kit logo when that file isn't there yet.
@@ -587,6 +592,7 @@ export default function ProjectsPage() {
   const iconCard = { ...ICON_SERVICE, label: bi.iconlab?.label || ICON_SERVICE.name, icon: bi.iconlab?.icon || ICON_SERVICE.icon, color: bi.iconlab?.color, hidden: !!bi.iconlab?.hidden }
   const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label || t('newsvc_title'), icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color, hidden: !!bi.newservice?.hidden }
   const storeCard = { ...STORE_SERVICE, label: bi.store?.label || t('store_title'), icon: bi.store?.icon || STORE_SERVICE.icon, color: bi.store?.color, hidden: !!bi.store?.hidden }
+  const rackCard = { ...RACK_SERVICE, label: bi.rack?.label || t('rack_title'), icon: bi.rack?.icon || RACK_SERVICE.icon, color: bi.rack?.color, hidden: !!bi.rack?.hidden }
   const linkCfg = links?.card || {}
   const linksCard = { ...LINKS_SERVICE, label: linkCfg.label || t('links_title'), icon: linkCfg.icon || LINKS_SERVICE.icon, color: linkCfg.color, hidden: !!linkCfg.hidden, count: (links?.links || []).length }
   // The full home card list (builtins + services), ordered by the admin's saved order.
@@ -601,7 +607,7 @@ export default function ProjectsPage() {
   const cardsAll = isManager
     // Service Manager leads: it is where a portal gets its services, so it is the
     // first thing a new portal needs and the first card of the System band.
-    ? sortByHome([storeCard, iconCard, linksCard, ...(projects || []), createCard], homeCfg?.order || [])
+    ? sortByHome([storeCard, iconCard, linksCard, ...(projects || []), createCard, rackCard], homeCfg?.order || [])
     : sortByHome([...(linksCard.hidden || !linksCard.count ? [] : [linksCard]), ...(projects || [])], homeCfg?.order || [])
   const cards = isManager ? cardsAll.filter((c) => !c.hidden || mgmt) : cardsAll
 
@@ -950,7 +956,8 @@ export default function ProjectsPage() {
               const statusText = isBuiltin
                 ? (p.builtin === 'newservice' ? t('newsvc_card_hint')
                   : p.builtin === 'store' ? t('store_card_hint')
-                  : p.builtin === 'links' ? t('links_card_hint', p.count || 0) : t('iconlab_card_hint'))
+                  : p.builtin === 'links' ? t('links_card_hint', p.count || 0)
+                    : p.builtin === 'rack' ? t('rack_card_hint') : t('iconlab_card_hint'))
                 : p.multi_project ? t('portal_proj_open_svc')
                 : (p.running ? t('projects_running', p.port) : t('projects_stopped'))
               return (
@@ -1039,6 +1046,7 @@ export default function ProjectsPage() {
                         first={fullOrder.indexOf(key) <= 0} last={fullOrder.indexOf(key) >= fullOrder.length - 1}
                         onMove={(dir) => move(key, dir)} onChanged={refresh} />
                       {isBuiltin && p.builtin === 'links' && <LinksView links={links?.links || []} manage onChanged={refresh} />}
+                      {isBuiltin && p.builtin === 'rack' && <RackView />}
                       {/* manage mode: per-project management incl. delete */}
                       {p.multi_project && !isBuiltin && <ServiceProjects service={p} canManage={isManager} manage onChanged={refresh} />}
                       {/* single service: keep the Enter/Stop row (Stop lives here, in manage mode only) */}
