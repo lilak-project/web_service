@@ -24,6 +24,8 @@ const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.name)
 /** The portal's own tools always band together: they are things you do TO the
  *  portal, not services it runs, and an admin should not have to file them. */
 const SYSTEM_KEYS = ['@iconlab', '@newservice', '@store', '@rack']
+// Where the last project of each service is remembered.
+const PROJ_KEY = 'pl.proj.'
 const SYSTEM_ID = '@system'
 const NOGROUP_ID = '@none'
 // The name a materialised System band is stored under. Until something is
@@ -193,15 +195,18 @@ function Slider({ open, className = '', children }) {
   )
 }
 
-function ProjectList({ svc, color, sel, onPick, open }) {
+function ProjectList({ svc, color, sel, onPick, onRows, onManage, open }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [rows, setRows] = useState(null)
 
   useEffect(() => {
     if (!open || rows) return
-    launcher.get(`/services/${svc}/projects`).then((r) => setRows(r.data)).catch(() => setRows([]))
+    launcher.get(`/services/${svc}/projects`).then((r) => { setRows(r.data); onRows?.(r.data) })
+      .catch(() => { setRows([]); onRows?.([]) })
   }, [open, svc])  // eslint-disable-line react-hooks/exhaustive-deps
+  // Loaded already when the press came in — the list is fetched once and kept.
+  useEffect(() => { if (open && rows) onRows?.(rows) }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Slider open={open} className="pl-plist">
@@ -223,6 +228,15 @@ function ProjectList({ svc, color, sel, onPick, open }) {
           </button>
         )
       })}
+      {/* The projects themselves — make one, rename, delete. The list above is
+          for going somewhere; this is for changing what is in it. */}
+      <button type="button" className={`pl-proj${sel?.svc === svc && !sel?.proj ? ' on' : ''}`}
+        onClick={onManage}>
+        <span className="pl-runsp" />
+        <span className="pl-txt" style={{ color: 'var(--text-secondary)' }}>
+          {L('프로젝트 관리', 'Manage projects')}
+        </span>
+      </button>
     </Slider>
   )
 }
@@ -376,10 +390,27 @@ export default function SidebarPortal({
   const pickProject = useCallback((s, proj) => {
     leaveSettings()
     if (s.open === 'window') { window.open(`/pp/${s.name}/${proj}/`, '_blank'); return }
+    // Remembered, so pressing the service next time lands where you left off
+    // rather than on a page asking which project you meant.
+    try { localStorage.setItem(`${PROJ_KEY}${s.name}`, proj) } catch { /* private mode */ }
     setSel({ svc: s.name, proj })
     setView('service')
     if (window.innerWidth < PHONE) setMini(true)
   }, [])
+
+  // Pressing a multi-project service asks for a project to be opened; which one
+  // is only known once the list has loaded, so the card sets this and the list
+  // answers it (autoProj, below).
+  const wantAuto = useRef(null)
+  const autoProj = useCallback((s, rows) => {
+    if (wantAuto.current !== cardKey(s)) return
+    wantAuto.current = null
+    if (!rows?.length) return                 // nothing to open: the panel stays
+    let last = null
+    try { last = localStorage.getItem(`${PROJ_KEY}${s.name}`) } catch { /* private mode */ }
+    const pick = rows.find((p) => p.name === last) || rows[0]
+    pickProject(s, pick.name)
+  }, [pickProject])
 
   const projOpen = (name) => openSvcs.has(name)
   const toggleProj = (name) => setOpenSvcs((o) => {
@@ -610,6 +641,10 @@ export default function SidebarPortal({
               if (fromSettings) leaveSettings()
               // Pressing the service already in the panel folds its list again.
               else if (sel?.svc === key && view === 'service' && projOpen(key)) { toggleProj(key); return }
+              // Open the service itself — the project you were last in, or its
+              // first — so the service's own screen lands beside the bar. Only
+              // when it has no projects does the panel stay on managing them.
+              wantAuto.current = key
               setSel({ svc: key, proj: '' })
               setView('service')
               // Collapsed, the project list is invisible — asking for it expands
@@ -636,7 +671,9 @@ export default function SidebarPortal({
         </div>
         {multi && (
           <ProjectList svc={s.name} color={s.color} sel={view === 'service' ? sel : null}
-            open={projOpen(key)} onPick={(p) => pickProject(s, p)} />
+            open={projOpen(key)} onPick={(p) => pickProject(s, p)}
+            onRows={(rows) => autoProj(s, rows)}
+            onManage={() => { wantAuto.current = null; setSel({ svc: key, proj: '' }); setView('service') }} />
         )}
         {dropLine(key, true)}
       </div>
