@@ -217,6 +217,13 @@ export default function App() {
   // null = the tab's own order: 한글 이름, or My List's own sequence.
   const [sort, setSort] = useState(null)
   const [clsSort, setClsSort] = useState({ k: 'name', dir: 1 })
+  // Filtering has a MODE. In it the labels stop sorting and start choosing
+  // which column's values you are picking from; the picks pile up across
+  // columns until they are applied.
+  const [fmode, setFmode] = useState(false)
+  const [fcol, setFcol] = useState(null)       // the column being picked from
+  const [fsel, setFsel] = useState({})         // { column: [values] }
+  const [fon, setFon] = useState(false)        // applied
   const findRef = useRef(null)
   const lastHit = useRef(null)      // for shift-click: where the range starts
 
@@ -294,13 +301,36 @@ export default function App() {
     return [...list].sort(byColumn(sort?.k || 'kor', sort?.dir ?? 1, tab.grp))
   }, [tab, authors, myList, sort])
 
+  /** Every selected value must match, column by column: AND across columns,
+   *  OR inside one. An empty column is not a constraint. */
+  const passes = useCallback((a) => Object.entries(fsel).every(([k, vals]) =>
+    !vals.length || vals.includes(String(SORTERS[k]?.(a) ?? ''))), [fsel])
+
   const rows = useMemo(() => {
+    const kept = fon ? scope.filter(passes) : scope
     const q = query.trim().toLowerCase()
-    if (!q) return scope
-    return scope.filter((a) => [korName(a), engName(a), a.nick, repEmail(a), currentAff(a)?.tag,
+    if (!q) return kept
+    return kept.filter((a) => [korName(a), engName(a), a.nick, repEmail(a), currentAff(a)?.tag,
       currentAff(a)?.position, ...(a.groups || []).map((g) => g.group)]
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [scope, query])
+  }, [scope, query, fon, passes])
+
+  /** The values on offer for one column, and how many rows each would keep.
+   *  Counted over the tab's own authors, not the filtered ones: a value that
+   *  would empty the list is still worth seeing. */
+  const facet = useMemo(() => {
+    if (!fcol) return []
+    const get = SORTERS[fcol]
+    const n = new Map()
+    for (const a of scope) {
+      const v = String(get?.(a) ?? '')
+      if (v) n.set(v, (n.get(v) || 0) + 1)
+    }
+    return [...n.entries()].map(([v, count]) => ({ v, count }))
+      .sort((x, y) => y.count - x.count || x.v.localeCompare(y.v, 'ko'))
+  }, [fcol, scope])
+  const picked_ = (k) => fsel[k] || []
+  const facetTotal = Object.values(fsel).reduce((t, v) => t + v.length, 0)
 
   const classes = useMemo(() => {
     if (tab?.kind !== 'classes') return []
@@ -388,6 +418,24 @@ export default function App() {
           <button type="button" className="am-btn" disabled={!picked.size}
             onClick={() => { setPicked(new Set()); lastHit.current = null }}>clear</button>
           {picked.size > 0 && <span className="am-n">{picked.size} 선택</span>}
+          <span className="am-gap" />
+          {fmode ? (
+            <>
+              <button type="button" className="am-btn am-go" onClick={() => { setFmode(false); setFon(facetTotal > 0) }}>
+                필터 적용{facetTotal ? ` (${facetTotal})` : ''}
+              </button>
+              <button type="button" className="am-btn" onClick={() => setFmode(false)}>취소</button>
+              <span className="am-hint">레이블을 눌러 종류를 고르세요.</span>
+            </>
+          ) : fon ? (
+            <>
+              <button type="button" className="am-btn am-danger"
+                onClick={() => { setFon(false); setFsel({}); setFcol(null) }}>필터 풀기</button>
+              <button type="button" className="am-btn" onClick={() => setFmode(true)}>필터 고치기</button>
+            </>
+          ) : (
+            <button type="button" className="am-btn" onClick={() => setFmode(true)}>필터 선택</button>
+          )}
           {tab?.id === 'mylist' && <>
             <span className="am-gap" />
             <button type="button" className="am-btn" disabled={!scope.length}
@@ -425,6 +473,7 @@ export default function App() {
         {doc && tab?.kind === 'authors' && (
           <>
             <Table cols={cols} onDrag={drag('')}
+              facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
               sort={sort || { k: tab.id === 'mylist' ? null : 'kor', dir: 1 }}
               onSort={(k) => setSort((s2) => {
                 // The implicit order counts as the current one, so the first
@@ -433,8 +482,26 @@ export default function App() {
                 const now = s2 || (tab.id === 'mylist' ? null : { k: 'kor', dir: 1 })
                 return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
               })}
-              head={{ all: allPicked, some: somePicked, onAll: toggleAll }}>
-              {rows.map((a, i) => {
+              head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
+              {fmode && !fcol && <p className="am-msg">위의 레이블을 눌러 어떤 종류로 걸를지 고르세요.</p>}
+              {fmode && fcol && facet.length === 0 && <p className="am-msg">이 열에는 값이 없습니다.</p>}
+              {fmode && fcol && facet.map(({ v, count }, i) => {
+                const on = picked_(fcol).includes(v)
+                return (
+                  <div key={v} className={`am-row am-frow am-hit${on ? ' on' : ''}`}
+                    onClick={() => setFsel((s2) => {
+                      const cur = s2[fcol] || []
+                      return { ...s2, [fcol]: on ? cur.filter((x) => x !== v) : [...cur, v] }
+                    })}>
+                    <span className="am-chk"><input type="checkbox" checked={on} tabIndex={-1} readOnly
+                      aria-label={`${v} 고르기`} /></span>
+                    <span className="am-gut">{i + 1}</span>
+                    <span className="am-c am-ink">{v}</span>
+                    <span className="am-c am-num">{count}</span>
+                  </div>
+                )
+              })}
+              {!fmode && rows.map((a, i) => {
                 const cur = currentAff(a)
                 const on = picked.has(a.id)
                 return (
@@ -461,7 +528,7 @@ export default function App() {
                     }} />
                 )
               })}
-              {rows.length === 0 && <p className="am-msg">해당하는 저자가 없습니다.</p>}
+              {!fmode && rows.length === 0 && <p className="am-msg">해당하는 저자가 없습니다.</p>}
             </Table>
             {tab.id === 'mylist' && (
               <MyListOut list={scope} doc={doc} say={setNote}
@@ -538,7 +605,7 @@ const byPaperOrder = (core = coreOf) => (a, b) => {
 }
 
 // ─── The table shell: one template, a sticky head, draggable edges ──────────
-function Table({ cols, onDrag, head, sort, onSort, children }) {
+function Table({ cols, onDrag, head, sort, onSort, facet, children }) {
   const tmpl = `${cols.map((c) => `${c.w}px`).join(' ')} 1fr`
   return (
     <div className="am-tab-body">
@@ -551,6 +618,14 @@ function Table({ cols, onDrag, head, sort, onSort, children }) {
               <input type="checkbox" checked={head.all}
                 ref={(el) => { if (el) el.indeterminate = !head.all && head.some }}
                 onChange={head.onAll} aria-label="전체 선택" />
+            ) : facet && !c.fix ? (
+              // In filter mode the label stops sorting and starts choosing
+              // which column you are picking values from.
+              <button type="button" className={`am-sort am-facet${facet.col === c.k ? ' on' : ''}`}
+                onClick={() => facet.onPick(c.k)}>
+                {c.label}
+                {facet.count(c.k) > 0 && <i className="am-arrow">{facet.count(c.k)}</i>}
+              </button>
             ) : onSort && !c.fix ? (
               // The label IS the sort control: press it again and the arrow
               // turns over.

@@ -406,3 +406,9 @@ body.am-resizing .am-hit:hover { background: transparent; }
    ends, and it is also where the edge is dragged: the line shows where to
    take hold. */
 .am-head > .am-c + .am-c { border-left: 1px solid var(--rk-edge); }
+
+/* Filter mode: the label you are picking values from, and how many are picked. */
+.am-facet.on { color: var(--rk-cite-t); }
+.am-head:has(.am-facet) { background: var(--rk-mark, #f3e5bb); }
+/* One value on offer, and how many rows it would keep. */
+.am-row.am-frow { grid-template-columns: 26px 34px minmax(160px, 1fr) 80px; }
