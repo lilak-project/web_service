@@ -173,3 +173,154 @@ body {
   .am-row { grid-template-columns: 34px 50px 78px minmax(120px, 1fr) 7px 210px 40px; }
   .am-pos { display: none; }
 }
+
+/* ── the command line ─────────────────────────────────────────────────────
+   What the selection can do, and the one search field. Buttons are 22px —
+   one step inside the 26px line, the portal's rule for what sits in a row. */
+.am-cmd {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px;
+  border-bottom: 1px solid var(--rk-line);
+}
+.am-btn {
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--rk-dim);
+  border-radius: 0;
+  background: var(--rk-panel);
+  font: inherit;
+  font-size: var(--rk-fs);
+  color: var(--rk-dim);
+  cursor: pointer;
+}
+.am-btn:hover:not(:disabled) { background: var(--rk-gut); border-color: var(--rk-ink); color: var(--rk-ink); }
+.am-btn:disabled { border-color: var(--rk-line); color: var(--rk-mute); cursor: default; }
+.am-btn.am-go { border-color: var(--rk-cite-t); background: var(--rk-cite); color: var(--rk-cite-t); }
+.am-find {
+  width: 240px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--rk-edge);
+  border-radius: 0;
+  background: var(--rk-panel);
+  font: inherit;
+  font-size: var(--rk-fs);
+  color: var(--rk-text);
+}
+
+/* ── the tabs ─────────────────────────────────────────────────────────────
+   They sit ON the table: the chosen one is the table's own white, the rest
+   are the head's grey, so a tab reads as the front sheet of a folder. */
+.am-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  height: 26px;
+  background: var(--rk-gut);
+  border-bottom: 1px solid var(--rk-edge);
+  overflow-x: auto;
+}
+.am-tab {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  background: var(--rk-head);
+  border-right: 1px solid var(--rk-edge);
+  color: var(--rk-dim);
+}
+.am-tab.on { background: var(--rk-panel); color: var(--rk-ink); }
+.am-tabname {
+  height: 100%;
+  padding: 0 11px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--rk-fs);
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.am-x {
+  width: 18px;
+  height: 100%;
+  padding: 0;
+  margin-right: 3px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--rk-mute);
+  cursor: pointer;
+}
+.am-x:hover { color: var(--rk-mark-t, #b91c1c); }
+
+/* ── rows you can hit ─────────────────────────────────────────────────────
+   Hover says "this line is a thing you can act on"; the selected fill is the
+   portal's own selected blue. */
+.am-tab-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.am-hit { cursor: default; }
+.am-hit:hover { background: var(--rk-gut); }
+.am-hit.on { background: var(--rk-cite); }
+.am-hit.on:hover { background: #cfe0fb; }
+.am-chk { display: grid; place-items: center; }
+.am-chk input { width: 12px; height: 12px; margin: 0; accent-color: var(--rk-cite-t); }
+
+/* The author table gains a checkbox column in front of the number. */
+.am-row {
+  grid-template-columns:
+    26px 34px 54px 82px minmax(150px, 1fr) 7px 104px 210px 170px 40px 96px 98px 46px;
+}
+/* The classes are four columns, not thirteen. */
+.am-row.am-crow { grid-template-columns: 34px minmax(160px, 1fr) 70px minmax(160px, 2fr); }
+
+@media (max-width: 1279px) {
+  .am-row { grid-template-columns: 26px 34px 54px 82px minmax(140px, 1fr) 7px 104px 210px 170px 40px; }
+}
+@media (max-width: 1039px) {
+  .am-row { grid-template-columns: 26px 34px 54px 82px minmax(130px, 1fr) 7px 210px 170px 40px; }
+}
+@media (max-width: 859px) {
+  .am-row { grid-template-columns: 26px 34px 50px 78px minmax(120px, 1fr) 7px 210px 40px; }
+}
+
+/* ── one record, at the readable size ─────────────────────────────────────
+   Finding is dense; reading and typing are not. */
+.am-rec {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: stretch;
+  font-size: 13px;
+}
+.am-fl {
+  display: flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-top: 1px solid var(--rk-line);
+  color: var(--rk-dim);
+}
+.am-fv {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 7px 12px;
+  border-top: 1px solid var(--rk-line);
+}
+.am-rec > :nth-child(1), .am-rec > :nth-child(2) { border-top: 0; }
+.am-in {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--rk-edge);
+  border-radius: 0;
+  background: var(--rk-panel);
+  font: inherit;
+  font-size: 13px;
+  color: var(--rk-text);
+}
+.am-hint { color: var(--rk-mute); }
