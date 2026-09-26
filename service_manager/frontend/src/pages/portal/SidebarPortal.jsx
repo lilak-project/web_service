@@ -833,9 +833,11 @@ export default function SidebarPortal({
               <Icon name="folder-plus" size={15} />
               <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
             </button>
-            {/* Shown only while a card is in the air: an empty target is a
-                button that does nothing. Dropping here is the Hide button,
-                reached by the hand that is already holding the card. */}
+            {/* The room the bar has left over IS the target, and it is here
+                before you pick a card up — a place you have to discover while
+                already holding something is a place you drop things wrong.
+                Dropping here is the Hide button, reached by the hand that is
+                already holding the card. */}
             <div className={`pl-b2drop${drag ? ' live' : ''}${dropAt?.hide ? ' over' : ''}`}
               onDragOver={(e) => { if (!drag) return; e.preventDefault(); setDropAt({ hide: true }) }}
               onDragLeave={() => setDropAt((d) => (d?.hide ? null : d))}
@@ -843,8 +845,6 @@ export default function SidebarPortal({
               <Icon name="eye-off" size={14} />
               <span>{L('여기로 끌어다 놓으면 숨김', 'drop a card here to hide it')}</span>
             </div>
-
-            <div className="pl-spring" />
 
             {/* Last of all, like Log out in the settings bar: leaving is not
                 one of the things you do while you are here. */}
