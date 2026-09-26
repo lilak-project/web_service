@@ -485,7 +485,10 @@ function Row({ cols, cell, className, onClick, onContextMenu }) {
             className={`${c.k === 'num' ? 'am-gut' : 'am-c'}`
               + `${c.k === 'chk' ? ' am-chk' : ''}${c.num ? ' am-num' : ''}`
               + `${c.cite ? ' am-cite' : ''}${c.k === 'name' ? ' am-ink' : ''}`
-              + `${c.k === 'nm' || c.k === 'email' || c.k === 'init' ? ' am-mono' : ''}`
+              // Only email keeps the monospace: it is an address, read a
+              // character at a time. Everything derived from a NAME reads in
+              // the body face, like the name it came from.
+              + `${c.k === 'email' ? ' am-mono' : ''}`
               + `${c.k === 'affil' || c.k === 'pos' || c.k === 'nm' ? ' am-dim' : ''}`}>
             {cell[c.k]}
           </span>
