@@ -49,8 +49,11 @@ function StepOut({ open, kind, children }) {
     // Keyed on what it holds, so swapping remounts it and the step-out plays
     // again instead of the browser reusing a finished animation.
     <aside key={live} className={`pl-bar2${folding ? ' folding' : ''}`}
-      onAnimationEnd={() => { if (folding) setLive(open ? kind : null) }}>
-      {last.current}
+      onAnimationEnd={(e) => {
+        // The box and its contents both animate; one of them is enough.
+        if (folding && e.target === e.currentTarget) setLive(open ? kind : null)
+      }}>
+      <div className="pl-b2in">{last.current}</div>
     </aside>
   )
 }

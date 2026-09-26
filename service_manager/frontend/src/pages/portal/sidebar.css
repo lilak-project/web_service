@@ -12,6 +12,10 @@
      separators. A step past --border-strong, which the cards inside the bars
      already use — the chrome's own lines have to beat the cards'. */
   --divider: var(--text-muted);
+  /* The second bar's width and the time it takes, in one place: the box, its
+     contents and both folds all read them. */
+  --b2w: 214px;
+  --b2t: .38s;
   /* RACK is square, and the bar is part of the rack — so the kit's radii are
      pinned to --rack-radius here (pinned, not a fallback, or the theme's
      larger radii win). One knob, in settings.css, turns every corner in the
@@ -23,7 +27,10 @@
   display: flex;
   font-size: 13px;
   color: var(--text-primary);
-  background: var(--app-bg);
+  /* Whatever is briefly uncovered between the bars is this, not --app-bg's
+     near-white: the chrome's own ground, so a gap between two bars looks like
+     more bar rather than a hole in the page. */
+  background: var(--surface-3);
 }
 /* :where() so the reset carries ZERO specificity. As `.pl-root button` it was
    (0,1,1) and beat every single-class rule — which silently stripped the border
@@ -389,31 +396,38 @@
 /* The same geometry as the service bar — 10px gutters, 4px gaps — on a deeper
    background, so it reads as one step in rather than a different component. */
 .pl-bar2 {
-  width: 214px;
+  width: var(--b2w);
   flex-shrink: 0;
-  display: flex; flex-direction: column;
+  display: flex;
   /* The account plinth's ground: this bar is the same kind of surface — the
      portal talking about itself rather than about a service. */
   background: var(--surface-3);
   border-right: 1px solid var(--divider);
-  /* It comes OUT of the service bar. The bar is collapsing to 64px at the same
-     time, so the menu slides right from under it — which is the gesture the
-     account button makes: one bar folds, the next one steps out of it. It
-     starts a whole width to the left and is drawn under the bar (z-index), so
-     nothing of it shows until it clears the bar's edge. */
+  /* TWO motions at once, and the second is why: the BOX grows from nothing to
+     its width, so the panel beside it gives way continuously — the way it does
+     when you drag the window's edge — instead of jumping aside and leaving a
+     strip for the menu to cross. The CONTENTS meanwhile slide right from under
+     the service bar, which is the gesture the account button makes. */
+  overflow: hidden;
   position: relative; z-index: 1;
-  animation: pl-step-out .38s cubic-bezier(.2, .8, .2, 1);
+  animation: pl-b2-open var(--b2t) cubic-bezier(.2, .8, .2, 1);
 }
-@keyframes pl-step-out {
-  from { transform: translateX(-100%); }
-  to { transform: none; }
+/* Fixed width inside the growing box, so the menu is revealed rather than
+   squeezed: text does not reflow while the animation runs. */
+.pl-b2in {
+  width: var(--b2w); flex: 0 0 auto;
+  display: flex; flex-direction: column;
+  animation: pl-b2-slide var(--b2t) cubic-bezier(.2, .8, .2, 1);
 }
+@keyframes pl-b2-open  { from { width: 0; }                   to { width: var(--b2w); } }
+@keyframes pl-b2-slide { from { transform: translateX(-100%); } to { transform: none; } }
+
 /* And folds back the same way it came. */
-.pl-bar2.folding { animation: pl-fold-in .38s cubic-bezier(.2, .8, .2, 1) forwards; }
-@keyframes pl-fold-in {
-  from { transform: none; }
-  to { transform: translateX(-100%); }
-}
+.pl-bar2.folding { animation: pl-b2-close var(--b2t) cubic-bezier(.2, .8, .2, 1) forwards; }
+.pl-bar2.folding .pl-b2in { animation: pl-b2-tuck var(--b2t) cubic-bezier(.2, .8, .2, 1) forwards; }
+@keyframes pl-b2-close { from { width: var(--b2w); }  to { width: 0; } }
+@keyframes pl-b2-tuck  { from { transform: none; }    to { transform: translateX(-100%); } }
+
 /* The bar has to be over it for the slide to read as coming from underneath. */
 .pl-side { position: relative; z-index: 2; }
 .pl-b2head { height: 50px; padding: 0 16px; display: flex; align-items: center; white-space: nowrap; }
