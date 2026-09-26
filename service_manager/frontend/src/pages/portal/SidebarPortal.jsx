@@ -694,34 +694,11 @@ export default function SidebarPortal({
           )))}
         </div>
 
-        {/* Outside .pl-nav so it stays put while the list scrolls: these two act on
-            the WHOLE bar, not on anything in the list — so they sit at its foot,
-            on the plinth, where the other whole-portal controls already are. */}
-        {manage && isManager && (
-          <div className="pl-mgbar">
-            {/* The action first, the way out last — at the foot of the bar the
-                way out sits closest to where the eye ends up. */}
-            <button type="button" className="pl-mgnew" onClick={onCreateGroup}>
-              <Icon name="folder-plus" size={14} /> <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
-            </button>
-            {/* Same switch as in the settings menu, in the place the account
-                card leaves free: fills when it is on, fixed label either way. */}
-            <button type="button" className={`pl-mgnew${flat ? '' : ' on'}`}
-              onClick={() => setFlat((f) => !f)}>
-              <Icon name="tree" size={14} /> <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
-            </button>
-            <button type="button" className="pl-mgout" onClick={toggleManage}>
-              <Icon name="close" size={14} /> <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
-            </button>
-          </div>
-        )}
-
         {/* The account alone at the foot now: the modes moved into the settings
             bar, which is where the rest of "things about this portal" live.
-            In manage mode the plinth belongs to the two manage buttons instead:
-            settings is not what you are doing, and the account card would only
-            be one more thing to mis-drag. */}
-        {!signedOut && !(manage && isManager) && (
+            Manage mode has a bar of its own now, so the plinth stays the
+            account's. */}
+        {!signedOut && (
         <div className="pl-user">
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
             <button type="button" className="pl-row"
@@ -743,6 +720,38 @@ export default function SidebarPortal({
       {/* Settings is a SECOND bar of the same shape one step in, not a page that
           replaces the first: the service bar stays, so there is always a way out
           and you can still see what is running. */}
+      {manage && isManager && (
+        <aside className="pl-bar2">
+          <div className="pl-b2head"><b>{L('관리', 'Manage')}</b></div>
+          <div className="pl-nav2">
+            {/* What the cover DOES, then what you can do to it. Same items the
+                settings menu carries, in the same class, so managing is one
+                more bar beside the first rather than a mode that rearranges
+                the one you had. */}
+            <button type="button" className={`pl-c2${flat ? '' : ' on'}`}
+              onClick={() => setFlat((f) => !f)}>
+              <Icon name="tree" size={15} />
+              <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
+            </button>
+            <button type="button" className={`pl-c2${view === 'live' ? ' on' : ''}`}
+              onClick={enterLive}>
+              <Icon name="broadcast" size={15} />
+              <span className="pl-txt">{L('라이브 모드', 'Live mode')}</span>
+            </button>
+
+            <div className="pl-sep" />
+            <button type="button" className="pl-c2" onClick={onCreateGroup}>
+              <Icon name="folder-plus" size={15} />
+              <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
+            </button>
+            <button type="button" className="pl-c2 out" onClick={toggleManage}>
+              <Icon name="close" size={15} />
+              <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
+            </button>
+          </div>
+        </aside>
+      )}
+
       {view === 'settings' && (
         <aside className="pl-bar2">
           <div className="pl-b2head"><b>{L('설정', 'Settings')}</b></div>
