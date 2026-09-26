@@ -809,6 +809,14 @@ export default function SidebarPortal({
             {/* The modes are not pages — they change what the whole cover does
                 — so they sit past the spring, under the pages. */}
             <div className="pl-sep" />
+            {/* The same thing the logo does, named: from in here the logo is two
+                bars away, and this is where the other switches live. Fixed
+                label, filled while the bar IS folded, like the modes below. */}
+            <button type="button" className={`pl-c2${mini ? ' on' : ''}`}
+              onClick={() => setMini((m) => !m)}>
+              <Icon name="caret-left" size={15} />
+              <span className="pl-txt">{L('사이드바 접기', 'Collapse sidebar')}</span>
+            </button>
             {modes.map((m) => (
               <button key={m.id} type="button"
                 className={`pl-c2${(m.id === 'live' ? view === 'live' : manage) ? ' on' : ''}`}
