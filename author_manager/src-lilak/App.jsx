@@ -77,10 +77,17 @@ function currentAff(a) {
   return [...list].sort((x, y) => String(x.since || '').localeCompare(String(y.since || ''))).at(-1)
 }
 const repEmail = (a) => a.repEmail || currentAff(a)?.email || (a.emails || [])[0] || ''
-/** The smallest group `core`: where the author sits in a paper's author list. */
+/** The smallest group `core`: where the author sits in a paper's author list
+ *  when no one group is being looked at. */
 function coreOf(a) {
   const cores = (a.groups || []).map((g) => Number(g.core)).filter((n) => Number.isFinite(n) && n >= 1)
   return cores.length ? Math.min(...cores) : null
+}
+/** That ONE group's core. A core is assigned per group: outside a group's tab
+ *  there is no single number to show. */
+function coreIn(a, group) {
+  const n = Number((a.groups || []).find((g) => g.group === group)?.core)
+  return Number.isFinite(n) && n >= 1 ? n : null
 }
 // An author's affiliation entry keys its affiliation as `tag`; its group entry
 // keys the group as `group`. The class records carry `name` (and `shortName`).
@@ -202,8 +209,11 @@ export default function App() {
   const tab = tabs.find((t) => t.id === active) || tabs[0]
 
   const cols = useMemo(
-    () => COLS.filter((c) => !(c.drop && vw < c.drop)).map((c) => ({ ...c, w: widths[c.k] ?? c.w })),
-    [vw, widths])
+    () => COLS
+      .filter((c) => !(c.drop && vw < c.drop))
+      .filter((c) => c.k !== 'core' || !!tab?.grp)
+      .map((c) => ({ ...c, w: widths[c.k] ?? c.w })),
+    [vw, widths, tab])
   const clsCols = useMemo(() => CLS_COLS.map((c) => ({ ...c, w: widths[`c:${c.k}`] ?? c.w })), [widths])
   const drag = useCallback((prefix) => (key, startX, startW) => {
     const move = (e) => {
@@ -231,7 +241,8 @@ export default function App() {
     let list = authors
     if (tab.aff) list = list.filter((a) => inAff(a, tab.aff))
     if (tab.grp) list = list.filter((a) => inGrp(a, tab.grp))
-    return [...list].sort(byPaperOrder)
+    // In a group's tab, that group's core is the order.
+    return [...list].sort(byPaperOrder(tab.grp ? (a) => coreIn(a, tab.grp) : coreOf))
   }, [tab, authors, myList])
 
   const rows = useMemo(() => {
@@ -383,7 +394,7 @@ export default function App() {
                       nm: citeShort(a) || D,
                       email: repEmail(a) || D,
                       pos: cur?.position || D,
-                      core: coreOf(a) ?? D,
+                      core: (tab.grp ? coreIn(a, tab.grp) : coreOf(a)) ?? D,
                       last: citeLast(a) || D,
                       first: citeFirst(a) || D,
                       init: citeInit(a) || D,
@@ -448,8 +459,8 @@ export default function App() {
   )
 }
 
-function byPaperOrder(a, b) {
-  const c = (coreOf(a) ?? 99) - (coreOf(b) ?? 99)
+const byPaperOrder = (core = coreOf) => (a, b) => {
+  const c = (core(a) ?? 99) - (core(b) ?? 99)
   return c !== 0 ? c : (citeShort(a) || engName(a) || anyName(a))
     .localeCompare(citeShort(b) || engName(b) || anyName(b))
 }
@@ -491,10 +502,6 @@ function Row({ cols, cell, className, onClick, onContextMenu }) {
             className={`${c.k === 'num' ? 'am-gut' : 'am-c'}`
               + `${c.k === 'chk' ? ' am-chk' : ''}${c.num ? ' am-num' : ''}`
               + `${c.cite ? ' am-cite' : ''}${c.k === 'name' ? ' am-ink' : ''}`
-              // Only email keeps the monospace: it is an address, read a
-              // character at a time. Everything derived from a NAME reads in
-              // the body face, like the name it came from.
-              + `${c.k === 'email' ? ' am-mono' : ''}`
               + `${c.k === 'affil' || c.k === 'pos' || c.k === 'nm' ? ' am-dim' : ''}`}>
             {cell[c.k]}
           </span>
@@ -512,7 +519,7 @@ function MyListOut({ list, doc, onDrop, onMakeGroup, group, setGroup, say }) {
 
   /** The LaTeX author block: core order, then a superscript per affiliation. */
   const paperOut = () => {
-    const ordered = [...list].sort(byPaperOrder)
+    const ordered = [...list].sort(byPaperOrder())
     const idx = new Map()
     for (const a of ordered) {
       const tag = currentAff(a)?.tag
@@ -647,12 +654,12 @@ function EditAuthor({ author, doc, onSave }) {
           <input className="am-in" style={{ width: 200 }} value={f.nick || ''} onChange={set('nick')} />
         </Fld>
         <Fld label="줄임 이름">
-          <input className="am-in am-mono" style={{ width: 160 }} value={f.abvName || ''} onChange={set('abvName')}
+          <input className="am-in" style={{ width: 160 }} value={f.abvName || ''} onChange={set('abvName')}
             placeholder={citeShort({ ...f, abvName: '' }) || 'J. W. Lee'} />
           <span className="am-hint">비우면 영문 이름에서 만듭니다.</span>
         </Fld>
         <Fld label="대표 email">
-          <input className="am-in am-mono" style={{ width: 260 }} value={f.repEmail || ''} onChange={set('repEmail')}
+          <input className="am-in" style={{ width: 260 }} value={f.repEmail || ''} onChange={set('repEmail')}
             placeholder={repEmail(author) || 'name@ibs.re.kr'} />
         </Fld>
         <Fld label="현재 소속">
