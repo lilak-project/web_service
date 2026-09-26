@@ -75,7 +75,7 @@ function coreOf(a) {
   return cores.length ? Math.min(...cores) : null
 }
 const inAff = (a, tag) => (a.affiliations || []).some((x) => x.tag === tag)
-const inGrp = (a, name) => (a.groups || []).some((g) => g.name === name)
+const inGrp = (a, name) => (a.groups || []).some((g) => g.group === name)
 
 const D = '·'   // a cell with nothing in it still shows its column
 
@@ -137,7 +137,7 @@ export default function App() {
     const q = query.trim().toLowerCase()
     if (!q) return scope
     return scope.filter((a) => [korName(a), engName(a), a.nick, repEmail(a), currentAff(a)?.tag,
-      currentAff(a)?.position, ...(a.groups || []).map((g) => g.name)]
+      currentAff(a)?.position, ...(a.groups || []).map((g) => g.group)]
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
   }, [scope, query])
 
@@ -390,7 +390,7 @@ function EditAuthor({ author, doc, onSave }) {
         <Fld label="그룹">
           <span className="am-hint">
             {(f.groups || []).length
-              ? (f.groups || []).map((g) => `${g.name}${g.core ? ` (core ${g.core})` : ''}`).join(' · ')
+              ? (f.groups || []).map((g) => `${g.group}${g.core ? ` (core ${g.core})` : ''}`).join(' · ')
               : '없음'} — 아직 여기서 고칠 수 없습니다.
           </span>
         </Fld>
@@ -432,7 +432,7 @@ function EditClass({ name, of, doc, onSave }) {
                   ? (a.affiliations || []).map((x) => (x.tag === rec.name ? { ...x, tag: f.name } : x))
                   : a.affiliations,
                 groups: of === 'group'
-                  ? (a.groups || []).map((g) => (g.name === rec.name ? { ...g, name: f.name } : g))
+                  ? (a.groups || []).map((g) => (g.group === rec.name ? { ...g, group: f.name } : g))
                   : a.groups,
               }))
               : doc.authors

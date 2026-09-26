@@ -16,7 +16,7 @@ def A(i, ko_f, ko_g, f, m, l, tag, pos, mail, core):
     return {'id': 'a%d' % i, 'korFamily': ko_f, 'korGiven': ko_g, 'engFirst': f, 'engMiddle': m,
             'engLast': l, 'emails': [mail], 'repEmail': mail,
             'affiliations': [{'tag': tag, 'position': pos, 'email': mail, 'since': '2020-01'}],
-            'groups': [{'name': 'CENS', 'core': core}]}
+            'groups': [{'group': 'CENS', 'role': '', 'core': core}]}
 
 
 ROWS = [
@@ -39,9 +39,14 @@ ROWS = [
  ('아루니타', '', 'Arunita', '', 'MUKHERJEE', 'CENS', 'Postdoctoral Researcher', 'arunita@ibs.re.kr', 6),
  ('지펭', '', 'Zifeng', '', 'LUO', 'CENS', 'Senior Research Fellow', 'luozf@ibs.re.kr', 6),
 ]
+# The keys the live document actually uses: an author's affiliation entry keys
+# its affiliation as `tag`, its group entry keys the group as `group`, and a
+# class record carries both `name` and `shortName`.
 DOC = {'version': 1, 'authors': [A(i, *r) for i, r in enumerate(ROWS)],
-       'affiliations': [{'name': 'CENS'}, {'name': 'KAU'}],
-       'groups': [{'name': 'CENS', 'core': 1}]}
+       'affiliations': [{'name': 'CENS', 'shortName': 'CENS', 'fullName': 'Center for Exotic Nuclear Studies'},
+                        {'name': 'KAU', 'shortName': 'KAU', 'fullName': 'Korea Aerospace University'}],
+       'groups': [{'name': 'CENS', 'shortName': 'CENS'},
+                  {'name': 'meeting', 'shortName': 'meeting'}]}
 TOK = ('x.' + base64.urlsafe_b64encode(
     json.dumps({'email': 'check@local', 'role': 'manager'}).encode()).decode().rstrip('=') + '.y')
 
