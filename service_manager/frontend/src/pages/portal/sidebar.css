@@ -93,6 +93,10 @@
    service's colour being distinct. */
 .pl-av.round { border-radius: 50%; }
 .pl-root.mini .pl-card { background: transparent; border-color: transparent; box-shadow: none; }
+/* Folded, the rail is a margin rather than a control panel: the service colours
+   stand down to grey, and come back when the pointer does. */
+.pl-root.mini .pl-side { filter: grayscale(1) opacity(.6); transition: filter .18s ease; }
+.pl-root.mini .pl-side:hover, .pl-root.mini .pl-side:focus-within { filter: none; }
 /* Collapsed, a card's hit area is a square INSIDE the bar (10..54) rather than a
    260px strip running off the right edge. */
 .pl-root.mini .pl-row {

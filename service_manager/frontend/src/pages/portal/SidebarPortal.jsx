@@ -344,10 +344,16 @@ export default function SidebarPortal({
     // A builtin is a portal tool, not a proxied URL: it opens in the panel as a
     // component. Everything else follows its manifest `open`.
     if (!s.builtin && s.open === 'window') { window.open(`/p/${s.name}/`, '_blank'); return }
-    setSel({ svc: cardKey(s), proj: '' })
+    const key = cardKey(s)
+    // Opening a service gives it the screen: the bar folds to the rail. Pressing
+    // the one you are already on is how you get the bar back — and pressing it
+    // again folds it away, so the rail is a handle for the bar as well as a
+    // list of services.
+    if (view === 'service' && sel?.svc === key) { setMini((m) => !m); return }
+    setSel({ svc: key, proj: '' })
     setView('service')
-    if (window.innerWidth < PHONE) setMini(true)
-  }, [])
+    setMini(true)
+  }, [signedOut, leaveSettings, view, sel])
 
   /** Manage mode: picking a card shows its settings in the panel, never runs it. */
   const openManage = useCallback((s) => {
