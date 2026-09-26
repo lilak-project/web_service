@@ -50,7 +50,11 @@
      them. It stays 1px: the box is border-box, so 2px would eat a pixel of the
      collapsed 64px bar and drag every icon off centre. */
   border-right: 1px solid var(--divider);
-  transition: width .15s;
+  /* Folding travels, at the second bar's pace — the two move together often
+     enough that one timing reads as one machine. The filter is listed HERE and
+     not in the .mini rule below: a `transition` there replaces this one, which
+     is what silently killed the width animation when the grey was added. */
+  transition: width var(--b2t) cubic-bezier(.2, .8, .2, 1), filter .18s ease;
   overflow: hidden;
 }
 .pl-root.mini .pl-side { width: 64px; }
@@ -95,7 +99,7 @@
 .pl-root.mini .pl-card { background: transparent; border-color: transparent; box-shadow: none; }
 /* Folded, the rail is a margin rather than a control panel: the service colours
    stand down to grey, and come back when the pointer does. */
-.pl-root.mini .pl-side { filter: grayscale(1) opacity(.6); transition: filter .18s ease; }
+.pl-root.mini .pl-side { filter: grayscale(1) opacity(.6); }
 .pl-root.mini .pl-side:hover, .pl-root.mini .pl-side:focus-within { filter: none; }
 /* Collapsed, a card's hit area is a square INSIDE the bar (10..54) rather than a
    260px strip running off the right edge. */
