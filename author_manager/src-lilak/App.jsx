@@ -1076,6 +1076,8 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
   if (!draft && !rec) return <p className="am-msg">그 {what}을 찾을 수 없습니다.</p>
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const named = String(f.name || '').trim()
+  // A half-typed line is not data, here either.
+  const tidy = (r) => ({ ...r, links: (r.links || []).map((x) => String(x).trim()).filter(Boolean) })
 
   // How many authors point at this name: the number that decides whether
   // deleting it is a tidy-up or an edit to two dozen records.
@@ -1084,12 +1086,12 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
 
   function create() {
     if (!named || taken) return
-    onSave({ [key]: [...(doc[key] || []), { ...f, name: named, shortName: named }] },
+    onSave({ [key]: [...(doc[key] || []), { ...tidy(f), name: named, shortName: named }] },
       `'${named}' ${what} 등록됨`).then((ok) => { if (ok) onCreated?.(named) })
   }
   async function update() {
     const renamed = named !== rec.name
-    const recs = (doc[key] || []).map((r) => (r.name === rec.name ? { ...f, name: named, shortName: named } : r))
+    const recs = (doc[key] || []).map((r) => (r.name === rec.name ? { ...tidy(f), name: named, shortName: named } : r))
     // A rename has to travel: the authors point at this name by value.
     const authors = renamed
       ? doc.authors.map((a) => ({
@@ -1144,6 +1146,10 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
             <input className="am-in" style={{ width: 110 }} value={f.endDate || ''} onChange={set('endDate')} placeholder="end" />
           </Fld>
         )}
+        <Fld label="링크">
+          <TextRows value={f.links || []} add="+ 링크" placeholder="https://…" link
+            onChange={(v) => setF((s) => ({ ...s, links: v }))} />
+        </Fld>
         <Fld label="">
           {draft ? (
             <>
