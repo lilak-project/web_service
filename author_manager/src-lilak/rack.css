@@ -430,3 +430,15 @@ body.am-resizing .am-hit:hover { background: transparent; }
 .am-outhead:hover { background: var(--rk-hover); color: var(--rk-ink); }
 .am-outhead.on { color: var(--rk-ink); }
 .am-caret { font-style: normal; font-size: 9px; color: var(--rk-mute); }
+
+/* A field that holds SEVERAL entries: one line each, and a way to add another. */
+.am-rows { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.am-rrow { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.am-rrow .am-x { width: 18px; height: 22px; color: var(--rk-mute); }
+.am-rrow .am-x:hover { color: #b91c1c; }
+.am-tag {
+  display: inline-flex; align-items: center; height: 17px; padding: 0 7px;
+  border: 1px solid var(--rk-cite-t); background: var(--rk-cite);
+  font-size: 11px; color: var(--rk-cite-t);
+}
+.am-rows select.am-in { padding: 0 4px; }

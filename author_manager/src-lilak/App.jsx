@@ -776,6 +776,81 @@ function Fld({ label, children }) {
   return (<><span className="am-fl">{label}</span><div className="am-fv">{children}</div></>)
 }
 
+/** Which entry is the CURRENT affiliation: the last one by date. Marked rather
+ *  than moved, so the order you typed them in survives. */
+const latestIdx = (list) => {
+  let best = -1
+  list.forEach((x, i) => {
+    if (best < 0 || String(x.since || '').localeCompare(String(list[best].since || '')) >= 0) best = i
+  })
+  return best
+}
+
+/** The affiliation history: every entry, in the order it is stored. */
+function AffRows({ value = [], options, onChange }) {
+  const cur = latestIdx(value)
+  const put = (i, k, v) => onChange(value.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
+  return (
+    <div className="am-rows">
+      {value.length === 0 && <span className="am-hint">없음</span>}
+      {value.map((x, i) => (
+        <div key={i} className="am-rrow">
+          <select className="am-in" style={{ width: 130 }} value={x.tag || ''}
+            onChange={(e) => put(i, 'tag', e.target.value)}>
+            <option value="">(소속)</option>
+            {/* An entry pointing at a class that is gone stays selectable, so
+                saving does not quietly change who someone was. */}
+            {[...new Set([...options, x.tag].filter(Boolean))].map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+          <input className="am-in" style={{ width: 190 }} placeholder="position"
+            value={x.position || ''} onChange={(e) => put(i, 'position', e.target.value)} />
+          <input className="am-in" style={{ width: 190 }} placeholder="email"
+            value={x.email || ''} onChange={(e) => put(i, 'email', e.target.value)} />
+          <input className="am-in" style={{ width: 84 }} placeholder="2020-01"
+            value={x.since || ''} onChange={(e) => put(i, 'since', e.target.value)} />
+          {i === cur && <span className="am-tag">현재</span>}
+          <button type="button" className="am-x" title="이 줄 지우기"
+            onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
+        </div>
+      ))}
+      <button type="button" className="am-btn" onClick={() =>
+        onChange([...value, { tag: '', position: '', email: '', since: '' }])}>+ 소속</button>
+    </div>
+  )
+}
+
+/** Group membership. `core` is this author's place in THAT group's author list. */
+function GrpRows({ value = [], options, onChange }) {
+  const put = (i, k, v) => onChange(value.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
+  return (
+    <div className="am-rows">
+      {value.length === 0 && <span className="am-hint">없음</span>}
+      {value.map((x, i) => (
+        <div key={i} className="am-rrow">
+          <select className="am-in" style={{ width: 190 }} value={x.group || ''}
+            onChange={(e) => put(i, 'group', e.target.value)}>
+            <option value="">(그룹)</option>
+            {[...new Set([...options, x.group].filter(Boolean))].map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+          <input className="am-in" style={{ width: 150 }} placeholder="role"
+            value={x.role || ''} onChange={(e) => put(i, 'role', e.target.value)} />
+          <input className="am-in" style={{ width: 66 }} type="number" min="1" placeholder="core"
+            value={x.core ?? ''} onChange={(e) => put(i, 'core', e.target.value === '' ? '' : Number(e.target.value))} />
+          <span className="am-hint">저자 순서</span>
+          <button type="button" className="am-x" title="이 줄 지우기"
+            onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
+        </div>
+      ))}
+      <button type="button" className="am-btn" onClick={() =>
+        onChange([...value, { group: '', role: '', core: 10 }])}>+ 그룹</button>
+    </div>
+  )
+}
+
 function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone }) {
   // No author means a DRAFT: the same form, and saving puts it in the document
   // rather than over one. One form, two jobs, so a field added here is added to
@@ -786,18 +861,8 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
   const [sure, setSure] = useState(false)   // delete asks once, in place
   useEffect(() => { setF(author || blank); setSure(false) }, [author])  // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
-  const cur = currentAff(f) || {}
-  // The current affiliation is the last entry by date; editing it edits THAT
-  // entry rather than adding a new one.
-  const setAff = (k) => (e) => setF((s) => {
-    const list = [...(s.affiliations || [])]
-    if (!list.length) list.push({ tag: '', position: '', email: '', since: '' })
-    const latest = [...list].sort((x, y) =>
-      String(x.since || '').localeCompare(String(y.since || ''))).at(-1)
-    const i = list.indexOf(latest)
-    list[i] = { ...list[i], [k]: e.target.value }
-    return { ...s, affiliations: list }
-  })
+  const affNames = (doc.affiliations || []).map((r) => r.name)
+  const grpNames = (doc.groups || []).map((r) => r.name)
 
   const named = () => (f.nick || '').trim() || korName(f) || engName(f)
 
@@ -842,21 +907,16 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
         <Fld label="대표 email">
           <input className="am-in" style={{ width: 260 }} value={f.repEmail || ''} onChange={set('repEmail')}
             placeholder={(author && repEmail(author)) || 'name@ibs.re.kr'} />
+          <span className="am-hint">비우면 현재 소속의 이메일을 씁니다.</span>
         </Fld>
-        <Fld label="현재 소속">
-          <input className="am-in" style={{ width: 110 }} value={cur.tag || ''} onChange={setAff('tag')} placeholder="affil." />
-          <input className="am-in" style={{ width: 200 }} value={cur.position || ''} onChange={setAff('position')} placeholder="position" />
-          <input className="am-in" style={{ width: 90 }} value={cur.since || ''} onChange={setAff('since')} placeholder="2020-01" />
+        <Fld label="소속 이력">
+          <AffRows value={f.affiliations || []} options={affNames}
+            onChange={(v) => setF((s) => ({ ...s, affiliations: v }))} />
         </Fld>
-        {!draft && (
-          <Fld label="그룹">
-            <span className="am-hint">
-              {(f.groups || []).length
-                ? (f.groups || []).map((g) => `${g.group}${g.core ? ` (core ${g.core})` : ''}`).join(' · ')
-                : '없음'} — 아직 여기서 고칠 수 없습니다.
-            </span>
-          </Fld>
-        )}
+        <Fld label="그룹 소속">
+          <GrpRows value={f.groups || []} options={grpNames}
+            onChange={(v) => setF((s) => ({ ...s, groups: v }))} />
+        </Fld>
         <Fld label="">
           {draft ? (
             <>
