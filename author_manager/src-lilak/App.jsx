@@ -205,6 +205,10 @@ export default function App() {
   const [note, setNote] = useState('')
   const [tabs, setTabs] = useState(FIXED)
   const [active, setActive] = useState('total')
+  // The editor is its OWN pane with its OWN tabs: a record you are fixing is
+  // not one of the lists, and closing one should not send you somewhere else.
+  const [etabs, setEtabs] = useState([])
+  const [eactive, setEactive] = useState(null)
   const [picked, setPicked] = useState(() => new Set())     // selected author ids
   const [query, setQuery] = useState('')
   const [widths, setWidths] = useState(() => load(WIDTH_KEY, {}))
@@ -316,11 +320,13 @@ export default function App() {
   }, [query, fon, passes])
   const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
 
-  // An edit takes the right half when there is room for both, with the list it
-  // came from still on the left: you fix a record while looking at the rest.
-  const editing = tab?.kind === 'edit' || tab?.kind === 'editcls'
-  const beside = editing && vw >= 1180 ? (tabs.find((t) => t.id === tab.from) || null) : null
-  const asideRows = useMemo(() => (beside ? rowsOf(scopeOf(beside)) : []), [beside, rowsOf, scopeOf])
+  // The editor pane takes the right half when there is room for both; below
+  // that it has the width to itself while it is open, and closing its last tab
+  // gives the list back.
+  const etab = etabs.find((t) => t.id === eactive) || null
+  const wide = vw >= 1180
+  const showEdit = !!etab
+  const showList = !showEdit || wide
 
   /** The values on offer for one column, and how many rows each would keep.
    *  Counted over the tab's own authors, not the filtered ones: a value that
@@ -358,6 +364,17 @@ export default function App() {
   function closeTab(id) {
     setTabs((ts) => ts.filter((t) => t.id !== id))
     if (active === id) setActive('total')
+  }
+  function openEdit(t) {
+    setEtabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
+    setEactive(t.id)
+  }
+  function closeEdit(id) {
+    setEtabs((ts) => {
+      const left = ts.filter((t) => t.id !== id)
+      if (id === eactive) setEactive(left.length ? left[left.length - 1].id : null)
+      return left
+    })
   }
 
   // ── the selection ──
@@ -422,13 +439,13 @@ export default function App() {
         <div className="am-cmd">
           {tab?.kind === 'classes' ? (
             <button type="button" className="am-btn am-go"
-              onClick={() => openTab({
+              onClick={() => openEdit({
                 id: `newcls:${tab.of}`, kind: 'editcls', of: tab.of, who: null,
                 label: tab.of === 'affiliation' ? '새 소속' : '새 그룹',
               })}>{tab.of === 'affiliation' ? '+ 새 소속' : '+ 새 그룹'}</button>
           ) : (
             <button type="button" className="am-btn am-go"
-              onClick={() => openTab({ id: 'new', kind: 'edit', label: '새 저자', who: null })}>+ 새 저자</button>
+              onClick={() => openEdit({ id: 'new', kind: 'edit', label: '새 저자', who: null })}>+ 새 저자</button>
           )}
           <button type="button" className="am-btn" onClick={addToMyList}>add to my list</button>
           <button type="button" className="am-btn" disabled={!picked.size}
@@ -454,9 +471,12 @@ export default function App() {
           )}
           {tab?.id === 'mylist' && <>
             <span className="am-gap" />
-            <button type="button" className="am-btn" disabled={!scope.length}
+            {/* These two exist only while My List is the tab you are on, so
+                they are coloured as what they are: not part of the row of
+                buttons that is always there. */}
+            <button type="button" className="am-btn am-tabonly" disabled={!scope.length}
               onClick={() => setGroupForm((g) => (g ? null : {}))}>make group</button>
-            <button type="button" className="am-btn" disabled={!myList.length}
+            <button type="button" className="am-btn am-tabonly" disabled={!myList.length}
               onClick={() => { setMyList([]); setNote('My List를 비웠습니다.') }}>empty my list</button>
           </>}
           <span className="am-sp" />
@@ -465,158 +485,75 @@ export default function App() {
             onChange={(e) => setQuery(e.target.value)} />
         </div>
 
+        <div className="am-body">
+        {showList && (<div className="am-pane">
         <div className="am-tabs">
-          {tabs.map((t) => {
-            // The four that are always there against the ones you opened: the
-            // × already says which is which once you look, the colour says it
-            // before you do.
-            const fixed = FIXED.some((f) => f.id === t.id)
-            return (
-              <span key={t.id} className={`am-tab${fixed ? '' : ' am-opened'}${t.id === active ? ' on' : ''}`}>
-                <button type="button" className="am-tabname" onClick={() => setActive(t.id)}>{t.label}</button>
-                {!fixed && (
-                  <button type="button" className="am-x" title="닫기"
-                    onClick={() => closeTab(t.id)} aria-label={`${t.label} 닫기`}>×</button>
-                )}
-              </span>
-            )
-          })}
-        </div>
+            {tabs.map((t) => {
+              // The four that are always there against the ones you opened: the
+              // × already says which is which once you look, the colour says it
+              // before you do.
+              const fixed = FIXED.some((f) => f.id === t.id)
+              return (
+                <span key={t.id} className={`am-tab${fixed ? '' : ' am-opened'}${t.id === active ? ' on' : ''}`}>
+                  <button type="button" className="am-tabname" onClick={() => setActive(t.id)}>{t.label}</button>
+                  {!fixed && (
+                    <button type="button" className="am-x" title="닫기"
+                      onClick={() => closeTab(t.id)} aria-label={`${t.label} 닫기`}>×</button>
+                  )}
+                </span>
+              )
+            })}
+          </div>
 
-        {err && <p className="am-msg">{err}</p>}
-        {!err && !doc && <p className="am-msg">읽는 중…</p>}
+          {err && <p className="am-msg">{err}</p>}
+          {!err && !doc && <p className="am-msg">읽는 중…</p>}
 
-        {doc && tab?.kind === 'authors' && (
-          <>
-            <Table cols={cols} onDrag={drag('')}
-              facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
-              sort={sort || { k: tab.id === 'mylist' ? null : 'kor', dir: 1 }}
-              onSort={(k) => setSort((s2) => {
-                // The implicit order counts as the current one, so the first
-                // press on the column already sorted turns it over instead of
-                // doing nothing you can see.
-                const now = s2 || (tab.id === 'mylist' ? null : { k: 'kor', dir: 1 })
-                return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
-              })}
-              head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
-              {fmode && !fcol && <p className="am-msg">위의 레이블을 눌러 어떤 종류로 걸를지 고르세요.</p>}
-              {fmode && fcol && facet.length === 0 && <p className="am-msg">이 열에는 값이 없습니다.</p>}
-              {fmode && fcol && facet.map(({ v, count }, i) => {
-                const on = picked_(fcol).includes(v)
-                return (
-                  <div key={v} className={`am-row am-frow am-hit${on ? ' on' : ''}`}
-                    onClick={() => setFsel((s2) => {
-                      const cur = s2[fcol] || []
-                      return { ...s2, [fcol]: on ? cur.filter((x) => x !== v) : [...cur, v] }
-                    })}>
-                    <span className="am-chk"><input type="checkbox" checked={on} tabIndex={-1} readOnly
-                      aria-label={`${v} 고르기`} /></span>
-                    <span className="am-gut">{i + 1}</span>
-                    <span className="am-c am-ink">{v}</span>
-                    <span className="am-c am-num">{count}</span>
-                  </div>
-                )
-              })}
-              {!fmode && rows.map((a, i) => {
-                const cur = currentAff(a)
-                const on = picked.has(a.id)
-                return (
-                  <Row key={a.id || i} cols={cols} className={`am-hit${on ? ' on' : ''}`}
-                    onClick={(e) => hit(i, e.shiftKey)}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
-                      openTab({ id: `edit:${a.id}`, kind: 'edit', label: anyName(a), who: a.id, from: tab.id })
-                    }}
-                    cell={{
-                      chk: <input type="checkbox" checked={on} tabIndex={-1} readOnly
-                        aria-label={`${anyName(a)} 선택`} />,
-                      num: i + 1,
-                      affil: cur?.tag || D,
-                      kor: korName(a) || D,
-                      name: engName(a) || a.nick || D,
-                      nm: citeShort(a) || D,
-                      email: repEmail(a) || D,
-                      pos: cur?.position || D,
-                      core: (tab.grp ? coreIn(a, tab.grp) : coreOf(a)) ?? D,
-                    }} />
-                )
-              })}
-              {!fmode && rows.length === 0 && <p className="am-msg">해당하는 저자가 없습니다.</p>}
-            </Table>
-            {/* The listing belongs to any tab that is already a chosen set of
-                people — My List, or one group's or affiliation's tab. Not
-                total: a paper is never everyone. */}
-            {(tab.id === 'mylist' || tab.grp || tab.aff) && (
-              <MyListOut list={scope} doc={doc} say={setNote}
-                open={outOpen} setOpen={setOutOpen} canGroup={tab.id === 'mylist'}
-                group={groupForm} setGroup={setGroupForm}
-                onMakeGroup={(form) => {
-                  const name = String(form.shortName || form.fullName || '').trim()
-                  if (!name) { setNote('그룹 이름이 필요합니다.'); return false }
-                  if ((doc.groups || []).some((g) => g.name === name)) { setNote('같은 이름의 그룹이 있습니다.'); return false }
-                  const ids = new Set(scope.map((a) => a.id))
-                  commit({
-                    groups: [...(doc.groups || []), { ...form, name, shortName: name }],
-                    authors: doc.authors.map((a) => (ids.has(a.id) && !inGrp(a, name)
-                      ? { ...a, groups: [...(a.groups || []), { group: name, role: '', core: 10 }] }
-                      : a)),
-                  }, `'${name}' 그룹 생성 · ${ids.size}명 추가`)
-                  return true
-                }} />
-            )}
-          </>
-        )}
-
-        {doc && tab?.kind === 'classes' && (
-          <Table cols={clsCols} onDrag={drag('c:')} sort={clsSort}
-            onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}>
-            {classes.map((r, i) => (
-              <Row key={r.name} cols={clsCols} className="am-hit"
-                onClick={() => openTab({
-                  id: `${tab.of}:${r.name}`, kind: 'authors', label: r.name,
-                  ...(tab.of === 'affiliation' ? { aff: r.name } : { grp: r.name }),
-                })}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  openTab({ id: `editcls:${tab.of}:${r.name}`, kind: 'editcls', label: r.name, of: tab.of, who: r.name, from: tab.id })
-                }}
-                cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
-            ))}
-            {classes.length === 0 && <p className="am-msg">등록된 항목이 없습니다.</p>}
-          </Table>
-        )}
-
-        {doc && editing && beside && (
-          <div className="am-split">
-            <div className="am-half">
-              {beside.kind === 'classes' ? (
-                <Table cols={clsCols} onDrag={drag('c:')} sort={clsSort}
-                  onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}>
-                  {classesOf(beside).map((r, i) => (
-                    <Row key={r.name} cols={clsCols}
-                      className={`am-hit${tab.who === r.name ? ' on' : ''}`}
-                      onClick={() => openTab({
-                        id: `editcls:${beside.of}:${r.name}`, kind: 'editcls',
-                        label: r.name, of: beside.of, who: r.name, from: beside.id,
-                      })}
-                      cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
-                  ))}
-                </Table>
-              ) : (
+          {doc && tab?.kind === 'authors' && (
+            <>
               <Table cols={cols} onDrag={drag('')}
-                sort={sort || { k: beside.id === 'mylist' ? null : 'kor', dir: 1 }}
+                facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
+                sort={sort || { k: tab.id === 'mylist' ? null : 'kor', dir: 1 }}
                 onSort={(k) => setSort((s2) => {
-                  const now = s2 || (beside.id === 'mylist' ? null : { k: 'kor', dir: 1 })
+                  // The implicit order counts as the current one, so the first
+                  // press on the column already sorted turns it over instead of
+                  // doing nothing you can see.
+                  const now = s2 || (tab.id === 'mylist' ? null : { k: 'kor', dir: 1 })
                   return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
-                })}>
-                {asideRows.map((a, i) => {
+                })}
+                head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
+                {fmode && !fcol && <p className="am-msg">위의 레이블을 눌러 어떤 종류로 걸를지 고르세요.</p>}
+                {fmode && fcol && facet.length === 0 && <p className="am-msg">이 열에는 값이 없습니다.</p>}
+                {fmode && fcol && facet.map(({ v, count }, i) => {
+                  const on = picked_(fcol).includes(v)
+                  return (
+                    <div key={v} className={`am-row am-frow am-hit${on ? ' on' : ''}`}
+                      onClick={() => setFsel((s2) => {
+                        const cur = s2[fcol] || []
+                        return { ...s2, [fcol]: on ? cur.filter((x) => x !== v) : [...cur, v] }
+                      })}>
+                      <span className="am-chk"><input type="checkbox" checked={on} tabIndex={-1} readOnly
+                        aria-label={`${v} 고르기`} /></span>
+                      <span className="am-gut">{i + 1}</span>
+                      <span className="am-c am-ink">{v}</span>
+                      <span className="am-c am-num">{count}</span>
+                    </div>
+                  )
+                })}
+                {!fmode && rows.map((a, i) => {
                   const cur = currentAff(a)
+                  const on = picked.has(a.id)
+                  const edited = etabs.some((t) => t.who === a.id)
                   return (
                     <Row key={a.id || i} cols={cols}
-                      className={`am-hit${tab.who === a.id ? ' on' : ''}`}
-                      onClick={() => openTab({ id: `edit:${a.id}`, kind: 'edit', label: anyName(a), who: a.id, from: beside.id })}
+                      className={`am-hit${on ? ' on' : ''}${edited ? ' am-edited' : ''}`}
+                      onClick={(e) => hit(i, e.shiftKey)}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        openEdit({ id: `edit:${a.id}`, kind: 'edit', label: anyName(a), who: a.id })
+                      }}
                       cell={{
-                        chk: null,
+                        chk: <input type="checkbox" checked={on} tabIndex={-1} readOnly
+                          aria-label={`${anyName(a)} 선택`} />,
                         num: i + 1,
                         affil: cur?.tag || D,
                         kor: korName(a) || D,
@@ -624,58 +561,90 @@ export default function App() {
                         nm: citeShort(a) || D,
                         email: repEmail(a) || D,
                         pos: cur?.position || D,
-                        core: (beside.grp ? coreIn(a, beside.grp) : coreOf(a)) ?? D,
+                        core: (tab.grp ? coreIn(a, tab.grp) : coreOf(a)) ?? D,
                       }} />
                   )
                 })}
+                {!fmode && rows.length === 0 && <p className="am-msg">해당하는 저자가 없습니다.</p>}
               </Table>
-              )}
-            </div>
-            <div className="am-half am-halfedit">
-              {tab.kind === 'edit' ? (
-                <EditAuthor author={tab.who ? authors.find((a) => a.id === tab.who) : null}
-                  doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
-                  onCreated={(id, label) => { closeTab('new'); openTab({ id: `edit:${id}`, kind: 'edit', label, who: id, from: tab.from }) }}
-                  onDone={(id) => closeTab(`edit:${id}`)}
-                  onDeleted={(id) => {
-                    closeTab(`edit:${id}`)
-                    setMyList((l) => l.filter((x) => x !== id))
-                    setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
+              {/* The listing belongs to any tab that is already a chosen set of
+                  people — My List, or one group's or affiliation's tab. Not
+                  total: a paper is never everyone. */}
+              {(tab.id === 'mylist' || tab.grp || tab.aff) && (
+                <MyListOut list={scope} doc={doc} say={setNote}
+                  open={outOpen} setOpen={setOutOpen} canGroup={tab.id === 'mylist'}
+                  group={groupForm} setGroup={setGroupForm}
+                  onMakeGroup={(form) => {
+                    const name = String(form.shortName || form.fullName || '').trim()
+                    if (!name) { setNote('그룹 이름이 필요합니다.'); return false }
+                    if ((doc.groups || []).some((g) => g.name === name)) { setNote('같은 이름의 그룹이 있습니다.'); return false }
+                    const ids = new Set(scope.map((a) => a.id))
+                    commit({
+                      groups: [...(doc.groups || []), { ...form, name, shortName: name }],
+                      authors: doc.authors.map((a) => (ids.has(a.id) && !inGrp(a, name)
+                        ? { ...a, groups: [...(a.groups || []), { group: name, role: '', core: 10 }] }
+                        : a)),
+                    }, `'${name}' 그룹 생성 · ${ids.size}명 추가`)
+                    return true
                   }} />
-              ) : (
-                <EditClass name={tab.who} of={tab.of} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
-                  onCreated={(name) => {
-                    closeTab(`newcls:${tab.of}`)
-                    openTab({ id: `editcls:${tab.of}:${name}`, kind: 'editcls', label: name, of: tab.of, who: name, from: tab.from })
-                  }}
-                  onDone={(name) => closeTab(`editcls:${tab.of}:${name}`)} />
               )}
-            </div>
-          </div>
-        )}
+            </>
+          )}
 
-        {doc && !beside && tab?.kind === 'edit' && (
-          <EditAuthor author={tab.who ? authors.find((a) => a.id === tab.who) : null}
-            doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
-            onCreated={(id, label) => {
-              closeTab('new')
-              openTab({ id: `edit:${id}`, kind: 'edit', label, who: id })
-            }}
-            onDone={(id) => closeTab(`edit:${id}`)}
-            onDeleted={(id) => {
-              closeTab(`edit:${id}`)
-              setMyList((l) => l.filter((x) => x !== id))
-              setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
-            }} />
-        )}
-        {doc && !beside && tab?.kind === 'editcls' && (
-          <EditClass name={tab.who} of={tab.of} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
-            onCreated={(name) => {
-              closeTab(`newcls:${tab.of}`)
-              openTab({ id: `editcls:${tab.of}:${name}`, kind: 'editcls', label: name, of: tab.of, who: name, from: tab.from })
-            }}
-            onDone={(name) => closeTab(`editcls:${tab.of}:${name}`)} />
-        )}
+          {doc && tab?.kind === 'classes' && (
+            <Table cols={clsCols} onDrag={drag('c:')} sort={clsSort}
+              onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}>
+              {classes.map((r, i) => (
+                <Row key={r.name} cols={clsCols} className="am-hit"
+                  onClick={() => openTab({
+                    id: `${tab.of}:${r.name}`, kind: 'authors', label: r.name,
+                    ...(tab.of === 'affiliation' ? { aff: r.name } : { grp: r.name }),
+                  })}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    openEdit({ id: `editcls:${tab.of}:${r.name}`, kind: 'editcls', label: r.name, of: tab.of, who: r.name })
+                  }}
+                  cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
+              ))}
+              {classes.length === 0 && <p className="am-msg">등록된 항목이 없습니다.</p>}
+            </Table>
+          )}
+
+        </div>)}
+
+        {showEdit && (<div className="am-pane am-epane">
+          <div className="am-tabs">
+            {etabs.map((t) => (
+              <span key={t.id} className={`am-tab am-opened${t.id === eactive ? ' on' : ''}`}>
+                <button type="button" className="am-tabname" onClick={() => setEactive(t.id)}>{t.label}</button>
+                <button type="button" className="am-x" title="닫기"
+                  onClick={() => closeEdit(t.id)} aria-label={`${t.label} 닫기`}>×</button>
+              </span>
+            ))}
+          </div>
+          {etab.kind === 'edit' ? (
+            <EditAuthor author={etab.who ? authors.find((a) => a.id === etab.who) : null}
+              doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
+              onCreated={(id, label) => {
+                closeEdit('new')
+                openEdit({ id: `edit:${id}`, kind: 'edit', label, who: id })
+              }}
+              onDone={(id) => closeEdit(`edit:${id}`)}
+              onDeleted={(id) => {
+                closeEdit(`edit:${id}`)
+                setMyList((l) => l.filter((x) => x !== id))
+                setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
+              }} />
+          ) : (
+            <EditClass name={etab.who} of={etab.of} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+              onCreated={(name) => {
+                closeEdit(`newcls:${etab.of}`)
+                openEdit({ id: `editcls:${etab.of}:${name}`, kind: 'editcls', label: name, of: etab.of, who: name })
+              }}
+              onDone={(name) => closeEdit(`editcls:${etab.of}:${name}`)} />
+          )}
+        </div>)}
+        </div>
 
         <footer className="am-foot">
           <span>{note || '왼쪽 클릭으로 선택, shift로 범위, 오른쪽 클릭으로 편집.'}</span>

@@ -24,6 +24,8 @@
   --rk-ink: #0f172a;
   --rk-gut: #f8fafc;
   --rk-hover: #e9eef5;   /* a row under the pointer */
+  --rk-tab: #f3e5bb;     /* a control that belongs to ONE tab */
+  --rk-tab-t: #92400e;
   --rk-cite: #dbeafe;      /* the citation columns wear it on the HEAD only */
   --rk-cite-t: #1d4ed8;
   --rk-mono: 'D2 coding', ui-monospace, Menlo, Consolas, monospace;
@@ -233,7 +235,7 @@ body {
   color: var(--rk-mute);
   cursor: pointer;
 }
-.am-x:hover { color: var(--rk-mark-t, #b91c1c); }
+.am-x:hover { color: #b91c1c; }
 
 /* ── rows you can hit ─────────────────────────────────────────────────────
    Hover says "this line is a thing you can act on"; the selected fill is the
@@ -412,7 +414,7 @@ body.am-resizing .am-hit:hover { background: transparent; }
 
 /* Filter mode: the label you are picking values from, and how many are picked. */
 .am-facet.on { color: var(--rk-cite-t); }
-.am-head:has(.am-facet) { background: var(--rk-mark, #f3e5bb); }
+.am-head:has(.am-facet) { background: var(--rk-tab); }
 /* One value on offer, and how many rows it would keep. */
 .am-row.am-frow { grid-template-columns: 26px 34px minmax(160px, 1fr) 80px; }
 
@@ -443,8 +445,17 @@ body.am-resizing .am-hit:hover { background: transparent; }
 /* A warning in a form: said where the thing it is about is. */
 .am-warn { color: #b91c1c; }
 
-/* Wide enough for both: the list it came from on the left, the record on the
-   right. You fix one while still looking at the rest. */
-.am-split { flex: 1; min-height: 0; display: flex; align-items: stretch; }
-.am-half { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; }
-.am-halfedit { border-left: 1px solid var(--rk-edge); overflow-y: auto; }
+/* Two panes side by side: the lists, and the editor with its own tabs. Each
+   keeps its own scroll, so reading one does not move the other. */
+.am-body { flex: 1; min-height: 0; display: flex; align-items: stretch; }
+.am-pane { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; }
+.am-epane { border-left: 1px solid var(--rk-edge); overflow-y: auto; background: var(--rk-panel); }
+/* A row that is open in the editor, while the selection blue means something
+   else entirely. */
+.am-hit.am-edited { box-shadow: inset 2px 0 0 var(--rk-cite-t); }
+
+/* A button that is only here while this tab is: mustard, so it is not read as
+   part of the row that is always there. */
+.am-btn.am-tabonly { border-color: var(--rk-tab-t); background: var(--rk-tab); color: var(--rk-tab-t); }
+.am-btn.am-tabonly:hover:not(:disabled) { background: #ecd89f; border-color: var(--rk-tab-t); color: var(--rk-tab-t); }
+.am-btn.am-tabonly:disabled { border-color: var(--rk-line); background: none; color: var(--rk-mute); }
