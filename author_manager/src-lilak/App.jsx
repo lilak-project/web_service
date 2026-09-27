@@ -438,7 +438,9 @@ export default function App() {
 
         <div className="am-cmd">
           {tab?.kind === 'classes' ? (
-            <button type="button" className="am-btn am-go"
+            /* Mustard like the other two: it is only here while a class tab is,
+               and the colour is what says so. */
+            <button type="button" className="am-btn am-tabonly"
               onClick={() => openEdit({
                 id: `newcls:${tab.of}`, kind: 'editcls', of: tab.of, who: null,
                 label: tab.of === 'affiliation' ? '새 소속' : '새 그룹',
