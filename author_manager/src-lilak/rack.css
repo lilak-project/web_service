@@ -130,9 +130,6 @@ body {
 }
 .am-head .am-c { color: var(--rk-dim); }
 .am-head .am-gut { color: var(--rk-dim); background: var(--rk-gut); }
-/* Column groups wear the colour on their head only: painting whole columns the
-   way the sheet does turns a third of a 137-line screen into fill. */
-.am-head .am-cite { background: var(--rk-cite); color: var(--rk-cite-t); }
 
 .am-foot {
   flex: 0 0 auto;

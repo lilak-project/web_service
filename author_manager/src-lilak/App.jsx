@@ -123,9 +123,6 @@ const COLS = [
   { k: 'email', w: 214, min: 90, label: 'email' },
   { k: 'pos', w: 176, min: 70, label: 'position', drop: 860 },
   { k: 'core', w: 44, min: 34, label: 'core', num: true },
-  { k: 'last', w: 100, min: 50, label: 'last', cite: true, drop: 1280 },
-  { k: 'first', w: 100, min: 50, label: 'first', cite: true, drop: 1280 },
-  { k: 'init', w: 48, min: 34, label: 'init', cite: true, drop: 1280 },
 ]
 const CLS_COLS = [
   { k: 'num', w: 34, min: 26, fix: true, label: '#' },
@@ -541,9 +538,6 @@ export default function App() {
                       email: repEmail(a) || D,
                       pos: cur?.position || D,
                       core: (tab.grp ? coreIn(a, tab.grp) : coreOf(a)) ?? D,
-                      last: citeLast(a) || D,
-                      first: citeFirst(a) || D,
-                      init: citeInit(a) || D,
                     }} />
                 )
               })}
@@ -631,9 +625,6 @@ export default function App() {
                         email: repEmail(a) || D,
                         pos: cur?.position || D,
                         core: (beside.grp ? coreIn(a, beside.grp) : coreOf(a)) ?? D,
-                        last: citeLast(a) || D,
-                        first: citeFirst(a) || D,
-                        init: citeInit(a) || D,
                       }} />
                   )
                 })}
@@ -711,7 +702,7 @@ function Table({ cols, onDrag, head, sort, onSort, facet, children }) {
         {cols.map((c) => (
           <span key={c.k}
             className={`${c.k === 'num' ? 'am-gut' : 'am-c'}`
-              + `${c.num ? ' am-num' : ''}${c.cite ? ' am-cite' : ''}${c.k === 'chk' ? ' am-chk' : ''}`}>
+              + `${c.num ? ' am-num' : ''}${c.k === 'chk' ? ' am-chk' : ''}`}>
             {c.k === 'chk' && head ? (
               <input type="checkbox" checked={head.all}
                 ref={(el) => { if (el) el.indeterminate = !head.all && head.some }}
@@ -753,7 +744,7 @@ function Row({ cols, cell, className, onClick, onContextMenu }) {
           <span key={c.k}
             className={`${c.k === 'num' ? 'am-gut' : 'am-c'}`
               + `${c.k === 'chk' ? ' am-chk' : ''}${c.num ? ' am-num' : ''}`
-              + `${c.cite ? ' am-cite' : ''}${c.k === 'name' ? ' am-ink' : ''}`
+              + `${c.k === 'name' ? ' am-ink' : ''}`
               + `${c.k === 'affil' || c.k === 'pos' || c.k === 'nm' ? ' am-dim' : ''}`}>
             {cell[c.k]}
           </span>
