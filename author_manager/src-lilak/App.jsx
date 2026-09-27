@@ -576,7 +576,7 @@ export default function App() {
 
         {doc && tab?.kind === 'edit' && (
           <EditAuthor author={tab.who ? authors.find((a) => a.id === tab.who) : null}
-            doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+            doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
             onCreated={(id, label) => {
               closeTab('new')
               openTab({ id: `edit:${id}`, kind: 'edit', label, who: id })
@@ -776,6 +776,78 @@ function Fld({ label, children }) {
   return (<><span className="am-fl">{label}</span><div className="am-fv">{children}</div></>)
 }
 
+/** A list of plain strings — emails, links — one line each. */
+function TextRows({ value = [], onChange, add, placeholder, link }) {
+  return (
+    <div className="am-rows">
+      {value.length === 0 && <span className="am-hint">없음</span>}
+      {value.map((v, i) => (
+        <div key={i} className="am-rrow">
+          <input className="am-in" style={{ width: 300 }} placeholder={placeholder} value={v}
+            onChange={(e) => onChange(value.map((x, j) => (j === i ? e.target.value : x)))} />
+          {link && /^https?:\/\//.test(v) && (
+            <a href={v} target="_blank" rel="noreferrer" className="am-hint">열기</a>
+          )}
+          <button type="button" className="am-x" title="이 줄 지우기"
+            onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
+        </div>
+      ))}
+      <button type="button" className="am-btn" onClick={() => onChange([...value, ''])}>{add}</button>
+    </div>
+  )
+}
+
+// The whole document is saved on every edit, so an attachment is carried in it
+// as a data URL and counts against every future save. A couple of megabytes of
+// PDF is a fair scan; ten is a document nobody can save any more.
+const FILE_CAP = 2 * 1024 * 1024
+const dataUrl = (file) => new Promise((res, rej) => {
+  const r = new FileReader()
+  r.onload = () => res(r.result)
+  r.onerror = () => rej(new Error('읽지 못했습니다.'))
+  r.readAsDataURL(file)
+})
+function download(data, name) {
+  const a = document.createElement('a')
+  a.href = data
+  a.download = name || 'file'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+const kb = (n) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`)
+
+/** Attachments, kept in the document itself. */
+function FileRows({ value = [], onChange, say }) {
+  const pick = useRef(null)
+  async function add(e) {
+    const files = [...(e.target.files || [])]
+    e.target.value = ''
+    const added = []
+    for (const f of files) {
+      if (f.size > FILE_CAP) { say(`${f.name} 은 ${kb(FILE_CAP)}보다 큽니다 — 문서 전체가 매번 저장되므로 받지 않습니다.`); continue }
+      added.push({ name: f.name, type: f.type, size: f.size, data: await dataUrl(f) })
+    }
+    if (added.length) onChange([...value, ...added])
+  }
+  return (
+    <div className="am-rows">
+      {value.length === 0 && <span className="am-hint">없음</span>}
+      {value.map((f, i) => (
+        <div key={`${f.name}-${i}`} className="am-rrow">
+          <button type="button" className="am-btn" onClick={() => download(f.data, f.name)}>{f.name}</button>
+          <span className="am-hint">{f.size ? kb(f.size) : ''}</span>
+          <button type="button" className="am-x" title="지우기"
+            onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
+        </div>
+      ))}
+      <button type="button" className="am-btn" onClick={() => pick.current?.click()}>+ 파일</button>
+      <input ref={pick} type="file" multiple hidden onChange={add} />
+      <span className="am-hint">한 개 {kb(FILE_CAP)}까지.</span>
+    </div>
+  )
+}
+
 /** Which entry is the CURRENT affiliation: the last one by date. Marked rather
  *  than moved, so the order you typed them in survives. */
 const latestIdx = (list) => {
@@ -851,7 +923,7 @@ function GrpRows({ value = [], options, onChange }) {
   )
 }
 
-function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone }) {
+function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone, say }) {
   // No author means a DRAFT: the same form, and saving puts it in the document
   // rather than over one. One form, two jobs, so a field added here is added to
   // both at once.
@@ -866,15 +938,26 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
 
   const named = () => (f.nick || '').trim() || korName(f) || engName(f)
 
+  // A half-typed line is not data. Blank strings and entries that point at no
+  // affiliation or group are dropped on the way out, so the document does not
+  // collect the rows somebody added and thought better of.
+  const tidy = (r) => ({
+    ...r,
+    emails: (r.emails || []).map((x) => String(x).trim()).filter(Boolean),
+    links: (r.links || []).map((x) => String(x).trim()).filter(Boolean),
+    affiliations: (r.affiliations || []).filter((x) => String(x.tag || '').trim()),
+    groups: (r.groups || []).filter((x) => String(x.group || '').trim()),
+  })
+
   async function create() {
     if (!named()) return   // the button is disabled, but a stray Enter is not
     const now = new Date().toISOString()
-    const a = { ...f, id: newId(), createdAt: now, updatedAt: now }
+    const a = { ...tidy(f), id: newId(), createdAt: now, updatedAt: now }
     if (await onSave({ authors: [a, ...doc.authors] }, `${anyName(a)} 등록됨`)) onCreated?.(a.id, anyName(a))
   }
   async function update() {
     const ok = await onSave({
-      authors: doc.authors.map((a) => (a.id === f.id ? { ...f, updatedAt: new Date().toISOString() } : a)),
+      authors: doc.authors.map((a) => (a.id === f.id ? { ...tidy(f), updatedAt: new Date().toISOString() } : a)),
     })
     // The record was an errand, not a destination: a save that landed closes
     // the tab it came from. A save that lost the race keeps it, edits and all.
@@ -916,6 +999,21 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
         <Fld label="그룹 소속">
           <GrpRows value={f.groups || []} options={grpNames}
             onChange={(v) => setF((s) => ({ ...s, groups: v }))} />
+        </Fld>
+        <Fld label="이메일">
+          <TextRows value={f.emails || []} add="+ 이메일" placeholder="name@lab.kr"
+            onChange={(v) => setF((s) => ({ ...s, emails: v }))} />
+        </Fld>
+        <Fld label="전화">
+          <input className="am-in" style={{ width: 190 }} value={f.phone || ''} onChange={set('phone')} />
+        </Fld>
+        <Fld label="링크">
+          <TextRows value={f.links || []} add="+ 링크" placeholder="https://…" link
+            onChange={(v) => setF((s) => ({ ...s, links: v }))} />
+        </Fld>
+        <Fld label="첨부파일">
+          <FileRows value={f.attachments || []} say={say}
+            onChange={(v) => setF((s) => ({ ...s, attachments: v }))} />
         </Fld>
         <Fld label="">
           {draft ? (
