@@ -459,3 +459,6 @@ body.am-resizing .am-hit:hover { background: transparent; }
 .am-btn.am-tabonly { border-color: var(--rk-tab-t); background: var(--rk-tab); color: var(--rk-tab-t); }
 .am-btn.am-tabonly:hover:not(:disabled) { background: #ecd89f; border-color: var(--rk-tab-t); color: var(--rk-tab-t); }
 .am-btn.am-tabonly:disabled { border-color: var(--rk-line); background: none; color: var(--rk-mute); }
+
+/* The group picker is a button that happens to open its own list. */
+.am-btn.am-pick { padding-right: 2px; }

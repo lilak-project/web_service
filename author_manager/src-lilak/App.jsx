@@ -410,6 +410,20 @@ export default function App() {
     setNote(fresh.length ? `My List에 ${fresh.length}명 담았습니다.` : '이미 다 담겨 있습니다.')
   }
 
+  // Adding people to a group that already exists is the same edit make group
+  // makes, minus inventing the group: pick it and the members go in.
+  function addToGroup(name) {
+    if (!name) return
+    const fresh = scope.filter((a) => !inGrp(a, name))
+    if (!fresh.length) { setNote(`이미 모두 '${name}'에 있습니다.`); return }
+    const ids = new Set(fresh.map((a) => a.id))
+    commit({
+      authors: doc.authors.map((a) => (ids.has(a.id)
+        ? { ...a, groups: [...(a.groups || []), { group: name, role: '', core: 10 }] }
+        : a)),
+    }, `'${name}'에 ${fresh.length}명 추가`)
+  }
+
   // ── saving one record ──
   async function commit(patch, said) {
     if (!doc) return false
@@ -476,6 +490,16 @@ export default function App() {
             {/* These two exist only while My List is the tab you are on, so
                 they are coloured as what they are: not part of the row of
                 buttons that is always there. */}
+            {/* The group list IS the menu — a native select needs no popup of
+                our own, and picking is the whole action. */}
+            <select className="am-btn am-tabonly am-pick" value=""
+              disabled={!scope.length || !(doc?.groups || []).length}
+              onChange={(e) => addToGroup(e.target.value)}>
+              <option value="">add to group</option>
+              {(doc?.groups || []).map((g) => (
+                <option key={g.name} value={g.name}>{g.name}</option>
+              ))}
+            </select>
             <button type="button" className="am-btn am-tabonly" disabled={!scope.length}
               onClick={() => setGroupForm((g) => (g ? null : {}))}>make group</button>
             <button type="button" className="am-btn am-tabonly" disabled={!myList.length}
