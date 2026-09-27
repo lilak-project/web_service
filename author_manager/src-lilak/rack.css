@@ -445,3 +445,9 @@ body.am-resizing .am-hit:hover { background: transparent; }
 
 /* A warning in a form: said where the thing it is about is. */
 .am-warn { color: #b91c1c; }
+
+/* Wide enough for both: the list it came from on the left, the record on the
+   right. You fix one while still looking at the rest. */
+.am-split { flex: 1; min-height: 0; display: flex; align-items: stretch; }
+.am-half { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; }
+.am-halfedit { border-left: 1px solid var(--rk-edge); overflow-y: auto; }

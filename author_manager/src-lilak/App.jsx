@@ -198,8 +198,8 @@ const PRESETS = [
 const FIXED = [
   { id: 'total', kind: 'authors', label: 'total' },
   { id: 'mylist', kind: 'authors', label: 'my list' },
-  { id: 'affiliation', kind: 'classes', label: 'affiliation', of: 'affiliation' },
   { id: 'groups', kind: 'classes', label: 'groups', of: 'group' },
+  { id: 'affiliation', kind: 'classes', label: 'affiliation', of: 'affiliation' },
 ]
 
 export default function App() {
@@ -285,8 +285,9 @@ export default function App() {
     window.addEventListener('mouseup', up)
   }, [])
 
-  // Which authors this tab is about, before the search narrows them.
-  const scope = useMemo(() => {
+  // Which authors a tab is about, before the search narrows them. Takes the
+  // tab, because an edit beside its list needs BOTH on screen.
+  const scopeOf = useCallback((tab) => {
     if (tab?.kind !== 'authors') return []
     if (tab.id === 'mylist') {
       const order = new Map(myList.map((id, i) => [id, i]))
@@ -300,21 +301,29 @@ export default function App() {
     if (tab.aff) list = list.filter((a) => inAff(a, tab.aff))
     if (tab.grp) list = list.filter((a) => inGrp(a, tab.grp))
     return [...list].sort(byColumn(sort?.k || 'kor', sort?.dir ?? 1, tab.grp))
-  }, [tab, authors, myList, sort])
+  }, [authors, myList, sort])
+  const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
 
   /** Every selected value must match, column by column: AND across columns,
    *  OR inside one. An empty column is not a constraint. */
   const passes = useCallback((a) => Object.entries(fsel).every(([k, vals]) =>
     !vals.length || vals.includes(String(SORTERS[k]?.(a) ?? ''))), [fsel])
 
-  const rows = useMemo(() => {
-    const kept = fon ? scope.filter(passes) : scope
+  const rowsOf = useCallback((sc) => {
+    const kept = fon ? sc.filter(passes) : sc
     const q = query.trim().toLowerCase()
     if (!q) return kept
     return kept.filter((a) => [korName(a), engName(a), a.nick, repEmail(a), currentAff(a)?.tag,
       currentAff(a)?.position, ...(a.groups || []).map((g) => g.group)]
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [scope, query, fon, passes])
+  }, [query, fon, passes])
+  const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
+
+  // An edit takes the right half when there is room for both, with the list it
+  // came from still on the left: you fix a record while looking at the rest.
+  const editing = tab?.kind === 'edit' || tab?.kind === 'editcls'
+  const beside = editing && vw >= 1180 ? (tabs.find((t) => t.id === tab.from) || null) : null
+  const asideRows = useMemo(() => (beside ? rowsOf(scopeOf(beside)) : []), [beside, rowsOf, scopeOf])
 
   /** The values on offer for one column, and how many rows each would keep.
    *  Counted over the tab's own authors, not the filtered ones: a value that
@@ -333,15 +342,16 @@ export default function App() {
   const picked_ = (k) => fsel[k] || []
   const facetTotal = Object.values(fsel).reduce((t, v) => t + v.length, 0)
 
-  const classes = useMemo(() => {
-    if (tab?.kind !== 'classes') return []
-    const recs = (tab.of === 'affiliation' ? doc?.affiliations : doc?.groups) || []
+  const classesOf = useCallback((t) => {
+    if (t?.kind !== 'classes') return []
+    const recs = (t.of === 'affiliation' ? doc?.affiliations : doc?.groups) || []
     return recs.map((r) => ({
       name: r.name,
       full: r.fullName || '',
-      count: authors.filter((a) => (tab.of === 'affiliation' ? inAff(a, r.name) : inGrp(a, r.name))).length,
+      count: authors.filter((a) => (t.of === 'affiliation' ? inAff(a, r.name) : inGrp(a, r.name))).length,
     })).sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
-  }, [tab, doc, authors, clsSort])
+  }, [doc, authors, clsSort])
+  const classes = useMemo(() => classesOf(tab), [classesOf, tab])
 
   // ── tabs ──
   function openTab(t) {
@@ -518,7 +528,7 @@ export default function App() {
                     onClick={(e) => hit(i, e.shiftKey)}
                     onContextMenu={(e) => {
                       e.preventDefault()
-                      openTab({ id: `edit:${a.id}`, kind: 'edit', label: anyName(a), who: a.id })
+                      openTab({ id: `edit:${a.id}`, kind: 'edit', label: anyName(a), who: a.id, from: tab.id })
                     }}
                     cell={{
                       chk: <input type="checkbox" checked={on} tabIndex={-1} readOnly
@@ -574,7 +584,7 @@ export default function App() {
                 })}
                 onContextMenu={(e) => {
                   e.preventDefault()
-                  openTab({ id: `editcls:${tab.of}:${r.name}`, kind: 'editcls', label: r.name, of: tab.of, who: r.name })
+                  openTab({ id: `editcls:${tab.of}:${r.name}`, kind: 'editcls', label: r.name, of: tab.of, who: r.name, from: tab.id })
                 }}
                 cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
             ))}
@@ -582,7 +592,78 @@ export default function App() {
           </Table>
         )}
 
-        {doc && tab?.kind === 'edit' && (
+        {doc && editing && beside && (
+          <div className="am-split">
+            <div className="am-half">
+              {beside.kind === 'classes' ? (
+                <Table cols={clsCols} onDrag={drag('c:')} sort={clsSort}
+                  onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}>
+                  {classesOf(beside).map((r, i) => (
+                    <Row key={r.name} cols={clsCols}
+                      className={`am-hit${tab.who === r.name ? ' on' : ''}`}
+                      onClick={() => openTab({
+                        id: `editcls:${beside.of}:${r.name}`, kind: 'editcls',
+                        label: r.name, of: beside.of, who: r.name, from: beside.id,
+                      })}
+                      cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
+                  ))}
+                </Table>
+              ) : (
+              <Table cols={cols} onDrag={drag('')}
+                sort={sort || { k: beside.id === 'mylist' ? null : 'kor', dir: 1 }}
+                onSort={(k) => setSort((s2) => {
+                  const now = s2 || (beside.id === 'mylist' ? null : { k: 'kor', dir: 1 })
+                  return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
+                })}>
+                {asideRows.map((a, i) => {
+                  const cur = currentAff(a)
+                  return (
+                    <Row key={a.id || i} cols={cols}
+                      className={`am-hit${tab.who === a.id ? ' on' : ''}`}
+                      onClick={() => openTab({ id: `edit:${a.id}`, kind: 'edit', label: anyName(a), who: a.id, from: beside.id })}
+                      cell={{
+                        chk: null,
+                        num: i + 1,
+                        affil: cur?.tag || D,
+                        kor: korName(a) || D,
+                        name: engName(a) || a.nick || D,
+                        nm: citeShort(a) || D,
+                        email: repEmail(a) || D,
+                        pos: cur?.position || D,
+                        core: (beside.grp ? coreIn(a, beside.grp) : coreOf(a)) ?? D,
+                        last: citeLast(a) || D,
+                        first: citeFirst(a) || D,
+                        init: citeInit(a) || D,
+                      }} />
+                  )
+                })}
+              </Table>
+              )}
+            </div>
+            <div className="am-half am-halfedit">
+              {tab.kind === 'edit' ? (
+                <EditAuthor author={tab.who ? authors.find((a) => a.id === tab.who) : null}
+                  doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
+                  onCreated={(id, label) => { closeTab('new'); openTab({ id: `edit:${id}`, kind: 'edit', label, who: id, from: tab.from }) }}
+                  onDone={(id) => closeTab(`edit:${id}`)}
+                  onDeleted={(id) => {
+                    closeTab(`edit:${id}`)
+                    setMyList((l) => l.filter((x) => x !== id))
+                    setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
+                  }} />
+              ) : (
+                <EditClass name={tab.who} of={tab.of} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+                  onCreated={(name) => {
+                    closeTab(`newcls:${tab.of}`)
+                    openTab({ id: `editcls:${tab.of}:${name}`, kind: 'editcls', label: name, of: tab.of, who: name, from: tab.from })
+                  }}
+                  onDone={(name) => closeTab(`editcls:${tab.of}:${name}`)} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {doc && !beside && tab?.kind === 'edit' && (
           <EditAuthor author={tab.who ? authors.find((a) => a.id === tab.who) : null}
             doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
             onCreated={(id, label) => {
@@ -596,11 +677,11 @@ export default function App() {
               setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
             }} />
         )}
-        {doc && tab?.kind === 'editcls' && (
+        {doc && !beside && tab?.kind === 'editcls' && (
           <EditClass name={tab.who} of={tab.of} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
             onCreated={(name) => {
               closeTab(`newcls:${tab.of}`)
-              openTab({ id: `editcls:${tab.of}:${name}`, kind: 'editcls', label: name, of: tab.of, who: name })
+              openTab({ id: `editcls:${tab.of}:${name}`, kind: 'editcls', label: name, of: tab.of, who: name, from: tab.from })
             }}
             onDone={(name) => closeTab(`editcls:${tab.of}:${name}`)} />
         )}
@@ -880,7 +961,7 @@ function AffRows({ value = [], options, onChange }) {
       {value.length === 0 && <span className="am-hint">없음</span>}
       {value.map((x, i) => (
         <div key={i} className="am-rrow">
-          <select className="am-in" style={{ width: 130 }} value={x.tag || ''}
+          <select className="am-in" style={{ width: 120 }} value={x.tag || ''}
             onChange={(e) => put(i, 'tag', e.target.value)}>
             <option value="">(소속)</option>
             {/* An entry pointing at a class that is gone stays selectable, so
@@ -889,7 +970,9 @@ function AffRows({ value = [], options, onChange }) {
               <option key={o} value={o}>{o}</option>
             ))}
           </select>
-          <input className="am-in" style={{ width: 190 }} placeholder="position"
+          <input className="am-in" style={{ width: 150 }} placeholder="부서"
+            value={x.dept || ''} onChange={(e) => put(i, 'dept', e.target.value)} />
+          <input className="am-in" style={{ width: 170 }} placeholder="position"
             value={x.position || ''} onChange={(e) => put(i, 'position', e.target.value)} />
           <input className="am-in" style={{ width: 190 }} placeholder="email"
             value={x.email || ''} onChange={(e) => put(i, 'email', e.target.value)} />
@@ -901,7 +984,7 @@ function AffRows({ value = [], options, onChange }) {
         </div>
       ))}
       <button type="button" className="am-btn" onClick={() =>
-        onChange([...value, { tag: '', position: '', email: '', since: '' }])}>+ 소속</button>
+        onChange([...value, { tag: '', dept: '', position: '', email: '', since: '' }])}>+ 소속</button>
     </div>
   )
 }
