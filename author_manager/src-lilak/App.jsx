@@ -413,8 +413,16 @@ export default function App() {
         </header>
 
         <div className="am-cmd">
-          <button type="button" className="am-btn am-go"
-            onClick={() => openTab({ id: 'new', kind: 'edit', label: '새 저자', who: null })}>+ 새 저자</button>
+          {tab?.kind === 'classes' ? (
+            <button type="button" className="am-btn am-go"
+              onClick={() => openTab({
+                id: `newcls:${tab.of}`, kind: 'editcls', of: tab.of, who: null,
+                label: tab.of === 'affiliation' ? '새 소속' : '새 그룹',
+              })}>{tab.of === 'affiliation' ? '+ 새 소속' : '+ 새 그룹'}</button>
+          ) : (
+            <button type="button" className="am-btn am-go"
+              onClick={() => openTab({ id: 'new', kind: 'edit', label: '새 저자', who: null })}>+ 새 저자</button>
+          )}
           <button type="button" className="am-btn" onClick={addToMyList}>add to my list</button>
           <button type="button" className="am-btn" disabled={!picked.size}
             onClick={() => { setPicked(new Set()); lastHit.current = null }}>clear</button>
@@ -589,7 +597,12 @@ export default function App() {
             }} />
         )}
         {doc && tab?.kind === 'editcls' && (
-          <EditClass name={tab.who} of={tab.of} doc={doc} onSave={commit} />
+          <EditClass name={tab.who} of={tab.of} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+            onCreated={(name) => {
+              closeTab(`newcls:${tab.of}`)
+              openTab({ id: `editcls:${tab.of}:${name}`, kind: 'editcls', label: name, of: tab.of, who: name })
+            }}
+            onDone={(name) => closeTab(`editcls:${tab.of}:${name}`)} />
         )}
 
         <footer className="am-foot">
@@ -1052,13 +1065,57 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
   )
 }
 
-function EditClass({ name, of, doc, onSave }) {
+function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
   const key = of === 'affiliation' ? 'affiliations' : 'groups'
-  const rec = (doc[key] || []).find((r) => r.name === name)
-  const [f, setF] = useState(rec || { name })
-  useEffect(() => { setF(rec || { name }) }, [name, rec])
-  if (!rec) return <p className="am-msg">그 {of === 'affiliation' ? '소속을' : '그룹을'} 찾을 수 없습니다.</p>
+  const what = of === 'affiliation' ? '소속' : '그룹'
+  const draft = !name
+  const rec = draft ? null : (doc[key] || []).find((r) => r.name === name)
+  const [f, setF] = useState(rec || { name: '', shortName: '', fullName: '' })
+  const [sure, setSure] = useState(false)
+  useEffect(() => { setF(rec || { name: '', shortName: '', fullName: '' }); setSure(false) }, [name, rec])
+  if (!draft && !rec) return <p className="am-msg">그 {what}을 찾을 수 없습니다.</p>
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  const named = String(f.name || '').trim()
+
+  // How many authors point at this name: the number that decides whether
+  // deleting it is a tidy-up or an edit to two dozen records.
+  const users = (doc.authors || []).filter((a) => (of === 'affiliation' ? inAff(a, name) : inGrp(a, name))).length
+  const taken = (doc[key] || []).some((r) => r.name === named && r.name !== rec?.name)
+
+  function create() {
+    if (!named || taken) return
+    onSave({ [key]: [...(doc[key] || []), { ...f, name: named, shortName: named }] },
+      `'${named}' ${what} 등록됨`).then((ok) => { if (ok) onCreated?.(named) })
+  }
+  async function update() {
+    const renamed = named !== rec.name
+    const recs = (doc[key] || []).map((r) => (r.name === rec.name ? { ...f, name: named, shortName: named } : r))
+    // A rename has to travel: the authors point at this name by value.
+    const authors = renamed
+      ? doc.authors.map((a) => ({
+        ...a,
+        affiliations: of === 'affiliation'
+          ? (a.affiliations || []).map((x) => (x.tag === rec.name ? { ...x, tag: named } : x))
+          : a.affiliations,
+        groups: of === 'group'
+          ? (a.groups || []).map((g) => (g.group === rec.name ? { ...g, group: named } : g))
+          : a.groups,
+      }))
+      : doc.authors
+    if (await onSave({ [key]: recs, authors })) onDone?.(rec.name)
+  }
+  async function remove() {
+    // Deleting the record without taking it off the authors would leave them
+    // pointing at a name that is not there.
+    const authors = doc.authors.map((a) => ({
+      ...a,
+      affiliations: of === 'affiliation' ? (a.affiliations || []).filter((x) => x.tag !== rec.name) : a.affiliations,
+      groups: of === 'group' ? (a.groups || []).filter((g) => g.group !== rec.name) : a.groups,
+    }))
+    if (await onSave({ [key]: (doc[key] || []).filter((r) => r.name !== rec.name), authors },
+      `'${rec.name}' ${what} 삭제됨`)) onDone?.(rec.name)
+  }
+
   return (
     <div className="am-tab-body">
       <div className="am-rec">
@@ -1067,41 +1124,54 @@ function EditClass({ name, of, doc, onSave }) {
               shows: they are the same string, so they move together. */}
           <input className="am-in" style={{ width: 220 }} value={f.name || ''}
             onChange={(e) => setF((s) => ({ ...s, name: e.target.value, shortName: e.target.value }))} />
-          <span className="am-hint">고치면 이 이름을 쓰는 저자들도 같이 고쳐집니다.</span>
+          {taken ? <span className="am-warn">같은 이름이 이미 있습니다.</span>
+            : draft ? <span className="am-hint">저자들이 이 이름으로 가리킵니다.</span>
+              : <span className="am-hint">고치면 이 이름을 쓰는 저자 {users}명도 같이 고쳐집니다.</span>}
         </Fld>
         <Fld label="full name">
           <input className="am-in" style={{ width: 360 }} value={f.fullName || ''} onChange={set('fullName')} />
+          <span className="am-hint">paper authors의 소속 줄에 이 이름이 나갑니다.</span>
         </Fld>
         {of === 'affiliation' ? (
           <Fld label="주소 · 전화">
             <input className="am-in" style={{ width: 360 }} value={f.address || ''} onChange={set('address')} placeholder="address" />
-            <input className="am-in am-mono" style={{ width: 150 }} value={f.phone || ''} onChange={set('phone')} placeholder="phone" />
+            <input className="am-in" style={{ width: 150 }} value={f.phone || ''} onChange={set('phone')} placeholder="phone" />
           </Fld>
         ) : (
           <Fld label="설명 · 기간">
             <input className="am-in" style={{ width: 300 }} value={f.description || ''} onChange={set('description')} placeholder="description" />
-            <input className="am-in am-mono" style={{ width: 110 }} value={f.creationDate || ''} onChange={set('creationDate')} placeholder="2025-01-01" />
-            <input className="am-in am-mono" style={{ width: 110 }} value={f.endDate || ''} onChange={set('endDate')} placeholder="end" />
+            <input className="am-in" style={{ width: 110 }} value={f.creationDate || ''} onChange={set('creationDate')} placeholder="2025-01-01" />
+            <input className="am-in" style={{ width: 110 }} value={f.endDate || ''} onChange={set('endDate')} placeholder="end" />
           </Fld>
         )}
         <Fld label="">
-          <button type="button" className="am-btn am-go" onClick={() => {
-            const renamed = f.name !== rec.name
-            const recs = (doc[key] || []).map((r) => (r.name === rec.name ? f : r))
-            const authors = renamed
-              ? doc.authors.map((a) => ({
-                ...a,
-                affiliations: of === 'affiliation'
-                  ? (a.affiliations || []).map((x) => (x.tag === rec.name ? { ...x, tag: f.name } : x))
-                  : a.affiliations,
-                groups: of === 'group'
-                  ? (a.groups || []).map((g) => (g.group === rec.name ? { ...g, group: f.name } : g))
-                  : a.groups,
-              }))
-              : doc.authors
-            onSave({ [key]: recs, authors })
-          }}>save</button>
-          <button type="button" className="am-btn" onClick={() => setF(rec)}>revert</button>
+          {draft ? (
+            <>
+              <button type="button" className="am-btn am-go" disabled={!named || taken} onClick={create}>등록</button>
+              {!named && <span className="am-hint">이름이 있어야 합니다.</span>}
+            </>
+          ) : (
+            <>
+              <button type="button" className="am-btn am-go" disabled={!named || taken} onClick={update}>save and exit</button>
+              <button type="button" className="am-btn" onClick={() => setF(rec)}>revert</button>
+              {isAdmin && (
+                <>
+                  <span className="am-gap" />
+                  {sure ? (
+                    <>
+                      <span className="am-warn">
+                        {users ? `저자 ${users}명의 목록에서도 빠집니다.` : '쓰는 저자가 없습니다.'} 되돌릴 수 없습니다.
+                      </span>
+                      <button type="button" className="am-btn am-danger" onClick={remove}>정말 삭제</button>
+                      <button type="button" className="am-btn" onClick={() => setSure(false)}>취소</button>
+                    </>
+                  ) : (
+                    <button type="button" className="am-btn am-danger" onClick={() => setSure(true)}>delete</button>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </Fld>
       </div>
     </div>

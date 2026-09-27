@@ -442,3 +442,6 @@ body.am-resizing .am-hit:hover { background: transparent; }
   font-size: 11px; color: var(--rk-cite-t);
 }
 .am-rows select.am-in { padding: 0 4px; }
+
+/* A warning in a form: said where the thing it is about is. */
+.am-warn { color: #b91c1c; }
