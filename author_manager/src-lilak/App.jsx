@@ -25,11 +25,16 @@ const PORTAL_PARTS = PORTAL_BASE.split('/').filter(Boolean)
 const PORTAL_PROJECT = PORTAL_PARTS.length ? PORTAL_PARTS[PORTAL_PARTS.length - 1] : ''
 const MYLIST_KEY = `am.mylist.${PORTAL_PROJECT}`
 const WIDTH_KEY = `am.cols.${PORTAL_PROJECT}`
+const VIEW_KEY = `am.view.${PORTAL_PROJECT}`
 
 const load = (k, fallback) => {
   try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback } catch { return fallback }
 }
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* private mode */ } }
+
+/** How this project was left: the tabs you opened, which one you were on, the
+ *  sort and the filter. Read once — it is a starting point, not a live store. */
+const VIEW = (typeof localStorage === 'undefined') ? {} : load(VIEW_KEY, {})
 
 function portalToken() {
   try { return localStorage.getItem('lilak_portal_token') || localStorage.getItem('elog_token') || '' }
@@ -203,8 +208,9 @@ export default function App() {
   const [doc, setDoc] = useState(null)
   const [err, setErr] = useState('')
   const [note, setNote] = useState('')
-  const [tabs, setTabs] = useState(FIXED)
-  const [active, setActive] = useState('total')
+  const [tabs, setTabs] = useState(() => [...FIXED,
+    ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
+  const [active, setActive] = useState(VIEW.active || 'total')
   // The editor is its OWN pane with its OWN tabs: a record you are fixing is
   // not one of the lists, and closing one should not send you somewhere else.
   const [etabs, setEtabs] = useState([])
@@ -216,15 +222,15 @@ export default function App() {
   const [myList, setMyList] = useState(() => load(MYLIST_KEY, []))
   const [groupForm, setGroupForm] = useState(null)   // the new-group form, when open
   // null = the tab's own order: 한글 이름, or My List's own sequence.
-  const [sort, setSort] = useState(null)
-  const [clsSort, setClsSort] = useState({ k: 'name', dir: 1 })
+  const [sort, setSort] = useState(VIEW.sort || null)
+  const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'name', dir: 1 })
   // Filtering has a MODE. In it the labels stop sorting and start choosing
   // which column's values you are picking from; the picks pile up across
   // columns until they are applied.
   const [fmode, setFmode] = useState(false)
   const [fcol, setFcol] = useState(null)       // the column being picked from
-  const [fsel, setFsel] = useState({})         // { column: [values] }
-  const [fon, setFon] = useState(false)        // applied
+  const [fsel, setFsel] = useState(VIEW.fsel || {})   // { column: [values] }
+  const [fon, setFon] = useState(!!VIEW.fon)   // applied
   const [outOpen, setOutOpen] = useState(false)   // the listing drawer
   const findRef = useRef(null)
   const lastHit = useRef(null)      // for shift-click: where the range starts
@@ -235,6 +241,23 @@ export default function App() {
   }, [])
   useEffect(() => { save(MYLIST_KEY, myList) }, [myList])
   useEffect(() => { save(WIDTH_KEY, widths) }, [widths])
+  // The four fixed tabs are not worth storing; picking mode is not a state you
+  // come back to, so only the applied filter is kept.
+  useEffect(() => {
+    save(VIEW_KEY, { tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
+                     active, sort, clsSort, fsel, fon })
+  }, [tabs, active, sort, clsSort, fsel, fon])
+  // A tab for a group or an affiliation that is no longer in the document
+  // cannot be shown; it goes, and takes you back to total if you were on it.
+  useEffect(() => {
+    if (!doc) return
+    const alive = (t) => (t.grp ? (doc.groups || []).some((r) => r.name === t.grp)
+      : t.aff ? (doc.affiliations || []).some((r) => r.name === t.aff) : true)
+    setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
+  }, [doc])
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === active)) setActive('total')
+  }, [tabs, active])
   useEffect(() => {
     const on = () => setVw(window.innerWidth)
     window.addEventListener('resize', on)
