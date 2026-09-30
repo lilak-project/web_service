@@ -20,7 +20,7 @@ import {
   RackTable, RackRow, RackTabs,
   useColumnWidths, useViewportWidth, useSelection, useFindKey, useNote, useViewState,
   bySome, fill as fillTpl, facetOf, passesFilter,
-  PORTAL_PROJECT, projectKey, load, save, isManager, fetchDoc,
+  PORTAL_PROJECT, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
 
@@ -155,6 +155,10 @@ export default function App() {
   const [tabs, setTabs] = useState(() => [...FIXED,
     ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
   const [active, setActive] = useState(VIEW.active || 'total')
+  // The editor is its OWN pane with its OWN tabs: a record you are fixing is
+  // not one of the lists, and closing one should not send you somewhere else.
+  const [etabs, setEtabs] = useState([])
+  const [eactive, setEactive] = useState(null)
   const [query, setQuery] = useState('')
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS])
   const vw = useViewportWidth()
@@ -264,9 +268,42 @@ export default function App() {
     setTabs((ts) => ts.filter((t) => t.id !== id))
     if (active === id) setActive('total')
   }
+  function openEdit(t) {
+    setEtabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
+    setEactive(t.id)
+  }
+  function closeEdit(id) {
+    setEtabs((ts) => {
+      const left = ts.filter((t) => t.id !== id)
+      if (id === eactive) setEactive(left.length ? left[left.length - 1].id : null)
+      return left
+    })
+  }
+
+  // ── saving one record ──
+  async function commit(patch, said) {
+    if (!doc) return false
+    try {
+      const r = await putDoc(doc.version, {
+        references: patch.references || doc.references,
+        journals: patch.journals || doc.journals,
+      })
+      if (r.conflict) { setNote('다른 사람이 먼저 저장했습니다 — 새로 읽어주세요.'); return false }
+      setDoc(r.doc)
+      setNote(said || '저장했습니다.')
+      return true
+    } catch (e) { setNote(String(e.message || e)); return false }
+  }
   /** What the listing is about: the papers you ticked, or the tab itself when
    *  you have ticked nothing. */
   const chosen = useMemo(() => scope.filter((r) => picked.has(r.id)), [scope, picked])
+
+  // The editor takes the right half when there is room for both; below that it
+  // has the width to itself while it is open.
+  const etab = etabs.find((t) => t.id === eactive) || null
+  const showEdit = !!etab
+  const showList = !showEdit || vw >= 1180
+  const allTags = useMemo(() => [...new Set(refs.flatMap(tagsOf))].sort(), [refs])
 
   return (
     <div className="rl">
@@ -279,6 +316,19 @@ export default function App() {
         </header>
 
         <div className="rl-cmd">
+          {tab?.kind === 'classes' && tab.of === 'journal' ? (
+            /* Mustard: it is only here while a journal tab is, and the colour is
+               what says so. */
+            <button type="button" className="rl-btn rl-tabonly"
+              onClick={() => openEdit({ id: 'newjrn', kind: 'editjrn', who: null, label: '새 저널' })}>
+              + 새 저널
+            </button>
+          ) : (
+            <button type="button" className="rl-btn rl-go"
+              onClick={() => openEdit({ id: 'new', kind: 'edit', who: null, label: '새 논문' })}>
+              + 새 논문
+            </button>
+          )}
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
@@ -308,7 +358,7 @@ export default function App() {
         </div>
 
         <div className="rl-body">
-          <div className="rl-pane">
+          {showList && (<div className="rl-pane">
             <RackTabs tabs={tabs} active={active} fixed={FIXED}
               onPick={setActive} onClose={closeTab} />
 
@@ -345,10 +395,16 @@ export default function App() {
                   })}
                   {!fmode && rows.map((r, i) => {
                     const on = picked.has(r.id)
+                    const edited = etabs.some((t) => t.who === r.id)
                     return (
                       <RackRow key={r.id || i} cols={cols} tone={TONE}
-                        className={`rl-hit${on ? ' on' : ''}`}
+                        className={`rl-hit${on ? ' on' : ''}${edited ? ' rl-edited' : ''}`}
                         onClick={(e) => hit(i, e.shiftKey)}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          openEdit({ id: `edit:${r.id}`, kind: 'edit', who: r.id,
+                            label: r.citeKey || r.title?.slice(0, 24) || '논문' })
+                        }}
                         cell={{
                           chk: <input type="checkbox" checked={on} tabIndex={-1} readOnly
                             aria-label={`${r.citeKey || r.title} 선택`} />,
@@ -381,16 +437,44 @@ export default function App() {
                       id: `${tab.of}:${r.name}`, kind: 'refs', label: r.name,
                       ...CLS_OF[tab.of].open(r.name),
                     })}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      openEdit(tab.of === 'journal'
+                        ? { id: `editjrn:${r.name}`, kind: 'editjrn', who: r.name, label: r.name }
+                        : { id: `edittag:${r.name}`, kind: 'edittag', who: r.name, label: r.name })
+                    }}
                     cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
                 ))}
                 {classes.length === 0 && <p className="rl-msg">아직 없습니다.</p>}
               </RackTable>
             )}
-          </div>
+          </div>)}
+
+          {showEdit && (<div className="rl-pane rl-epane">
+            <RackTabs tabs={etabs} active={eactive} opened
+              onPick={setEactive} onClose={closeEdit} />
+            {etab.kind === 'edit' ? (
+              <EditRef ref_={etab.who ? refs.find((r) => r.id === etab.who) : null}
+                doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
+                onCreated={(id, label) => { closeEdit('new'); openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label }) }}
+                onDone={(id) => closeEdit(`edit:${id}`)}
+                onDeleted={(id) => {
+                  closeEdit(`edit:${id}`)
+                  setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
+                }} />
+            ) : etab.kind === 'editjrn' ? (
+              <EditJournal name={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+                onCreated={(name) => { closeEdit('newjrn'); openEdit({ id: `editjrn:${name}`, kind: 'editjrn', who: name, label: name }) }}
+                onDone={(name) => closeEdit(`editjrn:${name}`)} />
+            ) : (
+              <EditTag name={etab.who} doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN}
+                onDone={(name) => closeEdit(`edittag:${name}`)} />
+            )}
+          </div>)}
         </div>
 
         <footer className="rl-foot">
-          <span>{note || '왼쪽 클릭으로 선택, shift로 범위.'}</span>
+          <span>{note || '왼쪽 클릭으로 선택, shift로 범위, 오른쪽 클릭으로 편집.'}</span>
           <span className="rl-sp" />
           <span className="rl-mono">{rows.length ? `${rows.length}줄` : ''}</span>
         </footer>
@@ -452,6 +536,481 @@ function ListOut({ list, picked, tokens, say, open, setOpen }) {
         <textarea className="rl-outbox" value={out} readOnly
           placeholder={none ? '이 탭에 논문이 없습니다.' : ''} />
       </>)}
+    </div>
+  )
+}
+
+// ─── Editing ────────────────────────────────────────────────────────────────
+// The record reads at the readable size, not the list's: finding is dense,
+// reading and typing are not.
+function Fld({ label, children }) {
+  return (<><span className="rl-fl">{label}</span><div className="rl-fv">{children}</div></>)
+}
+
+/** A list of plain strings — links — one line each. */
+function TextRows({ value = [], onChange, add, placeholder, link }) {
+  return (
+    <div className="rl-rows">
+      {value.length === 0 && <span className="rl-hint">없음</span>}
+      {value.map((v, i) => (
+        <div key={i} className="rl-rrow">
+          <input className="rl-in" style={{ width: 320 }} placeholder={placeholder} value={v}
+            onChange={(e) => onChange(value.map((x, j) => (j === i ? e.target.value : x)))} />
+          {link && /^https?:\/\//.test(v) && (
+            <a href={v} target="_blank" rel="noreferrer" className="rl-hint">열기</a>
+          )}
+          <button type="button" className="rl-x" title="이 줄 지우기"
+            onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
+        </div>
+      ))}
+      <button type="button" className="rl-btn" onClick={() => onChange([...value, ''])}>{add}</button>
+    </div>
+  )
+}
+
+/** Tags: the ones already in use are offered, a new one is just typed. A tag
+ *  is a word, so the list of them is the list of words in use — there is
+ *  nothing to create first. */
+function TagRows({ value = [], onChange, options }) {
+  const [add, setAdd] = useState('')
+  const put = () => {
+    const t = add.trim()
+    if (!t) return
+    if (!value.includes(t)) onChange([...value, t])
+    setAdd('')
+  }
+  return (
+    <div className="rl-rows">
+      <div className="rl-rrow">
+        {value.map((t) => (
+          <span key={t} className="rl-tag">
+            {t}
+            <button type="button" className="rl-x" title="이 태그 떼기"
+              onClick={() => onChange(value.filter((x) => x !== t))}>×</button>
+          </span>
+        ))}
+        {value.length === 0 && <span className="rl-hint">없음</span>}
+      </div>
+      <div className="rl-rrow">
+        <input className="rl-in" style={{ width: 220 }} list="rl-tags" value={add}
+          placeholder="태그" onChange={(e) => setAdd(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); put() } }} />
+        <datalist id="rl-tags">{options.map((t) => <option key={t} value={t} />)}</datalist>
+        <button type="button" className="rl-btn" onClick={put} disabled={!add.trim()}>+ 태그</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Pasting a citation ─────────────────────────────────────────────────────
+/** What a publisher's site hands you is a BibTeX entry or a RIS block, so
+ *  typing the fields again is work a parser can do. Anything it cannot read is
+ *  left for the fields you already filled — a partial read beats a refusal. */
+function parseCitation(text) {
+  const t = String(text || '').trim()
+  if (!t) return null
+  return /^TY\s{2}-|\nTY\s{2}-/.test(t) ? parseRis(t) : parseBib(t)
+}
+/** The value of one BibTeX field, brace-balanced: a title with {$^{12}$C} in it
+ *  ends at ITS closing brace, not at the first one. */
+function bibField(src, key) {
+  const m = new RegExp(`[,{]\\s*${key}\\s*=\\s*`, 'i').exec(src)
+  if (!m) return ''
+  let i = m.index + m[0].length
+  const open = src[i]
+  if (open === '{' || open === '"') {
+    const close = open === '{' ? '}' : '"'
+    let depth = 0, out = ''
+    for (; i < src.length; i++) {
+      const c = src[i]
+      if (c === '{' || (c === '"' && open === '"' && depth === 0)) { depth++; if (depth === 1) continue }
+      if (c === close) { depth--; if (depth === 0) break }
+      out += c
+    }
+    return out.replace(/\s+/g, ' ').trim()
+  }
+  return (src.slice(i).match(/^[^,}\n]+/) || [''])[0].trim()
+}
+function parseBib(src) {
+  const head = /@(\w+)\s*\{\s*([^,\s]+)\s*,/.exec(src)
+  const got = {
+    type: head && /thesis/i.test(head[1]) ? 'thesis' : 'paper',
+    citeKey: head ? head[2] : '',
+    title: bibField(src, 'title'),
+    author: bibField(src, 'author'),
+    journal: bibField(src, 'journal') || bibField(src, 'journaltitle') || bibField(src, 'booktitle'),
+    volume: bibField(src, 'volume'),
+    pages: bibField(src, 'pages'),
+    year: bibField(src, 'year') || (bibField(src, 'date').match(/\d{4}/) || [''])[0],
+    doi: bibField(src, 'doi'),
+    url: bibField(src, 'url'),
+  }
+  const eprint = bibField(src, 'eprint')
+  if (eprint && !got.journal) { got.journal = 'arXiv'; got.volume = got.volume || eprint }
+  return got
+}
+const RIS = { TI: 'title', T1: 'title', JO: 'journal', JF: 'journal', T2: 'journal',
+  VL: 'volume', PY: 'year', Y1: 'year', DO: 'doi', UR: 'url', SP: 'pages', EP: 'end' }
+function parseRis(src) {
+  const got = { type: 'paper', citeKey: '', author: '', title: '', journal: '',
+    volume: '', pages: '', year: '', doi: '', url: '' }
+  const authors = []
+  for (const line of src.split(/\r?\n/)) {
+    const m = /^([A-Z][A-Z0-9])\s{2}-\s*(.*)$/.exec(line.trim())
+    if (!m) continue
+    const [, tag, val] = m
+    if (tag === 'AU' || tag === 'A1') { if (val) authors.push(val) }
+    else if (RIS[tag] && val) {
+      if (RIS[tag] === 'year') got.year = (val.match(/\d{4}/) || [val])[0]
+      else if (RIS[tag] === 'end') got.pages = got.pages ? `${got.pages}-${val}` : val
+      else if (!got[RIS[tag]]) got[RIS[tag]] = val
+    } else if (tag === 'TY' && /THES/i.test(val)) got.type = 'thesis'
+  }
+  got.author = authors.join(' and ')
+  return got
+}
+
+/** Paste a citation, see what it read, take it or leave it. */
+function PasteBox({ onTake, say }) {
+  const [text, setText] = useState('')
+  const got = useMemo(() => parseCitation(text), [text])
+  const found = got ? Object.entries(got).filter(([, v]) => v) : []
+  return (
+    <div className="rl-rows">
+      <textarea className="rl-in rl-mono" rows={4} style={{ width: '100%', minWidth: 260 }}
+        placeholder="BibTeX 또는 RIS를 붙여넣으세요" value={text}
+        onChange={(e) => setText(e.target.value)} />
+      <div className="rl-rrow">
+        <button type="button" className="rl-btn rl-go" disabled={found.length < 2}
+          onClick={() => {
+            onTake(got)
+            say(`${found.length}개 항목을 읽었습니다.`)
+            setText('')
+          }}>읽어서 채우기</button>
+        <button type="button" className="rl-btn" disabled={!text} onClick={() => setText('')}>지우기</button>
+        <span className="rl-hint">
+          {text ? (found.length ? found.map(([k]) => k).join(' · ') : '읽을 수 있는 항목이 없습니다.') : ''}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+const TYPES = ['paper', 'thesis', 'report', 'writing']
+
+function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDone, say }) {
+  // No record means a DRAFT: the same form, and saving puts it in the document
+  // rather than over one.
+  const draft = !ref_
+  const blank = { id: null, type: 'paper', citeKey: '', title: '', author: '', journal: '',
+    volume: '', pages: '', year: '', doi: '', url: '', tags: [], cites: [], links: [], note: '' }
+  const [f, setF] = useState(ref_ || blank)
+  const [sure, setSure] = useState(false)   // delete asks once, in place
+  useEffect(() => { setF(ref_ || blank); setSure(false) }, [ref_])  // eslint-disable-line react-hooks/exhaustive-deps
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  const named = () => (f.citeKey || '').trim() || (f.title || '').trim()
+  const jrnNames = (doc.journals || []).map((j) => j.name)
+
+  // A half-typed line is not data: blank strings are dropped on the way out.
+  const tidy = (r) => ({
+    ...r,
+    citeKey: String(r.citeKey || '').trim(),
+    tags: (r.tags || []).map((x) => String(x).trim()).filter(Boolean),
+    links: (r.links || []).map((x) => String(x).trim()).filter(Boolean),
+  })
+  const label = (r) => r.citeKey || (r.title || '').slice(0, 24) || '논문'
+
+  async function create() {
+    if (!named()) return
+    const now = new Date().toISOString()
+    const r = { ...tidy(f), id: newId(), createdAt: now, updatedAt: now }
+    if (await onSave({ references: [r, ...doc.references] }, `${label(r)} 등록됨`)) onCreated?.(r.id, label(r))
+  }
+  async function update() {
+    const ok = await onSave({
+      references: doc.references.map((r) => (r.id === f.id
+        ? { ...tidy(f), updatedAt: new Date().toISOString() } : r)),
+    })
+    // The record was an errand, not a destination: a save that landed closes
+    // the tab it came from.
+    if (ok) onDone?.(f.id)
+  }
+  async function remove() {
+    // A paper other papers cite is removed from their citation lists too, or
+    // they would point at nothing.
+    const refs = doc.references.filter((r) => r.id !== f.id).map((r) => (
+      (r.cites || []).some((c) => c.ref === f.id)
+        ? { ...r, cites: r.cites.map((c) => (c.ref === f.id ? { ...c, ref: '' } : c)) } : r))
+    if (await onSave({ references: refs }, `${label(f)} 삭제됨`)) onDeleted?.(f.id)
+  }
+
+  return (
+    <div className="rl-edit">
+      <div className="rl-rec">
+        {draft && (
+          <Fld label="붙여넣기">
+            <PasteBox say={say} onTake={(got) => setF((s) => ({ ...s, ...got,
+              // A journal we already know keeps its record's spelling.
+              journal: jrnNames.find((n) => n.toLowerCase() === (got.journal || '').toLowerCase())
+                || got.journal || s.journal }))} />
+          </Fld>
+        )}
+        <Fld label="종류">
+          <select className="rl-in" value={f.type || 'paper'} onChange={set('type')}>
+            {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </Fld>
+        <Fld label="cite key">
+          <input className="rl-in rl-mono" style={{ width: 300 }} value={f.citeKey || ''}
+            onChange={set('citeKey')} placeholder="JAlmeid_ApJ_1983" />
+        </Fld>
+        <Fld label="제목">
+          <textarea className="rl-in" rows={2} style={{ width: '100%', minWidth: 260 }}
+            value={f.title || ''} onChange={set('title')} />
+        </Fld>
+        <Fld label="저자">
+          <textarea className="rl-in" rows={2} style={{ width: '100%', minWidth: 260 }}
+            value={f.author || ''} onChange={set('author')}
+            placeholder="A. Author and B. Author and …" />
+        </Fld>
+        <Fld label="저널">
+          <input className="rl-in" style={{ width: 300 }} list="rl-jrns" value={f.journal || ''}
+            onChange={set('journal')} />
+          <datalist id="rl-jrns">{jrnNames.map((n) => <option key={n} value={n} />)}</datalist>
+          {f.journal && !jrnNames.includes(f.journal) && (
+            <span className="rl-hint">목록에 없는 저널입니다 — journals 탭에서 등록하면 약어가 붙습니다.</span>
+          )}
+        </Fld>
+        <Fld label="권 · 면 · 해">
+          <input className="rl-in" style={{ width: 80 }} value={f.volume || ''} onChange={set('volume')} placeholder="volume" />
+          <input className="rl-in" style={{ width: 110 }} value={f.pages || ''} onChange={set('pages')} placeholder="pages" />
+          <input className="rl-in" style={{ width: 70 }} value={f.year || ''} onChange={set('year')} placeholder="year" />
+        </Fld>
+        <Fld label="doi">
+          <input className="rl-in rl-mono" style={{ width: 300 }} value={f.doi || ''} onChange={set('doi')} />
+          {f.doi && <a className="rl-hint" href={`https://doi.org/${f.doi}`} target="_blank" rel="noreferrer">열기</a>}
+        </Fld>
+        <Fld label="url">
+          <input className="rl-in" style={{ width: 320 }} value={f.url || ''} onChange={set('url')} />
+          {/^https?:\/\//.test(f.url || '') && (
+            <a className="rl-hint" href={f.url} target="_blank" rel="noreferrer">열기</a>
+          )}
+        </Fld>
+        <Fld label="태그">
+          <TagRows value={f.tags || []} options={tags}
+            onChange={(v) => setF((s) => ({ ...s, tags: v }))} />
+        </Fld>
+        <Fld label="링크">
+          <TextRows value={f.links || []} add="+ 링크" placeholder="https://…" link
+            onChange={(v) => setF((s) => ({ ...s, links: v }))} />
+        </Fld>
+        <Fld label="메모">
+          <textarea className="rl-in" rows={2} style={{ width: '100%', minWidth: 260 }}
+            value={f.note || ''} onChange={set('note')} />
+        </Fld>
+        <Fld label="">
+          {draft ? (
+            <>
+              <button type="button" className="rl-btn rl-go" disabled={!named()} onClick={create}>등록</button>
+              <span className="rl-hint">{named() ? '' : 'cite key나 제목 하나는 있어야 합니다.'}</span>
+            </>
+          ) : (
+            <>
+              <button type="button" className="rl-btn rl-go" onClick={update}>save and exit</button>
+              <button type="button" className="rl-btn" onClick={() => setF(ref_)}>revert</button>
+              {isAdmin && (
+                <>
+                  <span className="rl-gap" />
+                  {/* Asked in place: window.confirm never appears inside the
+                      portal's frame, so a dialog would delete with no question
+                      asked at all. */}
+                  {sure ? (
+                    <>
+                      <span className="rl-hint">되돌릴 수 없습니다.</span>
+                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
+                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
+                    </>
+                  ) : (
+                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </Fld>
+      </div>
+    </div>
+  )
+}
+
+function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone }) {
+  const draft = !name
+  const rec = draft ? null : (doc.journals || []).find((j) => j.name === name)
+  const blank = { name: '', shortName: '', abbrev: '', publisher: '', issn: '', url: '' }
+  const [f, setF] = useState(rec || blank)
+  const [sure, setSure] = useState(false)
+  useEffect(() => { setF(rec || blank); setSure(false) }, [name, rec])  // eslint-disable-line react-hooks/exhaustive-deps
+  if (!draft && !rec) return <p className="rl-msg">그 저널을 찾을 수 없습니다.</p>
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  const named = String(f.name || '').trim()
+  const taken = (doc.journals || []).some((j) => j.name === named && j.name !== rec?.name)
+  // How many papers point at this name: the number that decides whether a
+  // rename is a tidy-up or an edit to two dozen records.
+  const users = (doc.references || []).filter((r) => r.journal === name).length
+
+  function create() {
+    if (!named || taken) return
+    const j = { ...f, name: named, shortName: (f.shortName || named).trim() }
+    if (onSave({ journals: [...(doc.journals || []), j] }, `저널 '${named}' 등록됨`)) onCreated?.(named)
+  }
+  async function update() {
+    const j = { ...f, name: named, shortName: (f.shortName || named).trim() }
+    // A journal is referenced by its name, so a rename has to travel to every
+    // paper that names it — otherwise they point at a journal that is gone.
+    const ok = await onSave({
+      journals: (doc.journals || []).map((x) => (x.name === rec.name ? j : x)),
+      references: named === rec.name ? doc.references
+        : doc.references.map((r) => (r.journal === rec.name ? { ...r, journal: named } : r)),
+    }, named === rec.name ? '저장했습니다.' : `'${rec.name}' → '${named}' · 논문 ${users}편도 함께`)
+    if (ok) onDone?.(named)
+  }
+  async function remove() {
+    // The papers keep their journal text: deleting the record loses the
+    // abbreviation, not the fact of where it was published.
+    if (await onSave({ journals: (doc.journals || []).filter((x) => x.name !== rec.name) },
+      `저널 '${rec.name}' 삭제됨`)) onDone?.(rec.name)
+  }
+
+  return (
+    <div className="rl-edit">
+      <div className="rl-rec">
+        <Fld label="이름">
+          <input className="rl-in" style={{ width: 320 }} value={f.name || ''} onChange={set('name')}
+            placeholder="The Astrophysical Journal" />
+          {taken && <span className="rl-warn">같은 이름의 저널이 있습니다.</span>}
+        </Fld>
+        <Fld label="짧은 이름">
+          <input className="rl-in" style={{ width: 120 }} value={f.shortName || ''} onChange={set('shortName')}
+            placeholder="ApJ" />
+          <span className="rl-hint">표의 jl 열에 나옵니다.</span>
+        </Fld>
+        <Fld label="축약 이름">
+          <input className="rl-in" style={{ width: 240 }} value={f.abbrev || ''} onChange={set('abbrev')}
+            placeholder="Astrophys. J." />
+          <span className="rl-hint">인용에 쓰입니다.</span>
+        </Fld>
+        <Fld label="발행처">
+          <input className="rl-in" style={{ width: 240 }} value={f.publisher || ''} onChange={set('publisher')} />
+        </Fld>
+        <Fld label="issn">
+          <input className="rl-in rl-mono" style={{ width: 140 }} value={f.issn || ''} onChange={set('issn')} />
+        </Fld>
+        <Fld label="url">
+          <input className="rl-in" style={{ width: 320 }} value={f.url || ''} onChange={set('url')} />
+        </Fld>
+        <Fld label="">
+          {draft ? (
+            <>
+              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={create}>등록</button>
+              <span className="rl-hint">{named ? '' : '이름이 있어야 합니다.'}</span>
+            </>
+          ) : (
+            <>
+              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={update}>save and exit</button>
+              <button type="button" className="rl-btn" onClick={() => setF(rec)}>revert</button>
+              <span className="rl-hint">{users}편이 이 저널입니다.</span>
+              {isAdmin && (
+                <>
+                  <span className="rl-gap" />
+                  {sure ? (
+                    <>
+                      <span className="rl-hint">논문의 저널 이름은 글자로 남습니다.</span>
+                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
+                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
+                    </>
+                  ) : (
+                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </Fld>
+      </div>
+    </div>
+  )
+}
+
+/** A tag has no record: it is a word on some papers. So editing one is
+ *  renaming it everywhere, merging it into another, or taking it off. */
+function EditTag({ name, doc, tags, onSave, isAdmin, onDone }) {
+  const [to, setTo] = useState(name)
+  const [sure, setSure] = useState(false)
+  useEffect(() => { setTo(name); setSure(false) }, [name])
+  const users = (doc.references || []).filter((r) => (r.tags || []).includes(name))
+  const named = String(to || '').trim()
+  const merging = named && tags.includes(named) && named !== name
+
+  async function rename() {
+    if (!named || named === name) return
+    const refs = doc.references.map((r) => {
+      if (!(r.tags || []).includes(name)) return r
+      const next = []
+      for (const t of r.tags) {
+        const v = t === name ? named : t
+        if (!next.includes(v)) next.push(v)     // merging into a tag it already has
+      }
+      return { ...r, tags: next }
+    })
+    const said = merging
+      ? `'${name}' → '${named}'에 합쳤습니다 · 논문 ${users.length}편`
+      : `'${name}' → '${named}' · 논문 ${users.length}편`
+    if (await onSave({ references: refs }, said)) onDone?.(name)
+  }
+  async function remove() {
+    const refs = doc.references.map((r) => ((r.tags || []).includes(name)
+      ? { ...r, tags: r.tags.filter((t) => t !== name) } : r))
+    if (await onSave({ references: refs }, `'${name}' 태그를 ${users.length}편에서 뗐습니다.`)) onDone?.(name)
+  }
+
+  return (
+    <div className="rl-edit">
+      <div className="rl-rec">
+        <Fld label="태그">
+          <input className="rl-in" style={{ width: 260 }} list="rl-tags-all" value={to || ''}
+            onChange={(e) => setTo(e.target.value)} />
+          <datalist id="rl-tags-all">{tags.map((t) => <option key={t} value={t} />)}</datalist>
+          {merging && <span className="rl-hint">이미 있는 태그입니다 — 합쳐집니다.</span>}
+        </Fld>
+        <Fld label="쓰는 논문">
+          <div className="rl-rows">
+            {users.length === 0 && <span className="rl-hint">없음</span>}
+            {users.slice(0, 12).map((r) => (
+              <span key={r.id} className="rl-hint">{r.citeKey || (r.title || '').slice(0, 40)}</span>
+            ))}
+            {users.length > 12 && <span className="rl-hint">… 모두 {users.length}편</span>}
+          </div>
+        </Fld>
+        <Fld label="">
+          <button type="button" className="rl-btn rl-go" disabled={!named || named === name}
+            onClick={rename}>{merging ? '합치고 나가기' : 'save and exit'}</button>
+          <button type="button" className="rl-btn" onClick={() => setTo(name)}>revert</button>
+          {isAdmin && (
+            <>
+              <span className="rl-gap" />
+              {sure ? (
+                <>
+                  <span className="rl-hint">논문 {users.length}편에서 이 태그를 뗍니다.</span>
+                  <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
+                  <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
+                </>
+              ) : (
+                <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
+              )}
+            </>
+          )}
+        </Fld>
+      </div>
     </div>
   )
 }
