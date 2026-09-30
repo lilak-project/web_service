@@ -5,11 +5,15 @@ author_manager와 같은 구조, 데이터만 다른 서비스. 표·탭·선택
 
 ## 데이터
 ```
-references  citeKey type title author journal volume pages year doi url
-            tags[] cites[] pdf links attachments note
+references  citeKey type title journal volume pages year doi url
+            authors[{name|ref, corr}]  tags[] cites[{n,ref,raw}] pdf links note
 journals    name shortName abbrev        (ApJ / Astrophys. J.)
+authors     id tag name aliases[] email orcid note
 settings    PDF 허용 루트 목록 (매니저만)
 ```
+저자는 **줄**이다 — 순서가 곧 저자 순서. 등록된 사람이면 `ref`로 연결되고 이름은
+그 레코드에서 온다. BibTeX의 `author` 문자열은 저장하지 않고 이름들을 이어 만든다.
+`corr`는 corresponding author 표시이며 1저자와 겹칠 수 있다.
 분류는 **journals 하나**. 콜라보(SpiRIT …)와 주제 묶음(tpc · 12c · p1 · ai)은
 태그다 — 똑같이 다대다이고 자기 필드가 없었다. 태그 목록은 논문들이 쓰는 것에서 모은다.
 `cites: [{n, ref, raw}]` — 리스트에 있으면 `ref`, 없으면 `raw`. **cited by는 역산**.
@@ -28,6 +32,11 @@ settings    PDF 허용 루트 목록 (매니저만)
 - [x] 6. 인용 연결 — 편집기의 `참고문헌` 줄(번호 · 목록에서 찾기 · 없으면 글자),
         `인용한 논문`은 역산해서 보여주고 눌러서 이동. 표의 `cites`/`cited by`
         숫자를 누르면 그 논문들의 탭이 열린다(인용 번호 순).
+- [x] 6.5 저자 클래스 — authors 탭(name · handle · papers · 1st · 2nd · corr. · 그 외),
+        숫자를 누르면 그 역할의 논문 탭. 논문 편집기의 저자 칸은 한 줄에 한 명
+        (`#handle` 또는 이름으로 연결, `등록`을 누르면 레코드를 만들고 같은 이름의
+        줄을 전부 연결, corr. 체크, ↑↓로 순서). 저자 편집기에서 다른 표기(alias)를
+        더하면 그렇게 적힌 줄도 연결된다.
 - [ ] 7. PDF — 업로드 + 로컬 경로 연결, 패널 탭 뷰어, 설정 탭에서 허용 루트 관리
 - [ ] 8. 출력 다듬기 — 프리셋 확인(short ref. · cite keys · \bibitem · BibTeX)
 

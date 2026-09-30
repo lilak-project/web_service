@@ -33,13 +33,45 @@ const IS_ADMIN = isManager()
 // the journal's abbreviation are worked out from the parts, so they cannot
 // drift from what is stored. (The spreadsheet kept all three in columns of
 // their own, and they did.)
+// A paper's authors are ROWS, in order, each of which may point at an author
+// record. BibTeX writes them as one string because a .bib field is one string;
+// that string is these names joined, and is never stored — otherwise 'which
+// papers is W. G. Lynch on' has two answers that can disagree.
 const AUTHOR_SPLIT = /\s+and\s+/i
-const authorList = (r) => String(r.author || '').split(AUTHOR_SPLIT).map((s) => s.trim()).filter(Boolean)
-const firstAuthor = (r) => authorList(r)[0] || ''
-const etAl = (r) => {
-  const list = authorList(r)
+const splitAuthors = (text) => String(text || '')
+  .split(AUTHOR_SPLIT).map((x) => x.trim().replace(/,$/, '')).filter(Boolean)
+const authorRows = (r) => (r.authors || []).filter((a) => a && (a.name || a.ref))
+/** A registered author is spelled by their record, so fixing a name fixes it
+ *  on every paper at once. */
+const autName = (doc, a) => (a?.ref
+  ? ((doc?.authors || []).find((x) => x.id === a.ref)?.name || a.name || '')
+  : (a?.name || ''))
+const authorList = (doc, r) => authorRows(r).map((a) => autName(doc, a)).filter(Boolean)
+const authorString = (doc, r) => authorList(doc, r).join(' and ')
+const firstAuthor = (doc, r) => authorList(doc, r)[0] || ''
+const etAl = (doc, r) => {
+  const list = authorList(doc, r)
   return list.length > 1 ? `${list[0]} et al.` : (list[0] || '')
 }
+/** Where an author stands on a paper. Not exclusive: a first author can be the
+ *  corresponding one, and both lists should say so. */
+const autRoles = (r, id) => {
+  const i = authorRows(r).findIndex((a) => a.ref === id)
+  if (i < 0) return []
+  const out = []
+  if (i === 0) out.push('first')
+  if (i === 1) out.push('second')
+  if (authorRows(r)[i].corr) out.push('corr')
+  if (i >= 2 && !authorRows(r)[i].corr) out.push('other')
+  return out
+}
+const inRole = (r, id, role) => (role === 'all'
+  ? authorRows(r).some((a) => a.ref === id) : autRoles(r, id).includes(role))
+/** A handle for an author: initials and the family name, the way the
+ *  spreadsheet's a1 column was written (J. Almeid → JAlmeid). */
+const handleFor = (name) => String(name || '').replace(/[.]/g, '').split(/\s+/)
+  .filter(Boolean).map((w, i, a) => (i === a.length - 1 ? w : w[0])).join('')
+  .replace(/[^\w-]/g, '') || 'author'
 /** A journal is referenced by its record `name`; the table shows the short one. */
 const journalRec = (doc, r) => (doc?.journals || []).find((j) => j.name === r.journal) || null
 const jShort = (doc, r) => journalRec(doc, r)?.shortName || r.journal || ''
@@ -47,7 +79,7 @@ const jShort = (doc, r) => journalRec(doc, r)?.shortName || r.journal || ''
 // hold (ApJ) and the one a citation uses (Astrophys. J.).
 const jAbbrev = (doc, r) => journalRec(doc, r)?.abbrev || journalRec(doc, r)?.name || r.journal || ''
 const shortRef = (doc, r) => [
-  etAl(r), [jAbbrev(doc, r), r.volume, r.pages].filter(Boolean).join(' '),
+  etAl(doc, r), [jAbbrev(doc, r), r.volume, r.pages].filter(Boolean).join(' '),
 ].filter(Boolean).join(', ') + (r.year ? ` (${r.year})` : '')
 
 // A paper points at ONE journal and carries any number of tags. A topic set
@@ -103,9 +135,9 @@ const TOKENS = (doc) => ({
   'cite key': (r) => r.citeKey || '',
   type: (r) => r.type || '',
   title: (r) => r.title || '',
-  author: (r) => r.author || '',
-  'first author': (r) => firstAuthor(r),
-  'et al.': (r) => etAl(r),
+  author: (r) => authorString(doc, r),
+  'first author': (r) => firstAuthor(doc, r),
+  'et al.': (r) => etAl(doc, r),
   jl: (r) => jShort(doc, r),
   journal: (r) => jAbbrev(doc, r),
   volume: (r) => r.volume || '',
@@ -133,7 +165,7 @@ const SORTERS = (doc) => ({
   year: (r) => Number(r.year) || null,
   jl: (r) => jShort(doc, r),
   title: (r) => r.title || '',
-  a1: (r) => firstAuthor(r),
+  a1: (r) => firstAuthor(doc, r),
   tags: (r) => tagsOf(r).join(' '),
   cites: (r) => citesOf(r).length || null,
 })
@@ -142,14 +174,30 @@ const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const FIXED = [
   { id: 'total', kind: 'refs', label: 'total' },
+  { id: 'authors', kind: 'classes', label: 'authors', of: 'author' },
   { id: 'journals', kind: 'classes', label: 'journals', of: 'journal' },
   { id: 'tags', kind: 'classes', label: 'tags', of: 'tag' },
 ]
 const CLS_OF = {
+  author: { key: 'authors', open: (id) => ({ aut: id, role: 'all' }) },
   journal: { key: 'journals', has: inJrn, open: (n) => ({ jrn: n }) },
   // Tags have no records behind them: the list is what the papers use.
   tag: { key: null, has: inTag, open: (n) => ({ tag: n }) },
 }
+/** The authors' own columns: where someone stands is the point of the row. */
+const AUT_COLS = [
+  { k: 'num', w: 40, min: 30, fix: true, label: '#' },
+  { k: 'name', w: 200, min: 80, label: 'name' },
+  { k: 'tag', w: 130, min: 60, label: 'handle' },
+  { k: 'count', w: 70, min: 46, label: 'papers', num: true },
+  { k: 'first', w: 58, min: 40, label: '1st', num: true },
+  { k: 'second', w: 58, min: 40, label: '2nd', num: true },
+  { k: 'corr', w: 58, min: 40, label: 'corr.', num: true },
+  { k: 'other', w: 58, min: 40, label: '그 외', num: true },
+]
+const AUT_SORTERS = { name: (r) => r.name, tag: (r) => r.tag, count: (r) => r.count,
+  first: (r) => r.first, second: (r) => r.second, corr: (r) => r.corr, other: (r) => r.other }
+const ROLE_LABEL = { all: '', first: '1저자', second: '2저자', corr: 'corr.', other: '그 외' }
 
 export default function App() {
   const [VIEW, saveView] = useViewState(VIEW_KEY)
@@ -164,7 +212,7 @@ export default function App() {
   const [etabs, setEtabs] = useState([])
   const [eactive, setEactive] = useState(null)
   const [query, setQuery] = useState('')
-  const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS])
+  const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...AUT_COLS])
   const vw = useViewportWidth()
   const [sort, setSort] = useState(VIEW.sort || null)
   const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'name', dir: 1 })
@@ -198,6 +246,7 @@ export default function App() {
       if (t.tag) return (doc.references || []).some((r) => inTag(r, t.tag))
       // A citation tab belongs to a paper; without it there is nothing to list.
       if (t.cites || t.citedBy) return (doc.references || []).some((r) => r.id === (t.cites || t.citedBy))
+      if (t.aut) return (doc.authors || []).some((a) => a.id === t.aut)
       return false
     }
     setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
@@ -212,7 +261,8 @@ export default function App() {
   const sorters = useMemo(() => SORTERS(doc), [doc])
 
   const cols = useMemo(() => sized(COLS, vw), [sized, vw])
-  const clsCols = useMemo(() => sized(CLS_COLS, vw, 'c:'), [sized, vw])
+  const clsCols = useMemo(() => sized(tab?.of === 'author' ? AUT_COLS : CLS_COLS, vw, 'c:'),
+    [sized, vw, tab])
 
   /** How many papers in the list cite this one. Counted once for the whole
    *  document rather than per row, which would be 87² comparisons a render. */
@@ -240,6 +290,11 @@ export default function App() {
       const list = refs.filter((r) => linkedCites(r).some((c) => c.ref === t.citedBy))
       return [...list].sort(byColumn(sort?.k || 'citeKey', sort?.dir ?? 1))
     }
+    // An author's papers, by where they stand on them.
+    if (t.aut) {
+      const list = refs.filter((r) => inRole(r, t.aut, t.role || 'all'))
+      return [...list].sort(byColumn(sort?.k || 'year', sort?.dir ?? -1))
+    }
     let list = refs
     if (t.jrn) list = list.filter((r) => inJrn(r, t.jrn))
     if (t.tag) list = list.filter((r) => inTag(r, t.tag))
@@ -252,9 +307,10 @@ export default function App() {
     const kept = fon ? sc.filter(passes) : sc
     const q = query.trim().toLowerCase()
     if (!q) return kept
-    return kept.filter((r) => [r.citeKey, r.title, r.author, r.journal, r.year, r.doi,
-      ...tagsOf(r)].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [query, fon, passes])
+    return kept.filter((r) => [r.citeKey, r.title, r.journal, r.year, r.doi,
+      ...authorList(doc, r), ...tagsOf(r)]
+      .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
+  }, [query, fon, passes, doc])
   const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
   const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
     = useSelection(rows)
@@ -269,6 +325,16 @@ export default function App() {
    *  from what the papers actually use. */
   const classesOf = useCallback((t) => {
     if (t?.kind !== 'classes') return []
+    // Authors count where they stand, not just how many: 1st, 2nd,
+    // corresponding, and the rest.
+    if (t.of === 'author') {
+      return (doc?.authors || []).map((a) => {
+        const mine = refs.filter((r) => authorRows(r).some((x) => x.ref === a.id))
+        const n = (role) => mine.filter((r) => autRoles(r, a.id).includes(role)).length
+        return { id: a.id, name: a.name, tag: a.tag, count: mine.length,
+          first: n('first'), second: n('second'), corr: n('corr'), other: n('other') }
+      }).sort(bySome(AUT_SORTERS[clsSort.k] || AUT_SORTERS.name, clsSort.dir))
+    }
     const spec = CLS_OF[t.of]
     const recs = spec.key ? (doc?.[spec.key] || [])
       : [...new Set(refs.flatMap(tagsOf))].sort().map((name) => ({ name }))
@@ -307,6 +373,7 @@ export default function App() {
       const r = await putDoc(doc.version, {
         references: patch.references || doc.references,
         journals: patch.journals || doc.journals,
+        authors: patch.authors || doc.authors,
       })
       if (r.conflict) { setNote('다른 사람이 먼저 저장했습니다 — 새로 읽어주세요.'); return false }
       setDoc(r.doc)
@@ -336,7 +403,12 @@ export default function App() {
         </header>
 
         <div className="rl-cmd">
-          {tab?.kind === 'classes' && tab.of === 'journal' ? (
+          {tab?.kind === 'classes' && tab.of === 'author' ? (
+            <button type="button" className="rl-btn rl-tabonly"
+              onClick={() => openEdit({ id: 'newaut', kind: 'editaut', who: null, label: '새 저자' })}>
+              + 새 저자
+            </button>
+          ) : tab?.kind === 'classes' && tab.of === 'journal' ? (
             /* Mustard: it is only here while a journal tab is, and the colour is
                what says so. */
             <button type="button" className="rl-btn rl-tabonly"
@@ -434,7 +506,7 @@ export default function App() {
                           year: r.year || D,
                           jl: jShort(doc, r) || D,
                           title: r.title || D,
-                          a1: firstAuthor(r) || D,
+                          a1: firstAuthor(doc, r) || D,
                           tags: tagsOf(r).join(' ') || D,
                           // A count you can press: the number is also the way
                           // to the papers it counts.
@@ -467,20 +539,39 @@ export default function App() {
             {doc && tab?.kind === 'classes' && (
               <RackTable cols={clsCols} onDrag={drag('c:')} sort={clsSort}
                 onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}>
-                {classes.map((r, i) => (
-                  <RackRow key={r.name} cols={clsCols} tone={TONE} className="rl-hit"
-                    onClick={() => openTab({
-                      id: `${tab.of}:${r.name}`, kind: 'refs', label: r.name,
-                      ...CLS_OF[tab.of].open(r.name),
-                    })}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
-                      openEdit(tab.of === 'journal'
-                        ? { id: `editjrn:${r.name}`, kind: 'editjrn', who: r.name, label: r.name }
-                        : { id: `edittag:${r.name}`, kind: 'edittag', who: r.name, label: r.name })
-                    }}
-                    cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
-                ))}
+                {classes.map((r, i) => {
+                  const key = tab.of === 'author' ? r.id : r.name
+                  // On an author's row every count is a way in: press 1st and
+                  // you get the papers they lead, not all of them.
+                  const roleCell = (role, n) => (n ? (
+                    <button type="button" className="rl-lnk" title={`${r.name} · ${ROLE_LABEL[role]}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openTab({ id: `aut:${r.id}:${role}`, kind: 'refs', aut: r.id, role,
+                          label: `${r.tag || r.name} ${ROLE_LABEL[role]}` })
+                      }}>{n}</button>
+                  ) : D)
+                  return (
+                    <RackRow key={key} cols={clsCols} tone={TONE} className="rl-hit"
+                      onClick={() => openTab({
+                        id: `${tab.of}:${key}`, kind: 'refs', label: r.tag || r.name,
+                        ...CLS_OF[tab.of].open(key),
+                      })}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        openEdit(tab.of === 'author'
+                          ? { id: `editaut:${r.id}`, kind: 'editaut', who: r.id, label: r.tag || r.name }
+                          : tab.of === 'journal'
+                            ? { id: `editjrn:${r.name}`, kind: 'editjrn', who: r.name, label: r.name }
+                            : { id: `edittag:${r.name}`, kind: 'edittag', who: r.name, label: r.name })
+                      }}
+                      cell={tab.of === 'author' ? {
+                        num: i + 1, name: r.name, tag: r.tag || D, count: r.count,
+                        first: roleCell('first', r.first), second: roleCell('second', r.second),
+                        corr: roleCell('corr', r.corr), other: roleCell('other', r.other),
+                      } : { num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
+                  )
+                })}
                 {classes.length === 0 && <p className="rl-msg">아직 없습니다.</p>}
               </RackTable>
             )}
@@ -502,6 +593,16 @@ export default function App() {
                   closeEdit(`edit:${id}`)
                   setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
                 }} />
+            ) : etab.kind === 'editaut' ? (
+              <EditAuthorRec id={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+                onCreated={(a) => { closeEdit('newaut'); openEdit({ id: `editaut:${a.id}`, kind: 'editaut', who: a.id, label: a.tag || a.name }) }}
+                onDone={(id) => closeEdit(`editaut:${id}`)}
+                onOpenRef={(id) => {
+                  const r = refs.find((x) => x.id === id)
+                  if (r) openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label: refLabel(r) })
+                }}
+                onOpenRole={(a, role) => openTab({ id: `aut:${a.id}:${role}`, kind: 'refs',
+                  aut: a.id, role, label: `${a.tag || a.name} ${ROLE_LABEL[role]}` })} />
             ) : etab.kind === 'editjrn' ? (
               <EditJournal name={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
                 onCreated={(name) => { closeEdit('newjrn'); openEdit({ id: `editjrn:${name}`, kind: 'editjrn', who: name, label: name }) }}
@@ -576,6 +677,232 @@ function ListOut({ list, picked, tokens, say, open, setOpen }) {
         <textarea className="rl-outbox" value={out} readOnly
           placeholder={none ? '이 탭에 논문이 없습니다.' : ''} />
       </>)}
+    </div>
+  )
+}
+
+// ─── Authors ────────────────────────────────────────────────────────────────
+/** A paper's authors, in order. A row is a name; if it is someone the list
+ *  knows, it is their handle instead, and the name comes from their record.
+ *  Type a name or a #handle to link one, press 등록 to make a record out of a
+ *  name nobody has registered yet. */
+function AuthorRows({ value = [], doc, onChange, onRegister }) {
+  const recs = doc.authors || []
+  const byKey = useMemo(() => {
+    const m = new Map()
+    for (const a of recs) {
+      m.set(a.name.toLowerCase(), a.id)
+      m.set(`#${a.tag}`.toLowerCase(), a.id)
+      m.set(a.tag.toLowerCase(), a.id)
+      for (const x of (a.aliases || [])) m.set(String(x).toLowerCase(), a.id)
+    }
+    return m
+  }, [recs])
+  const options = useMemo(() => recs.flatMap((a) => [`#${a.tag}`, a.name]), [recs])
+  const row = (i, patch) => onChange(value.map((a, j) => (j === i ? { ...a, ...patch } : a)))
+  const move = (i, d) => {
+    const next = [...value]
+    const j = i + d
+    if (j < 0 || j >= next.length) return
+    ;[next[i], next[j]] = [next[j], next[i]]
+    onChange(next)
+  }
+  const linked = value.filter((a) => a.ref).length
+
+  return (
+    <div className="rl-rows">
+      {value.length === 0 && <span className="rl-hint">없음</span>}
+      {value.map((a, i) => {
+        const rec = a.ref ? recs.find((x) => x.id === a.ref) : null
+        return (
+          <div key={i} className="rl-rrow">
+            <span className="rl-hint rl-mono" style={{ width: 22, textAlign: 'right' }}>{i + 1}</span>
+            {rec ? (
+              <span className="rl-tag">
+                #{rec.tag}
+                <button type="button" className="rl-x" title="연결 끊기"
+                  onClick={() => row(i, { ref: '', name: rec.name })}>×</button>
+              </span>
+            ) : (
+              <>
+                <input className="rl-in" style={{ width: 210 }} list="rl-auts" value={a.name || ''}
+                  placeholder="이름 또는 #handle"
+                  onChange={(e) => {
+                    const v = e.target.value
+                    const id = byKey.get(v.trim().toLowerCase())
+                    row(i, id ? { ref: id, name: '' } : { name: v })
+                  }} />
+                <button type="button" className="rl-btn" disabled={!String(a.name || '').trim()}
+                  title="이 이름으로 저자를 등록하고 같은 이름의 줄을 모두 연결합니다"
+                  onClick={() => onRegister?.(a.name)}>등록</button>
+              </>
+            )}
+            <span className="rl-hint">{rec ? rec.name : ''}</span>
+            <label className="rl-hint" title="corresponding author">
+              <input type="checkbox" checked={!!a.corr}
+                onChange={(e) => row(i, { corr: e.target.checked })} /> corr.
+            </label>
+            <button type="button" className="rl-x" title="위로" onClick={() => move(i, -1)}>↑</button>
+            <button type="button" className="rl-x" title="아래로" onClick={() => move(i, 1)}>↓</button>
+            <button type="button" className="rl-x" title="이 줄 지우기"
+              onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
+          </div>
+        )
+      })}
+      <datalist id="rl-auts">{options.map((o) => <option key={o} value={o} />)}</datalist>
+      <div className="rl-rrow">
+        <button type="button" className="rl-btn"
+          onClick={() => onChange([...value, { name: '', ref: '', corr: false }])}>+ 저자</button>
+        <span className="rl-hint">{value.length}명 · {linked}명 연결</span>
+      </div>
+    </div>
+  )
+}
+
+/** An author record. The counts are the point: where this person stands on the
+ *  papers they are on, and each of them is a way to that list. */
+function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef, onOpenRole }) {
+  const draft = !id
+  const rec = draft ? null : (doc.authors || []).find((a) => a.id === id)
+  const blank = { id: null, tag: '', name: '', aliases: [], email: '', orcid: '', note: '' }
+  const [f, setF] = useState(rec || blank)
+  const [sure, setSure] = useState(false)
+  useEffect(() => { setF(rec || blank); setSure(false) }, [id, rec])  // eslint-disable-line react-hooks/exhaustive-deps
+  if (!draft && !rec) return <p className="rl-msg">그 저자를 찾을 수 없습니다.</p>
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  const named = String(f.name || '').trim()
+  const tag = String(f.tag || '').trim() || handleFor(named)
+  const taken = (doc.authors || []).some((a) => a.tag === tag && a.id !== rec?.id)
+
+  const mine = (doc.references || []).filter((r) => (r.authors || []).some((a) => a.ref === id))
+  const of = (role) => mine.filter((r) => autRoles(r, id).includes(role))
+  const ROLES = [['first', '1저자'], ['second', '2저자'], ['corr', 'corresponding'], ['other', '그 외']]
+
+  async function create() {
+    if (!named || taken) return
+    const a = { ...f, id: newId(), tag, name: named }
+    // A record made here still links the rows that spell the name this way.
+    const link = (rows) => (rows || []).map((x) => (!x.ref && x.name === named ? { ...x, ref: a.id } : x))
+    const hits = (doc.references || []).reduce((n, r) => n + (r.authors || [])
+      .filter((x) => !x.ref && x.name === named).length, 0)
+    if (await onSave({
+      authors: [...(doc.authors || []), a],
+      references: (doc.references || []).map((r) => ({ ...r, authors: link(r.authors) })),
+    }, `${a.tag} 등록 · ${hits}줄 연결`)) onCreated?.(a)
+  }
+  async function update() {
+    const a = { ...f, tag, name: named, aliases: (f.aliases || []).map((x) => String(x).trim()).filter(Boolean) }
+    // An alias added here links the rows that were spelling it the other way.
+    const link = (rows) => (rows || []).map((x) => (!x.ref
+      && (x.name === named || (a.aliases || []).includes(x.name)) ? { ...x, ref: a.id } : x))
+    const hits = (doc.references || []).reduce((n, r) => n + (r.authors || [])
+      .filter((x) => !x.ref && (x.name === named || (a.aliases || []).includes(x.name))).length, 0)
+    if (await onSave({
+      authors: (doc.authors || []).map((x) => (x.id === rec.id ? a : x)),
+      references: (doc.references || []).map((r) => ({ ...r, authors: link(r.authors) })),
+    }, hits ? `저장 · ${hits}줄 새로 연결` : '저장했습니다.')) onDone?.(rec.id)
+  }
+  async function remove() {
+    // The papers keep the name as text: what goes is the record, not the fact
+    // that this person wrote them.
+    const refs = (doc.references || []).map((r) => ({
+      ...r,
+      authors: (r.authors || []).map((x) => (x.ref === rec.id
+        ? { ...x, ref: '', name: x.name || rec.name } : x)),
+    }))
+    if (await onSave({ authors: (doc.authors || []).filter((a) => a.id !== rec.id), references: refs },
+      `${rec.tag} 삭제 · 이름은 ${mine.length}편에 글자로 남습니다`)) onDone?.(rec.id)
+  }
+
+  return (
+    <div className="rl-edit">
+      <div className="rl-rec">
+        <Fld label="이름">
+          <input className="rl-in" style={{ width: 240 }} value={f.name || ''} onChange={set('name')}
+            placeholder="W. G. Lynch" />
+        </Fld>
+        <Fld label="handle">
+          <span className="rl-tag">#{tag}</span>
+          <input className="rl-in rl-mono" style={{ width: 150 }} value={f.tag || ''} onChange={set('tag')}
+            placeholder={handleFor(named)} />
+          {taken && <span className="rl-warn">이미 쓰는 handle입니다.</span>}
+          <span className="rl-hint">논문의 저자 칸에 #{tag} 로 붙입니다.</span>
+        </Fld>
+        <Fld label="다른 표기">
+          <TextRows value={f.aliases || []} add="+ 표기" placeholder="W.G. Lynch"
+            onChange={(v) => setF((s) => ({ ...s, aliases: v }))} />
+          <span className="rl-hint">저장하면 이렇게 적힌 줄도 연결됩니다.</span>
+        </Fld>
+        <Fld label="email">
+          <input className="rl-in" style={{ width: 240 }} value={f.email || ''} onChange={set('email')} />
+        </Fld>
+        <Fld label="orcid">
+          <input className="rl-in rl-mono" style={{ width: 200 }} value={f.orcid || ''} onChange={set('orcid')} />
+        </Fld>
+        <Fld label="메모">
+          <textarea className="rl-in" rows={2} style={{ width: '100%', minWidth: 260 }}
+            value={f.note || ''} onChange={set('note')} />
+        </Fld>
+        {!draft && (
+          <Fld label="논문">
+            <div className="rl-rows">
+              <div className="rl-rrow">
+                {ROLES.map(([role, label]) => {
+                  const n = of(role).length
+                  return (
+                    <span key={role} className="rl-hint">
+                      {label}{' '}
+                      {n ? (
+                        <button type="button" className="rl-lnk"
+                          onClick={() => onOpenRole?.(rec, role)}>{n}</button>
+                      ) : '0'}
+                    </span>
+                  )
+                })}
+                <span className="rl-hint">· 모두 {mine.length}편</span>
+              </div>
+              {mine.slice(0, 14).map((r) => (
+                <div key={r.id} className="rl-rrow">
+                  <button type="button" className="rl-lnk" onClick={() => onOpenRef?.(r.id)}>
+                    {refLabel(r)}
+                  </button>
+                  <span className="rl-hint">
+                    {autRoles(r, id).map((x) => ROLE_LABEL[x]).filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+              ))}
+              {mine.length > 14 && <span className="rl-hint">… 모두 {mine.length}편</span>}
+            </div>
+          </Fld>
+        )}
+        <Fld label="">
+          {draft ? (
+            <>
+              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={create}>등록</button>
+              <span className="rl-hint">{named ? '' : '이름이 있어야 합니다.'}</span>
+            </>
+          ) : (
+            <>
+              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={update}>save and exit</button>
+              <button type="button" className="rl-btn" onClick={() => setF(rec)}>revert</button>
+              {isAdmin && (
+                <>
+                  <span className="rl-gap" />
+                  {sure ? (
+                    <>
+                      <span className="rl-hint">이름은 논문에 글자로 남습니다.</span>
+                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
+                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
+                    </>
+                  ) : (
+                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </Fld>
+      </div>
     </div>
   )
 }
@@ -815,6 +1142,37 @@ function PasteBox({ onTake, say }) {
 const TYPES = ['paper', 'thesis', 'report', 'writing']
 
 function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDone, onOpen, say }) {
+  /** Registering the author on this row registers them everywhere: the record
+   *  is created and every row in every paper that spells the name this way
+   *  points at it. That is the whole convenience — 44 rows saying
+   *  'W. G. Lynch' become 44 links in one press. */
+  async function registerAuthor(name) {
+    const clean = String(name || '').trim()
+    if (!clean) return
+    const existing = (doc.authors || []).find((a) => a.name === clean
+      || (a.aliases || []).includes(clean))
+    const rec = existing || (() => {
+      const taken = new Set((doc.authors || []).map((a) => a.tag))
+      let tag = handleFor(clean), n = 2
+      while (taken.has(tag)) tag = `${handleFor(clean)}${n++}`
+      return { id: newId(), tag, name: clean, aliases: [], email: '', orcid: '', note: '' }
+    })()
+    const link = (rows) => (rows || []).map((a) => (!a.ref && (a.name === clean
+      || (rec.aliases || []).includes(a.name)) ? { ...a, ref: rec.id } : a))
+    const patch = {
+      authors: existing ? doc.authors : [...(doc.authors || []), rec],
+      references: doc.references.map((r) => ({ ...r, authors: link(r.authors) })),
+    }
+    // The form's own rows are linked straight away, so the field does not wait
+    // for the document to come back.
+    setF((s) => ({ ...s, authors: link(s.authors) }))
+    const hits = doc.references.reduce((n, r) => n + (r.authors || [])
+      .filter((a) => !a.ref && a.name === clean).length, 0)
+    await onSave(patch, existing
+      ? `${rec.tag} 로 연결 · ${hits}줄`
+      : `${rec.tag} 등록 · ${hits}줄 연결`)
+  }
+
   // No record means a DRAFT: the same form, and saving puts it in the document
   // rather than over one.
   const draft = !ref_
@@ -885,9 +1243,8 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
             value={f.title || ''} onChange={set('title')} />
         </Fld>
         <Fld label="저자">
-          <textarea className="rl-in" rows={2} style={{ width: '100%', minWidth: 260 }}
-            value={f.author || ''} onChange={set('author')}
-            placeholder="A. Author and B. Author and …" />
+          <AuthorRows value={f.authors || []} doc={doc} onRegister={registerAuthor}
+            onChange={(v) => setF((s) => ({ ...s, authors: v }))} />
         </Fld>
         <Fld label="저널">
           <input className="rl-in" style={{ width: 300 }} list="rl-jrns" value={f.journal || ''}

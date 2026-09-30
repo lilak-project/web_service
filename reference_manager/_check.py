@@ -30,7 +30,7 @@ open('dist/_check.html', 'w').write('''<!doctype html>
     if ((o && o.method || 'GET').toUpperCase() !== 'PUT') return json(DOC);
     const b = JSON.parse(o.body);
     if (b.baseVersion !== DOC.version) return json({ detail: 'conflict', current: DOC }, 409);
-    for (const k of ['references', 'journals', 'settings'])
+    for (const k of ['references', 'journals', 'authors', 'settings'])
       if (b[k] != null) DOC[k] = b[k];
     DOC.version += 1;
     return json(DOC);

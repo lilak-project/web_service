@@ -4,8 +4,9 @@ The same shape as author_manager's: a single JSON document holding the records
 and the classes they point at, stored whole and guarded by a version, so two
 people editing at once cannot silently overwrite each other.
 
-  references  the papers: citeKey, title, author, journal, year, tags[], cites[], pdf
-  journals    the one class with fields of its own (shortName, abbrev)
+  references  the papers: citeKey, title, authors[], journal, year, tags[], cites[], pdf
+  journals    a class with fields of its own (shortName, abbrev)
+  authors     a class: one person, a #handle, and the spellings they appear under
   settings    service-wide, e.g. the roots a linked PDF may live under
 
 A topic set and a collaboration are tags, not classes: same many-to-many, no
@@ -36,7 +37,7 @@ DATA_FILE = DATA / "data.json"
 
 # Keys the server owns. Anything else the client sends is ignored (per-user state
 # stays in the browser).
-SHARED_KEYS = ("references", "journals", "settings")
+SHARED_KEYS = ("references", "journals", "authors", "settings")
 
 _lock = threading.Lock()          # serialize read-modify-write within this process
 
@@ -58,8 +59,8 @@ def _atomic_write(path: Path, text: str) -> None:
 
 
 def _blank() -> dict:
-    return {"version": 1, "references": [], "journals": [], "settings": {},
-            "updatedAt": _now(), "updatedBy": ""}
+    return {"version": 1, "references": [], "journals": [], "authors": [],
+            "settings": {}, "updatedAt": _now(), "updatedBy": ""}
 
 
 def _read() -> dict:
@@ -84,6 +85,7 @@ class SaveBody(BaseModel):
     baseVersion: int
     references: Optional[list] = None
     journals: Optional[list] = None
+    authors: Optional[list] = None
     settings: Optional[dict] = None
 
 
