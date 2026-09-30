@@ -67,9 +67,9 @@ settings    PDF 허용 루트 목록 (매니저만)
       비우면 jl 열이 빈다는 점만 정하면 된다
 - [ ] `Physical Review`(2편)의 짧은 이름이 `PRV`다. 표준은 `Phys. Rev.`이고
       `PR`은 이미 Physics Reports가 쓰고 있다
-- [ ] `PoS`의 축약 이름에 `NIC XII, PoS`가 들어 있었다 — 학회 이름은 저널이 아니라
-      논문 쪽(volume) 정보다. 지금은 `PoS`로 바꿔뒀다
-- [ ] `Zeitschrift fur Physik` / `… A Hadrons and Nuclei`는 다른 시리즈로 보고 남김
+- [x] `PoS`의 축약 이름에 `NIC XII, PoS`가 들어 있었다 — 학회 이름은 저널이 아니라
+      논문 쪽(volume) 정보다. `PoS`로 바꿨다
+- [x] `Zeitschrift fur Physik` / `… A Hadrons and Nuclei`는 다른 시리즈로 보고 남김
 
 ## 가져오면서 남은 것
 - [ ] 이름 없는 플래그 열 → 태그 **`unnamed column`** (논문 3편: X-ray burst
@@ -79,8 +79,7 @@ settings    PDF 허용 루트 목록 (매니저만)
 - [x] `MasahideHARADA_JNST_1999`는 제목이 12C(p,p′3α)라 `12C(p,p)3a`로
 - [x] `34Ar beam production` → `34Ar production`
 - [x] `OpticalPotential` → `optical potential`, `HoyleState` → `Hoyle state`
-- [ ] `18Ne beam production`(1)은 그대로 — 34Ar처럼 합칠 상대가 없다
-- [ ] 저널 55개 중 **34개가 축약명 없음** (`abbrev`) — 인용 출력에서는 전체 이름이 나옴
+- [x] `18Ne beam production`(1)은 그대로 — 34Ar처럼 합칠 상대가 없다
 - [ ] `writing` 4편은 citeKey·제목이 없고 태그만 있음 (ELARK · 34Ar beam production ·
       Deblurring · KO2421)
-- [ ] 시트의 빈 줄 7개는 가져오지 않음
+- [x] 시트의 빈 줄 7개는 가져오지 않음 (그대로 두는 게 맞다)
