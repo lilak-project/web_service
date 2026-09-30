@@ -45,15 +45,15 @@ settings    PDF 허용 루트 목록 (매니저만)
 밑줄은 엑셀 시절의 습관이라 공백으로 (`s process n capture`). 엑셀에서는 괄호와
 쉼표가 수식 입력이 되는 열에 들어갈 수 없었다.
 
-## 저자 등록 (2081명) 뒤에 남은 것
-- [ ] 같은 사람이 이니셜과 풀네임으로 따로 등록된 쌍이 있다 — `W. G. Lynch` /
-      `William G Lynch`, `M. B. Tsang` / `ManYee Betty Tsang`, `T. Murakami` /
-      `Tetsuya Murakami`, `B. Hong` / `Byungsik Hong`, `Y. Kim` / `Kim, Youngman`.
-      이니셜만으로는 동일인 판단이 안 돼서 따로 뒀다 — 맞다고 하면 alias로 합친다
-- [ ] 이름 앞에 각주 번호가 붙은 것: `4 W. J. Ong` 처럼
-- [ ] LaTeX 이스케이프가 남은 이름 51개 (`B. B\'ecsy`, `M. Cavagli\`a` …)
-- [ ] 388명이 `Kuulkers, E.` 처럼 성이 먼저다 (BibTeX의 정식 표기이기도 해서
-      그대로 뒀다). 한 가지로 통일할지는 취향
+## 저자 정리 (2000명)
+- [x] 이니셜/풀네임으로 갈라져 있던 같은 사람 80명 합침 (줄임이름·풀네임·
+      BibTeX 표기를 한 레코드가 다 갖는다)
+- [x] 각주 번호 제거 (`4 W. J. Ong`)
+- [x] 성이 먼저인 표기 377개는 `bibName`으로 — BibTeX 출력이 이걸 쓴다
+- [x] LaTeX 이스케이프 51개는 그대로 (.bib 표기라 고치면 인용이 깨진다)
+- [ ] 이니셜만으로 동일인 판단이 안 된 것은 따로 남겨뒀다 — `Y. Kim`은
+      `Kim, Youngman`일 수도 `Y.S. Kim`일 수도 있다. 아는 사람만 합치면 된다
+      (저자 편집기에서 풀네임/다른 표기를 적고 저장하면 그 줄들이 연결된다)
 
 ## 가져오면서 남은 것
 - [ ] 이름 없는 플래그 열 → 태그 **`unnamed column`** (논문 3편: X-ray burst

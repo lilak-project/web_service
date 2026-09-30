@@ -67,11 +67,45 @@ const autRoles = (r, id) => {
 }
 const inRole = (r, id, role) => (role === 'all'
   ? authorRows(r).some((a) => a.ref === id) : autRoles(r, id).includes(role))
+// An author carries three spellings of the same person, because a paper needs
+// different ones in different places:
+//   name      what a citation prints — W. G. Lynch
+//   fullName  spelled out — William G Lynch
+//   bibName   BibTeX's own order — Lynch, W. G.
+// Only `name` is required; the other two are filled when they are known, and
+// either can produce `name` mechanically.
+/** given words and the family word, reading BibTeX's comma the right way. */
+const nameParts = (name) => {
+  const t = String(name || '').trim()
+  if (t.includes(',')) {
+    const [family, given] = [t.slice(0, t.indexOf(',')).trim(), t.slice(t.indexOf(',') + 1).trim()]
+    return [given.replace(/[.]/g, ' ').split(/\s+/).filter(Boolean), family]
+  }
+  const w = t.replace(/[.]/g, ' ').split(/\s+/).filter(Boolean)
+  return [w.slice(0, -1), w[w.length - 1] || '']
+}
+/** The citation form. A hyphenated given name keeps both initials — Ying-Xun →
+ *  Y.-X. — which is how it is cited and the only thing that tells it from
+ *  Y. Zhang. */
+const abbrevName = (name) => {
+  const [given, family] = nameParts(name)
+  const ini = given.map((w) => w.split('-').filter((b) => /[A-Za-z]/.test(b))
+    .map((b) => `${b.replace(/[^A-Za-z]/g, '')[0].toUpperCase()}.`).join('-'))
+  return [...ini, family].filter(Boolean).join(' ')
+}
+/** BibTeX's order, out of a name written the usual way. */
+const bibOrder = (name) => {
+  const [given, family] = nameParts(name)
+  if (!family) return String(name || '')
+  return given.length ? `${family}, ${given.map((w) => (w.length <= 2 ? `${w}.` : w)).join(' ')}` : family
+}
 /** A handle for an author: initials and the family name, the way the
  *  spreadsheet's a1 column was written (J. Almeid → JAlmeid). */
-const handleFor = (name) => String(name || '').replace(/[.]/g, '').split(/\s+/)
-  .filter(Boolean).map((w, i, a) => (i === a.length - 1 ? w : w[0])).join('')
-  .replace(/[^\w-]/g, '') || 'author'
+const handleFor = (name) => {
+  const [given, family] = nameParts(name)
+  return `${given.map((w) => w.replace(/[^A-Za-z]/g, '')[0] || '').join('')}${family}`
+    .replace(/[^\w-]/g, '') || 'author'
+}
 /** A journal is referenced by its record `name`; the table shows the short one. */
 const journalRec = (doc, r) => (doc?.journals || []).find((j) => j.name === r.journal) || null
 const jShort = (doc, r) => journalRec(doc, r)?.shortName || r.journal || ''
@@ -136,6 +170,12 @@ const TOKENS = (doc) => ({
   type: (r) => r.type || '',
   title: (r) => r.title || '',
   author: (r) => authorString(doc, r),
+  // What a .bib file wants: Family, Given — the record's own bibName when it
+  // has one, and that order worked out from the name when it does not.
+  'author (bib)': (r) => authorRows(r).map((a) => {
+    const rec = a.ref ? (doc?.authors || []).find((x) => x.id === a.ref) : null
+    return rec?.bibName || bibOrder(autName(doc, a))
+  }).filter(Boolean).join(' and '),
   'first author': (r) => firstAuthor(doc, r),
   'et al.': (r) => etAl(doc, r),
   jl: (r) => jShort(doc, r),
@@ -152,7 +192,7 @@ const PRESETS = [
   ['short ref.', '{short ref}', ',⏎'],
   ['cite keys', '{cite key}', ', '],
   ['\\bibitem', '\\bibitem{{cite key}} {author}, {journal} {volume} {pages} ({year}).', '⏎'],
-  ['BibTeX', '@article{{cite key},\n  author = {{author}},\n  title = {{title}},'
+  ['BibTeX', '@article{{cite key},\n  author = {{author (bib)}},\n  title = {{title}},'
     + '\n  journal = {{journal}},\n  year = {{year}},\n  volume = {{volume}},'
     + '\n  pages = {{pages}},\n  doi = {{doi}},\n  url = {{url}},\n}', '⏎⏎'],
 ]
@@ -696,14 +736,14 @@ function AuthorRows({ value = [], doc, onChange, onRegister }) {
   const byKey = useMemo(() => {
     const m = new Map()
     for (const a of recs) {
-      m.set(a.name.toLowerCase(), a.id)
-      m.set(`#${a.tag}`.toLowerCase(), a.id)
-      m.set(a.tag.toLowerCase(), a.id)
-      for (const x of (a.aliases || [])) m.set(String(x).toLowerCase(), a.id)
+      for (const k of [a.name, a.fullName, a.bibName, a.tag, `#${a.tag}`, ...(a.aliases || [])]) {
+        if (k) m.set(String(k).toLowerCase(), a.id)
+      }
     }
     return m
   }, [recs])
-  const options = useMemo(() => recs.flatMap((a) => [`#${a.tag}`, a.name]), [recs])
+  const options = useMemo(() => recs.flatMap((a) => [`#${a.tag}`, a.name,
+    ...(a.fullName ? [a.fullName] : [])]), [recs])
   const row = (i, patch) => onChange(value.map((a, j) => (j === i ? { ...a, ...patch } : a)))
   const move = (i, d) => {
     const next = [...value]
@@ -776,7 +816,8 @@ function AuthorRows({ value = [], doc, onChange, onRegister }) {
 function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef, onOpenRole }) {
   const draft = !id
   const rec = draft ? null : (doc.authors || []).find((a) => a.id === id)
-  const blank = { id: null, tag: '', name: '', aliases: [], email: '', orcid: '', note: '' }
+  const blank = { id: null, tag: '', name: '', fullName: '', bibName: '',
+    aliases: [], email: '', orcid: '', note: '' }
   const [f, setF] = useState(rec || blank)
   const [sure, setSure] = useState(false)
   useEffect(() => { setF(rec || blank); setSure(false) }, [id, rec])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -804,11 +845,14 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef,
   }
   async function update() {
     const a = { ...f, tag, name: named, aliases: (f.aliases || []).map((x) => String(x).trim()).filter(Boolean) }
-    // An alias added here links the rows that were spelling it the other way.
-    const link = (rows) => (rows || []).map((x) => (!x.ref
-      && (x.name === named || (a.aliases || []).includes(x.name)) ? { ...x, ref: a.id } : x))
+    // Every spelling this record holds links the rows that use it: the other
+    // two names are spellings too, not decoration.
+    const spellings = [named, a.fullName, a.bibName, ...(a.aliases || [])]
+      .map((x) => String(x || '').trim()).filter(Boolean)
+    const link = (rows) => (rows || []).map((x) => (!x.ref && spellings.includes(x.name)
+      ? { ...x, ref: a.id } : x))
     const hits = (doc.references || []).reduce((n, r) => n + (r.authors || [])
-      .filter((x) => !x.ref && (x.name === named || (a.aliases || []).includes(x.name))).length, 0)
+      .filter((x) => !x.ref && spellings.includes(x.name)).length, 0)
     if (await onSave({
       authors: (doc.authors || []).map((x) => (x.id === rec.id ? a : x)),
       references: (doc.references || []).map((r) => ({ ...r, authors: link(r.authors) })),
@@ -829,9 +873,28 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef,
   return (
     <div className="rl-edit">
       <div className="rl-rec">
-        <Fld label="이름">
+        <Fld label="줄임이름">
           <input className="rl-in" style={{ width: 240 }} value={f.name || ''} onChange={set('name')}
             placeholder="W. G. Lynch" />
+          <span className="rl-hint">표와 인용에 쓰입니다. 하나는 있어야 합니다.</span>
+        </Fld>
+        <Fld label="풀네임">
+          <input className="rl-in" style={{ width: 280 }} value={f.fullName || ''} onChange={set('fullName')}
+            placeholder="William G Lynch" />
+          <button type="button" className="rl-btn" disabled={!String(f.fullName || '').trim()}
+            title="풀네임에서 줄임이름을 만듭니다"
+            onClick={() => setF((s2) => ({ ...s2, name: abbrevName(s2.fullName) }))}>줄임이름으로</button>
+        </Fld>
+        <Fld label="BibTeX 표기">
+          <input className="rl-in rl-mono" style={{ width: 280 }} value={f.bibName || ''}
+            onChange={set('bibName')} placeholder="Lynch, W. G." />
+          <button type="button" className="rl-btn" disabled={!String(f.bibName || '').trim()}
+            title="BibTeX 표기에서 줄임이름을 만듭니다"
+            onClick={() => setF((s2) => ({ ...s2, name: abbrevName(s2.bibName) }))}>줄임이름으로</button>
+          <button type="button" className="rl-btn" disabled={!String(f.name || f.fullName || '').trim()}
+            title="이름에서 BibTeX 순서를 만듭니다"
+            onClick={() => setF((s2) => ({ ...s2, bibName: bibOrder(s2.fullName || s2.name) }))}>← 이름에서</button>
+          <span className="rl-hint">성이 먼저인 형태. BibTeX 출력이 이 표기를 씁니다.</span>
         </Fld>
         <Fld label="handle">
           <span className="rl-tag">#{tag}</span>
