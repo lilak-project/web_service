@@ -271,6 +271,11 @@ export default function SidebarPortal({
     const saved = localStorage.getItem(MINI_KEY)
     return saved !== null ? saved === '1' : window.innerWidth < WIDE
   })
+  // Command mode: the keyboard is talking to the BAR, not to the service that
+  // has the focus. Esc turns it on, the cards say which key is theirs, Esc (or
+  // any click) turns it off.
+  const [cmd, setCmd] = useState(false)
+  const [cmdKeys, setCmdKeys] = useState([])    // card keys, in the order shown
   const [sel, setSel] = useState(readSel)        // { svc, proj } — mirrored in the URL
   const [view, setView] = useState(() => (readSel() ? 'service' : 'empty'))  // service|settings|live|empty
   // A Set, not one name: opening a service must not close another. Several
@@ -330,6 +335,77 @@ export default function SidebarPortal({
     }
     window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
+  }, [])
+
+  // One handler for the whole bar's keyboard. It also goes on the open service's
+  // document: a service has the focus almost all the time, and the portal never
+  // sees a key pressed in there.
+  //
+  //   `  (₩ on a Korean layout)  fold the bar / bring it back
+  //   Esc                        command mode on — and off again
+  //   1..9 · s                  while it is on: a card, or settings
+  //
+  // `\` is left alone: elog's drawer already has it.
+  const foldKey = useRef(null)
+  const sideRef = useRef(null)
+  const cmdFolded = useRef(false)
+  const enterCmd = useCallback(() => {
+    const nodes = [...(navRef.current?.querySelectorAll('.pl-card[data-key]') || [])]
+    setCmdKeys(nodes.map((n) => n.dataset.key))
+    setCmd(true)
+    // Folded, the bar is 64px of icons: the keys it is offering would not be
+    // readable. It opens for as long as command mode lasts.
+    setMini((m) => { cmdFolded.current = m; return false })
+    // Take the focus back from the service, or the next key goes to it again.
+    try { window.focus(); sideRef.current?.focus({ preventScroll: true }) } catch { /* no focus */ }
+  }, [])
+  foldKey.current = (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return
+    const el = (e.target?.ownerDocument || document).activeElement
+    const tag = (el?.tagName || '').toUpperCase()
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable
+    if (e.key === 'Escape') {
+      // Inside the service Esc is the service's own key first; it only reaches
+      // the portal when nothing there took it.
+      if (typing || e.defaultPrevented) return
+      if (cmd) {
+        setCmd(false)
+        if (cmdFolded.current) { setMini(true); cmdFolded.current = false }
+        return
+      }
+      enterCmd()
+      return
+    }
+    if (typing) return
+    if (e.key === '`' || e.key === '₩') {
+      if (manageRef.current) return               // managing holds the bar open
+      e.preventDefault()
+      // A folded bar cannot show the keys it is offering, so folding it on
+      // purpose is also leaving command mode.
+      setCmd(false); cmdFolded.current = false
+      setMini((m) => !m)
+      return
+    }
+    if (!cmd) return
+    const press = (sel2) => {
+      const n = navRef.current?.querySelector(sel2)
+      if (!n) return
+      e.preventDefault()
+      setCmd(false)
+      n.click()
+    }
+    if (/^[1-9]$/.test(e.key)) {
+      const key = cmdKeys[Number(e.key) - 1]
+      if (key) press(`.pl-card[data-key="${CSS.escape(key)}"] .pl-row`)
+    } else if (e.key === 's') press('.pl-user .pl-row')
+  }
+  useEffect(() => {
+    const on = (e) => foldKey.current(e)
+    window.addEventListener('keydown', on)
+    // A click is you pointing at what you want; the keys are not needed for it.
+    const off = () => setCmd(false)
+    window.addEventListener('mousedown', off)
+    return () => { window.removeEventListener('keydown', on); window.removeEventListener('mousedown', off) }
   }, [])
 
   const leaveSettings = useCallback(() => {
@@ -604,6 +680,7 @@ export default function SidebarPortal({
 
   const serviceCard = (s) => {
     const key = cardKey(s)
+    const hot = cmd ? cmdKeys.indexOf(key) : -1     // its key while command mode is on
     // Opening a service's projects counts as picking it: its tile fills, and the
     // card takes the selected border while the bar is expanded (collapsed, every
     // card's border is transparent, so the tile carries it alone).
@@ -658,6 +735,7 @@ export default function SidebarPortal({
               {s.label || s.name}
               {multi && s.projects_count != null && <small>({s.projects_count})</small>}
             </span>
+            {hot >= 0 && hot < 9 && <kbd className="pl-key">{hot + 1}</kbd>}
             {multi && <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--text-muted)" /></span>}
           </button>
         </div>
@@ -745,7 +823,7 @@ export default function SidebarPortal({
 
   return (
     <div className={`pl-root${mini ? ' mini' : ''}${view === 'settings' ? ' settings' : ''}`
-      + `${manage && isManager ? ' managing' : ''}`}>
+      + `${manage && isManager ? ' managing' : ''}${cmd ? ' cmd' : ''}`}>
       {/* the drawer's scrim — shown by CSS at phone width only, so it follows a
           resize instead of whatever innerWidth was at render time */}
       {!mini && <div className="pl-scrim" onClick={() => setMini(true)} />}
@@ -759,7 +837,7 @@ export default function SidebarPortal({
         </button>
       )}
 
-      <aside className="pl-side">
+      <aside className="pl-side" ref={sideRef} tabIndex={-1}>
         <div className="pl-brand">
           <button type="button" className="pl-logo" disabled={manage && isManager}
             onClick={() => setMini((m) => !m)}
@@ -831,8 +909,15 @@ export default function SidebarPortal({
               </span>
               <span className="pl-txt">{user?.username}</span>
             </button>
+            {cmd && <kbd className="pl-key">s</kbd>}
           </div>
         </div>
+        )}
+        {cmd && (
+          <div className="pl-cmdhint">
+            <b>1–9</b> {L('서비스', 'service')} · <b>s</b> {L('설정', 'settings')}
+            {' · '}<b>`</b> {L('접기', 'fold')} · <b>Esc</b> {L('끝내기', 'exit')}
+          </div>
         )}
       </aside>
 
@@ -1000,7 +1085,13 @@ export default function SidebarPortal({
             </>
           ) : view === 'service' && src ? (
             <iframe key={src} src={src} title={sel.svc}
-              allow="clipboard-read; clipboard-write; fullscreen" />
+              allow="clipboard-read; clipboard-write; fullscreen"
+              onLoad={(e) => {
+                // Same origin for a proxied service; an external one throws and
+                // simply does not get the shortcut.
+                try { e.target.contentDocument.addEventListener('keydown', (ev) => foldKey.current(ev)) }
+                catch { /* another origin */ }
+              }} />
           ) : (
             <div className="pl-empty">
               <div>
