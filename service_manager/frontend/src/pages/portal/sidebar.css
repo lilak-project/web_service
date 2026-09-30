@@ -627,4 +627,17 @@
   font-size: 11px;
   color: var(--text-muted);
 }
-.pl-root.mini .pl-cmdhint, .pl-root.mini .pl-key { display: none; }
+.pl-root.mini .pl-cmdhint { display: none; }
+/* Folded, the key still works, so it is still shown — on the corner of the
+   43px square, since there is no room beside a name that is not there. */
+.pl-root.mini .pl-row { position: relative; }
+.pl-root.mini .pl-key {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  font-size: 9px;
+  line-height: 11px;
+}

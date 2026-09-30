@@ -341,21 +341,18 @@ export default function SidebarPortal({
   // document: a service has the focus almost all the time, and the portal never
   // sees a key pressed in there.
   //
-  //   `  (₩ on a Korean layout)  fold the bar / bring it back
+  //   `  (₩ on a Korean layout)  fold the bar / bring it back — the ONLY key
+  //                              that does; command mode leaves the width alone
   //   Esc                        command mode on — and off again
   //   1..9 · s                  while it is on: a card, or settings
   //
   // `\` is left alone: elog's drawer already has it.
   const foldKey = useRef(null)
   const sideRef = useRef(null)
-  const cmdFolded = useRef(false)
   const enterCmd = useCallback(() => {
     const nodes = [...(navRef.current?.querySelectorAll('.pl-card[data-key]') || [])]
     setCmdKeys(nodes.map((n) => n.dataset.key))
     setCmd(true)
-    // Folded, the bar is 64px of icons: the keys it is offering would not be
-    // readable. It opens for as long as command mode lasts.
-    setMini((m) => { cmdFolded.current = m; return false })
     // Take the focus back from the service, or the next key goes to it again.
     try { window.focus(); sideRef.current?.focus({ preventScroll: true }) } catch { /* no focus */ }
   }, [])
@@ -371,11 +368,7 @@ export default function SidebarPortal({
       // Escape out of a field is the whole point of Escape: the field lets go,
       // and the keys mean the bar again.
       if (typing) { try { el.blur() } catch { /* gone already */ } }
-      if (cmd) {
-        setCmd(false)
-        if (cmdFolded.current) { setMini(true); cmdFolded.current = false }
-        return
-      }
+      if (cmd) { setCmd(false); return }
       enterCmd()
       return
     }
@@ -383,9 +376,6 @@ export default function SidebarPortal({
     if (e.key === '`' || e.key === '₩') {
       if (manageRef.current) return               // managing holds the bar open
       e.preventDefault()
-      // A folded bar cannot show the keys it is offering, so folding it on
-      // purpose is also leaving command mode.
-      setCmd(false); cmdFolded.current = false
       setMini((m) => !m)
       return
     }
