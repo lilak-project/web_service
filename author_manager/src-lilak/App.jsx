@@ -12,65 +12,25 @@
  * being EDITED. Picking a class opens a tab of its authors; right-clicking any
  * row opens a tab that edits it. Tabs you opened carry an ×.
  *
- * Column widths live in one place (COLS + the `widths` state, remembered), and
- * both the head and every row read the same template — so a column is a column
- * all the way down, whatever the reader drags it to.
+ * The table itself, the tabs, the selection and the portal plumbing are the
+ * kit's `racklist` — shared with reference_manager, which is the same shape of
+ * service with different records. What stays here is what makes this one about
+ * AUTHORS: the columns, the accessors behind them, the listing tokens and the
+ * two editors.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import './rack.css'
+import {
+  RackTable, RackRow, RackTabs,
+  useColumnWidths, useViewportWidth, useSelection, useFindKey, useNote, useViewState,
+  bySome, fill as fillTpl, facetOf, passesFilter,
+  PORTAL_PROJECT, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
+} from 'lilak-ui/racklist'
+import 'lilak-ui/racklist/rack.css'
 
-// ─── Portal integration (same contract as the rest of the services) ─────────
-const PORTAL_BASE = (typeof window !== 'undefined' && window.__PORTAL_BASE__) || ''
-const PORTAL_PARTS = PORTAL_BASE.split('/').filter(Boolean)
-const PORTAL_PROJECT = PORTAL_PARTS.length ? PORTAL_PARTS[PORTAL_PARTS.length - 1] : ''
-const MYLIST_KEY = `am.mylist.${PORTAL_PROJECT}`
-const WIDTH_KEY = `am.cols.${PORTAL_PROJECT}`
-const VIEW_KEY = `am.view.${PORTAL_PROJECT}`
-
-const load = (k, fallback) => {
-  try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback } catch { return fallback }
-}
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* private mode */ } }
-
-/** How this project was left: the tabs you opened, which one you were on, the
- *  sort and the filter. Read once — it is a starting point, not a live store. */
-const VIEW = (typeof localStorage === 'undefined') ? {} : load(VIEW_KEY, {})
-
-function portalToken() {
-  try { return localStorage.getItem('lilak_portal_token') || localStorage.getItem('elog_token') || '' }
-  catch { return '' }
-}
-const authHeaders = () => (portalToken() ? { Authorization: `Bearer ${portalToken()}` } : {})
-
-/** The portal's own token says who this is; deleting is a manager's job. */
-function portalUser() {
-  try {
-    const t = portalToken()
-    if (!t) return null
-    const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
-    return { email: p.email || p.username || '', role: String(p.role || p.prole || '') }
-  } catch { return null }
-}
-const IS_ADMIN = ['manager', 'admin'].includes((portalUser()?.role || '').toLowerCase())
-const newId = () => (crypto.randomUUID ? crypto.randomUUID()
-  : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
-
-async function fetchDoc() {
-  const r = await fetch(`${PORTAL_BASE}/api/data`, { headers: authHeaders() })
-  if (!r.ok) throw new Error(`GET /api/data → ${r.status}`)
-  return r.json()
-}
-/** Whole-document save, version-guarded: 409 means someone else got there first. */
-async function putDoc(baseVersion, body) {
-  const r = await fetch(`${PORTAL_BASE}/api/data`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ baseVersion, ...body }),
-  })
-  if (r.status === 409) return { conflict: true }
-  if (!r.ok) throw new Error(`PUT /api/data → ${r.status}`)
-  return { doc: await r.json() }
-}
+const MYLIST_KEY = projectKey('am', 'mylist')
+const WIDTH_KEY = projectKey('am', 'cols')
+const VIEW_KEY = projectKey('am', 'view')
+const IS_ADMIN = isManager()
 
 // ─── The fields a row shows ─────────────────────────────────────────────────
 // A name is spelled in ONE place: nm./last/first/init are worked out from the
@@ -155,10 +115,7 @@ const TOKENS = {
   init: (a) => citeInit(a),
   nick: (a) => a.nick || '',
 }
-const fill = (tpl, a) => tpl.replace(/\{([^{}]+)\}/g, (m, k) => {
-  const f = TOKENS[k.trim()]
-  return f ? String(f(a) ?? '') : m
-})
+const fill = (tpl, a) => fillTpl(tpl, a, TOKENS)
 // What a column sorts by. The same accessors the cells use, so the order you
 // get is the order you can see.
 const SORTERS = {
@@ -173,21 +130,12 @@ const SORTERS = {
   first: (a) => citeFirst(a),
   init: (a) => citeInit(a),
 }
-/** Blanks last whichever way the arrow points: an empty cell is not a value. */
-function bySome(get, dir) {
-  return (a, b) => {
-    const x = get(a), y = get(b)
-    const xe = x === null || x === undefined || x === ''
-    const ye = y === null || y === undefined || y === ''
-    if (xe || ye) return xe && ye ? 0 : (xe ? 1 : -1)
-    if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir
-    return String(x).localeCompare(String(y), 'ko') * dir
-  }
-}
 const byColumn = (k, dir, group) =>
   bySome(k === 'core' && group ? (a) => coreIn(a, group) : SORTERS[k], dir)
 // The classes' own columns. Same machinery, three keys.
 const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r.full }
+/** Which columns are the record's own words (ink) and which are about it (dim). */
+const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim' }
 
 const PRESETS = [
   ['이름 나열', '{이름}'],
@@ -205,9 +153,10 @@ const FIXED = [
 ]
 
 export default function App() {
+  const [VIEW, saveView] = useViewState(VIEW_KEY)
   const [doc, setDoc] = useState(null)
   const [err, setErr] = useState('')
-  const [note, setNote] = useState('')
+  const [note, setNote] = useNote()
   const [tabs, setTabs] = useState(() => [...FIXED,
     ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
   const [active, setActive] = useState(VIEW.active || 'total')
@@ -215,10 +164,9 @@ export default function App() {
   // not one of the lists, and closing one should not send you somewhere else.
   const [etabs, setEtabs] = useState([])
   const [eactive, setEactive] = useState(null)
-  const [picked, setPicked] = useState(() => new Set())     // selected author ids
   const [query, setQuery] = useState('')
-  const [widths, setWidths] = useState(() => load(WIDTH_KEY, {}))
-  const [vw, setVw] = useState(() => (typeof window === 'undefined' ? 1400 : window.innerWidth))
+  const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS])
+  const vw = useViewportWidth()
   const [myList, setMyList] = useState(() => load(MYLIST_KEY, []))
   const [groupForm, setGroupForm] = useState(null)   // the new-group form, when open
   // null = the tab's own order: 한글 이름, or My List's own sequence.
@@ -233,19 +181,18 @@ export default function App() {
   const [fon, setFon] = useState(!!VIEW.fon)   // applied
   const [outOpen, setOutOpen] = useState(false)   // the listing drawer
   const findRef = useRef(null)
-  const lastHit = useRef(null)      // for shift-click: where the range starts
+  useFindKey(findRef)
 
   useEffect(() => {
     if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
     fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
   }, [])
   useEffect(() => { save(MYLIST_KEY, myList) }, [myList])
-  useEffect(() => { save(WIDTH_KEY, widths) }, [widths])
   // The four fixed tabs are not worth storing; picking mode is not a state you
   // come back to, so only the applied filter is kept.
   useEffect(() => {
-    save(VIEW_KEY, { tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-                     active, sort, clsSort, fsel, fon })
+    saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
+               active, sort, clsSort, fsel, fon })
   }, [tabs, active, sort, clsSort, fsel, fon])
   // A tab for a group or an affiliation that is no longer in the document
   // cannot be shown; it goes, and takes you back to total if you were on it.
@@ -258,56 +205,14 @@ export default function App() {
   useEffect(() => {
     if (!tabs.some((t) => t.id === active)) setActive('total')
   }, [tabs, active])
-  useEffect(() => {
-    const on = () => setVw(window.innerWidth)
-    window.addEventListener('resize', on)
-    return () => window.removeEventListener('resize', on)
-  }, [])
-  // One line of status, and it clears itself.
-  useEffect(() => {
-    if (!note) return
-    const t = setTimeout(() => setNote(''), 4000)
-    return () => clearTimeout(t)
-  }, [note])
-  // ⌘F / Ctrl+F belongs to the table's own search, not the browser's — the
-  // browser would only find the rows already painted anyway.
-  useEffect(() => {
-    const on = (e) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
-        e.preventDefault()
-        findRef.current?.focus()
-        findRef.current?.select()
-      }
-    }
-    window.addEventListener('keydown', on)
-    return () => window.removeEventListener('keydown', on)
-  }, [])
 
   const authors = doc?.authors || []
   const tab = tabs.find((t) => t.id === active) || tabs[0]
 
-  const cols = useMemo(
-    () => COLS
-      .filter((c) => !(c.drop && vw < c.drop))
-      .filter((c) => c.k !== 'core' || !!tab?.grp)
-      .map((c) => ({ ...c, w: widths[c.k] ?? c.w })),
-    [vw, widths, tab])
-  const clsCols = useMemo(() => CLS_COLS.map((c) => ({ ...c, w: widths[`c:${c.k}`] ?? c.w })), [widths])
-  const drag = useCallback((prefix) => (key, startX, startW) => {
-    const move = (e) => {
-      const col = [...COLS, ...CLS_COLS].find((c) => c.k === key)
-      const w = Math.max(col?.min ?? 34, Math.round(startW + (e.clientX - startX)))
-      setWidths((s) => ({ ...s, [prefix + key]: w }))
-    }
-    const up = () => {
-      window.removeEventListener('mousemove', move)
-      window.removeEventListener('mouseup', up)
-      document.body.classList.remove('am-resizing')
-    }
-    document.body.classList.add('am-resizing')
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseup', up)
-  }, [])
+  // core belongs to ONE group, so it is only a column inside a group's tab.
+  const cols = useMemo(() => sized(COLS.filter((c) => c.k !== 'core' || !!tab?.grp), vw),
+    [sized, vw, tab])
+  const clsCols = useMemo(() => sized(CLS_COLS, vw, 'c:'), [sized, vw])
 
   // Which authors a tab is about, before the search narrows them. Takes the
   // tab, because an edit beside its list needs BOTH on screen.
@@ -328,10 +233,7 @@ export default function App() {
   }, [authors, myList, sort])
   const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
 
-  /** Every selected value must match, column by column: AND across columns,
-   *  OR inside one. An empty column is not a constraint. */
-  const passes = useCallback((a) => Object.entries(fsel).every(([k, vals]) =>
-    !vals.length || vals.includes(String(SORTERS[k]?.(a) ?? ''))), [fsel])
+  const passes = useCallback((a) => passesFilter(a, fsel, SORTERS), [fsel])
 
   const rowsOf = useCallback((sc) => {
     const kept = fon ? sc.filter(passes) : sc
@@ -342,6 +244,8 @@ export default function App() {
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
   }, [query, fon, passes])
   const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
+  const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
+    = useSelection(rows)
 
   // The editor pane takes the right half when there is room for both; below
   // that it has the width to itself while it is open, and closing its last tab
@@ -351,20 +255,9 @@ export default function App() {
   const showEdit = !!etab
   const showList = !showEdit || wide
 
-  /** The values on offer for one column, and how many rows each would keep.
-   *  Counted over the tab's own authors, not the filtered ones: a value that
-   *  would empty the list is still worth seeing. */
-  const facet = useMemo(() => {
-    if (!fcol) return []
-    const get = SORTERS[fcol]
-    const n = new Map()
-    for (const a of scope) {
-      const v = String(get?.(a) ?? '')
-      if (v) n.set(v, (n.get(v) || 0) + 1)
-    }
-    return [...n.entries()].map(([v, count]) => ({ v, count }))
-      .sort((x, y) => y.count - x.count || x.v.localeCompare(y.v, 'ko'))
-  }, [fcol, scope])
+  // Counted over the tab's own authors, not the filtered ones: a value that
+  // would empty the list is still worth seeing.
+  const facet = useMemo(() => facetOf(scope, SORTERS[fcol]), [fcol, scope])
   const picked_ = (k) => fsel[k] || []
   const facetTotal = Object.values(fsel).reduce((t, v) => t + v.length, 0)
 
@@ -400,32 +293,6 @@ export default function App() {
     })
   }
 
-  // ── the selection ──
-  /** Click picks one; shift-click picks everything between it and the last. */
-  function hit(i, shift) {
-    const from = shift && lastHit.current != null ? lastHit.current : i
-    const [lo, hi] = from <= i ? [from, i] : [i, from]
-    const span = rows.slice(lo, hi + 1).map((a) => a.id)
-    // The row you started from decides: shift-click extends a selection, and
-    // a plain click on a picked row unpicks it.
-    const turningOn = shift ? true : !picked.has(rows[i].id)
-    setPicked((s) => {
-      const n = new Set(s)
-      span.forEach((id) => (turningOn ? n.add(id) : n.delete(id)))
-      return n
-    })
-    if (!shift) lastHit.current = i
-  }
-  const allPicked = rows.length > 0 && rows.every((a) => picked.has(a.id))
-  const somePicked = rows.some((a) => picked.has(a.id))
-  function toggleAll() {
-    setPicked((s) => {
-      const n = new Set(s)
-      if (allPicked) rows.forEach((a) => n.delete(a.id))
-      else rows.forEach((a) => n.add(a.id))
-      return n
-    })
-  }
   function addToMyList() {
     if (!picked.size) { setNote('선택된 저자가 없습니다.'); return }
     const fresh = [...picked].filter((id) => !myList.includes(id))
@@ -464,58 +331,58 @@ export default function App() {
   }
 
   return (
-    <div className="am">
-      <section className="am-mod">
-        <header className="am-bar">
+    <div className="rl">
+      <section className="rl-mod">
+        <header className="rl-bar">
           <b>저자</b>
-          <span className="am-n">{doc ? `${authors.length}명` : ''}</span>
-          <span className="am-sp" />
-          <span className="am-n">{PORTAL_PROJECT}</span>
+          <span className="rl-n">{doc ? `${authors.length}명` : ''}</span>
+          <span className="rl-sp" />
+          <span className="rl-n">{PORTAL_PROJECT}</span>
         </header>
 
-        <div className="am-cmd">
+        <div className="rl-cmd">
           {tab?.kind === 'classes' ? (
             /* Mustard like the other two: it is only here while a class tab is,
                and the colour is what says so. */
-            <button type="button" className="am-btn am-tabonly"
+            <button type="button" className="rl-btn rl-tabonly"
               onClick={() => openEdit({
                 id: `newcls:${tab.of}`, kind: 'editcls', of: tab.of, who: null,
                 label: tab.of === 'affiliation' ? '새 소속' : '새 그룹',
               })}>{tab.of === 'affiliation' ? '+ 새 소속' : '+ 새 그룹'}</button>
           ) : (
-            <button type="button" className="am-btn am-go"
+            <button type="button" className="rl-btn rl-go"
               onClick={() => openEdit({ id: 'new', kind: 'edit', label: '새 저자', who: null })}>+ 새 저자</button>
           )}
-          <button type="button" className="am-btn" onClick={addToMyList}>add to my list</button>
-          <button type="button" className="am-btn" disabled={!picked.size}
-            onClick={() => { setPicked(new Set()); lastHit.current = null }}>clear</button>
-          {picked.size > 0 && <span className="am-n">{picked.size} 선택</span>}
-          <span className="am-gap" />
+          <button type="button" className="rl-btn" onClick={addToMyList}>add to my list</button>
+          <button type="button" className="rl-btn" disabled={!picked.size}
+            onClick={clearPicked}>clear</button>
+          {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
+          <span className="rl-gap" />
           {fmode ? (
             <>
-              <button type="button" className="am-btn am-go" onClick={() => { setFmode(false); setFon(facetTotal > 0) }}>
+              <button type="button" className="rl-btn rl-go" onClick={() => { setFmode(false); setFon(facetTotal > 0) }}>
                 필터 적용{facetTotal ? ` (${facetTotal})` : ''}
               </button>
-              <button type="button" className="am-btn" onClick={() => setFmode(false)}>취소</button>
-              <span className="am-hint">레이블을 눌러 종류를 고르세요.</span>
+              <button type="button" className="rl-btn" onClick={() => setFmode(false)}>취소</button>
+              <span className="rl-hint">레이블을 눌러 종류를 고르세요.</span>
             </>
           ) : fon ? (
             <>
-              <button type="button" className="am-btn am-danger"
+              <button type="button" className="rl-btn rl-danger"
                 onClick={() => { setFon(false); setFsel({}); setFcol(null) }}>필터 풀기</button>
-              <button type="button" className="am-btn" onClick={() => setFmode(true)}>필터 고치기</button>
+              <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 고치기</button>
             </>
           ) : (
-            <button type="button" className="am-btn" onClick={() => setFmode(true)}>필터 선택</button>
+            <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 선택</button>
           )}
           {tab?.id === 'mylist' && <>
-            <span className="am-gap" />
+            <span className="rl-gap" />
             {/* These two exist only while My List is the tab you are on, so
                 they are coloured as what they are: not part of the row of
                 buttons that is always there. */}
             {/* The group list IS the menu — a native select needs no popup of
                 our own, and picking is the whole action. */}
-            <select className="am-btn am-tabonly am-pick" value=""
+            <select className="rl-btn rl-tabonly rl-pick" value=""
               disabled={!scope.length || !(doc?.groups || []).length}
               onChange={(e) => addToGroup(e.target.value)}>
               <option value="">add to group</option>
@@ -523,43 +390,28 @@ export default function App() {
                 <option key={g.name} value={g.name}>{g.name}</option>
               ))}
             </select>
-            <button type="button" className="am-btn am-tabonly" disabled={!scope.length}
+            <button type="button" className="rl-btn rl-tabonly" disabled={!scope.length}
               onClick={() => setGroupForm((g) => (g ? null : {}))}>make group</button>
-            <button type="button" className="am-btn am-tabonly" disabled={!myList.length}
+            <button type="button" className="rl-btn rl-tabonly" disabled={!myList.length}
               onClick={() => { setMyList([]); setNote('My List를 비웠습니다.') }}>empty my list</button>
           </>}
-          <span className="am-sp" />
-          <input ref={findRef} type="search" className="am-find" value={query}
+          <span className="rl-sp" />
+          <input ref={findRef} type="search" className="rl-find" value={query}
             placeholder="이름 · 이메일 · 소속 · 그룹   (⌘F)"
             onChange={(e) => setQuery(e.target.value)} />
         </div>
 
-        <div className="am-body">
-        {showList && (<div className="am-pane">
-        <div className="am-tabs">
-            {tabs.map((t) => {
-              // The four that are always there against the ones you opened: the
-              // × already says which is which once you look, the colour says it
-              // before you do.
-              const fixed = FIXED.some((f) => f.id === t.id)
-              return (
-                <span key={t.id} className={`am-tab${fixed ? '' : ' am-opened'}${t.id === active ? ' on' : ''}`}>
-                  <button type="button" className="am-tabname" onClick={() => setActive(t.id)}>{t.label}</button>
-                  {!fixed && (
-                    <button type="button" className="am-x" title="닫기"
-                      onClick={() => closeTab(t.id)} aria-label={`${t.label} 닫기`}>×</button>
-                  )}
-                </span>
-              )
-            })}
-          </div>
+        <div className="rl-body">
+        {showList && (<div className="rl-pane">
+        <RackTabs tabs={tabs} active={active} fixed={FIXED}
+            onPick={setActive} onClose={closeTab} />
 
-          {err && <p className="am-msg">{err}</p>}
-          {!err && !doc && <p className="am-msg">읽는 중…</p>}
+          {err && <p className="rl-msg">{err}</p>}
+          {!err && !doc && <p className="rl-msg">읽는 중…</p>}
 
           {doc && tab?.kind === 'authors' && (
             <>
-              <Table cols={cols} onDrag={drag('')}
+              <RackTable cols={cols} onDrag={drag('')}
                 facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
                 sort={sort || { k: tab.id === 'mylist' ? null : 'kor', dir: 1 }}
                 onSort={(k) => setSort((s2) => {
@@ -570,21 +422,21 @@ export default function App() {
                   return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
                 })}
                 head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
-                {fmode && !fcol && <p className="am-msg">위의 레이블을 눌러 어떤 종류로 걸를지 고르세요.</p>}
-                {fmode && fcol && facet.length === 0 && <p className="am-msg">이 열에는 값이 없습니다.</p>}
+                {fmode && !fcol && <p className="rl-msg">위의 레이블을 눌러 어떤 종류로 걸를지 고르세요.</p>}
+                {fmode && fcol && facet.length === 0 && <p className="rl-msg">이 열에는 값이 없습니다.</p>}
                 {fmode && fcol && facet.map(({ v, count }, i) => {
                   const on = picked_(fcol).includes(v)
                   return (
-                    <div key={v} className={`am-row am-frow am-hit${on ? ' on' : ''}`}
+                    <div key={v} className={`rl-row rl-frow rl-hit${on ? ' on' : ''}`}
                       onClick={() => setFsel((s2) => {
                         const cur = s2[fcol] || []
                         return { ...s2, [fcol]: on ? cur.filter((x) => x !== v) : [...cur, v] }
                       })}>
-                      <span className="am-chk"><input type="checkbox" checked={on} tabIndex={-1} readOnly
+                      <span className="rl-chk"><input type="checkbox" checked={on} tabIndex={-1} readOnly
                         aria-label={`${v} 고르기`} /></span>
-                      <span className="am-gut">{i + 1}</span>
-                      <span className="am-c am-ink">{v}</span>
-                      <span className="am-c am-num">{count}</span>
+                      <span className="rl-gut">{i + 1}</span>
+                      <span className="rl-c rl-ink">{v}</span>
+                      <span className="rl-c rl-num">{count}</span>
                     </div>
                   )
                 })}
@@ -593,8 +445,8 @@ export default function App() {
                   const on = picked.has(a.id)
                   const edited = etabs.some((t) => t.who === a.id)
                   return (
-                    <Row key={a.id || i} cols={cols}
-                      className={`am-hit${on ? ' on' : ''}${edited ? ' am-edited' : ''}`}
+                    <RackRow key={a.id || i} cols={cols} tone={TONE}
+                      className={`rl-hit${on ? ' on' : ''}${edited ? ' rl-edited' : ''}`}
                       onClick={(e) => hit(i, e.shiftKey)}
                       onContextMenu={(e) => {
                         e.preventDefault()
@@ -614,8 +466,8 @@ export default function App() {
                       }} />
                   )
                 })}
-                {!fmode && rows.length === 0 && <p className="am-msg">해당하는 저자가 없습니다.</p>}
-              </Table>
+                {!fmode && rows.length === 0 && <p className="rl-msg">해당하는 저자가 없습니다.</p>}
+              </RackTable>
               {/* The listing belongs to any tab that is already a chosen set of
                   people — My List, or one group's or affiliation's tab. Not
                   total: a paper is never everyone. */}
@@ -641,10 +493,10 @@ export default function App() {
           )}
 
           {doc && tab?.kind === 'classes' && (
-            <Table cols={clsCols} onDrag={drag('c:')} sort={clsSort}
+            <RackTable cols={clsCols} onDrag={drag('c:')} sort={clsSort}
               onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}>
               {classes.map((r, i) => (
-                <Row key={r.name} cols={clsCols} className="am-hit"
+                <RackRow key={r.name} cols={clsCols} tone={TONE} className="rl-hit"
                   onClick={() => openTab({
                     id: `${tab.of}:${r.name}`, kind: 'authors', label: r.name,
                     ...(tab.of === 'affiliation' ? { aff: r.name } : { grp: r.name }),
@@ -655,22 +507,15 @@ export default function App() {
                   }}
                   cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
               ))}
-              {classes.length === 0 && <p className="am-msg">등록된 항목이 없습니다.</p>}
-            </Table>
+              {classes.length === 0 && <p className="rl-msg">등록된 항목이 없습니다.</p>}
+            </RackTable>
           )}
 
         </div>)}
 
-        {showEdit && (<div className="am-pane am-epane">
-          <div className="am-tabs">
-            {etabs.map((t) => (
-              <span key={t.id} className={`am-tab am-opened${t.id === eactive ? ' on' : ''}`}>
-                <button type="button" className="am-tabname" onClick={() => setEactive(t.id)}>{t.label}</button>
-                <button type="button" className="am-x" title="닫기"
-                  onClick={() => closeEdit(t.id)} aria-label={`${t.label} 닫기`}>×</button>
-              </span>
-            ))}
-          </div>
+        {showEdit && (<div className="rl-pane rl-epane">
+          <RackTabs tabs={etabs} active={eactive} opened
+            onPick={setEactive} onClose={closeEdit} />
           {etab.kind === 'edit' ? (
             <EditAuthor author={etab.who ? authors.find((a) => a.id === etab.who) : null}
               doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
@@ -695,10 +540,10 @@ export default function App() {
         </div>)}
         </div>
 
-        <footer className="am-foot">
+        <footer className="rl-foot">
           <span>{note || '왼쪽 클릭으로 선택, shift로 범위, 오른쪽 클릭으로 편집.'}</span>
-          <span className="am-sp" />
-          <span className="am-mono">{rows.length ? `${rows.length}줄` : ''}</span>
+          <span className="rl-sp" />
+          <span className="rl-mono">{rows.length ? `${rows.length}줄` : ''}</span>
         </footer>
       </section>
     </div>
@@ -709,67 +554,6 @@ const byPaperOrder = (core = coreOf) => (a, b) => {
   const c = (core(a) ?? 99) - (core(b) ?? 99)
   return c !== 0 ? c : (citeShort(a) || engName(a) || anyName(a))
     .localeCompare(citeShort(b) || engName(b) || anyName(b))
-}
-
-// ─── The table shell: one template, a sticky head, draggable edges ──────────
-function Table({ cols, onDrag, head, sort, onSort, facet, children }) {
-  const tmpl = `${cols.map((c) => `${c.w}px`).join(' ')} 1fr`
-  return (
-    <div className="am-tab-body">
-      <div className="am-row am-head" style={{ gridTemplateColumns: tmpl }}>
-        {cols.map((c) => (
-          <span key={c.k}
-            className={`${c.k === 'num' ? 'am-gut' : 'am-c'}`
-              + `${c.num ? ' am-num' : ''}${c.k === 'chk' ? ' am-chk' : ''}`}>
-            {c.k === 'chk' && head ? (
-              <input type="checkbox" checked={head.all}
-                ref={(el) => { if (el) el.indeterminate = !head.all && head.some }}
-                onChange={head.onAll} aria-label="전체 선택" />
-            ) : facet && !c.fix ? (
-              // In filter mode the label stops sorting and starts choosing
-              // which column you are picking values from.
-              <button type="button" className={`am-sort am-facet${facet.col === c.k ? ' on' : ''}`}
-                onClick={() => facet.onPick(c.k)}>
-                {c.label}
-                {facet.count(c.k) > 0 && <i className="am-arrow">{facet.count(c.k)}</i>}
-              </button>
-            ) : onSort && !c.fix ? (
-              // The label IS the sort control: press it again and the arrow
-              // turns over.
-              <button type="button" className="am-sort" onClick={() => onSort(c.k)}>
-                {c.label}
-                {sort?.k === c.k && <i className="am-arrow">{sort.dir > 0 ? '↑' : '↓'}</i>}
-              </button>
-            ) : c.label}
-            {!c.fix && <i className="am-grip" onMouseDown={(e) => {
-              e.preventDefault(); e.stopPropagation(); onDrag(c.k, e.clientX, c.w)
-            }} />}
-          </span>
-        ))}
-        <span className="am-c" />
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function Row({ cols, cell, className, onClick, onContextMenu }) {
-  const tmpl = `${cols.map((c) => `${c.w}px`).join(' ')} 1fr`
-  return (
-    <div className={`am-row ${className || ''}`} style={{ gridTemplateColumns: tmpl }}
-      onClick={onClick} onContextMenu={onContextMenu}>
-      {cols.map((c) => (
-          <span key={c.k}
-            className={`${c.k === 'num' ? 'am-gut' : 'am-c'}`
-              + `${c.k === 'chk' ? ' am-chk' : ''}${c.num ? ' am-num' : ''}`
-              + `${c.k === 'name' ? ' am-ink' : ''}`
-              + `${c.k === 'affil' || c.k === 'pos' || c.k === 'nm' ? ' am-dim' : ''}`}>
-            {cell[c.k]}
-          </span>
-      ))}
-      <span className="am-c" />
-    </div>
-  )
 }
 
 // ─── My List's output: the reason the list exists ───────────────────────────
@@ -810,62 +594,62 @@ function MyListOut({ list, doc, onMakeGroup, group, setGroup, say, open, setOpen
 
   const none = list.length === 0
   return (
-    <div className="am-out">
+    <div className="rl-out">
       {/* Folded by default: the list is what you came for, the text it makes is
           what you leave with. */}
-      <button type="button" className={`am-outhead${open ? ' on' : ''}`} onClick={() => setOpen(!open)}
+      <button type="button" className={`rl-outhead${open ? ' on' : ''}`} onClick={() => setOpen(!open)}
         aria-expanded={open}>
-        <i className="am-caret">{open ? '▾' : '▸'}</i>
+        <i className="rl-caret">{open ? '▾' : '▸'}</i>
         <span>나열</span>
-        <span className="am-hint">{list.length}명</span>
+        <span className="rl-hint">{list.length}명</span>
       </button>
       {open && (<>
       {group && canGroup && (
-        <div className="am-rec am-newgrp">
-          <span className="am-fl">새 그룹</span>
-          <div className="am-fv">
-            <input className="am-in" style={{ width: 150 }} placeholder="short name *"
+        <div className="rl-rec rl-newgrp">
+          <span className="rl-fl">새 그룹</span>
+          <div className="rl-fv">
+            <input className="rl-in" style={{ width: 150 }} placeholder="short name *"
               value={group.shortName || ''} onChange={(e) => setGroup((g) => ({ ...g, shortName: e.target.value }))} />
-            <input className="am-in" style={{ width: 240 }} placeholder="full name"
+            <input className="rl-in" style={{ width: 240 }} placeholder="full name"
               value={group.fullName || ''} onChange={(e) => setGroup((g) => ({ ...g, fullName: e.target.value }))} />
-            <button type="button" className="am-btn am-go"
+            <button type="button" className="rl-btn rl-go"
               onClick={() => { if (onMakeGroup(group)) setGroup(null) }}>save</button>
-            <button type="button" className="am-btn" onClick={() => setGroup(null)}>cancel</button>
-            <span className="am-hint">My List의 {list.length}명이 이 그룹에 들어갑니다 (core 10).</span>
+            <button type="button" className="rl-btn" onClick={() => setGroup(null)}>cancel</button>
+            <span className="rl-hint">My List의 {list.length}명이 이 그룹에 들어갑니다 (core 10).</span>
           </div>
         </div>
       )}
 
-      <div className="am-outbar">
+      <div className="rl-outbar">
         {PRESETS.map(([label, t]) => (
-          <button key={label} type="button" className={`am-btn${!paper && tpl === t ? ' on' : ''}`}
+          <button key={label} type="button" className={`rl-btn${!paper && tpl === t ? ' on' : ''}`}
             disabled={none} onClick={() => { setPaper(false); setTpl(t) }}>{label}</button>
         ))}
-        <button type="button" className={`am-btn am-go${paper ? ' on' : ''}`} disabled={none}
+        <button type="button" className={`rl-btn rl-go${paper ? ' on' : ''}`} disabled={none}
           onClick={() => setPaper(true)}>paper authors</button>
-        <span className="am-sp" />
-        <button type="button" className="am-btn" disabled={!out} onClick={copy}>copy</button>
+        <span className="rl-sp" />
+        <button type="button" className="rl-btn" disabled={!out} onClick={copy}>copy</button>
       </div>
 
       {/* The rule itself, editable. The tokens are the column names. */}
-      <div className="am-rule-line">
-        <span className="am-hint">나열 규칙</span>
-        <input className="am-in am-mono" style={{ flex: 1, minWidth: 180 }} value={tpl}
+      <div className="rl-rule-line">
+        <span className="rl-hint">나열 규칙</span>
+        <input className="rl-in rl-mono" style={{ flex: 1, minWidth: 180 }} value={tpl}
           disabled={paper} onChange={(e) => { setPaper(false); setTpl(e.target.value) }} />
-        <span className="am-hint">사이</span>
-        <input className="am-in am-mono" style={{ width: 66 }} value={sep} disabled={paper}
+        <span className="rl-hint">사이</span>
+        <input className="rl-in rl-mono" style={{ width: 66 }} value={sep} disabled={paper}
           onChange={(e) => setSep(e.target.value)} title="구분기호" />
-        <button type="button" className="am-btn" title="줄바꿈 추가" disabled={paper}
+        <button type="button" className="rl-btn" title="줄바꿈 추가" disabled={paper}
           onClick={() => setSep((v) => `${v}⏎`)}>+⏎</button>
       </div>
-      <div className="am-tokens">
+      <div className="rl-tokens">
         {Object.keys(TOKENS).map((k) => (
-          <button key={k} type="button" className="am-tok" disabled={paper}
+          <button key={k} type="button" className="rl-tok" disabled={paper}
             onClick={() => { setPaper(false); setTpl((v) => `${v}{${k}}`) }}>{`{${k}}`}</button>
         ))}
       </div>
 
-      <textarea className="am-outbox" value={out} readOnly
+      <textarea className="rl-outbox" value={out} readOnly
         placeholder={none ? '이 탭에 사람이 없습니다.' : ''} />
       </>)}
     </div>
@@ -876,26 +660,26 @@ function MyListOut({ list, doc, onMakeGroup, group, setGroup, say, open, setOpen
 // The record reads at the readable size, not the list's: finding is dense,
 // reading and typing are not.
 function Fld({ label, children }) {
-  return (<><span className="am-fl">{label}</span><div className="am-fv">{children}</div></>)
+  return (<><span className="rl-fl">{label}</span><div className="rl-fv">{children}</div></>)
 }
 
 /** A list of plain strings — emails, links — one line each. */
 function TextRows({ value = [], onChange, add, placeholder, link }) {
   return (
-    <div className="am-rows">
-      {value.length === 0 && <span className="am-hint">없음</span>}
+    <div className="rl-rows">
+      {value.length === 0 && <span className="rl-hint">없음</span>}
       {value.map((v, i) => (
-        <div key={i} className="am-rrow">
-          <input className="am-in" style={{ width: 300 }} placeholder={placeholder} value={v}
+        <div key={i} className="rl-rrow">
+          <input className="rl-in" style={{ width: 300 }} placeholder={placeholder} value={v}
             onChange={(e) => onChange(value.map((x, j) => (j === i ? e.target.value : x)))} />
           {link && /^https?:\/\//.test(v) && (
-            <a href={v} target="_blank" rel="noreferrer" className="am-hint">열기</a>
+            <a href={v} target="_blank" rel="noreferrer" className="rl-hint">열기</a>
           )}
-          <button type="button" className="am-x" title="이 줄 지우기"
+          <button type="button" className="rl-x" title="이 줄 지우기"
             onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
-      <button type="button" className="am-btn" onClick={() => onChange([...value, ''])}>{add}</button>
+      <button type="button" className="rl-btn" onClick={() => onChange([...value, ''])}>{add}</button>
     </div>
   )
 }
@@ -934,19 +718,19 @@ function FileRows({ value = [], onChange, say }) {
     if (added.length) onChange([...value, ...added])
   }
   return (
-    <div className="am-rows">
-      {value.length === 0 && <span className="am-hint">없음</span>}
+    <div className="rl-rows">
+      {value.length === 0 && <span className="rl-hint">없음</span>}
       {value.map((f, i) => (
-        <div key={`${f.name}-${i}`} className="am-rrow">
-          <button type="button" className="am-btn" onClick={() => download(f.data, f.name)}>{f.name}</button>
-          <span className="am-hint">{f.size ? kb(f.size) : ''}</span>
-          <button type="button" className="am-x" title="지우기"
+        <div key={`${f.name}-${i}`} className="rl-rrow">
+          <button type="button" className="rl-btn" onClick={() => download(f.data, f.name)}>{f.name}</button>
+          <span className="rl-hint">{f.size ? kb(f.size) : ''}</span>
+          <button type="button" className="rl-x" title="지우기"
             onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
-      <button type="button" className="am-btn" onClick={() => pick.current?.click()}>+ 파일</button>
+      <button type="button" className="rl-btn" onClick={() => pick.current?.click()}>+ 파일</button>
       <input ref={pick} type="file" multiple hidden onChange={add} />
-      <span className="am-hint">한 개 {kb(FILE_CAP)}까지.</span>
+      <span className="rl-hint">한 개 {kb(FILE_CAP)}까지.</span>
     </div>
   )
 }
@@ -966,11 +750,11 @@ function AffRows({ value = [], options, onChange }) {
   const cur = latestIdx(value)
   const put = (i, k, v) => onChange(value.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
   return (
-    <div className="am-rows">
-      {value.length === 0 && <span className="am-hint">없음</span>}
+    <div className="rl-rows">
+      {value.length === 0 && <span className="rl-hint">없음</span>}
       {value.map((x, i) => (
-        <div key={i} className="am-rrow">
-          <select className="am-in" style={{ width: 120 }} value={x.tag || ''}
+        <div key={i} className="rl-rrow">
+          <select className="rl-in" style={{ width: 120 }} value={x.tag || ''}
             onChange={(e) => put(i, 'tag', e.target.value)}>
             <option value="">(소속)</option>
             {/* An entry pointing at a class that is gone stays selectable, so
@@ -979,20 +763,20 @@ function AffRows({ value = [], options, onChange }) {
               <option key={o} value={o}>{o}</option>
             ))}
           </select>
-          <input className="am-in" style={{ width: 150 }} placeholder="부서"
+          <input className="rl-in" style={{ width: 150 }} placeholder="부서"
             value={x.dept || ''} onChange={(e) => put(i, 'dept', e.target.value)} />
-          <input className="am-in" style={{ width: 170 }} placeholder="position"
+          <input className="rl-in" style={{ width: 170 }} placeholder="position"
             value={x.position || ''} onChange={(e) => put(i, 'position', e.target.value)} />
-          <input className="am-in" style={{ width: 190 }} placeholder="email"
+          <input className="rl-in" style={{ width: 190 }} placeholder="email"
             value={x.email || ''} onChange={(e) => put(i, 'email', e.target.value)} />
-          <input className="am-in" style={{ width: 84 }} placeholder="2020-01"
+          <input className="rl-in" style={{ width: 84 }} placeholder="2020-01"
             value={x.since || ''} onChange={(e) => put(i, 'since', e.target.value)} />
-          {i === cur && <span className="am-tag">현재</span>}
-          <button type="button" className="am-x" title="이 줄 지우기"
+          {i === cur && <span className="rl-tag">현재</span>}
+          <button type="button" className="rl-x" title="이 줄 지우기"
             onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
-      <button type="button" className="am-btn" onClick={() =>
+      <button type="button" className="rl-btn" onClick={() =>
         onChange([...value, { tag: '', dept: '', position: '', email: '', since: '' }])}>+ 소속</button>
     </div>
   )
@@ -1002,27 +786,27 @@ function AffRows({ value = [], options, onChange }) {
 function GrpRows({ value = [], options, onChange }) {
   const put = (i, k, v) => onChange(value.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
   return (
-    <div className="am-rows">
-      {value.length === 0 && <span className="am-hint">없음</span>}
+    <div className="rl-rows">
+      {value.length === 0 && <span className="rl-hint">없음</span>}
       {value.map((x, i) => (
-        <div key={i} className="am-rrow">
-          <select className="am-in" style={{ width: 190 }} value={x.group || ''}
+        <div key={i} className="rl-rrow">
+          <select className="rl-in" style={{ width: 190 }} value={x.group || ''}
             onChange={(e) => put(i, 'group', e.target.value)}>
             <option value="">(그룹)</option>
             {[...new Set([...options, x.group].filter(Boolean))].map((o) => (
               <option key={o} value={o}>{o}</option>
             ))}
           </select>
-          <input className="am-in" style={{ width: 150 }} placeholder="role"
+          <input className="rl-in" style={{ width: 150 }} placeholder="role"
             value={x.role || ''} onChange={(e) => put(i, 'role', e.target.value)} />
-          <input className="am-in" style={{ width: 66 }} type="number" min="1" placeholder="core"
+          <input className="rl-in" style={{ width: 66 }} type="number" min="1" placeholder="core"
             value={x.core ?? ''} onChange={(e) => put(i, 'core', e.target.value === '' ? '' : Number(e.target.value))} />
-          <span className="am-hint">저자 순서</span>
-          <button type="button" className="am-x" title="이 줄 지우기"
+          <span className="rl-hint">저자 순서</span>
+          <button type="button" className="rl-x" title="이 줄 지우기"
             onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
-      <button type="button" className="am-btn" onClick={() =>
+      <button type="button" className="rl-btn" onClick={() =>
         onChange([...value, { group: '', role: '', core: 10 }])}>+ 그룹</button>
     </div>
   )
@@ -1073,29 +857,29 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
   }
 
   return (
-    <div className="am-tab-body">
-      <div className="am-rec">
+    <div className="rl-tab-body">
+      <div className="rl-rec">
         <Fld label="한글 이름">
-          <input className="am-in" style={{ width: 90 }} value={f.korFamily || ''} onChange={set('korFamily')} placeholder="성" />
-          <input className="am-in" style={{ width: 120 }} value={f.korGiven || ''} onChange={set('korGiven')} placeholder="이름" />
+          <input className="rl-in" style={{ width: 90 }} value={f.korFamily || ''} onChange={set('korFamily')} placeholder="성" />
+          <input className="rl-in" style={{ width: 120 }} value={f.korGiven || ''} onChange={set('korGiven')} placeholder="이름" />
         </Fld>
         <Fld label="English">
-          <input className="am-in" style={{ width: 130 }} value={f.engFirst || ''} onChange={set('engFirst')} placeholder="first" />
-          <input className="am-in" style={{ width: 110 }} value={f.engMiddle || ''} onChange={set('engMiddle')} placeholder="middle" />
-          <input className="am-in" style={{ width: 140 }} value={f.engLast || ''} onChange={set('engLast')} placeholder="last" />
+          <input className="rl-in" style={{ width: 130 }} value={f.engFirst || ''} onChange={set('engFirst')} placeholder="first" />
+          <input className="rl-in" style={{ width: 110 }} value={f.engMiddle || ''} onChange={set('engMiddle')} placeholder="middle" />
+          <input className="rl-in" style={{ width: 140 }} value={f.engLast || ''} onChange={set('engLast')} placeholder="last" />
         </Fld>
         <Fld label="별명">
-          <input className="am-in" style={{ width: 200 }} value={f.nick || ''} onChange={set('nick')} />
+          <input className="rl-in" style={{ width: 200 }} value={f.nick || ''} onChange={set('nick')} />
         </Fld>
         <Fld label="줄임 이름">
-          <input className="am-in" style={{ width: 160 }} value={f.abvName || ''} onChange={set('abvName')}
+          <input className="rl-in" style={{ width: 160 }} value={f.abvName || ''} onChange={set('abvName')}
             placeholder={citeShort({ ...f, abvName: '' }) || 'J. W. Lee'} />
-          <span className="am-hint">비우면 영문 이름에서 만듭니다.</span>
+          <span className="rl-hint">비우면 영문 이름에서 만듭니다.</span>
         </Fld>
         <Fld label="대표 email">
-          <input className="am-in" style={{ width: 260 }} value={f.repEmail || ''} onChange={set('repEmail')}
+          <input className="rl-in" style={{ width: 260 }} value={f.repEmail || ''} onChange={set('repEmail')}
             placeholder={(author && repEmail(author)) || 'name@ibs.re.kr'} />
-          <span className="am-hint">비우면 현재 소속의 이메일을 씁니다.</span>
+          <span className="rl-hint">비우면 현재 소속의 이메일을 씁니다.</span>
         </Fld>
         <Fld label="소속 이력">
           <AffRows value={f.affiliations || []} options={affNames}
@@ -1110,7 +894,7 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
             onChange={(v) => setF((s) => ({ ...s, emails: v }))} />
         </Fld>
         <Fld label="전화">
-          <input className="am-in" style={{ width: 190 }} value={f.phone || ''} onChange={set('phone')} />
+          <input className="rl-in" style={{ width: 190 }} value={f.phone || ''} onChange={set('phone')} />
         </Fld>
         <Fld label="링크">
           <TextRows value={f.links || []} add="+ 링크" placeholder="https://…" link
@@ -1123,29 +907,29 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
         <Fld label="">
           {draft ? (
             <>
-              <button type="button" className="am-btn am-go" disabled={!named()} onClick={create}>등록</button>
-              <span className="am-hint">
+              <button type="button" className="rl-btn rl-go" disabled={!named()} onClick={create}>등록</button>
+              <span className="rl-hint">
                 {named() ? '' : '별명이나 이름 하나는 있어야 합니다.'}
               </span>
             </>
           ) : (
             <>
-              <button type="button" className="am-btn am-go" onClick={update}>save and exit</button>
-              <button type="button" className="am-btn" onClick={() => setF(author)}>revert</button>
+              <button type="button" className="rl-btn rl-go" onClick={update}>save and exit</button>
+              <button type="button" className="rl-btn" onClick={() => setF(author)}>revert</button>
               {isAdmin && (
                 <>
-                  <span className="am-gap" />
+                  <span className="rl-gap" />
                   {/* Asked in place: window.confirm never appears inside the
                       portal's frame, so a dialog would delete with no question
                       asked at all. */}
                   {sure ? (
                     <>
-                      <span className="am-hint">되돌릴 수 없습니다.</span>
-                      <button type="button" className="am-btn am-danger" onClick={remove}>정말 삭제</button>
-                      <button type="button" className="am-btn" onClick={() => setSure(false)}>취소</button>
+                      <span className="rl-hint">되돌릴 수 없습니다.</span>
+                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
+                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
                     </>
                   ) : (
-                    <button type="button" className="am-btn am-danger" onClick={() => setSure(true)}>delete</button>
+                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
                   )}
                 </>
               )}
@@ -1165,7 +949,7 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
   const [f, setF] = useState(rec || { name: '', shortName: '', fullName: '' })
   const [sure, setSure] = useState(false)
   useEffect(() => { setF(rec || { name: '', shortName: '', fullName: '' }); setSure(false) }, [name, rec])
-  if (!draft && !rec) return <p className="am-msg">그 {what}을 찾을 수 없습니다.</p>
+  if (!draft && !rec) return <p className="rl-msg">그 {what}을 찾을 수 없습니다.</p>
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const named = String(f.name || '').trim()
   // A half-typed line is not data, here either.
@@ -1211,31 +995,31 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
   }
 
   return (
-    <div className="am-tab-body">
-      <div className="am-rec">
+    <div className="rl-tab-body">
+      <div className="rl-rec">
         <Fld label="이름">
           {/* name is what the authors point at, shortName is what the record
               shows: they are the same string, so they move together. */}
-          <input className="am-in" style={{ width: 220 }} value={f.name || ''}
+          <input className="rl-in" style={{ width: 220 }} value={f.name || ''}
             onChange={(e) => setF((s) => ({ ...s, name: e.target.value, shortName: e.target.value }))} />
-          {taken ? <span className="am-warn">같은 이름이 이미 있습니다.</span>
-            : draft ? <span className="am-hint">저자들이 이 이름으로 가리킵니다.</span>
-              : <span className="am-hint">고치면 이 이름을 쓰는 저자 {users}명도 같이 고쳐집니다.</span>}
+          {taken ? <span className="rl-warn">같은 이름이 이미 있습니다.</span>
+            : draft ? <span className="rl-hint">저자들이 이 이름으로 가리킵니다.</span>
+              : <span className="rl-hint">고치면 이 이름을 쓰는 저자 {users}명도 같이 고쳐집니다.</span>}
         </Fld>
         <Fld label="full name">
-          <input className="am-in" style={{ width: 360 }} value={f.fullName || ''} onChange={set('fullName')} />
-          <span className="am-hint">paper authors의 소속 줄에 이 이름이 나갑니다.</span>
+          <input className="rl-in" style={{ width: 360 }} value={f.fullName || ''} onChange={set('fullName')} />
+          <span className="rl-hint">paper authors의 소속 줄에 이 이름이 나갑니다.</span>
         </Fld>
         {of === 'affiliation' ? (
           <Fld label="주소 · 전화">
-            <input className="am-in" style={{ width: 360 }} value={f.address || ''} onChange={set('address')} placeholder="address" />
-            <input className="am-in" style={{ width: 150 }} value={f.phone || ''} onChange={set('phone')} placeholder="phone" />
+            <input className="rl-in" style={{ width: 360 }} value={f.address || ''} onChange={set('address')} placeholder="address" />
+            <input className="rl-in" style={{ width: 150 }} value={f.phone || ''} onChange={set('phone')} placeholder="phone" />
           </Fld>
         ) : (
           <Fld label="설명 · 기간">
-            <input className="am-in" style={{ width: 300 }} value={f.description || ''} onChange={set('description')} placeholder="description" />
-            <input className="am-in" style={{ width: 110 }} value={f.creationDate || ''} onChange={set('creationDate')} placeholder="2025-01-01" />
-            <input className="am-in" style={{ width: 110 }} value={f.endDate || ''} onChange={set('endDate')} placeholder="end" />
+            <input className="rl-in" style={{ width: 300 }} value={f.description || ''} onChange={set('description')} placeholder="description" />
+            <input className="rl-in" style={{ width: 110 }} value={f.creationDate || ''} onChange={set('creationDate')} placeholder="2025-01-01" />
+            <input className="rl-in" style={{ width: 110 }} value={f.endDate || ''} onChange={set('endDate')} placeholder="end" />
           </Fld>
         )}
         <Fld label="링크">
@@ -1245,26 +1029,26 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
         <Fld label="">
           {draft ? (
             <>
-              <button type="button" className="am-btn am-go" disabled={!named || taken} onClick={create}>등록</button>
-              {!named && <span className="am-hint">이름이 있어야 합니다.</span>}
+              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={create}>등록</button>
+              {!named && <span className="rl-hint">이름이 있어야 합니다.</span>}
             </>
           ) : (
             <>
-              <button type="button" className="am-btn am-go" disabled={!named || taken} onClick={update}>save and exit</button>
-              <button type="button" className="am-btn" onClick={() => setF(rec)}>revert</button>
+              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={update}>save and exit</button>
+              <button type="button" className="rl-btn" onClick={() => setF(rec)}>revert</button>
               {isAdmin && (
                 <>
-                  <span className="am-gap" />
+                  <span className="rl-gap" />
                   {sure ? (
                     <>
-                      <span className="am-warn">
+                      <span className="rl-warn">
                         {users ? `저자 ${users}명의 목록에서도 빠집니다.` : '쓰는 저자가 없습니다.'} 되돌릴 수 없습니다.
                       </span>
-                      <button type="button" className="am-btn am-danger" onClick={remove}>정말 삭제</button>
-                      <button type="button" className="am-btn" onClick={() => setSure(false)}>취소</button>
+                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
+                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
                     </>
                   ) : (
-                    <button type="button" className="am-btn am-danger" onClick={() => setSure(true)}>delete</button>
+                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
                   )}
                 </>
               )}
