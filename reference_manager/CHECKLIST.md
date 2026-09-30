@@ -34,11 +34,12 @@ settings    PDF 허용 루트 목록 (매니저만)
 ## 가져오면서 남은 것
 - [ ] 이름 없는 플래그 열 → 태그 **`unnamed column`** (논문 3편: X-ray burst
       sensitivity · MumpowerMR_PRC_2015 · SkyNet). 무슨 묶음인지 알면 이름 변경
-- [ ] `MasahideHARADA_JNST_1999`는 제목이 12C(p,p′3α)인데 `12C(p,p)12C`에 들어가
-      있다 (원래 태그가 `12C_p_p_12C`였다). `12C(p,p)3a`가 맞을 듯
-- [ ] `34Ar production`(14) 옆에 `34Ar beam production`(1)이 따로 있다 — 후자는
-      writing 항목이라 일단 그대로 둠
-- [ ] CamelCase 몇 개: `OpticalPotential` · `HoyleState` · `SpiRITROOT`(고유명사)
+- [x] 구체적인 태그는 일반 태그도 같이 (`s process n capture` → `s process`,
+      `CRIB cryogenic gas target` → `CRIB`, `INDRA ALADIN` → `INDRA`)
+- [x] `MasahideHARADA_JNST_1999`는 제목이 12C(p,p′3α)라 `12C(p,p)3a`로
+- [x] `34Ar beam production` → `34Ar production`
+- [x] `OpticalPotential` → `optical potential`, `HoyleState` → `Hoyle state`
+- [ ] `18Ne beam production`(1)은 그대로 — 34Ar처럼 합칠 상대가 없다
 - [ ] 저널 55개 중 **34개가 축약명 없음** (`abbrev`) — 인용 출력에서는 전체 이름이 나옴
 - [ ] `writing` 4편은 citeKey·제목이 없고 태그만 있음 (ELARK · 34Ar beam production ·
       Deblurring · KO2421)
