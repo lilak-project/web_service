@@ -62,6 +62,10 @@ const inJrn = (r, name) => r.journal === name
 const citesOf = (r) => (r.cites || []).filter((c) => c && (c.ref || c.raw))
 const linkedCites = (r) => citesOf(r).filter((c) => c.ref)
 
+/** How a paper is named when it is not the row you are reading: its cite key,
+ *  or the start of its title when it has none. */
+const refLabel = (r) => (r?.citeKey || '').trim() || (r?.title || '').slice(0, 32) || '논문'
+
 const D = '·'   // a cell with nothing in it still shows its column
 
 // ─── The columns ────────────────────────────────────────────────────────────
@@ -192,6 +196,8 @@ export default function App() {
       if (FIXED.some((f) => f.id === t.id)) return true
       if (t.jrn) return (doc.journals || []).some((r) => r.name === t.jrn)
       if (t.tag) return (doc.references || []).some((r) => inTag(r, t.tag))
+      // A citation tab belongs to a paper; without it there is nothing to list.
+      if (t.cites || t.citedBy) return (doc.references || []).some((r) => r.id === (t.cites || t.citedBy))
       return false
     }
     setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
@@ -220,6 +226,20 @@ export default function App() {
 
   const scopeOf = useCallback((t) => {
     if (t?.kind !== 'refs') return []
+    // Citation tabs: what this paper cites, and what cites it. The first keeps
+    // the order the citation numbers give it — a reference list is numbered —
+    // until a column is clicked.
+    if (t.cites) {
+      const me = refs.find((r) => r.id === t.cites)
+      const byId = new Map(refs.map((r) => [r.id, r]))
+      const list = linkedCites(me || {}).map((c) => ({ c, r: byId.get(c.ref) })).filter((x) => x.r)
+      if (sort) return list.map((x) => x.r).sort(byColumn(sort.k, sort.dir))
+      return list.sort((x, y) => (Number(x.c.n) || 999) - (Number(y.c.n) || 999)).map((x) => x.r)
+    }
+    if (t.citedBy) {
+      const list = refs.filter((r) => linkedCites(r).some((c) => c.ref === t.citedBy))
+      return [...list].sort(byColumn(sort?.k || 'citeKey', sort?.dir ?? 1))
+    }
     let list = refs
     if (t.jrn) list = list.filter((r) => inJrn(r, t.jrn))
     if (t.tag) list = list.filter((r) => inTag(r, t.tag))
@@ -416,8 +436,24 @@ export default function App() {
                           title: r.title || D,
                           a1: firstAuthor(r) || D,
                           tags: tagsOf(r).join(' ') || D,
-                          cites: citesOf(r).length || D,
-                          by: citedBy.get(r.id) || D,
+                          // A count you can press: the number is also the way
+                          // to the papers it counts.
+                          cites: linkedCites(r).length ? (
+                            <button type="button" className="rl-lnk" title="이 논문이 인용한 것"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openTab({ id: `cites:${r.id}`, kind: 'refs', cites: r.id,
+                                  label: `${refLabel(r)} →` })
+                              }}>{linkedCites(r).length}</button>
+                          ) : (citesOf(r).length || D),
+                          by: citedBy.get(r.id) ? (
+                            <button type="button" className="rl-lnk" title="이 논문을 인용한 것"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openTab({ id: `by:${r.id}`, kind: 'refs', citedBy: r.id,
+                                  label: `→ ${refLabel(r)}` })
+                              }}>{citedBy.get(r.id)}</button>
+                          ) : D,
                         }} />
                     )
                   })}
@@ -456,6 +492,10 @@ export default function App() {
             {etab.kind === 'edit' ? (
               <EditRef ref_={etab.who ? refs.find((r) => r.id === etab.who) : null}
                 doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
+                onOpen={(id) => {
+                  const r = refs.find((x) => x.id === id)
+                  if (r) openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label: refLabel(r) })
+                }}
                 onCreated={(id, label) => { closeEdit('new'); openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label }) }}
                 onDone={(id) => closeEdit(`edit:${id}`)}
                 onDeleted={(id) => {
@@ -536,6 +576,82 @@ function ListOut({ list, picked, tokens, say, open, setOpen }) {
         <textarea className="rl-outbox" value={out} readOnly
           placeholder={none ? '이 탭에 논문이 없습니다.' : ''} />
       </>)}
+    </div>
+  )
+}
+
+// ─── Citations ──────────────────────────────────────────────────────────────
+/** A paper's reference list. Entry 5 is either a paper in this list — press its
+ *  number and you are reading it — or a line of text for one that is not here
+ *  yet. Both are kept: a citation you cannot link is still a citation. */
+function CiteRows({ value = [], refs, mine, onChange, onOpen }) {
+  // citeKey → id, so the picker can be typed into and pasted into.
+  const byLabel = useMemo(() => {
+    const m = new Map()
+    for (const r of refs) if (r.id !== mine) m.set(refLabel(r), r.id)
+    return m
+  }, [refs, mine])
+  const labels = useMemo(() => [...byLabel.keys()].sort(), [byLabel])
+  const labelOf = (id) => refLabel(refs.find((r) => r.id === id))
+  const row = (i, patch) => onChange(value.map((c, j) => (j === i ? { ...c, ...patch } : c)))
+
+  return (
+    <div className="rl-rows">
+      {value.length === 0 && <span className="rl-hint">없음</span>}
+      {value.map((c, i) => {
+        const linked = c.ref && refs.some((r) => r.id === c.ref)
+        return (
+          <div key={i} className="rl-rrow">
+            <input className="rl-in rl-mono" style={{ width: 44 }} value={c.n ?? ''} placeholder="#"
+              onChange={(e) => row(i, { n: e.target.value })} title="이 논문에서의 인용 번호" />
+            <input className="rl-in" style={{ width: 240 }} list="rl-refs"
+              value={linked ? labelOf(c.ref) : ''} placeholder="목록에서 찾기"
+              onChange={(e) => {
+                const id = byLabel.get(e.target.value.trim())
+                // Typing over a link clears it; a name that matches makes one.
+                row(i, id ? { ref: id, raw: '' } : { ref: '' })
+              }} />
+            {linked ? (
+              <button type="button" className="rl-btn" onClick={() => onOpen?.(c.ref)}>열기</button>
+            ) : (
+              <input className="rl-in" style={{ width: 300 }} value={c.raw || ''}
+                placeholder="J. Doe et al., PRC 99 (2019) 014601"
+                onChange={(e) => row(i, { raw: e.target.value })} />
+            )}
+            <button type="button" className="rl-x" title="이 줄 지우기"
+              onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
+          </div>
+        )
+      })}
+      <datalist id="rl-refs">{labels.map((l) => <option key={l} value={l} />)}</datalist>
+      <div className="rl-rrow">
+        <button type="button" className="rl-btn"
+          onClick={() => onChange([...value, { n: String(value.length + 1), ref: '', raw: '' }])}>
+          + 참고문헌
+        </button>
+        <span className="rl-hint">
+          {value.filter((c) => c.ref).length}개 연결 · {value.filter((c) => !c.ref && c.raw).length}개 글자만
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** Which papers cite this one. Counted, never stored: one fact in one place. */
+function CitedBy({ refs, mine, onOpen }) {
+  const users = refs.filter((r) => (r.cites || []).some((c) => c.ref === mine))
+  if (!users.length) return <span className="rl-hint">없음</span>
+  return (
+    <div className="rl-rows">
+      {users.map((r) => {
+        const n = (r.cites || []).find((c) => c.ref === mine)?.n
+        return (
+          <div key={r.id} className="rl-rrow">
+            <button type="button" className="rl-lnk" onClick={() => onOpen?.(r.id)}>{refLabel(r)}</button>
+            {n ? <span className="rl-hint">[{n}]</span> : null}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -698,7 +814,7 @@ function PasteBox({ onTake, say }) {
 
 const TYPES = ['paper', 'thesis', 'report', 'writing']
 
-function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDone, say }) {
+function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDone, onOpen, say }) {
   // No record means a DRAFT: the same form, and saving puts it in the document
   // rather than over one.
   const draft = !ref_
@@ -800,6 +916,17 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
           <TagRows value={f.tags || []} options={tags}
             onChange={(v) => setF((s) => ({ ...s, tags: v }))} />
         </Fld>
+        {!draft && (
+          <Fld label="참고문헌">
+            <CiteRows value={f.cites || []} refs={doc.references} mine={f.id} onOpen={onOpen}
+              onChange={(v) => setF((s) => ({ ...s, cites: v }))} />
+          </Fld>
+        )}
+        {!draft && (
+          <Fld label="인용한 논문">
+            <CitedBy refs={doc.references} mine={f.id} onOpen={onOpen} />
+          </Fld>
+        )}
         <Fld label="링크">
           <TextRows value={f.links || []} add="+ 링크" placeholder="https://…" link
             onChange={(v) => setF((s) => ({ ...s, links: v }))} />
