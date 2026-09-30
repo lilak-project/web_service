@@ -344,7 +344,7 @@ export default function SidebarPortal({
   //   `  (₩ on a Korean layout)  fold the bar / bring it back — the ONLY key
   //                              that does; command mode leaves the width alone
   //   Esc                        command mode on — and off again
-  //   1..9 · s                  while it is on: a card, or settings
+  //   1..9 · 0                  while it is on: a card, or the account
   //
   // `\` is left alone: elog's drawer already has it.
   const foldKey = useRef(null)
@@ -381,16 +381,19 @@ export default function SidebarPortal({
     }
     if (!cmd) return
     const press = (sel2) => {
-      const n = navRef.current?.querySelector(sel2)
+      // The whole bar, not the card list: the account card sits outside it, and
+      // looking only in .pl-nav found nothing and did nothing.
+      const n = sideRef.current?.querySelector(sel2)
       if (!n) return
       e.preventDefault()
       setCmd(false)
       n.click()
     }
-    if (/^[1-9]$/.test(e.key)) {
+    if (e.key === '0') press('.pl-user .pl-row')
+    else if (/^[1-9]$/.test(e.key)) {
       const key = cmdKeys[Number(e.key) - 1]
       if (key) press(`.pl-card[data-key="${CSS.escape(key)}"] .pl-row`)
-    } else if (e.key === 's') press('.pl-user .pl-row')
+    }
   }
   useEffect(() => {
     const on = (e) => foldKey.current(e)
@@ -901,14 +904,17 @@ export default function SidebarPortal({
                   seed={user?.username} size={30} />
               </span>
               <span className="pl-txt">{user?.username}</span>
+              {/* INSIDE the row, like a service card's: folded, the key is
+                  placed against the row it presses, and a kbd outside one has
+                  no box to sit in — it ended up in the bar's own corner. */}
+              {cmd && <kbd className="pl-key">0</kbd>}
             </button>
-            {cmd && <kbd className="pl-key">s</kbd>}
           </div>
         </div>
         )}
         {cmd && (
           <div className="pl-cmdhint">
-            <b>1–9</b> {L('서비스', 'service')} · <b>s</b> {L('설정', 'settings')}
+            <b>1–9</b> {L('서비스', 'service')} · <b>0</b> {L('설정', 'settings')}
             {' · '}<b>`</b> {L('접기', 'fold')} · <b>Esc</b> {L('끝내기', 'exit')}
           </div>
         )}
