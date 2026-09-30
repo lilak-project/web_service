@@ -55,6 +55,24 @@ settings    PDF 허용 루트 목록 (매니저만)
       `Kim, Youngman`일 수도 `Y.S. Kim`일 수도 있다. 아는 사람만 합치면 된다
       (저자 편집기에서 풀네임/다른 표기를 적고 저장하면 그 줄들이 연결된다)
 
+## 저널 정리 (48개)
+- [x] 제목과 약어로 두 번 들어와 있던 7개 합침 — `Physical Review C` + `Phys. Rev. C`
+      (49+12 → **61**), `Physical Review Letter(s)` (20+6 → 26), `Review(s) of
+      Modern Physics`, `Arxiv`/`arXiv`, `EPJ A`의 옛 부제, `JPS Conf. Proc.`,
+      `PoS`/`Proceedings of Science`
+- [x] `Physical Review C`의 짧은 이름이 `JPRC`였다 → `PRC`
+- [ ] 축약 이름(`abbrev`)이 없는 저널 **32개** — 인용에서 전체 이름이 나온다.
+      많이 쓰는 것부터: Nuclear Physics A(18) · Progress in Particle and Nuclear
+      Physics(9) · Physics Reports(5) · Nature Communications(4). 표준 약어를
+      채워도 되고, 필요한 것만 골라도 된다
+- [ ] `PhDThesis`(6편)는 저널이 아니다 — 논문 type이 이미 thesis다. 저널 칸을
+      비우면 jl 열이 빈다는 점만 정하면 된다
+- [ ] `Physical Review`(2편)의 짧은 이름이 `PRV`다. 표준은 `Phys. Rev.`이고
+      `PR`은 이미 Physics Reports가 쓰고 있다
+- [ ] `PoS`의 축약 이름에 `NIC XII, PoS`가 들어 있었다 — 학회 이름은 저널이 아니라
+      논문 쪽(volume) 정보다. 지금은 `PoS`로 바꿔뒀다
+- [ ] `Zeitschrift fur Physik` / `… A Hadrons and Nuclei`는 다른 시리즈로 보고 남김
+
 ## 가져오면서 남은 것
 - [ ] 이름 없는 플래그 열 → 태그 **`unnamed column`** (논문 3편: X-ray burst
       sensitivity · MumpowerMR_PRC_2015 · SkyNet). 무슨 묶음인지 알면 이름 변경
