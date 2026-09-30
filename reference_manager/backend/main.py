@@ -4,11 +4,12 @@ The same shape as author_manager's: a single JSON document holding the records
 and the classes they point at, stored whole and guarded by a version, so two
 people editing at once cannot silently overwrite each other.
 
-  references      the papers: citeKey, title, author, journal, year, cites[], pdf
-  journals        a class: name, shortName, fullName …
-  collaborations  a class: SpiRIT, LIGO_Virgo …
-  groups          a class a paper can be in several of (topic sets)
-  settings        service-wide, e.g. the roots a linked PDF may live under
+  references  the papers: citeKey, title, author, journal, year, tags[], cites[], pdf
+  journals    the one class with fields of its own (shortName, abbrev)
+  settings    service-wide, e.g. the roots a linked PDF may live under
+
+A topic set and a collaboration are tags, not classes: same many-to-many, no
+fields of their own. The tag list is gathered from the papers.
 
 Concurrency: a PUT sends the `baseVersion` it edited; if the stored version moved
 on it is rejected with 409 + the current document, and the client reloads.
@@ -35,7 +36,7 @@ DATA_FILE = DATA / "data.json"
 
 # Keys the server owns. Anything else the client sends is ignored (per-user state
 # stays in the browser).
-SHARED_KEYS = ("references", "journals", "collaborations", "groups", "settings")
+SHARED_KEYS = ("references", "journals", "settings")
 
 _lock = threading.Lock()          # serialize read-modify-write within this process
 
@@ -57,8 +58,8 @@ def _atomic_write(path: Path, text: str) -> None:
 
 
 def _blank() -> dict:
-    return {"version": 1, "references": [], "journals": [], "collaborations": [],
-            "groups": [], "settings": {}, "updatedAt": _now(), "updatedBy": ""}
+    return {"version": 1, "references": [], "journals": [], "settings": {},
+            "updatedAt": _now(), "updatedBy": ""}
 
 
 def _read() -> dict:
@@ -83,8 +84,6 @@ class SaveBody(BaseModel):
     baseVersion: int
     references: Optional[list] = None
     journals: Optional[list] = None
-    collaborations: Optional[list] = None
-    groups: Optional[list] = None
     settings: Optional[dict] = None
 
 

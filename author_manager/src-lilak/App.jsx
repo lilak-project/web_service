@@ -27,7 +27,6 @@ import {
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
 
-const MYLIST_KEY = projectKey('am', 'mylist')
 const WIDTH_KEY = projectKey('am', 'cols')
 const VIEW_KEY = projectKey('am', 'view')
 const IS_ADMIN = isManager()
@@ -147,7 +146,6 @@ const PRESETS = [
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const FIXED = [
   { id: 'total', kind: 'authors', label: 'total' },
-  { id: 'mylist', kind: 'authors', label: 'my list' },
   { id: 'groups', kind: 'classes', label: 'groups', of: 'group' },
   { id: 'affiliation', kind: 'classes', label: 'affiliation', of: 'affiliation' },
 ]
@@ -167,7 +165,6 @@ export default function App() {
   const [query, setQuery] = useState('')
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS])
   const vw = useViewportWidth()
-  const [myList, setMyList] = useState(() => load(MYLIST_KEY, []))
   const [groupForm, setGroupForm] = useState(null)   // the new-group form, when open
   // null = the tab's own order: 한글 이름, or My List's own sequence.
   const [sort, setSort] = useState(VIEW.sort || null)
@@ -187,7 +184,6 @@ export default function App() {
     if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
     fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
   }, [])
-  useEffect(() => { save(MYLIST_KEY, myList) }, [myList])
   // The four fixed tabs are not worth storing; picking mode is not a state you
   // come back to, so only the applied filter is kept.
   useEffect(() => {
@@ -196,10 +192,16 @@ export default function App() {
   }, [tabs, active, sort, clsSort, fsel, fon])
   // A tab for a group or an affiliation that is no longer in the document
   // cannot be shown; it goes, and takes you back to total if you were on it.
+  // Nor can one of a kind that no longer exists (My List was a tab once), so an
+  // opened tab has to name a scope this service still has.
   useEffect(() => {
     if (!doc) return
-    const alive = (t) => (t.grp ? (doc.groups || []).some((r) => r.name === t.grp)
-      : t.aff ? (doc.affiliations || []).some((r) => r.name === t.aff) : true)
+    const alive = (t) => {
+      if (FIXED.some((f) => f.id === t.id)) return true
+      if (t.grp) return (doc.groups || []).some((r) => r.name === t.grp)
+      if (t.aff) return (doc.affiliations || []).some((r) => r.name === t.aff)
+      return false
+    }
     setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
   }, [doc])
   useEffect(() => {
@@ -218,19 +220,11 @@ export default function App() {
   // tab, because an edit beside its list needs BOTH on screen.
   const scopeOf = useCallback((tab) => {
     if (tab?.kind !== 'authors') return []
-    if (tab.id === 'mylist') {
-      const order = new Map(myList.map((id, i) => [id, i]))
-      const mine = authors.filter((a) => order.has(a.id))
-      // My List's own order is the order you added them in — a paper's list is
-      // often built that way — so it stands until a column is clicked.
-      return sort ? mine.sort(byColumn(sort.k, sort.dir, tab.grp))
-        : mine.sort((x, y) => order.get(x.id) - order.get(y.id))
-    }
     let list = authors
     if (tab.aff) list = list.filter((a) => inAff(a, tab.aff))
     if (tab.grp) list = list.filter((a) => inGrp(a, tab.grp))
     return [...list].sort(byColumn(sort?.k || 'kor', sort?.dir ?? 1, tab.grp))
-  }, [authors, myList, sort])
+  }, [authors, sort])
   const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
 
   const passes = useCallback((a) => passesFilter(a, fsel, SORTERS), [fsel])
@@ -293,18 +287,17 @@ export default function App() {
     })
   }
 
-  function addToMyList() {
-    if (!picked.size) { setNote('선택된 저자가 없습니다.'); return }
-    const fresh = [...picked].filter((id) => !myList.includes(id))
-    setMyList((l) => [...l, ...fresh])
-    setNote(fresh.length ? `My List에 ${fresh.length}명 담았습니다.` : '이미 다 담겨 있습니다.')
-  }
+  /** The people the two group buttons act on: the ones you ticked. A tab is a
+   *  question (who is in CENS?); the selection is an answer you assembled, and
+   *  that is what goes into a group. */
+  const chosen = useMemo(() => scope.filter((a) => picked.has(a.id)), [scope, picked])
 
   // Adding people to a group that already exists is the same edit make group
   // makes, minus inventing the group: pick it and the members go in.
   function addToGroup(name) {
     if (!name) return
-    const fresh = scope.filter((a) => !inGrp(a, name))
+    const fresh = chosen.filter((a) => !inGrp(a, name))
+    if (!chosen.length) { setNote('선택된 저자가 없습니다.'); return }
     if (!fresh.length) { setNote(`이미 모두 '${name}'에 있습니다.`); return }
     const ids = new Set(fresh.map((a) => a.id))
     commit({
@@ -312,6 +305,23 @@ export default function App() {
         ? { ...a, groups: [...(a.groups || []), { group: name, role: '', core: 10 }] }
         : a)),
     }, `'${name}'에 ${fresh.length}명 추가`)
+  }
+
+  /** A new group out of the ticked people. The form is a row under the command
+   *  line, where the button that opened it is. */
+  function makeGroup(form) {
+    const name = String(form.shortName || form.fullName || '').trim()
+    if (!name) { setNote('그룹 이름이 필요합니다.'); return false }
+    if ((doc.groups || []).some((g) => g.name === name)) { setNote('같은 이름의 그룹이 있습니다.'); return false }
+    if (!chosen.length) { setNote('선택된 저자가 없습니다.'); return false }
+    const ids = new Set(chosen.map((a) => a.id))
+    commit({
+      groups: [...(doc.groups || []), { ...form, name, shortName: name }],
+      authors: doc.authors.map((a) => (ids.has(a.id) && !inGrp(a, name)
+        ? { ...a, groups: [...(a.groups || []), { group: name, role: '', core: 10 }] }
+        : a)),
+    }, `'${name}' 그룹 생성 · ${ids.size}명 추가`)
+    return true
   }
 
   // ── saving one record ──
@@ -353,7 +363,20 @@ export default function App() {
             <button type="button" className="rl-btn rl-go"
               onClick={() => openEdit({ id: 'new', kind: 'edit', label: '새 저자', who: null })}>+ 새 저자</button>
           )}
-          <button type="button" className="rl-btn" onClick={addToMyList}>add to my list</button>
+          {/* Both act on the ticked rows, so they are always here — a group is
+              made of people you picked, whatever tab you picked them on. The
+              group list IS the menu: a native select needs no popup of our own,
+              and picking is the whole action. */}
+          <select className="rl-btn rl-go rl-pick" value=""
+            disabled={!picked.size || !(doc?.groups || []).length}
+            onChange={(e) => addToGroup(e.target.value)}>
+            <option value="">add to group</option>
+            {(doc?.groups || []).map((g) => (
+              <option key={g.name} value={g.name}>{g.name}</option>
+            ))}
+          </select>
+          <button type="button" className="rl-btn rl-go" disabled={!picked.size}
+            onClick={() => setGroupForm((g) => (g ? null : {}))}>make group</button>
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
@@ -375,31 +398,29 @@ export default function App() {
           ) : (
             <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 선택</button>
           )}
-          {tab?.id === 'mylist' && <>
-            <span className="rl-gap" />
-            {/* These two exist only while My List is the tab you are on, so
-                they are coloured as what they are: not part of the row of
-                buttons that is always there. */}
-            {/* The group list IS the menu — a native select needs no popup of
-                our own, and picking is the whole action. */}
-            <select className="rl-btn rl-tabonly rl-pick" value=""
-              disabled={!scope.length || !(doc?.groups || []).length}
-              onChange={(e) => addToGroup(e.target.value)}>
-              <option value="">add to group</option>
-              {(doc?.groups || []).map((g) => (
-                <option key={g.name} value={g.name}>{g.name}</option>
-              ))}
-            </select>
-            <button type="button" className="rl-btn rl-tabonly" disabled={!scope.length}
-              onClick={() => setGroupForm((g) => (g ? null : {}))}>make group</button>
-            <button type="button" className="rl-btn rl-tabonly" disabled={!myList.length}
-              onClick={() => { setMyList([]); setNote('My List를 비웠습니다.') }}>empty my list</button>
-          </>}
           <span className="rl-sp" />
           <input ref={findRef} type="search" className="rl-find" value={query}
             placeholder="이름 · 이메일 · 소속 · 그룹   (⌘F)"
             onChange={(e) => setQuery(e.target.value)} />
         </div>
+
+        {groupForm && (
+          <div className="rl-rec rl-newgrp">
+            <span className="rl-fl">새 그룹</span>
+            <div className="rl-fv">
+              <input className="rl-in" style={{ width: 150 }} placeholder="short name *"
+                value={groupForm.shortName || ''} autoFocus
+                onChange={(e) => setGroupForm((g) => ({ ...g, shortName: e.target.value }))} />
+              <input className="rl-in" style={{ width: 240 }} placeholder="full name"
+                value={groupForm.fullName || ''}
+                onChange={(e) => setGroupForm((g) => ({ ...g, fullName: e.target.value }))} />
+              <button type="button" className="rl-btn rl-go"
+                onClick={() => { if (makeGroup(groupForm)) setGroupForm(null) }}>save</button>
+              <button type="button" className="rl-btn" onClick={() => setGroupForm(null)}>cancel</button>
+              <span className="rl-hint">선택한 {chosen.length}명이 이 그룹에 들어갑니다 (core 10).</span>
+            </div>
+          </div>
+        )}
 
         <div className="rl-body">
         {showList && (<div className="rl-pane">
@@ -413,12 +434,12 @@ export default function App() {
             <>
               <RackTable cols={cols} onDrag={drag('')}
                 facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
-                sort={sort || { k: tab.id === 'mylist' ? null : 'kor', dir: 1 }}
+                sort={sort || { k: 'kor', dir: 1 }}
                 onSort={(k) => setSort((s2) => {
                   // The implicit order counts as the current one, so the first
                   // press on the column already sorted turns it over instead of
                   // doing nothing you can see.
-                  const now = s2 || (tab.id === 'mylist' ? null : { k: 'kor', dir: 1 })
+                  const now = s2 || { k: 'kor', dir: 1 }
                   return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
                 })}
                 head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
@@ -468,27 +489,10 @@ export default function App() {
                 })}
                 {!fmode && rows.length === 0 && <p className="rl-msg">해당하는 저자가 없습니다.</p>}
               </RackTable>
-              {/* The listing belongs to any tab that is already a chosen set of
-                  people — My List, or one group's or affiliation's tab. Not
-                  total: a paper is never everyone. */}
-              {(tab.id === 'mylist' || tab.grp || tab.aff) && (
-                <MyListOut list={scope} doc={doc} say={setNote}
-                  open={outOpen} setOpen={setOutOpen} canGroup={tab.id === 'mylist'}
-                  group={groupForm} setGroup={setGroupForm}
-                  onMakeGroup={(form) => {
-                    const name = String(form.shortName || form.fullName || '').trim()
-                    if (!name) { setNote('그룹 이름이 필요합니다.'); return false }
-                    if ((doc.groups || []).some((g) => g.name === name)) { setNote('같은 이름의 그룹이 있습니다.'); return false }
-                    const ids = new Set(scope.map((a) => a.id))
-                    commit({
-                      groups: [...(doc.groups || []), { ...form, name, shortName: name }],
-                      authors: doc.authors.map((a) => (ids.has(a.id) && !inGrp(a, name)
-                        ? { ...a, groups: [...(a.groups || []), { group: name, role: '', core: 10 }] }
-                        : a)),
-                    }, `'${name}' 그룹 생성 · ${ids.size}명 추가`)
-                    return true
-                  }} />
-              )}
+              {/* What you ticked is the set you assembled; with nothing ticked
+                  the tab itself is the set. */}
+              <ListOut list={chosen.length ? chosen : scope} picked={chosen.length > 0}
+                doc={doc} say={setNote} open={outOpen} setOpen={setOutOpen} />
             </>
           )}
 
@@ -526,7 +530,6 @@ export default function App() {
               onDone={(id) => closeEdit(`edit:${id}`)}
               onDeleted={(id) => {
                 closeEdit(`edit:${id}`)
-                setMyList((l) => l.filter((x) => x !== id))
                 setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
               }} />
           ) : (
@@ -557,7 +560,7 @@ const byPaperOrder = (core = coreOf) => (a, b) => {
 }
 
 // ─── My List's output: the reason the list exists ───────────────────────────
-function MyListOut({ list, doc, onMakeGroup, group, setGroup, say, open, setOpen, canGroup }) {
+function ListOut({ list, picked, doc, say, open, setOpen }) {
   const [sep, setSep] = useState(', ')
   const [tpl, setTpl] = useState(PRESETS[0][1])
   const [paper, setPaper] = useState(false)   // the LaTeX block is not a template
@@ -601,25 +604,9 @@ function MyListOut({ list, doc, onMakeGroup, group, setGroup, say, open, setOpen
         aria-expanded={open}>
         <i className="rl-caret">{open ? '▾' : '▸'}</i>
         <span>나열</span>
-        <span className="rl-hint">{list.length}명</span>
+        <span className="rl-hint">{picked ? `선택한 ${list.length}명` : `${list.length}명`}</span>
       </button>
       {open && (<>
-      {group && canGroup && (
-        <div className="rl-rec rl-newgrp">
-          <span className="rl-fl">새 그룹</span>
-          <div className="rl-fv">
-            <input className="rl-in" style={{ width: 150 }} placeholder="short name *"
-              value={group.shortName || ''} onChange={(e) => setGroup((g) => ({ ...g, shortName: e.target.value }))} />
-            <input className="rl-in" style={{ width: 240 }} placeholder="full name"
-              value={group.fullName || ''} onChange={(e) => setGroup((g) => ({ ...g, fullName: e.target.value }))} />
-            <button type="button" className="rl-btn rl-go"
-              onClick={() => { if (onMakeGroup(group)) setGroup(null) }}>save</button>
-            <button type="button" className="rl-btn" onClick={() => setGroup(null)}>cancel</button>
-            <span className="rl-hint">My List의 {list.length}명이 이 그룹에 들어갑니다 (core 10).</span>
-          </div>
-        </div>
-      )}
-
       <div className="rl-outbar">
         {PRESETS.map(([label, t]) => (
           <button key={label} type="button" className={`rl-btn${!paper && tpl === t ? ' on' : ''}`}

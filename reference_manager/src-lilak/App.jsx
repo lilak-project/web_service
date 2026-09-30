@@ -3,13 +3,13 @@
  *
  *   레퍼런스 ──────────────────────────── nameplate (the module's name)
  *   add to my list  clear      [search]  command line — acts on the selection
- *   total │ my list │ journals │ … │ SpiRIT ×   tabs
+ *   total │ journals │ tags │ SpiRIT ×          tabs
  *   ☐ # type citeKey year jl title …    the head: sticky, draggable edges
  *   …rows…                              26px each
  *
- * A tab is either a list of REFERENCES (total, my list, or one journal /
- * collaboration / group / tag), or a list of CLASSES (those things themselves).
- * Picking a class opens a tab of its papers; tabs you opened carry an ×.
+ * A tab is either a list of REFERENCES (total, or one journal's or one tag's),
+ * or a list of the JOURNALS / TAGS themselves. Picking one opens a tab of its
+ * papers; tabs you opened carry an ×.
  *
  * The table, the tabs, the selection and the portal's document are the kit's
  * `racklist`, shared with author_manager. What is here is what makes this one
@@ -24,7 +24,6 @@ import {
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
 
-const MYLIST_KEY = projectKey('rm', 'mylist')
 const WIDTH_KEY = projectKey('rm', 'cols')
 const VIEW_KEY = projectKey('rm', 'view')
 const IS_ADMIN = isManager()
@@ -51,11 +50,13 @@ const shortRef = (doc, r) => [
   etAl(r), [jAbbrev(doc, r), r.volume, r.pages].filter(Boolean).join(' '),
 ].filter(Boolean).join(', ') + (r.year ? ` (${r.year})` : '')
 
+// A paper points at ONE journal and carries any number of tags. A topic set
+// (tpc, 12c) and a collaboration (SpiRIT, LIGO_Virgo) were classes of their own
+// at first, but nothing distinguished them from a tag: same many-to-many, no
+// fields of their own, nothing to edit. They are tags.
 const tagsOf = (r) => (r.tags || []).filter(Boolean)
 const inTag = (r, t) => tagsOf(r).includes(t)
-const inGrp = (r, name) => (r.groups || []).some((g) => g.group === name)
 const inJrn = (r, name) => r.journal === name
-const inCol = (r, name) => r.collaboration === name
 /** Papers this one lists, and papers that list it — one is stored, the other
  *  is counted, because storing both is two places to disagree. */
 const citesOf = (r) => (r.cites || []).filter((c) => c && (c.ref || c.raw))
@@ -75,8 +76,7 @@ const COLS = [
   { k: 'jl', w: 64, min: 40, label: 'jl' },
   { k: 'title', w: 330, min: 120, label: 'title' },
   { k: 'a1', w: 134, min: 70, label: 'first author', drop: 1040 },
-  { k: 'tags', w: 120, min: 60, label: 'tags', drop: 1320 },
-  { k: 'co', w: 92, min: 50, label: 'collaboration', drop: 1440 },
+  { k: 'tags', w: 180, min: 60, label: 'tags', drop: 1320 },
   { k: 'cites', w: 44, min: 34, label: 'cites', num: true, drop: 860 },
   { k: 'by', w: 44, min: 34, label: 'cited by', num: true, drop: 860 },
 ]
@@ -87,7 +87,7 @@ const CLS_COLS = [
   { k: 'full', w: 320, min: 90, label: 'full name' },
 ]
 /** Which columns are the record's own words (ink) and which are about it (dim). */
-const TONE = { title: 'ink', type: 'dim', jl: 'dim', a1: 'dim', tags: 'dim', co: 'dim' }
+const TONE = { title: 'ink', type: 'dim', jl: 'dim', a1: 'dim', tags: 'dim' }
 
 // ─── The listing rule ───────────────────────────────────────────────────────
 // A preset fills in a TEMPLATE and the template makes the text, so a shape
@@ -111,7 +111,6 @@ const TOKENS = (doc) => ({
   url: (r) => r.url || '',
   'short ref': (r) => shortRef(doc, r),
   tags: (r) => tagsOf(r).join(' '),
-  collaboration: (r) => r.collaboration || '',
 })
 const PRESETS = [
   ['short ref.', '{short ref}', ',⏎'],
@@ -132,7 +131,6 @@ const SORTERS = (doc) => ({
   title: (r) => r.title || '',
   a1: (r) => firstAuthor(r),
   tags: (r) => tagsOf(r).join(' '),
-  co: (r) => r.collaboration || '',
   cites: (r) => citesOf(r).length || null,
 })
 const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r.full }
@@ -140,17 +138,12 @@ const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const FIXED = [
   { id: 'total', kind: 'refs', label: 'total' },
-  { id: 'mylist', kind: 'refs', label: 'my list' },
   { id: 'journals', kind: 'classes', label: 'journals', of: 'journal' },
-  { id: 'collaborations', kind: 'classes', label: 'collaborations', of: 'collaboration' },
-  { id: 'groups', kind: 'classes', label: 'groups', of: 'group' },
   { id: 'tags', kind: 'classes', label: 'tags', of: 'tag' },
 ]
 const CLS_OF = {
   journal: { key: 'journals', has: inJrn, open: (n) => ({ jrn: n }) },
-  collaboration: { key: 'collaborations', has: inCol, open: (n) => ({ col: n }) },
-  group: { key: 'groups', has: inGrp, open: (n) => ({ grp: n }) },
-  // Tags have no record behind them: the list is what the papers use.
+  // Tags have no records behind them: the list is what the papers use.
   tag: { key: null, has: inTag, open: (n) => ({ tag: n }) },
 }
 
@@ -165,7 +158,6 @@ export default function App() {
   const [query, setQuery] = useState('')
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS])
   const vw = useViewportWidth()
-  const [myList, setMyList] = useState(() => load(MYLIST_KEY, []))
   const [sort, setSort] = useState(VIEW.sort || null)
   const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'name', dir: 1 })
   // Filtering has a MODE: in it the labels stop sorting and start choosing
@@ -182,18 +174,22 @@ export default function App() {
     if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
     fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
   }, [])
-  useEffect(() => { save(MYLIST_KEY, myList) }, [myList])
   useEffect(() => {
     saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
                active, sort, clsSort, fsel, fon })
   }, [tabs, active, sort, clsSort, fsel, fon])
-  // A tab for a class that is no longer in the document cannot be shown.
+  // A tab for something the document no longer has cannot be shown — and
+  // neither can one of a kind this service no longer has: collaborations and
+  // topic groups were tabs of their own before they became tags, and a stored
+  // one would otherwise sit there forever, next to the tag of the same name.
   useEffect(() => {
     if (!doc) return
-    const alive = (t) => (t.jrn ? (doc.journals || []).some((r) => r.name === t.jrn)
-      : t.col ? (doc.collaborations || []).some((r) => r.name === t.col)
-      : t.grp ? (doc.groups || []).some((r) => r.name === t.grp)
-      : t.tag ? (doc.references || []).some((r) => inTag(r, t.tag)) : true)
+    const alive = (t) => {
+      if (FIXED.some((f) => f.id === t.id)) return true
+      if (t.jrn) return (doc.journals || []).some((r) => r.name === t.jrn)
+      if (t.tag) return (doc.references || []).some((r) => inTag(r, t.tag))
+      return false
+    }
     setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
   }, [doc])
   useEffect(() => {
@@ -220,21 +216,11 @@ export default function App() {
 
   const scopeOf = useCallback((t) => {
     if (t?.kind !== 'refs') return []
-    if (t.id === 'mylist') {
-      const order = new Map(myList.map((id, i) => [id, i]))
-      const mine = refs.filter((r) => order.has(r.id))
-      // My List's own order is the order you added them in — a bibliography is
-      // often built that way — so it stands until a column is clicked.
-      return sort ? mine.sort(byColumn(sort.k, sort.dir))
-        : mine.sort((x, y) => order.get(x.id) - order.get(y.id))
-    }
     let list = refs
     if (t.jrn) list = list.filter((r) => inJrn(r, t.jrn))
-    if (t.col) list = list.filter((r) => inCol(r, t.col))
-    if (t.grp) list = list.filter((r) => inGrp(r, t.grp))
     if (t.tag) list = list.filter((r) => inTag(r, t.tag))
     return [...list].sort(byColumn(sort?.k || 'citeKey', sort?.dir ?? 1))
-  }, [refs, myList, sort, byColumn])
+  }, [refs, sort, byColumn])
   const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
 
   const passes = useCallback((r) => passesFilter(r, fsel, sorters), [fsel, sorters])
@@ -243,8 +229,7 @@ export default function App() {
     const q = query.trim().toLowerCase()
     if (!q) return kept
     return kept.filter((r) => [r.citeKey, r.title, r.author, r.journal, r.year, r.doi,
-      r.collaboration, ...tagsOf(r), ...(r.groups || []).map((g) => g.group)]
-      .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
+      ...tagsOf(r)].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
   }, [query, fon, passes])
   const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
   const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
@@ -279,12 +264,9 @@ export default function App() {
     setTabs((ts) => ts.filter((t) => t.id !== id))
     if (active === id) setActive('total')
   }
-  function addToMyList() {
-    if (!picked.size) { setNote('선택된 논문이 없습니다.'); return }
-    const fresh = [...picked].filter((id) => !myList.includes(id))
-    setMyList((l) => [...l, ...fresh])
-    setNote(fresh.length ? `My List에 ${fresh.length}편 담았습니다.` : '이미 다 담겨 있습니다.')
-  }
+  /** What the listing is about: the papers you ticked, or the tab itself when
+   *  you have ticked nothing. */
+  const chosen = useMemo(() => scope.filter((r) => picked.has(r.id)), [scope, picked])
 
   return (
     <div className="rl">
@@ -297,7 +279,6 @@ export default function App() {
         </header>
 
         <div className="rl-cmd">
-          <button type="button" className="rl-btn" onClick={addToMyList}>add to my list</button>
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
@@ -320,11 +301,6 @@ export default function App() {
           ) : (
             <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 선택</button>
           )}
-          {tab?.id === 'mylist' && <>
-            <span className="rl-gap" />
-            <button type="button" className="rl-btn rl-tabonly" disabled={!myList.length}
-              onClick={() => { setMyList([]); setNote('My List를 비웠습니다.') }}>empty my list</button>
-          </>}
           <span className="rl-sp" />
           <input ref={findRef} type="search" className="rl-find" value={query}
             placeholder="제목 · 저자 · 저널 · 태그   (⌘F)"
@@ -343,11 +319,11 @@ export default function App() {
               <>
                 <RackTable cols={cols} onDrag={drag('')}
                   facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
-                  sort={sort || { k: tab.id === 'mylist' ? null : 'citeKey', dir: 1 }}
+                  sort={sort || { k: 'citeKey', dir: 1 }}
                   onSort={(k) => setSort((s2) => {
                     // The implicit order counts as the current one, so the first
                     // press on the column already sorted turns it over.
-                    const now = s2 || (tab.id === 'mylist' ? null : { k: 'citeKey', dir: 1 })
+                    const now = s2 || { k: 'citeKey', dir: 1 }
                     return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
                   })}
                   head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
@@ -384,7 +360,6 @@ export default function App() {
                           title: r.title || D,
                           a1: firstAuthor(r) || D,
                           tags: tagsOf(r).join(' ') || D,
-                          co: r.collaboration || D,
                           cites: citesOf(r).length || D,
                           by: citedBy.get(r.id) || D,
                         }} />
@@ -392,10 +367,8 @@ export default function App() {
                   })}
                   {!fmode && rows.length === 0 && <p className="rl-msg">해당하는 논문이 없습니다.</p>}
                 </RackTable>
-                {(tab.id === 'mylist' || tab.jrn || tab.col || tab.grp || tab.tag) && (
-                  <ListOut list={scope} tokens={tokens} say={setNote}
-                    open={outOpen} setOpen={setOutOpen} />
-                )}
+                <ListOut list={chosen.length ? chosen : scope} picked={chosen.length > 0}
+                  tokens={tokens} say={setNote} open={outOpen} setOpen={setOutOpen} />
               </>
             )}
 
@@ -427,7 +400,7 @@ export default function App() {
 }
 
 // ─── The listing: the reason a chosen set exists ────────────────────────────
-function ListOut({ list, tokens, say, open, setOpen }) {
+function ListOut({ list, picked, tokens, say, open, setOpen }) {
   const [sep, setSep] = useState(PRESETS[0][2])
   const [tpl, setTpl] = useState(PRESETS[0][1])
   // Derived, not stored: editing the rule changes the text under your hands.
@@ -449,7 +422,7 @@ function ListOut({ list, tokens, say, open, setOpen }) {
         aria-expanded={open}>
         <i className="rl-caret">{open ? '▾' : '▸'}</i>
         <span>나열</span>
-        <span className="rl-hint">{list.length}편</span>
+        <span className="rl-hint">{picked ? `선택한 ${list.length}편` : `${list.length}편`}</span>
       </button>
       {open && (<>
         <div className="rl-outbar">
