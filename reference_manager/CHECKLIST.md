@@ -26,9 +26,19 @@ settings    PDF 허용 루트 목록 (매니저만)
 - [ ] 7. PDF — 업로드 + 로컬 경로 연결, 패널 탭 뷰어, 설정 탭에서 허용 루트 관리
 - [ ] 8. 출력 다듬기 — 프리셋 확인(short ref. · cite keys · \bibitem · BibTeX)
 
+## 태그 표기 규칙
+반응은 사람이 쓰는 대로 — `12C(p,p)12C` · `34Ar(a,p)37K` · `12C + 120Sn`.
+밑줄은 엑셀 시절의 습관이라 공백으로 (`s process n capture`). 엑셀에서는 괄호와
+쉼표가 수식 입력이 되는 열에 들어갈 수 없었다.
+
 ## 가져오면서 남은 것
 - [ ] 이름 없는 플래그 열 → 태그 **`unnamed column`** (논문 3편: X-ray burst
       sensitivity · MumpowerMR_PRC_2015 · SkyNet). 무슨 묶음인지 알면 이름 변경
+- [ ] `MasahideHARADA_JNST_1999`는 제목이 12C(p,p′3α)인데 `12C(p,p)12C`에 들어가
+      있다 (원래 태그가 `12C_p_p_12C`였다). `12C(p,p)3a`가 맞을 듯
+- [ ] `34Ar production`(14) 옆에 `34Ar beam production`(1)이 따로 있다 — 후자는
+      writing 항목이라 일단 그대로 둠
+- [ ] CamelCase 몇 개: `OpticalPotential` · `HoyleState` · `SpiRITROOT`(고유명사)
 - [ ] 저널 55개 중 **34개가 축약명 없음** (`abbrev`) — 인용 출력에서는 전체 이름이 나옴
 - [ ] `writing` 4편은 citeKey·제목이 없고 태그만 있음 (ELARK · 34Ar beam production ·
       Deblurring · KO2421)
