@@ -367,7 +367,10 @@ export default function SidebarPortal({
     if (e.key === 'Escape') {
       // Inside the service Esc is the service's own key first; it only reaches
       // the portal when nothing there took it.
-      if (typing || e.defaultPrevented) return
+      if (e.defaultPrevented) return
+      // Escape out of a field is the whole point of Escape: the field lets go,
+      // and the keys mean the bar again.
+      if (typing) { try { el.blur() } catch { /* gone already */ } }
       if (cmd) {
         setCmd(false)
         if (cmdFolded.current) { setMini(true); cmdFolded.current = false }
