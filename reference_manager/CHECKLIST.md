@@ -61,10 +61,8 @@ settings    PDF 허용 루트 목록 (매니저만)
       Modern Physics`, `Arxiv`/`arXiv`, `EPJ A`의 옛 부제, `JPS Conf. Proc.`,
       `PoS`/`Proceedings of Science`
 - [x] `Physical Review C`의 짧은 이름이 `JPRC`였다 → `PRC`
-- [ ] 축약 이름(`abbrev`)이 없는 저널 **32개** — 인용에서 전체 이름이 나온다.
-      많이 쓰는 것부터: Nuclear Physics A(18) · Progress in Particle and Nuclear
-      Physics(9) · Physics Reports(5) · Nature Communications(4). 표준 약어를
-      채워도 되고, 필요한 것만 골라도 된다
+- [x] 축약 이름 31개 채움 (ISO-4 식: `Nucl. Phys. A` · `Prog. Part. Nucl. Phys.` ·
+      `Phys. Rep.` · `Nat. Commun.` · `J. Phys. G` …). 남은 하나는 PhDThesis
 - [ ] `PhDThesis`(6편)는 저널이 아니다 — 논문 type이 이미 thesis다. 저널 칸을
       비우면 jl 열이 빈다는 점만 정하면 된다
 - [ ] `Physical Review`(2편)의 짧은 이름이 `PRV`다. 표준은 `Phys. Rev.`이고
