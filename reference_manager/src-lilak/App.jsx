@@ -686,7 +686,12 @@ function ListOut({ list, picked, tokens, say, open, setOpen }) {
  *  knows, it is their handle instead, and the name comes from their record.
  *  Type a name or a #handle to link one, press 등록 to make a record out of a
  *  name nobody has registered yet. */
+const SHOWN = 3   // an author list is long; the first three say whose paper it is
+
 function AuthorRows({ value = [], doc, onChange, onRegister }) {
+  // 291 authors is a real paper (LIGO), and a form that shows all of them is a
+  // form you cannot read past. The rest are one press away.
+  const [open, setOpen] = useState(false)
   const recs = doc.authors || []
   const byKey = useMemo(() => {
     const m = new Map()
@@ -712,7 +717,7 @@ function AuthorRows({ value = [], doc, onChange, onRegister }) {
   return (
     <div className="rl-rows">
       {value.length === 0 && <span className="rl-hint">없음</span>}
-      {value.map((a, i) => {
+      {(open ? value : value.slice(0, SHOWN)).map((a, i) => {
         const rec = a.ref ? recs.find((x) => x.id === a.ref) : null
         return (
           <div key={i} className="rl-rrow">
@@ -751,8 +756,15 @@ function AuthorRows({ value = [], doc, onChange, onRegister }) {
       })}
       <datalist id="rl-auts">{options.map((o) => <option key={o} value={o} />)}</datalist>
       <div className="rl-rrow">
+        {value.length > SHOWN && (
+          <button type="button" className="rl-btn" onClick={() => setOpen(!open)}>
+            {open ? '접기' : `열기 (${value.length - SHOWN}명 더)`}
+          </button>
+        )}
         <button type="button" className="rl-btn"
-          onClick={() => onChange([...value, { name: '', ref: '', corr: false }])}>+ 저자</button>
+          onClick={() => { setOpen(true); onChange([...value, { name: '', ref: '', corr: false }]) }}>
+          + 저자
+        </button>
         <span className="rl-hint">{value.length}명 · {linked}명 연결</span>
       </div>
     </div>

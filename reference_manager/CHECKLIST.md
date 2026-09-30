@@ -45,6 +45,16 @@ settings    PDF 허용 루트 목록 (매니저만)
 밑줄은 엑셀 시절의 습관이라 공백으로 (`s process n capture`). 엑셀에서는 괄호와
 쉼표가 수식 입력이 되는 열에 들어갈 수 없었다.
 
+## 저자 등록 (2081명) 뒤에 남은 것
+- [ ] 같은 사람이 이니셜과 풀네임으로 따로 등록된 쌍이 있다 — `W. G. Lynch` /
+      `William G Lynch`, `M. B. Tsang` / `ManYee Betty Tsang`, `T. Murakami` /
+      `Tetsuya Murakami`, `B. Hong` / `Byungsik Hong`, `Y. Kim` / `Kim, Youngman`.
+      이니셜만으로는 동일인 판단이 안 돼서 따로 뒀다 — 맞다고 하면 alias로 합친다
+- [ ] 이름 앞에 각주 번호가 붙은 것: `4 W. J. Ong` 처럼
+- [ ] LaTeX 이스케이프가 남은 이름 51개 (`B. B\'ecsy`, `M. Cavagli\`a` …)
+- [ ] 388명이 `Kuulkers, E.` 처럼 성이 먼저다 (BibTeX의 정식 표기이기도 해서
+      그대로 뒀다). 한 가지로 통일할지는 취향
+
 ## 가져오면서 남은 것
 - [ ] 이름 없는 플래그 열 → 태그 **`unnamed column`** (논문 3편: X-ray burst
       sensitivity · MumpowerMR_PRC_2015 · SkyNet). 무슨 묶음인지 알면 이름 변경
