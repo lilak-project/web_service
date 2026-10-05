@@ -293,6 +293,12 @@ export default function App() {
     })
   }
 
+  /** The menu reads in name order, not in the order groups were made: you are
+   *  looking for one, and the document's order is not a thing anyone knows. */
+  const groupNames = useMemo(
+    () => (doc?.groups || []).map((g) => g.name).sort((a, b) => a.localeCompare(b, 'ko')),
+    [doc])
+
   /** The people the two group buttons act on: the ones you ticked. A tab is a
    *  question (who is in CENS?); the selection is an answer you assembled, and
    *  that is what goes into a group. */
@@ -377,8 +383,8 @@ export default function App() {
             disabled={!picked.size || !(doc?.groups || []).length}
             onChange={(e) => addToGroup(e.target.value)}>
             <option value="">add to group</option>
-            {(doc?.groups || []).map((g) => (
-              <option key={g.name} value={g.name}>{g.name}</option>
+            {groupNames.map((n) => (
+              <option key={n} value={n}>{n}</option>
             ))}
           </select>
           <button type="button" className="rl-btn rl-go" disabled={!picked.size}
