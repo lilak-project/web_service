@@ -465,6 +465,12 @@ export default function App() {
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
           <span className="rl-gap" />
+          {tabs.length > FIXED.length && (
+            <button type="button" className="rl-btn" title="열어둔 탭을 모두 닫습니다"
+              onClick={() => { setTabs(FIXED); setActive('total') }}>
+              탭 닫기 ({tabs.length - FIXED.length})
+            </button>
+          )}
           {fmode ? (
             <>
               <button type="button" className="rl-btn rl-go"

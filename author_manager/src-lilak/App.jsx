@@ -145,7 +145,9 @@ const PRESETS = [
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const FIXED = [
-  { id: 'total', kind: 'authors', label: 'total' },
+  // The id stays 'total' — it is in everyone's stored view state — but the
+  // label says what the tab lists.
+  { id: 'total', kind: 'authors', label: 'authors' },
   { id: 'groups', kind: 'classes', label: 'groups', of: 'group' },
   { id: 'affiliation', kind: 'classes', label: 'affiliation', of: 'affiliation' },
 ]
@@ -381,6 +383,12 @@ export default function App() {
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
           <span className="rl-gap" />
+          {tabs.length > FIXED.length && (
+            <button type="button" className="rl-btn" title="열어둔 탭을 모두 닫습니다"
+              onClick={() => { setTabs(FIXED); setActive('total') }}>
+              탭 닫기 ({tabs.length - FIXED.length})
+            </button>
+          )}
           {fmode ? (
             <>
               <button type="button" className="rl-btn rl-go" onClick={() => { setFmode(false); setFon(facetTotal > 0) }}>
