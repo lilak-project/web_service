@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs,
-  useColumnWidths, useViewportWidth, useSelection, useFindKey, useNote, useViewState,
+  useColumnWidths, useViewportWidth, useSelection, useFindKey, useToggleKey, useNote, useViewState,
   bySome, fill as fillTpl, facetOf, passesFilter,
   PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
@@ -297,6 +297,13 @@ export default function App() {
   const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
   const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
     = useSelection(rows)
+  // ⌘Enter: whatever the search has left on screen, take it all — or put it
+  // all back. The same thing the head checkbox does, without leaving the keys.
+  useToggleKey(() => {
+    if (!rows.length) return
+    toggleAll()
+    setNote(allPicked ? `${rows.length}명 선택 해제` : `${rows.length}명 선택`)
+  })
 
   // The editor pane takes the right half when there is room for both; below
   // that it has the width to itself while it is open, and closing its last tab
@@ -478,7 +485,7 @@ export default function App() {
           )}
           <span className="rl-sp" />
           <input ref={findRef} type="search" className="rl-find" value={query}
-            placeholder="이름 · 이메일 · 소속 · 그룹   (⌘F)"
+            placeholder="이름 · 이메일 · 소속 · 그룹   (⌘F · ⌘⏎ 전체선택)"
             onChange={(e) => setQuery(e.target.value)} />
         </div>
 
