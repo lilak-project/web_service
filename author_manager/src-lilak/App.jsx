@@ -736,7 +736,47 @@ function Fld({ label, children }) {
   return (<><span className="rl-fl">{label}</span><div className="rl-fv">{children}</div></>)
 }
 
-/** A list of plain strings — emails, links — one line each. */
+/** Every address, and which one is THE address. The list and the
+ *  representative are one field because they are one question: a 대표 that is
+ *  not in the list, or a list with no 대표, is a record disagreeing with
+ *  itself. Marking a row moves the mark; editing the marked row moves it with
+ *  the text. */
+function EmailRows({ value = [], rep, onChange }) {
+  const clean = (x) => String(x || '').trim()
+  const put = (i, v) => {
+    const next = value.map((x, j) => (j === i ? v : x))
+    // The mark follows the address it was on, even while it is being typed.
+    onChange(next, clean(value[i]) === clean(rep) ? v : rep)
+  }
+  return (
+    <div className="rl-rows">
+      {value.length === 0 && <span className="rl-hint">없음</span>}
+      {value.map((v, i) => (
+        <div key={i} className="rl-rrow">
+          <label className="rl-hint" title="대표 주소로">
+            <input type="radio" checked={!!clean(v) && clean(v) === clean(rep)}
+              onChange={() => onChange(value, v)} /> 대표
+          </label>
+          <input className="rl-in" style={{ width: 280 }} placeholder="name@lab.kr" value={v}
+            onChange={(e) => put(i, e.target.value)} />
+          <button type="button" className="rl-x" title="이 줄 지우기"
+            onClick={() => onChange(value.filter((_, j) => j !== i),
+              clean(v) === clean(rep) ? '' : rep)}>×</button>
+        </div>
+      ))}
+      <div className="rl-rrow">
+        <button type="button" className="rl-btn"
+          onClick={() => onChange([...value, ''], rep)}>+ 이메일</button>
+        <span className="rl-hint">
+          {clean(rep) ? `대표 ${clean(rep)}` : (value.some((x) => clean(x))
+            ? '대표를 고르지 않으면 맨 위가 대표가 됩니다.' : '')}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** A list of plain strings — links — one line each. */
 function TextRows({ value = [], onChange, add, placeholder, link }) {
   return (
     <div className="rl-rows">
@@ -931,13 +971,22 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
   // A half-typed line is not data. Blank strings and entries that point at no
   // affiliation or group are dropped on the way out, so the document does not
   // collect the rows somebody added and thought better of.
-  const tidy = (r) => ({
+  const tidy = (r) => {
+    const emails = (r.emails || []).map((x) => String(x).trim()).filter(Boolean)
+    // A record cannot have a 대표 that is not one of its addresses, and a
+    // record with addresses and no 대표 shows nothing in the list — so the
+    // first one takes the job.
+    const rep = emails.includes(String(r.repEmail || '').trim())
+      ? String(r.repEmail).trim() : (emails[0] || '')
+    return {
     ...r,
-    emails: (r.emails || []).map((x) => String(x).trim()).filter(Boolean),
+    emails,
+    repEmail: rep,
     links: (r.links || []).map((x) => String(x).trim()).filter(Boolean),
     affiliations: (r.affiliations || []).filter((x) => String(x.tag || '').trim()),
     groups: (r.groups || []).filter((x) => String(x.group || '').trim()),
-  })
+    }
+  }
 
   async function create() {
     if (!named()) return   // the button is disabled, but a stray Enter is not
@@ -977,9 +1026,9 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
             placeholder={citeShort({ ...f, abvName: '' }) || 'J. W. Lee'} />
           <span className="rl-hint">비우면 영문 이름에서 만듭니다.</span>
         </Fld>
-        <Fld label="대표 email">
-          <input className="rl-in" style={{ width: 260 }} value={f.repEmail || ''} onChange={set('repEmail')}
-            placeholder={(author && repEmail(author)) || 'name@ibs.re.kr'} />
+        <Fld label="email">
+          <EmailRows value={f.emails || []} rep={f.repEmail || ''}
+            onChange={(emails, rep) => setF((s) => ({ ...s, emails, repEmail: rep }))} />
         </Fld>
         <Fld label="소속 이력">
           <AffRows value={f.affiliations || []} options={affNames}
@@ -988,10 +1037,6 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
         <Fld label="그룹 소속">
           <GrpRows value={f.groups || []} options={grpNames}
             onChange={(v) => setF((s) => ({ ...s, groups: v }))} />
-        </Fld>
-        <Fld label="이메일">
-          <TextRows value={f.emails || []} add="+ 이메일" placeholder="name@lab.kr"
-            onChange={(v) => setF((s) => ({ ...s, emails: v }))} />
         </Fld>
         <Fld label="전화">
           <input className="rl-in" style={{ width: 190 }} value={f.phone || ''} onChange={set('phone')} />
