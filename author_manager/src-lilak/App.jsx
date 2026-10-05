@@ -34,7 +34,10 @@ const IS_ADMIN = isManager()
 // ─── The fields a row shows ─────────────────────────────────────────────────
 // A name is spelled in ONE place: nm./last/first/init are worked out from the
 // English parts rather than stored, so they cannot drift from `name`.
-const korName = (a) => `${a.korFamily || ''}${a.korGiven || ''}`.trim()
+// 성 and 이름 are stored apart, so the name is written apart: 한 인식, not
+// 한인식. Someone with only one of the two (a foreign name transliterated whole)
+// reads as the one word they have.
+const korName = (a) => [a.korFamily, a.korGiven].map((x) => (x || '').trim()).filter(Boolean).join(' ')
 const engName = (a) => [a.engFirst, a.engMiddle, a.engLast].filter(Boolean).join(' ')
 const anyName = (a) => a.nick || korName(a) || engName(a) || '(이름 없음)'
 const citeLast = (a) => a.engLast || ''
@@ -285,7 +288,10 @@ export default function App() {
     const kept = fon ? sc.filter(passes) : sc
     const q = query.trim().toLowerCase()
     if (!q) return kept
-    return kept.filter((a) => [korName(a), engName(a), a.nick, repEmail(a),
+    // Both spellings of the Korean name are searched: it is written 한 인식 and
+    // typed 한인식, and a search that only knows one of those is a search that
+    // says there is no such person.
+    return kept.filter((a) => [korName(a), korName(a).replace(/\s+/g, ''), engName(a), a.nick, repEmail(a),
       ...(a.affiliations || []).flatMap((x) => [x.tag, x.position, x.dept]),
       ...(a.groups || []).map((g) => g.group)]
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
