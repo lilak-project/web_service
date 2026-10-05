@@ -95,6 +95,8 @@ const CLS_COLS = [
   { k: 'num', w: 34, min: 26, fix: true, label: '#' },
   { k: 'name', w: 200, min: 80, label: 'name' },
   { k: 'count', w: 70, min: 46, label: 'people', num: true },
+  // Only a group has one: an affiliation does not run from a date to a date.
+  { k: 'when', w: 160, min: 70, label: '기간', group: true },
   { k: 'full', w: 280, min: 90, label: 'full name' },
 ]
 
@@ -136,9 +138,19 @@ const SORTERS = {
 const byColumn = (k, dir, group) =>
   bySome(k === 'core' && group ? (a) => coreIn(a, group) : SORTERS[k], dir)
 // The classes' own columns. Same machinery, three keys.
-const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r.full }
+const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r.full,
+  // The first day is what a list of groups is ordered by; the end is a detail.
+  when: (r) => r.start }
+/** '2026-11-16 ~ 11-18' — the year is said once when both days share it. */
+const spanOf = (from, to) => {
+  const a = String(from || '').trim(), b = String(to || '').trim()
+  if (!a && !b) return ''
+  if (!b) return a
+  if (!a) return `~ ${b}`
+  return `${a} ~ ${b.slice(0, 4) === a.slice(0, 4) ? b.slice(5) : b}`
+}
 /** Which columns are the record's own words (ink) and which are about it (dim). */
-const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim', reg: 'dim' }
+const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim', reg: 'dim', when: 'dim' }
 
 const PRESETS = [
   ['이름 나열', '{이름}'],
@@ -220,7 +232,9 @@ export default function App() {
   // core belongs to ONE group, so it is only a column inside a group's tab.
   const cols = useMemo(() => sized(COLS.filter((c) => c.k !== 'core' || !!tab?.grp), vw),
     [sized, vw, tab])
-  const clsCols = useMemo(() => sized(CLS_COLS, vw, 'c:'), [sized, vw])
+  const clsCols = useMemo(
+    () => sized(CLS_COLS.filter((c) => !c.group || tab?.of === 'group'), vw, 'c:'),
+    [sized, vw, tab])
 
   // Which authors a tab is about, before the search narrows them. Takes the
   // tab, because an edit beside its list needs BOTH on screen.
@@ -267,6 +281,8 @@ export default function App() {
     return recs.map((r) => ({
       name: r.name,
       full: r.fullName || '',
+      start: r.creationDate || '',
+      when: spanOf(r.creationDate, r.endDate),
       count: authors.filter((a) => (t.of === 'affiliation' ? inAff(a, r.name) : inGrp(a, r.name))).length,
     })).sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
   }, [doc, authors, clsSort])
@@ -534,7 +550,8 @@ export default function App() {
                     e.preventDefault()
                     openEdit({ id: `editcls:${tab.of}:${r.name}`, kind: 'editcls', label: r.name, of: tab.of, who: r.name })
                   }}
-                  cell={{ num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
+                  cell={{ num: i + 1, name: r.name, count: r.count,
+                    when: r.when || D, full: r.full || D }} />
               ))}
               {classes.length === 0 && <p className="rl-msg">등록된 항목이 없습니다.</p>}
             </RackTable>
@@ -1028,11 +1045,19 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
             <input className="rl-in" style={{ width: 150 }} value={f.phone || ''} onChange={set('phone')} placeholder="phone" />
           </Fld>
         ) : (
-          <Fld label="설명 · 기간">
-            <input className="rl-in" style={{ width: 300 }} value={f.description || ''} onChange={set('description')} placeholder="description" />
-            <input className="rl-in" style={{ width: 110 }} value={f.creationDate || ''} onChange={set('creationDate')} placeholder="2025-01-01" />
-            <input className="rl-in" style={{ width: 110 }} value={f.endDate || ''} onChange={set('endDate')} placeholder="end" />
-          </Fld>
+          <>
+            <Fld label="설명">
+              <input className="rl-in" style={{ width: 360 }} value={f.description || ''} onChange={set('description')} placeholder="description" />
+            </Fld>
+            <Fld label="기간">
+              <input className="rl-in rl-mono" style={{ width: 120 }} value={f.creationDate || ''}
+                onChange={set('creationDate')} placeholder="2026-11-16" />
+              <span className="rl-hint">~</span>
+              <input className="rl-in rl-mono" style={{ width: 120 }} value={f.endDate || ''}
+                onChange={set('endDate')} placeholder="2026-11-18" />
+              <span className="rl-hint">없어도 됩니다. 목록은 시작일로 정렬합니다.</span>
+            </Fld>
+          </>
         )}
         <Fld label="링크">
           <TextRows value={f.links || []} add="+ 링크" placeholder="https://…" link
