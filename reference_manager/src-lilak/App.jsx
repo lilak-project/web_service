@@ -213,7 +213,9 @@ const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const FIXED = [
-  { id: 'total', kind: 'refs', label: 'total' },
+  // The id stays 'total' — it is in everyone's stored view state — but the
+  // label says what the tab lists.
+  { id: 'total', kind: 'refs', label: 'references' },
   { id: 'authors', kind: 'classes', label: 'authors', of: 'author' },
   { id: 'journals', kind: 'classes', label: 'journals', of: 'journal' },
   { id: 'tags', kind: 'classes', label: 'tags', of: 'tag' },
@@ -372,7 +374,11 @@ export default function App() {
         const mine = refs.filter((r) => authorRows(r).some((x) => x.ref === a.id))
         const n = (role) => mine.filter((r) => autRoles(r, a.id).includes(role)).length
         return { id: a.id, name: a.name, tag: a.tag, count: mine.length,
-          first: n('first'), second: n('second'), corr: n('corr'), other: n('other') }
+          first: n('first'), second: n('second'), corr: n('corr'), other: n('other'),
+          // Every spelling this person is known by, so the search box finds
+          // them by the full name or by #handle, not only by what the row shows.
+          find: [a.name, a.fullName, a.bibName, a.tag, ...(a.aliases || [])]
+            .filter(Boolean).join(' ').toLowerCase() }
       }).sort(bySome(AUT_SORTERS[clsSort.k] || AUT_SORTERS.name, clsSort.dir))
     }
     const spec = CLS_OF[t.of]
@@ -382,9 +388,16 @@ export default function App() {
       name: r.name,
       full: r.abbrev || r.fullName || '',
       count: refs.filter((x) => spec.has(x, r.name)).length,
+      find: [r.name, r.shortName, r.abbrev].filter(Boolean).join(' ').toLowerCase(),
     })).sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
   }, [doc, refs, clsSort])
-  const classes = useMemo(() => classesOf(tab), [classesOf, tab])
+  // The one search box searches whatever the tab lists: papers on a paper tab,
+  // and the journals, authors or tags themselves on theirs.
+  const classes = useMemo(() => {
+    const all = classesOf(tab)
+    const q = query.trim().toLowerCase()
+    return q ? all.filter((r) => (r.find || r.name.toLowerCase()).includes(q)) : all
+  }, [classesOf, tab, query])
 
   function openTab(t) {
     setTabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
@@ -497,7 +510,7 @@ export default function App() {
           )}
           <span className="rl-sp" />
           <input ref={findRef} type="search" className="rl-find" value={query}
-            placeholder="제목 · 저자 · 저널 · 태그   (⌘F)"
+            placeholder={tab?.kind === 'classes' ? '이 목록에서 찾기   (⌘F)' : '제목 · 저자 · 저널 · 태그   (⌘F)'}
             onChange={(e) => setQuery(e.target.value)} />
         </div>
 
@@ -669,7 +682,10 @@ export default function App() {
         <footer className="rl-foot">
           <span>{note || '왼쪽 클릭으로 선택, shift로 범위, 오른쪽 클릭으로 편집.'}</span>
           <span className="rl-sp" />
-          <span className="rl-mono">{rows.length ? `${rows.length}줄` : ''}</span>
+          <span className="rl-mono">
+            {tab?.kind === 'classes' ? (classes.length ? `${classes.length}줄` : '')
+              : (rows.length ? `${rows.length}줄` : '')}
+          </span>
         </footer>
       </section>
     </div>
