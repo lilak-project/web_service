@@ -86,6 +86,9 @@ const COLS = [
   { k: 'nm', w: 112, min: 60, label: 'abv-name', drop: 1040 },
   { k: 'email', w: 214, min: 90, label: 'email' },
   { k: 'pos', w: 176, min: 70, label: 'position', drop: 860 },
+  // When the record was made. It is the only thing here the document knows and
+  // nobody typed, so it is the one way to ask "who is new".
+  { k: 'reg', w: 84, min: 62, label: '등록일', drop: 1180 },
   { k: 'core', w: 44, min: 34, label: 'core', num: true },
 ]
 const CLS_COLS = [
@@ -124,6 +127,7 @@ const SORTERS = {
   nm: (a) => citeShort(a),
   email: (a) => repEmail(a),
   pos: (a) => currentAff(a)?.position || '',
+  reg: (a) => a.createdAt || '',
   core: (a) => coreOf(a),
   last: (a) => citeLast(a),
   first: (a) => citeFirst(a),
@@ -134,7 +138,7 @@ const byColumn = (k, dir, group) =>
 // The classes' own columns. Same machinery, three keys.
 const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r.full }
 /** Which columns are the record's own words (ink) and which are about it (dim). */
-const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim' }
+const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim', reg: 'dim' }
 
 const PRESETS = [
   ['이름 나열', '{이름}'],
@@ -497,6 +501,7 @@ export default function App() {
                         nm: citeShort(a) || D,
                         email: repEmail(a) || D,
                         pos: cur?.position || D,
+                        reg: (a.createdAt || '').slice(0, 10) || D,
                         core: (tab.grp ? coreIn(a, tab.grp) : coreOf(a)) ?? D,
                       }} />
                   )
