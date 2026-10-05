@@ -471,6 +471,12 @@ export default function App() {
               탭 닫기 ({tabs.length - FIXED.length})
             </button>
           )}
+          {etabs.length > 0 && (
+            <button type="button" className="rl-btn" title="편집 패널의 탭을 모두 닫습니다"
+              onClick={() => { setEtabs([]); setEactive(null) }}>
+              편집 닫기 ({etabs.length})
+            </button>
+          )}
           {fmode ? (
             <>
               <button type="button" className="rl-btn rl-go"
