@@ -16,6 +16,7 @@ service is the one case we must buffer — it's small and needs `<base>` injecti
 """
 from __future__ import annotations
 
+import json
 from typing import Optional
 from urllib.parse import quote
 
@@ -71,13 +72,34 @@ async def close_client() -> None:
         _client = None
 
 
-def inject_base(html: bytes, base_path: str) -> bytes:
+def service_facts(name: str, manifest: dict, project: str = "") -> dict:
+    """What a service cannot know about itself, because the portal owns it: the
+    colour and icon on its card, the label it is shown under, and which project
+    it was opened for. Kept small on purpose — it is injected into every HTML
+    response the proxy touches."""
+    return {
+        "name": name,
+        "label": manifest.get("label") or name,
+        "color": manifest.get("color") or "",
+        "icon": manifest.get("icon") or "",
+        "project": project,
+    }
+
+
+def inject_base(html: bytes, base_path: str, service: Optional[dict] = None) -> bytes:
     """Make a self-UI service work under a `<base_path>/` prefix: inject a
     `<base href>` (so relative assets resolve under the prefix) + `__PORTAL_BASE__`
     (so a base-path-aware app routes its API/router through the proxy). See
-    AI_SERVICE_GUIDE Q5."""
+    AI_SERVICE_GUIDE Q5.
+
+    `service` rides along as `__PORTAL_SERVICE__`: the few things a service
+    cannot know about itself because the PORTAL owns them — the colour on its
+    card, its label. A service that paints its own nameplate with it matches the
+    icon the user just pressed, without the colour being written down twice."""
+    extra = (f'window.__PORTAL_SERVICE__={json.dumps(service, ensure_ascii=False)};'
+             if service else '')
     inject = (f'<base href="{base_path}/">'
-              f'<script>window.__PORTAL_BASE__="{base_path}";</script>').encode()
+              f'<script>window.__PORTAL_BASE__="{base_path}";{extra}</script>').encode()
     low = html.lower()
     i = low.find(b"<head>")
     if i != -1:
@@ -126,6 +148,7 @@ async def stream_proxy(
     fwd_headers: dict,
     *,
     html_base: Optional[str] = None,
+    service: Optional[dict] = None,
 ) -> Response:
     """Proxy `request` to `target`, streaming both directions.
 
@@ -153,7 +176,7 @@ async def stream_proxy(
             return _error_response(exc)
         finally:
             await upstream.aclose()
-        body = inject_base(body, html_base)
+        body = inject_base(body, html_base, service)
         headers, set_cookies = _copy_headers(upstream, body_rewritten=True)
         resp = Response(content=body, status_code=upstream.status_code,
                         headers=headers, media_type=ctype)

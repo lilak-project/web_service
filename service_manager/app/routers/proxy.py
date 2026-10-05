@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from .. import permissions, registry, security
 from ..adapters import get_adapter
 from ..db import SessionLocal
-from ..proxy_util import login_redirect_or_401, stream_proxy
+from ..proxy_util import login_redirect_or_401, service_facts, stream_proxy
 
 router = APIRouter()
 
@@ -121,7 +121,8 @@ async def service_proxy(name: str, path: str, request: Request):
     else:
         fwd.update(adapter.proxy_headers(manifest))
 
-    return await stream_proxy(request, target, fwd, html_base=f"/p/{name}")
+    return await stream_proxy(request, target, fwd, html_base=f"/p/{name}",
+                              service=service_facts(name, manifest))
 
 
 @router.websocket("/p/{name}/{path:path}")

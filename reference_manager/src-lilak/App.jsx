@@ -20,7 +20,7 @@ import {
   RackTable, RackRow, RackTabs,
   useColumnWidths, useViewportWidth, useSelection, useFindKey, useNote, useViewState,
   bySome, fill as fillTpl, facetOf, passesFilter,
-  PORTAL_PROJECT, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
+  PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
 
@@ -433,7 +433,7 @@ export default function App() {
   const allTags = useMemo(() => [...new Set(refs.flatMap(tagsOf))].sort(), [refs])
 
   return (
-    <div className="rl">
+    <div className="rl" style={brandStyle()}>
       <section className="rl-mod">
         <header className="rl-bar">
           <b>레퍼런스</b>

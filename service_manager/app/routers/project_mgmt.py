@@ -19,7 +19,7 @@ from .. import models, permissions, project_runtime as pr
 from .. import registry, security
 from ..db import SessionLocal, get_db
 from ..deps import require_portal_admin, require_portal_user
-from ..proxy_util import login_redirect_or_401, stream_proxy
+from ..proxy_util import login_redirect_or_401, service_facts, stream_proxy
 
 router = APIRouter(tags=["project-management"])
 
@@ -239,4 +239,5 @@ async def project_proxy(svc: str, proj: str, path: str, request: Request):
     for h in ("authorization", "content-type", "accept"):
         if h in request.headers:
             fwd[h] = request.headers[h]
-    return await stream_proxy(request, target, fwd, html_base=f"/pp/{svc}/{proj}")
+    return await stream_proxy(request, target, fwd, html_base=f"/pp/{svc}/{proj}",
+                              service=service_facts(svc, registry.read_manifest(svc), proj))
