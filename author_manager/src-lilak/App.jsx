@@ -95,7 +95,9 @@ const CLS_COLS = [
   { k: 'num', w: 34, min: 26, fix: true, label: '#' },
   { k: 'name', w: 200, min: 80, label: 'name' },
   { k: 'count', w: 70, min: 46, label: 'people', num: true },
-  // Only a group has one: an affiliation does not run from a date to a date.
+  // Only a group has these: an affiliation is not of a kind, and does not run
+  // from a date to a date.
+  { k: 'type', w: 110, min: 70, label: 'type', group: true },
   { k: 'when', w: 160, min: 70, label: '기간', group: true },
   { k: 'full', w: 280, min: 90, label: 'full name' },
 ]
@@ -140,7 +142,7 @@ const byColumn = (k, dir, group) =>
 // The classes' own columns. Same machinery, three keys.
 const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r.full,
   // The first day is what a list of groups is ordered by; the end is a detail.
-  when: (r) => r.start }
+  when: (r) => r.start, type: (r) => r.type }
 /** '2026-11-16 ~ 11-18' — the year is said once when both days share it. */
 const spanOf = (from, to) => {
   const a = String(from || '').trim(), b = String(to || '').trim()
@@ -150,7 +152,16 @@ const spanOf = (from, to) => {
   return `${a} ~ ${b.slice(0, 4) === a.slice(0, 4) ? b.slice(5) : b}`
 }
 /** Which columns are the record's own words (ink) and which are about it (dim). */
-const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim', reg: 'dim', when: 'dim' }
+const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim', reg: 'dim', when: 'dim', type: 'dim' }
+/** What a group IS. A paper's author list is assembled for different reasons,
+ *  and a list of fifteen groups is unreadable without saying which is which. */
+const GROUP_TYPES = [
+  ['organization', '조직 · 팀 (CENS, IRIS 실험장치팀)'],
+  ['experiment', '실험 (STARK, PKU, RAON, KO-25-20)'],
+  ['presentation', '발표 · 포스터 (ICABU, INPC)'],
+  ['project', '과제'],
+  ['other', '그 밖'],
+]
 
 const PRESETS = [
   ['이름 나열', '{이름}'],
@@ -283,6 +294,7 @@ export default function App() {
       full: r.fullName || '',
       start: r.creationDate || '',
       when: spanOf(r.creationDate, r.endDate),
+      type: r.type || '',
       count: authors.filter((a) => (t.of === 'affiliation' ? inAff(a, r.name) : inGrp(a, r.name))).length,
     })).sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
   }, [doc, authors, clsSort])
@@ -551,7 +563,7 @@ export default function App() {
                     openEdit({ id: `editcls:${tab.of}:${r.name}`, kind: 'editcls', label: r.name, of: tab.of, who: r.name })
                   }}
                   cell={{ num: i + 1, name: r.name, count: r.count,
-                    when: r.when || D, full: r.full || D }} />
+                    type: r.type || D, when: r.when || D, full: r.full || D }} />
               ))}
               {classes.length === 0 && <p className="rl-msg">등록된 항목이 없습니다.</p>}
             </RackTable>
@@ -570,6 +582,7 @@ export default function App() {
                 openEdit({ id: `edit:${id}`, kind: 'edit', label, who: id })
               }}
               onDone={(id) => closeEdit(`edit:${id}`)}
+              onCancel={() => closeEdit(etab.id)}
               onDeleted={(id) => {
                 closeEdit(`edit:${id}`)
                 setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
@@ -580,7 +593,8 @@ export default function App() {
                 closeEdit(`newcls:${etab.of}`)
                 openEdit({ id: `editcls:${etab.of}:${name}`, kind: 'editcls', label: name, of: etab.of, who: name })
               }}
-              onDone={(name) => closeEdit(`editcls:${etab.of}:${name}`)} />
+              onDone={(name) => closeEdit(`editcls:${etab.of}:${name}`)}
+              onCancel={() => closeEdit(etab.id)} />
           )}
         </div>)}
         </div>
@@ -841,7 +855,7 @@ function GrpRows({ value = [], options, onChange }) {
   )
 }
 
-function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone, say }) {
+function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone, onCancel, say }) {
   // No author means a DRAFT: the same form, and saving puts it in the document
   // rather than over one. One form, two jobs, so a field added here is added to
   // both at once.
@@ -933,44 +947,49 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
           <FileRows value={f.attachments || []} say={say}
             onChange={(v) => setF((s) => ({ ...s, attachments: v }))} />
         </Fld>
-        <Fld label="">
-          {draft ? (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!named()} onClick={create}>등록</button>
-              <span className="rl-hint">
-                {named() ? '' : '별명이나 이름 하나는 있어야 합니다.'}
-              </span>
-            </>
-          ) : (
-            <>
-              <button type="button" className="rl-btn rl-go" onClick={update}>save and exit</button>
-              <button type="button" className="rl-btn" onClick={() => setF(author)}>revert</button>
-              {isAdmin && (
-                <>
-                  <span className="rl-gap" />
-                  {/* Asked in place: window.confirm never appears inside the
-                      portal's frame, so a dialog would delete with no question
-                      asked at all. */}
-                  {sure ? (
-                    <>
-                      <span className="rl-hint">되돌릴 수 없습니다.</span>
-                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-                    </>
-                  ) : (
-                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </Fld>
+      </div>
+      {/* Out of the field grid and stuck to the bottom: on a long record the way
+          to save it was below the fold, and a form you have to scroll to leave
+          is a form you leave by accident. */}
+      <div className="rl-acts">
+        {draft ? (
+          <>
+            <button type="button" className="rl-btn rl-go" disabled={!named()} onClick={create}>등록</button>
+            <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
+            <span className="rl-hint">
+              {named() ? '' : '별명이나 이름 하나는 있어야 합니다.'}
+            </span>
+          </>
+        ) : (
+          <>
+            <button type="button" className="rl-btn rl-go" onClick={update}>save and exit</button>
+            <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
+            <button type="button" className="rl-btn" onClick={() => setF(author)}>revert</button>
+            {isAdmin && (
+              <>
+                <span className="rl-gap" />
+                {/* Asked in place: window.confirm never appears inside the
+                    portal's frame, so a dialog would delete with no question
+                    asked at all. */}
+                {sure ? (
+                  <>
+                    <span className="rl-hint">되돌릴 수 없습니다.</span>
+                    <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
+                    <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
+                  </>
+                ) : (
+                  <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
+                )}
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   )
 }
 
-function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
+function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel }) {
   const key = of === 'affiliation' ? 'affiliations' : 'groups'
   const what = of === 'affiliation' ? '소속' : '그룹'
   const draft = !name
@@ -1046,6 +1065,15 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
           </Fld>
         ) : (
           <>
+            <Fld label="type">
+              <select className="rl-in" style={{ width: 150 }} value={f.type || ''} onChange={set('type')}>
+                <option value="">(없음)</option>
+                {GROUP_TYPES.map(([v]) => <option key={v} value={v}>{v}</option>)}
+              </select>
+              <span className="rl-hint">
+                {GROUP_TYPES.find(([v]) => v === f.type)?.[1] || '무엇으로 모인 사람들인지'}
+              </span>
+            </Fld>
             <Fld label="설명">
               <input className="rl-in" style={{ width: 360 }} value={f.description || ''} onChange={set('description')} placeholder="description" />
             </Fld>
@@ -1063,35 +1091,37 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone }) {
           <TextRows value={f.links || []} add="+ 링크" placeholder="https://…" link
             onChange={(v) => setF((s) => ({ ...s, links: v }))} />
         </Fld>
-        <Fld label="">
-          {draft ? (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={create}>등록</button>
-              {!named && <span className="rl-hint">이름이 있어야 합니다.</span>}
-            </>
-          ) : (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={update}>save and exit</button>
-              <button type="button" className="rl-btn" onClick={() => setF(rec)}>revert</button>
-              {isAdmin && (
-                <>
-                  <span className="rl-gap" />
-                  {sure ? (
-                    <>
-                      <span className="rl-warn">
-                        {users ? `저자 ${users}명의 목록에서도 빠집니다.` : '쓰는 저자가 없습니다.'} 되돌릴 수 없습니다.
-                      </span>
-                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-                    </>
-                  ) : (
-                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </Fld>
+      </div>
+      <div className="rl-acts">
+        {draft ? (
+          <>
+            <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={create}>등록</button>
+            <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
+            {!named && <span className="rl-hint">이름이 있어야 합니다.</span>}
+          </>
+        ) : (
+          <>
+            <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={update}>save and exit</button>
+            <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
+            <button type="button" className="rl-btn" onClick={() => setF(rec)}>revert</button>
+            {isAdmin && (
+              <>
+                <span className="rl-gap" />
+                {sure ? (
+                  <>
+                    <span className="rl-warn">
+                      {users ? `저자 ${users}명의 목록에서도 빠집니다.` : '쓰는 저자가 없습니다.'} 되돌릴 수 없습니다.
+                    </span>
+                    <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
+                    <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
+                  </>
+                ) : (
+                  <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
+                )}
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   )
