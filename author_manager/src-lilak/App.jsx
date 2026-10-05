@@ -47,11 +47,25 @@ const citeShort = (a) => {
   return a.engLast ? [given, a.engLast].filter(Boolean).join(' ') : ''
 }
 
-/** Latest affiliation entry, by its `since` date: who someone is NOW. */
+// Where someone is NOW. A person can be in two places at once (곽민식 is at
+// IRIS and at UST), so "current" is a FLAG on the entry, not the latest date —
+// a date can only name one winner. An entry written before the flag existed is
+// current: that is what it meant.
+const isCurrent = (x) => x.current !== false
+const currentAffs = (a) => (a.affiliations || []).filter((x) => x.tag && isCurrent(x))
+/** The first of them, for the places that can only say one — a paper's
+ *  superscript, the email a row falls back to. */
 function currentAff(a) {
-  const list = (a.affiliations || []).filter((x) => x.tag)
-  if (!list.length) return null
-  return [...list].sort((x, y) => String(x.since || '').localeCompare(String(y.since || ''))).at(-1)
+  return currentAffs(a)[0] || null
+}
+/** What the affiliation cell says. Two current places read as both; a person
+ *  with a history but nothing current reads 모름, which is not the same as the
+ *  blank of someone who never had one. */
+const AFF_UNKNOWN = '모름'
+function affilText(a) {
+  const now = currentAffs(a)
+  if (now.length) return now.map((x) => x.tag).join(', ')
+  return (a.affiliations || []).some((x) => x.tag) ? AFF_UNKNOWN : ''
 }
 const repEmail = (a) => a.repEmail || currentAff(a)?.email || (a.emails || [])[0] || ''
 /** The smallest group `core`: where the author sits in a paper's author list
@@ -109,12 +123,12 @@ const CLS_COLS = [
 // come and add. The tokens are the column names, which is what the reader
 // already has in front of them.
 const TOKENS = {
-  affiliation: (a) => currentAff(a)?.tag || '',
+  affiliation: (a) => affilText(a),
   이름: (a) => korName(a),
   name: (a) => engName(a),
   'abv-name': (a) => citeShort(a),
   email: (a) => repEmail(a),
-  position: (a) => currentAff(a)?.position || '',
+  position: (a) => currentAffs(a).map((x) => x.position).filter(Boolean).join(', '),
   core: (a) => coreOf(a) ?? '',
   last: (a) => citeLast(a),
   first: (a) => citeFirst(a),
@@ -125,12 +139,12 @@ const fill = (tpl, a) => fillTpl(tpl, a, TOKENS)
 // What a column sorts by. The same accessors the cells use, so the order you
 // get is the order you can see.
 const SORTERS = {
-  affil: (a) => currentAff(a)?.tag || '',
+  affil: (a) => affilText(a),
   kor: (a) => korName(a),
   name: (a) => engName(a) || a.nick || '',
   nm: (a) => citeShort(a),
   email: (a) => repEmail(a),
-  pos: (a) => currentAff(a)?.position || '',
+  pos: (a) => currentAffs(a).map((x) => x.position).filter(Boolean).join(', '),
   reg: (a) => a.createdAt || '',
   core: (a) => coreOf(a),
   last: (a) => citeLast(a),
@@ -264,8 +278,9 @@ export default function App() {
     const kept = fon ? sc.filter(passes) : sc
     const q = query.trim().toLowerCase()
     if (!q) return kept
-    return kept.filter((a) => [korName(a), engName(a), a.nick, repEmail(a), currentAff(a)?.tag,
-      currentAff(a)?.position, ...(a.groups || []).map((g) => g.group)]
+    return kept.filter((a) => [korName(a), engName(a), a.nick, repEmail(a),
+      ...(a.affiliations || []).flatMap((x) => [x.tag, x.position, x.dept]),
+      ...(a.groups || []).map((g) => g.group)]
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
   }, [query, fon, passes])
   const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
@@ -515,6 +530,7 @@ export default function App() {
                 })}
                 {!fmode && rows.map((a, i) => {
                   const cur = currentAff(a)
+                  const affs = affilText(a)
                   const on = picked.has(a.id)
                   const edited = etabs.some((t) => t.who === a.id)
                   return (
@@ -529,12 +545,12 @@ export default function App() {
                         chk: <input type="checkbox" checked={on} tabIndex={-1} readOnly
                           aria-label={`${anyName(a)} 선택`} />,
                         num: i + 1,
-                        affil: cur?.tag || D,
+                        affil: affs || D,
                         kor: korName(a) || D,
                         name: engName(a) || a.nick || D,
                         nm: citeShort(a) || D,
                         email: repEmail(a) || D,
-                        pos: cur?.position || D,
+                        pos: currentAffs(a).map((x) => x.position).filter(Boolean).join(', ') || D,
                         reg: (a.createdAt || '').slice(0, 10) || D,
                         core: (tab.grp ? coreIn(a, tab.grp) : coreOf(a)) ?? D,
                       }} />
@@ -780,18 +796,10 @@ function FileRows({ value = [], onChange, say }) {
 
 /** Which entry is the CURRENT affiliation: the last one by date. Marked rather
  *  than moved, so the order you typed them in survives. */
-const latestIdx = (list) => {
-  let best = -1
-  list.forEach((x, i) => {
-    if (best < 0 || String(x.since || '').localeCompare(String(list[best].since || '')) >= 0) best = i
-  })
-  return best
-}
-
 /** The affiliation history: every entry, in the order it is stored. */
 function AffRows({ value = [], options, onChange }) {
-  const cur = latestIdx(value)
   const put = (i, k, v) => onChange(value.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
+  const nowCount = value.filter((x) => x.tag && isCurrent(x)).length
   return (
     <div className="rl-rows">
       {value.length === 0 && <span className="rl-hint">없음</span>}
@@ -814,13 +822,33 @@ function AffRows({ value = [], options, onChange }) {
             value={x.email || ''} onChange={(e) => put(i, 'email', e.target.value)} />
           <input className="rl-in" style={{ width: 84 }} placeholder="2020-01"
             value={x.since || ''} onChange={(e) => put(i, 'since', e.target.value)} />
-          {i === cur && <span className="rl-tag">현재</span>}
+          {/* A person can be in two places at once, so this is a box per entry,
+              not a crown the latest date wears. */}
+          <label className="rl-hint" title="지금도 이 소속입니다">
+            <input type="checkbox" checked={isCurrent(x)}
+              onChange={(e) => put(i, 'current', e.target.checked)} /> 현재
+          </label>
           <button type="button" className="rl-x" title="이 줄 지우기"
             onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
-      <button type="button" className="rl-btn" onClick={() =>
-        onChange([...value, { tag: '', dept: '', position: '', email: '', since: '' }])}>+ 소속</button>
+      <div className="rl-rrow">
+        <button type="button" className="rl-btn" onClick={() =>
+          onChange([...value, { tag: '', dept: '', position: '', email: '', since: '', current: true }])}>
+          + 소속
+        </button>
+        {/* Moved away and we do not know where: the history stays, nothing is
+            current, and the list says 모름 rather than going blank — a blank is
+            what someone with no affiliation at all looks like. */}
+        <button type="button" className="rl-btn" disabled={!nowCount}
+          title="이전 소속은 남기고, 지금 소속은 모르는 상태로 둡니다"
+          onClick={() => onChange(value.map((x) => ({ ...x, current: false })))}>
+          지금은 모름
+        </button>
+        <span className="rl-hint">
+          {nowCount ? `현재 ${nowCount}곳` : (value.some((x) => x.tag) ? '현재 소속 모름' : '')}
+        </span>
+      </div>
     </div>
   )
 }
