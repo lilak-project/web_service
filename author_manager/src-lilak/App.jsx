@@ -67,7 +67,11 @@ function affilText(a) {
   if (now.length) return now.map((x) => x.tag).join(', ')
   return (a.affiliations || []).some((x) => x.tag) ? AFF_UNKNOWN : ''
 }
-const repEmail = (a) => a.repEmail || currentAff(a)?.email || (a.emails || [])[0] || ''
+/** The email a row shows: the one typed as the representative, and nothing
+ *  else. It used to fall back to the current affiliation's address, which meant
+ *  changing where someone works silently changed the address on screen — a
+ *  mail going somewhere nobody chose. A blank here means nobody has said. */
+const repEmail = (a) => a.repEmail || ''
 /** The smallest group `core`: where the author sits in a paper's author list
  *  when no one group is being looked at. */
 function coreOf(a) {
@@ -100,9 +104,11 @@ const COLS = [
   { k: 'nm', w: 112, min: 60, label: 'abv-name', drop: 1040 },
   { k: 'email', w: 214, min: 90, label: 'email' },
   { k: 'pos', w: 176, min: 70, label: 'position', drop: 860 },
-  // When the record was made. It is the only thing here the document knows and
-  // nobody typed, so it is the one way to ask "who is new".
+  // When the record was made, and when it last changed. The only two things
+  // here the document knows and nobody typed — one asks who is new, the other
+  // what has been seen to lately.
   { k: 'reg', w: 84, min: 62, label: '등록일', drop: 1180 },
+  { k: 'upd', w: 84, min: 62, label: '수정일', drop: 1320 },
   { k: 'core', w: 44, min: 34, label: 'core', num: true },
 ]
 const CLS_COLS = [
@@ -146,6 +152,7 @@ const SORTERS = {
   email: (a) => repEmail(a),
   pos: (a) => currentAffs(a).map((x) => x.position).filter(Boolean).join(', '),
   reg: (a) => a.createdAt || '',
+  upd: (a) => a.updatedAt || '',
   core: (a) => coreOf(a),
   last: (a) => citeLast(a),
   first: (a) => citeFirst(a),
@@ -166,7 +173,7 @@ const spanOf = (from, to) => {
   return `${a} ~ ${b.slice(0, 4) === a.slice(0, 4) ? b.slice(5) : b}`
 }
 /** Which columns are the record's own words (ink) and which are about it (dim). */
-const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim', reg: 'dim', when: 'dim', type: 'dim' }
+const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim', reg: 'dim', upd: 'dim', when: 'dim', type: 'dim' }
 /** What a group IS. A paper's author list is assembled for different reasons,
  *  and a list of fifteen groups is unreadable without saying which is which. */
 const GROUP_TYPES = [
@@ -552,6 +559,7 @@ export default function App() {
                         email: repEmail(a) || D,
                         pos: currentAffs(a).map((x) => x.position).filter(Boolean).join(', ') || D,
                         reg: (a.createdAt || '').slice(0, 10) || D,
+                        upd: (a.updatedAt || '').slice(0, 10) || D,
                         core: (tab.grp ? coreIn(a, tab.grp) : coreOf(a)) ?? D,
                       }} />
                   )
@@ -800,6 +808,15 @@ function FileRows({ value = [], onChange, say }) {
 function AffRows({ value = [], options, onChange }) {
   const put = (i, k, v) => onChange(value.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
   const nowCount = value.filter((x) => x.tag && isCurrent(x)).length
+  // The order is not decoration: the list joins them in it (IRIS, UST), and the
+  // first current one is the one a paper's superscript uses.
+  const move = (i, d) => {
+    const next = [...value]
+    const j = i + d
+    if (j < 0 || j >= next.length) return
+    ;[next[i], next[j]] = [next[j], next[i]]
+    onChange(next)
+  }
   return (
     <div className="rl-rows">
       {value.length === 0 && <span className="rl-hint">없음</span>}
@@ -828,6 +845,12 @@ function AffRows({ value = [], options, onChange }) {
             <input type="checkbox" checked={isCurrent(x)}
               onChange={(e) => put(i, 'current', e.target.checked)} /> 현재
           </label>
+          {value.length > 1 && (<>
+            <button type="button" className="rl-x" title="위로" disabled={i === 0}
+              onClick={() => move(i, -1)}>↑</button>
+            <button type="button" className="rl-x" title="아래로" disabled={i === value.length - 1}
+              onClick={() => move(i, 1)}>↓</button>
+          </>)}
           <button type="button" className="rl-x" title="이 줄 지우기"
             onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
         </div>
@@ -846,7 +869,8 @@ function AffRows({ value = [], options, onChange }) {
           지금은 모름
         </button>
         <span className="rl-hint">
-          {nowCount ? `현재 ${nowCount}곳` : (value.some((x) => x.tag) ? '현재 소속 모름' : '')}
+          {nowCount ? `현재 ${nowCount}곳${nowCount > 1 ? ' · 위에 있는 것이 먼저 나옵니다' : ''}`
+            : (value.some((x) => x.tag) ? '현재 소속 모름' : '')}
         </span>
       </div>
     </div>
@@ -950,7 +974,6 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
         <Fld label="대표 email">
           <input className="rl-in" style={{ width: 260 }} value={f.repEmail || ''} onChange={set('repEmail')}
             placeholder={(author && repEmail(author)) || 'name@ibs.re.kr'} />
-          <span className="rl-hint">비우면 현재 소속의 이메일을 씁니다.</span>
         </Fld>
         <Fld label="소속 이력">
           <AffRows value={f.affiliations || []} options={affNames}
