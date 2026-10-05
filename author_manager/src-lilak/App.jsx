@@ -992,10 +992,13 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
           <>
             <button type="button" className="rl-btn rl-go" onClick={update}>save and exit</button>
             <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
+            {/* Leaving is on the left, undoing and destroying on the right:
+                they are not the same kind of button and should not sit in one
+                row of four. */}
+            <span className="rl-sp" />
             <button type="button" className="rl-btn" onClick={() => setF(author)}>revert</button>
             {isAdmin && (
               <>
-                <span className="rl-gap" />
                 {/* Asked in place: window.confirm never appears inside the
                     portal's frame, so a dialog would delete with no question
                     asked at all. */}
@@ -1131,10 +1134,10 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel
           <>
             <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={update}>save and exit</button>
             <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
+            <span className="rl-sp" />
             <button type="button" className="rl-btn" onClick={() => setF(rec)}>revert</button>
             {isAdmin && (
               <>
-                <span className="rl-gap" />
                 {sure ? (
                   <>
                     <span className="rl-warn">
