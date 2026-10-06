@@ -380,6 +380,21 @@ export default function App() {
     }, `'${name}'에 ${fresh.length}명 추가`)
   }
 
+  /** Out of the group whose tab you are on. The button says how many, which is
+   *  the whole confirmation it needs: putting them back is the menu next to it.
+   *  Only this group's entry goes — the people and their other groups stay. */
+  function removeFromGroup(name) {
+    const out = chosen.filter((a) => inGrp(a, name))
+    if (!out.length) { setNote('선택된 저자가 없습니다.'); return }
+    const ids = new Set(out.map((a) => a.id))
+    commit({
+      authors: doc.authors.map((a) => (ids.has(a.id)
+        ? { ...a, groups: (a.groups || []).filter((g) => g.group !== name) }
+        : a)),
+    }, `'${name}'에서 ${out.length}명 뺐습니다.`)
+    setPicked((s2) => { const n = new Set(s2); ids.forEach((id) => n.delete(id)); return n })
+  }
+
   /** A new group out of the ticked people. The form is a row under the command
    *  line, where the button that opened it is. */
   function makeGroup(form) {
@@ -450,6 +465,14 @@ export default function App() {
           </select>
           <button type="button" className="rl-btn rl-go" disabled={!picked.size}
             onClick={() => setGroupForm((g) => (g ? null : {}))}>make group</button>
+          {/* Only while you are on a group's own tab: it is that group you would
+              be taking them out of, and no other tab names one. */}
+          {tab?.grp && (
+            <button type="button" className="rl-btn rl-tabonly" disabled={!picked.size}
+              onClick={() => removeFromGroup(tab.grp)}>
+              remove from group{picked.size ? ` (${picked.size})` : ''}
+            </button>
+          )}
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
