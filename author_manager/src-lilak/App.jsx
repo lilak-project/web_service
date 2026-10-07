@@ -705,6 +705,9 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
   // Two printed forms are not templates: they number the affiliations, which a
   // per-name rule cannot do. '' means the rule above is what is running.
   const [mode, setMode] = useState('')
+  // Printed with the citation name (S. Ahn) or the whole one (Sunghoon Ahn) —
+  // an abstract wants one, a programme or a poster credit the other.
+  const [nameAs, setNameAs] = useState('abv')
 
   /** The LaTeX author block: core order, then a superscript per affiliation. */
   /** The author block both printed forms are: core order, then the
@@ -722,7 +725,8 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
       return rec ? [rec.fullName || rec.name, rec.address].filter(Boolean).join(', ') : tag
     }
     const nums = (a) => currentAffs(a).map((x) => idx.get(x.tag)).filter(Boolean)
-    const name = (a) => citeShort(a) || engName(a) || anyName(a)
+    const name = (a) => (nameAs === 'full'
+      ? engName(a) || citeShort(a) : citeShort(a) || engName(a)) || anyName(a)
     return { ordered, idx, line, nums, name }
   }
   const paperOut = () => {
@@ -738,22 +742,31 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
    *  numbers. Plain, because the superscripting is done where it is typeset —
    *  a superscript character pasted into a word processor is a character that
    *  does not match the font around it. */
-  const abstractOut = () => {
+  const abstractOut = (tex) => {
     const { ordered, idx, line, nums, name } = block()
+    // The only difference between the two is how a number is raised: a word
+    // processor does it to a plain digit, LaTeX does it to $^{…}$.
+    const mark = (n) => (tex ? `$^{${n.join(',')}}$` : `,${n.join(',')}`)
     const one = (a) => {
       const n = nums(a)
-      return `${name(a)}${n.length ? `,${n.join(',')}` : ''}`
+      return `${name(a)}${n.length ? mark(n) : ''}`
     }
+    // Plain: the comma is already in front of the numbers, so a space divides
+    // people. LaTeX: the number is raised, so the comma has to divide them.
     const people = ordered.map(one)
+    const sep2 = tex ? ', ' : ' '
     const joined = people.length > 1
-      ? `${people.slice(0, -1).join(' ')} and ${people.at(-1)}`
+      ? `${people.slice(0, -1).join(sep2)}${sep2}and ${people.at(-1)}`
       : people.join('')
-    const affs = [...idx.entries()].map(([tag, i]) => `${i} ${line(tag)}`)
+    const affs = [...idx.entries()].map(([tag, i]) =>
+      (tex ? `$^{${i}}$ ${line(tag)} \\\\` : `${i} ${line(tag)}`))
     return `${joined}\n\n${affs.join('\n')}`
   }
 
   // Derived, not stored: editing the rule changes the text under your hands.
-  const out = mode === 'paper' ? paperOut() : mode === 'abstract' ? abstractOut()
+  const out = mode === 'paper' ? paperOut()
+    : mode === 'abstract' ? abstractOut(false)
+      : mode === 'abstract-tex' ? abstractOut(true)
     : list.map((a) => fill(tpl, a)).filter(Boolean).join(sep.replaceAll('⏎', '\n'))
 
   async function copy() {
@@ -781,8 +794,19 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
         ))}
         <button type="button" className={`rl-btn rl-go${mode === 'abstract' ? ' on' : ''}`} disabled={none}
           onClick={() => setMode('abstract')}>abstract</button>
+        <button type="button" className={`rl-btn rl-go${mode === 'abstract-tex' ? ' on' : ''}`} disabled={none}
+          onClick={() => setMode('abstract-tex')}>abstract (LaTeX)</button>
         <button type="button" className={`rl-btn rl-go${mode === 'paper' ? ' on' : ''}`} disabled={none}
           onClick={() => setMode('paper')}>paper authors</button>
+        {/* The three printed forms all name people; which name is a choice, not
+            three more buttons. */}
+        {mode && (<>
+          <span className="rl-gap" />
+          {[['abv', '{abv-name}'], ['full', '{name}']].map(([v, label]) => (
+            <button key={v} type="button" className={`rl-btn${nameAs === v ? ' on' : ''}`}
+              onClick={() => setNameAs(v)}>{label}</button>
+          ))}
+        </>)}
         <span className="rl-sp" />
         <button type="button" className="rl-btn" disabled={!out} onClick={copy}>copy</button>
       </div>
