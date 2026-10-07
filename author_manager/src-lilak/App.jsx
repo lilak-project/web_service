@@ -680,40 +680,73 @@ export default function App() {
   )
 }
 
+/** Core first, then by FAMILY name — which is how an author list is ordered.
+ *  Sorting the abbreviated name instead sorts by the first initial, and
+ *  A. Chekhovska lands where S. Ahn belongs. */
 const byPaperOrder = (core = coreOf) => (a, b) => {
   const c = (core(a) ?? 99) - (core(b) ?? 99)
-  return c !== 0 ? c : (citeShort(a) || engName(a) || anyName(a))
-    .localeCompare(citeShort(b) || engName(b) || anyName(b))
+  if (c !== 0) return c
+  const last = (x) => (x.engLast || citeShort(x).split(' ').at(-1) || anyName(x)).toLowerCase()
+  const l = last(a).localeCompare(last(b))
+  return l !== 0 ? l : citeShort(a).localeCompare(citeShort(b))
 }
 
 // ─── My List's output: the reason the list exists ───────────────────────────
 function ListOut({ list, picked, doc, say, open, setOpen }) {
   const [sep, setSep] = useState(', ')
   const [tpl, setTpl] = useState(PRESETS[0][1])
-  const [paper, setPaper] = useState(false)   // the LaTeX block is not a template
+  // Two printed forms are not templates: they number the affiliations, which a
+  // per-name rule cannot do. '' means the rule above is what is running.
+  const [mode, setMode] = useState('')
 
   /** The LaTeX author block: core order, then a superscript per affiliation. */
-  const paperOut = () => {
+  /** The author block both printed forms are: core order, then the
+   *  affiliations numbered in the order they first appear. Everyone's CURRENT
+   *  affiliations count — somebody at two places carries two numbers, which is
+   *  what the abstract prints. */
+  const block = () => {
     const ordered = [...list].sort(byPaperOrder())
     const idx = new Map()
     for (const a of ordered) {
-      const tag = currentAff(a)?.tag
-      if (tag && !idx.has(tag)) idx.set(tag, idx.size + 1)
+      for (const x of currentAffs(a)) if (!idx.has(x.tag)) idx.set(x.tag, idx.size + 1)
     }
     const line = (tag) => {
       const rec = (doc.affiliations || []).find((x) => x.name === tag)
       return rec ? [rec.fullName || rec.name, rec.address].filter(Boolean).join(', ') : tag
     }
+    const nums = (a) => currentAffs(a).map((x) => idx.get(x.tag)).filter(Boolean)
+    const name = (a) => citeShort(a) || engName(a) || anyName(a)
+    return { ordered, idx, line, nums, name }
+  }
+  const paperOut = () => {
+    const { ordered, idx, line, nums, name } = block()
     const names = ordered.map((a) => {
-      const tag = currentAff(a)?.tag
-      return `  ${citeShort(a) || engName(a) || anyName(a)}${tag ? `$^{${idx.get(tag)}}$` : ''}`
+      const n = nums(a)
+      return `  ${name(a)}${n.length ? `$^{${n.join(',')}}$` : ''}`
     })
     const affs = [...idx.entries()].map(([tag, i]) => `$^{${i}}$ ${line(tag)}\\\\`)
     return `\\author{%\n${names.join(',\n')}\n}\n\n% affiliations\n${affs.join('\n')}`
   }
+  /** The way it reads on the page: superscript digits, and the numbered
+   *  affiliations under it. Paste it into an abstract and it is done. */
+  const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹'
+  const sup = (n) => String(n).split('').map((c) => SUP[Number(c)] ?? c).join('')
+  const abstractOut = () => {
+    const { ordered, idx, line, nums, name } = block()
+    const one = (a) => {
+      const n = nums(a)
+      return `${name(a)}${n.length ? `,${n.map(sup).join(',')}` : ''}`
+    }
+    const people = ordered.map(one)
+    const joined = people.length > 1
+      ? `${people.slice(0, -1).join(' ')} and ${people.at(-1)}`
+      : people.join('')
+    const affs = [...idx.entries()].map(([tag, i]) => `${sup(i)}${line(tag)}`)
+    return `${joined}\n\n${affs.join('\n')}`
+  }
 
   // Derived, not stored: editing the rule changes the text under your hands.
-  const out = paper ? paperOut()
+  const out = mode === 'paper' ? paperOut() : mode === 'abstract' ? abstractOut()
     : list.map((a) => fill(tpl, a)).filter(Boolean).join(sep.replaceAll('⏎', '\n'))
 
   async function copy() {
@@ -736,11 +769,13 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
       {open && (<>
       <div className="rl-outbar">
         {PRESETS.map(([label, t]) => (
-          <button key={label} type="button" className={`rl-btn${!paper && tpl === t ? ' on' : ''}`}
-            disabled={none} onClick={() => { setPaper(false); setTpl(t) }}>{label}</button>
+          <button key={label} type="button" className={`rl-btn${!mode && tpl === t ? ' on' : ''}`}
+            disabled={none} onClick={() => { setMode(''); setTpl(t) }}>{label}</button>
         ))}
-        <button type="button" className={`rl-btn rl-go${paper ? ' on' : ''}`} disabled={none}
-          onClick={() => setPaper(true)}>paper authors</button>
+        <button type="button" className={`rl-btn rl-go${mode === 'abstract' ? ' on' : ''}`} disabled={none}
+          onClick={() => setMode('abstract')}>abstract</button>
+        <button type="button" className={`rl-btn rl-go${mode === 'paper' ? ' on' : ''}`} disabled={none}
+          onClick={() => setMode('paper')}>paper authors</button>
         <span className="rl-sp" />
         <button type="button" className="rl-btn" disabled={!out} onClick={copy}>copy</button>
       </div>
@@ -749,17 +784,17 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
       <div className="rl-rule-line">
         <span className="rl-hint">나열 규칙</span>
         <input className="rl-in rl-mono" style={{ flex: 1, minWidth: 180 }} value={tpl}
-          disabled={paper} onChange={(e) => { setPaper(false); setTpl(e.target.value) }} />
+          disabled={!!mode} onChange={(e) => { setMode(''); setTpl(e.target.value) }} />
         <span className="rl-hint">사이</span>
-        <input className="rl-in rl-mono" style={{ width: 66 }} value={sep} disabled={paper}
+        <input className="rl-in rl-mono" style={{ width: 66 }} value={sep} disabled={!!mode}
           onChange={(e) => setSep(e.target.value)} title="구분기호" />
-        <button type="button" className="rl-btn" title="줄바꿈 추가" disabled={paper}
+        <button type="button" className="rl-btn" title="줄바꿈 추가" disabled={!!mode}
           onClick={() => setSep((v) => `${v}⏎`)}>+⏎</button>
       </div>
       <div className="rl-tokens">
         {Object.keys(TOKENS).map((k) => (
-          <button key={k} type="button" className="rl-tok" disabled={paper}
-            onClick={() => { setPaper(false); setTpl((v) => `${v}{${k}}`) }}>{`{${k}}`}</button>
+          <button key={k} type="button" className="rl-tok" disabled={!!mode}
+            onClick={() => { setMode(''); setTpl((v) => `${v}{${k}}`) }}>{`{${k}}`}</button>
         ))}
       </div>
 
