@@ -734,21 +734,21 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
     const affs = [...idx.entries()].map(([tag, i]) => `$^{${i}}$ ${line(tag)}\\\\`)
     return `\\author{%\n${names.join(',\n')}\n}\n\n% affiliations\n${affs.join('\n')}`
   }
-  /** The way it reads on the page: superscript digits, and the numbered
-   *  affiliations under it. Paste it into an abstract and it is done. */
-  const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹'
-  const sup = (n) => String(n).split('').map((c) => SUP[Number(c)] ?? c).join('')
+  /** The block as an abstract carries it: the name, a comma, and the plain
+   *  numbers. Plain, because the superscripting is done where it is typeset —
+   *  a superscript character pasted into a word processor is a character that
+   *  does not match the font around it. */
   const abstractOut = () => {
     const { ordered, idx, line, nums, name } = block()
     const one = (a) => {
       const n = nums(a)
-      return `${name(a)}${n.length ? `,${n.map(sup).join(',')}` : ''}`
+      return `${name(a)}${n.length ? `,${n.join(',')}` : ''}`
     }
     const people = ordered.map(one)
     const joined = people.length > 1
       ? `${people.slice(0, -1).join(' ')} and ${people.at(-1)}`
       : people.join('')
-    const affs = [...idx.entries()].map(([tag, i]) => `${sup(i)}${line(tag)}`)
+    const affs = [...idx.entries()].map(([tag, i]) => `${i} ${line(tag)}`)
     return `${joined}\n\n${affs.join('\n')}`
   }
 
