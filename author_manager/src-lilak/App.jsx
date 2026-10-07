@@ -894,8 +894,8 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
         </Fld>
 
         <Fld label="소속 이력">
-          <div className="rl-rows">
-            {affTags.length === 0 && <span className="rl-hint">모두가 함께 가진 소속이 없습니다.</span>}
+          <div className="rl-rows rl-grid">
+            {affTags.length === 0 && <span className="rl-hint rl-full">모두가 함께 가진 소속이 없습니다.</span>}
             {affTags.map((t) => {
               const off = drop.aff.includes(t)
               return (
@@ -916,14 +916,14 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
               )
             })}
             {add2.aff.map((t) => (
-              <div key={t} className="rl-rrow">
+              <div key={t} className="rl-rrow rl-full">
                 <span className="rl-tag">{t}</span>
                 <span className="rl-hint">모두에게 추가됩니다.</span>
                 <button type="button" className="rl-x" title="취소"
                   onClick={() => setAdd2((s) => ({ ...s, aff: s.aff.filter((x) => x !== t) }))}>×</button>
               </div>
             ))}
-            <div className="rl-rrow">
+            <div className="rl-rrow rl-full">
               <select className="rl-btn rl-pick" value="" disabled={!affLeft.length}
                 onChange={(e) => setAdd2((s) => ({ ...s, aff: [...s.aff, e.target.value] }))}>
                 <option value="">+ 소속 추가</option>
@@ -934,8 +934,8 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
         </Fld>
 
         <Fld label="그룹 소속">
-          <div className="rl-rows">
-            {grpNames2.length === 0 && <span className="rl-hint">모두가 함께 속한 그룹이 없습니다.</span>}
+          <div className="rl-rows rl-grid">
+            {grpNames2.length === 0 && <span className="rl-hint rl-full">모두가 함께 속한 그룹이 없습니다.</span>}
             {grpNames2.map((g) => {
               const off = drop.grp.includes(g)
               return (
@@ -954,14 +954,14 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
               )
             })}
             {add2.grp.map((g) => (
-              <div key={g} className="rl-rrow">
+              <div key={g} className="rl-rrow rl-full">
                 <span className="rl-tag">{g}</span>
                 <span className="rl-hint">모두에게 추가됩니다 (core 10).</span>
                 <button type="button" className="rl-x" title="취소"
                   onClick={() => setAdd2((s) => ({ ...s, grp: s.grp.filter((x) => x !== g) }))}>×</button>
               </div>
             ))}
-            <div className="rl-rrow">
+            <div className="rl-rrow rl-full">
               <select className="rl-btn rl-pick" value="" disabled={!grpLeft.length}
                 onChange={(e) => setAdd2((s) => ({ ...s, grp: [...s.grp, e.target.value] }))}>
                 <option value="">+ 그룹 추가</option>
