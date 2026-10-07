@@ -91,6 +91,9 @@ function coreIn(a, group) {
 const inAff = (a, tag) => (a.affiliations || []).some((x) => x.tag === tag)
 const inGrp = (a, name) => (a.groups || []).some((g) => g.group === name)
 
+/** Names in name order, Korean collation — the lists are in both scripts. */
+const byName = (list) => [...list].sort((a, b) => String(a).localeCompare(String(b), 'ko'))
+
 const D = '·'   // a cell with nothing in it still shows its column
 
 // ─── The columns ────────────────────────────────────────────────────────────
@@ -356,9 +359,7 @@ export default function App() {
 
   /** The menu reads in name order, not in the order groups were made: you are
    *  looking for one, and the document's order is not a thing anyone knows. */
-  const groupNames = useMemo(
-    () => (doc?.groups || []).map((g) => g.name).sort((a, b) => a.localeCompare(b, 'ko')),
-    [doc])
+  const groupNames = useMemo(() => byName((doc?.groups || []).map((g) => g.name)), [doc])
 
   /** The people the two group buttons act on: the ones you ticked. A tab is a
    *  question (who is in CENS?); the selection is an answer you assembled, and
@@ -573,13 +574,22 @@ export default function App() {
                   const cur = currentAff(a)
                   const affs = affilText(a)
                   const on = picked.has(a.id)
-                  const edited = etabs.some((t) => t.who === a.id)
+                  // Open in the editor — on its own, or as one of many.
+                  const edited = etabs.some((t) => t.who === a.id || t.ids?.includes(a.id))
                   return (
                     <RackRow key={a.id || i} cols={cols} tone={TONE}
                       className={`rl-hit${on ? ' on' : ''}${edited ? ' rl-edited' : ''}`}
                       onClick={(e) => hit(i, e.shiftKey)}
                       onContextMenu={(e) => {
                         e.preventDefault()
+                        // Right-clicking INSIDE a selection means the selection:
+                        // the row you hit is one of the many you picked, and
+                        // editing it alone would ignore what you said.
+                        if (picked.size > 1 && picked.has(a.id)) {
+                          openEdit({ id: 'many', kind: 'many', label: `${picked.size}명 편집`,
+                            ids: [...picked] })
+                          return
+                        }
                         openEdit({ id: `edit:${a.id}`, kind: 'edit', label: anyName(a), who: a.id })
                       }}
                       cell={{
@@ -632,7 +642,10 @@ export default function App() {
         {showEdit && (<div className="rl-pane rl-epane">
           <RackTabs tabs={etabs} active={eactive} opened
             onPick={setEactive} onClose={closeEdit} />
-          {etab.kind === 'edit' ? (
+          {etab.kind === 'many' ? (
+            <EditMany ids={etab.ids} doc={doc} onSave={commit} say={setNote}
+              onDone={() => closeEdit('many')} onCancel={() => closeEdit('many')} />
+          ) : etab.kind === 'edit' ? (
             <EditAuthor author={etab.who ? authors.find((a) => a.id === etab.who) : null}
               doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
               onCreated={(id, label) => {
@@ -753,6 +766,219 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
       <textarea className="rl-outbox" value={out} readOnly
         placeholder={none ? '이 탭에 사람이 없습니다.' : ''} />
       </>)}
+    </div>
+  )
+}
+
+/** Editing many records at once.
+ *
+ * Only what the records SHARE can be edited: a name or a phone number belongs
+ * to one person, but "everyone in this group has core 3" is one fact said many
+ * times. So the form holds the affiliations and the groups they all have.
+ *
+ * The rule in every field is the same: what is already there is what everyone
+ * has, and an untouched field changes nothing. Where they differ the field is
+ * empty and says (여러 값) — type into it and everyone gets what you typed.
+ */
+function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
+  const people = useMemo(
+    () => (doc.authors || []).filter((a) => ids.includes(a.id)), [doc, ids])
+  /** The tags every one of them has, and the groups every one of them is in. */
+  const common = useCallback((key, id) => {
+    if (!people.length) return []
+    const sets = people.map((a) => new Set((a[key] || []).map((x) => x[id]).filter(Boolean)))
+    return byName([...sets[0]].filter((v) => sets.every((s) => s.has(v))))
+  }, [people])
+  const affTags = useMemo(() => common('affiliations', 'tag'), [common])
+  const grpNames2 = useMemo(() => common('groups', 'group'), [common])
+
+  /** One value if they all say the same thing, '' if they do not. */
+  const shared = useCallback((key, id, name, field) => {
+    const vals = people.map((a) => {
+      const e = (a[key] || []).find((x) => x[id] === name)
+      return e == null ? '' : String(e[field] ?? '')
+    })
+    return vals.every((v) => v === vals[0]) ? vals[0] : ''
+  }, [people])
+  const base = useMemo(() => {
+    const out = { aff: {}, grp: {} }
+    for (const t of affTags) {
+      out.aff[t] = { dept: shared('affiliations', 'tag', t, 'dept'),
+        position: shared('affiliations', 'tag', t, 'position'),
+        since: shared('affiliations', 'tag', t, 'since') }
+    }
+    for (const g of grpNames2) {
+      out.grp[g] = { role: shared('groups', 'group', g, 'role'),
+        core: shared('groups', 'group', g, 'core') }
+    }
+    return out
+  }, [affTags, grpNames2, shared])
+  const mixed = useCallback((key, id, name, field) => {
+    const vals = people.map((a) => {
+      const e = (a[key] || []).find((x) => x[id] === name)
+      return e == null ? '' : String(e[field] ?? '')
+    })
+    return !vals.every((v) => v === vals[0])
+  }, [people])
+
+  const [f, setF] = useState(base)
+  const [drop, setDrop] = useState({ aff: [], grp: [] })
+  const [add2, setAdd2] = useState({ aff: [], grp: [] })
+  useEffect(() => { setF(base); setDrop({ aff: [], grp: [] }); setAdd2({ aff: [], grp: [] }) },
+    [base, ids.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const put = (kind, name, field, v) =>
+    setF((s) => ({ ...s, [kind]: { ...s[kind], [name]: { ...s[kind][name], [field]: v } } }))
+  const toggleDrop = (kind, name) => setDrop((s) => ({ ...s,
+    [kind]: s[kind].includes(name) ? s[kind].filter((x) => x !== name) : [...s[kind], name] }))
+
+  const affLeft = byName((doc.affiliations || []).map((r) => r.name)
+    .filter((n) => !affTags.includes(n) && !add2.aff.includes(n)))
+  const grpLeft = byName((doc.groups || []).map((r) => r.name)
+    .filter((n) => !grpNames2.includes(n) && !add2.grp.includes(n)))
+
+  async function save() {
+    const now = new Date().toISOString()
+    const changed = (kind, name, field) => (f[kind][name]?.[field] ?? '') !== (base[kind][name]?.[field] ?? '')
+    const authors = (doc.authors || []).map((a) => {
+      if (!ids.includes(a.id)) return a
+      let affiliations = (a.affiliations || [])
+        .filter((x) => !drop.aff.includes(x.tag))
+        .map((x) => {
+          if (!base.aff[x.tag]) return x
+          const out = { ...x }
+          for (const k of ['dept', 'position', 'since']) {
+            if (changed('aff', x.tag, k)) out[k] = f.aff[x.tag][k]
+          }
+          return out
+        })
+      for (const t of add2.aff) {
+        if (!affiliations.some((x) => x.tag === t)) {
+          affiliations = [...affiliations,
+            { tag: t, dept: '', position: '', email: '', since: '', current: true }]
+        }
+      }
+      let groups = (a.groups || [])
+        .filter((x) => !drop.grp.includes(x.group))
+        .map((x) => {
+          if (!base.grp[x.group]) return x
+          const out = { ...x }
+          if (changed('grp', x.group, 'role')) out.role = f.grp[x.group].role
+          if (changed('grp', x.group, 'core')) out.core = Number(f.grp[x.group].core) || f.grp[x.group].core
+          return out
+        })
+      for (const g of add2.grp) {
+        if (!groups.some((x) => x.group === g)) groups = [...groups, { group: g, role: '', core: 10 }]
+      }
+      return { ...a, affiliations, groups, updatedAt: now }
+    })
+    const n = ids.length
+    if (await onSave({ authors }, `${n}명 한번에 저장했습니다.`)) onDone?.()
+  }
+
+  if (!people.length) return <p className="rl-msg">선택된 저자가 없습니다.</p>
+  return (
+    <div className="rl-tab-body">
+      <div className="rl-rec">
+        <Fld label="대상">
+          <div className="rl-rows">
+            <span className="rl-hint">{people.length}명</span>
+            <div className="rl-rrow">
+              {people.slice(0, 20).map((a) => <span key={a.id} className="rl-tag">{anyName(a)}</span>)}
+              {people.length > 20 && <span className="rl-hint">… 외 {people.length - 20}명</span>}
+            </div>
+            <span className="rl-hint">
+              이름 · 이메일 · 전화 · 링크 · 첨부는 한 사람의 것이라 여기서 고치지 않습니다.
+            </span>
+          </div>
+        </Fld>
+
+        <Fld label="소속 이력">
+          <div className="rl-rows">
+            {affTags.length === 0 && <span className="rl-hint">모두가 함께 가진 소속이 없습니다.</span>}
+            {affTags.map((t) => {
+              const off = drop.aff.includes(t)
+              return (
+                <div key={t} className="rl-rrow" style={off ? { opacity: 0.45 } : null}>
+                  <span className="rl-tag">{t}</span>
+                  <input className="rl-in" style={{ width: 150 }} disabled={off}
+                    placeholder={mixed('affiliations', 'tag', t, 'dept') ? '(여러 값)' : '부서'}
+                    value={f.aff[t]?.dept ?? ''} onChange={(e) => put('aff', t, 'dept', e.target.value)} />
+                  <input className="rl-in" style={{ width: 170 }} disabled={off}
+                    placeholder={mixed('affiliations', 'tag', t, 'position') ? '(여러 값)' : 'position'}
+                    value={f.aff[t]?.position ?? ''} onChange={(e) => put('aff', t, 'position', e.target.value)} />
+                  <input className="rl-in" style={{ width: 90 }} disabled={off}
+                    placeholder={mixed('affiliations', 'tag', t, 'since') ? '(여러 값)' : '2020-01'}
+                    value={f.aff[t]?.since ?? ''} onChange={(e) => put('aff', t, 'since', e.target.value)} />
+                  <button type="button" className="rl-x" title={off ? '되돌리기' : '모두에게서 빼기'}
+                    onClick={() => toggleDrop('aff', t)}>{off ? '↺' : '×'}</button>
+                </div>
+              )
+            })}
+            {add2.aff.map((t) => (
+              <div key={t} className="rl-rrow">
+                <span className="rl-tag">{t}</span>
+                <span className="rl-hint">모두에게 추가됩니다.</span>
+                <button type="button" className="rl-x" title="취소"
+                  onClick={() => setAdd2((s) => ({ ...s, aff: s.aff.filter((x) => x !== t) }))}>×</button>
+              </div>
+            ))}
+            <div className="rl-rrow">
+              <select className="rl-btn rl-pick" value="" disabled={!affLeft.length}
+                onChange={(e) => setAdd2((s) => ({ ...s, aff: [...s.aff, e.target.value] }))}>
+                <option value="">+ 소속 추가</option>
+                {affLeft.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+        </Fld>
+
+        <Fld label="그룹 소속">
+          <div className="rl-rows">
+            {grpNames2.length === 0 && <span className="rl-hint">모두가 함께 속한 그룹이 없습니다.</span>}
+            {grpNames2.map((g) => {
+              const off = drop.grp.includes(g)
+              return (
+                <div key={g} className="rl-rrow" style={off ? { opacity: 0.45 } : null}>
+                  <span className="rl-tag">{g}</span>
+                  <input className="rl-in" style={{ width: 200 }} disabled={off}
+                    placeholder={mixed('groups', 'group', g, 'role') ? '(여러 값)' : 'role'}
+                    value={f.grp[g]?.role ?? ''} onChange={(e) => put('grp', g, 'role', e.target.value)} />
+                  <input className="rl-in rl-mono" style={{ width: 70 }} disabled={off}
+                    placeholder={mixed('groups', 'group', g, 'core') ? '(여러 값)' : 'core'}
+                    value={f.grp[g]?.core ?? ''} onChange={(e) => put('grp', g, 'core', e.target.value)} />
+                  <span className="rl-hint">저자 순서</span>
+                  <button type="button" className="rl-x" title={off ? '되돌리기' : '모두에게서 빼기'}
+                    onClick={() => toggleDrop('grp', g)}>{off ? '↺' : '×'}</button>
+                </div>
+              )
+            })}
+            {add2.grp.map((g) => (
+              <div key={g} className="rl-rrow">
+                <span className="rl-tag">{g}</span>
+                <span className="rl-hint">모두에게 추가됩니다 (core 10).</span>
+                <button type="button" className="rl-x" title="취소"
+                  onClick={() => setAdd2((s) => ({ ...s, grp: s.grp.filter((x) => x !== g) }))}>×</button>
+              </div>
+            ))}
+            <div className="rl-rrow">
+              <select className="rl-btn rl-pick" value="" disabled={!grpLeft.length}
+                onChange={(e) => setAdd2((s) => ({ ...s, grp: [...s.grp, e.target.value] }))}>
+                <option value="">+ 그룹 추가</option>
+                {grpLeft.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+        </Fld>
+      </div>
+      <div className="rl-acts">
+        <button type="button" className="rl-btn rl-go" onClick={save}>save and exit</button>
+        <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
+        <span className="rl-sp" />
+        <button type="button" className="rl-btn" onClick={() => {
+          setF(base); setDrop({ aff: [], grp: [] }); setAdd2({ aff: [], grp: [] })
+        }}>revert</button>
+      </div>
     </div>
   )
 }
@@ -991,8 +1217,10 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
   const [sure, setSure] = useState(false)   // delete asks once, in place
   useEffect(() => { setF(author || blank); setSure(false) }, [author])  // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
-  const affNames = (doc.affiliations || []).map((r) => r.name)
-  const grpNames = (doc.groups || []).map((r) => r.name)
+  // Every list you pick a name from reads in name order: the order they were
+  // made in is not an order anyone can look something up in.
+  const affNames = byName((doc.affiliations || []).map((r) => r.name))
+  const grpNames = byName((doc.groups || []).map((r) => r.name))
 
   const named = () => (f.nick || '').trim() || korName(f) || engName(f)
 
