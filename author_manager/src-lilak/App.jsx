@@ -280,7 +280,11 @@ export default function App() {
     let list = authors
     if (tab.aff) list = list.filter((a) => inAff(a, tab.aff))
     if (tab.grp) list = list.filter((a) => inGrp(a, tab.grp))
-    return [...list].sort(byColumn(sort?.k || 'kor', sort?.dir ?? 1, tab.grp))
+    // No column clicked: the order an author list is written in — core first,
+    // then by family name. On a group's tab that group's core is the one that
+    // counts, which is the only core that means anything there.
+    if (!sort) return [...list].sort(byPaperOrder(tab.grp ? (a) => coreIn(a, tab.grp) : coreOf))
+    return [...list].sort(byColumn(sort.k, sort.dir, tab.grp))
   }, [authors, sort])
   const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
 
@@ -543,12 +547,12 @@ export default function App() {
             <>
               <RackTable cols={cols} onDrag={drag('')}
                 facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
-                sort={sort || { k: 'kor', dir: 1 }}
+                sort={sort || { k: 'core', dir: 1 }}
                 onSort={(k) => setSort((s2) => {
                   // The implicit order counts as the current one, so the first
                   // press on the column already sorted turns it over instead of
                   // doing nothing you can see.
-                  const now = s2 || { k: 'kor', dir: 1 }
+                  const now = s2 || { k: 'core', dir: 1 }
                   return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
                 })}
                 head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
@@ -612,7 +616,10 @@ export default function App() {
               </RackTable>
               {/* What you ticked is the set you assembled; with nothing ticked
                   the tab itself is the set. */}
+              {/* On a group's tab the printed block is ordered by THAT group's
+                  core — the number was assigned for this author list. */}
               <ListOut list={chosen.length ? chosen : scope} picked={chosen.length > 0}
+                core={tab.grp ? (a) => coreIn(a, tab.grp) : coreOf}
                 doc={doc} say={setNote} open={outOpen} setOpen={setOutOpen} />
             </>
           )}
@@ -692,7 +699,7 @@ const byPaperOrder = (core = coreOf) => (a, b) => {
 }
 
 // ─── My List's output: the reason the list exists ───────────────────────────
-function ListOut({ list, picked, doc, say, open, setOpen }) {
+function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
   const [sep, setSep] = useState(', ')
   const [tpl, setTpl] = useState(PRESETS[0][1])
   // Two printed forms are not templates: they number the affiliations, which a
@@ -705,7 +712,7 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
    *  affiliations count — somebody at two places carries two numbers, which is
    *  what the abstract prints. */
   const block = () => {
-    const ordered = [...list].sort(byPaperOrder())
+    const ordered = [...list].sort(byPaperOrder(core))
     const idx = new Map()
     for (const a of ordered) {
       for (const x of currentAffs(a)) if (!idx.has(x.tag)) idx.set(x.tag, idx.size + 1)
