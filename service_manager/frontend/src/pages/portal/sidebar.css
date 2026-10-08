@@ -652,3 +652,11 @@
   font-size: 9px;
   line-height: 11px;
 }
+
+/* The drawer has to come out of the flow, or a bar slid off screen still holds
+   its 260px and the panel is squeezed against an empty strip. The base
+   `.pl-side { position: relative }` is declared later in this file and was
+   winning on order alone — a media query adds no specificity. */
+@media (max-width: 639px) {
+  .pl-side { position: absolute; }
+}
