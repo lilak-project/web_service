@@ -318,43 +318,10 @@
 /* Under 640px the sidebar stops taking space and slides over the panel instead;
    the panel gets the whole width, which is the only way a service is usable on a
    phone. Between 640 and 900 the JS collapses it to 64px. */
-@media (max-width: 639px) {
-  .pl-side {
-    position: absolute; inset: 0 auto 0 0; z-index: 30;
-    box-shadow: 0 8px 30px rgba(15, 23, 42, .18);
-    transform: translateX(0);
-    transition: transform .18s, width .15s;
-  }
-  .pl-root.mini .pl-side { width: 260px; transform: translateX(-100%); box-shadow: none; }
-  /* The drawer is never the clipped 64px bar — it is either over the panel or gone. */
-  .pl-root.mini .pl-side :is(.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub) {
-    opacity: 1; pointer-events: auto;
-  }
-  .pl-root.mini .pl-card { background: var(--surface); border-color: var(--border-default); }
-  .pl-root.mini .pl-plist { display: flex; }
-}
-
-/* Drawer scrim — only exists at phone width, where the sidebar overlays. */
-.pl-scrim { display: none; }
-@media (max-width: 639px) {
-  .pl-scrim { display: block; position: absolute; inset: 0; z-index: 25; background: rgba(15, 23, 42, .35); }
-}
-
-/* Phone-only handle that brings the drawer back (the logo toggle rides away with
-   the bar). Hidden at widths where the 64px bar — and its logo — remain visible. */
-.pl-reopen { display: none; }
-@media (max-width: 639px) {
-  .pl-reopen {
-    display: grid; place-items: center;
-    position: absolute; top: 8px; left: 8px; z-index: 28;
-    width: 38px; height: 38px;
-    border-radius: var(--radius-lg, 5px);
-    background: var(--surface);
-    border: 1px solid var(--border-default);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, .14);
-    color: var(--text-emphasis);
-  }
-}
+/* The bar is the same bar at every width: 260px open, 64px folded, always in
+   the layout. It used to turn into a drawer below 640px and leave — which meant
+   the one thing that says where you are vanished exactly when the screen was
+   too small to find your way back. */
 
 /* ── group bands ─────────────────────────────────────────────────────────── */
 /* The band covers the bar's full width, gutters included: an indented box made
@@ -492,11 +459,6 @@
   border-color: var(--warning-text, #b45309);
   background: var(--warning-bg, #fef3c7);
   color: var(--warning-text, #b45309);
-}
-
-/* Phone: one bar at a time — the settings bar takes the drawer's place. */
-@media (max-width: 639px) {
-  .pl-bar2 { position: absolute; inset: 0 auto 0 0; z-index: 26; width: 214px; box-shadow: 0 8px 30px rgba(15, 23, 42, .18); }
 }
 
 /* Log out lives at the FOOT of the settings bar, pushed there by a spring, so it
@@ -651,12 +613,4 @@
   padding: 0 2px;
   font-size: 9px;
   line-height: 11px;
-}
-
-/* The drawer has to come out of the flow, or a bar slid off screen still holds
-   its 260px and the panel is squeezed against an empty strip. The base
-   `.pl-side { position: relative }` is declared later in this file and was
-   winning on order alone — a media query adds no specificity. */
-@media (max-width: 639px) {
-  .pl-side { position: absolute; }
 }

@@ -92,7 +92,9 @@ const MINI_KEY = 'portal-mini'
 const FLAT_KEY = 'portal-flat'
 const SHUT_KEY = 'portal-groups-shut'
 const WIDE = 900          // below this the bar collapses on its own
-const PHONE = 640         // below this it becomes a drawer over the panel (CSS)
+// Narrow enough that one open bar fills the screen: the bar still stands, it
+// just starts folded and folds again whenever something opens beside it.
+const PHONE = 640
 
 const readSet = (key) => {
   try { const a = JSON.parse(localStorage.getItem(key) || '[]'); return new Set(Array.isArray(a) ? a : []) }
@@ -324,7 +326,7 @@ export default function SidebarPortal({
     // read by useState above, narrow first visits included.
     const fit = () => {
       const w = window.innerWidth
-      if (w < PHONE) return                      // drawer: the user's choice stands
+      if (w < PHONE) return                      // narrow: the user's choice stands
       // Managing needs the bar wide, whatever the window does: the grips, the
       // drop bands and the drag itself are not reachable at 64px. Read through
       // a ref, so this effect runs ONCE — with `manage` in its deps it re-ran
@@ -820,19 +822,6 @@ export default function SidebarPortal({
   return (
     <div className={`pl-root${mini ? ' mini' : ''}${view === 'settings' ? ' settings' : ''}`
       + `${manage && isManager ? ' managing' : ''}${cmd ? ' cmd' : ''}`}>
-      {/* the drawer's scrim — shown by CSS at phone width only, so it follows a
-          resize instead of whatever innerWidth was at render time */}
-      {!mini && <div className="pl-scrim" onClick={() => setMini(true)} />}
-
-      {/* Phone only: the collapse toggle lives INSIDE the bar, which slides off
-          screen with it — without this there is no way back to the menu. */}
-      {mini && (
-        <button type="button" className="pl-reopen" onClick={() => setMini(false)}
-          title={L('메뉴', 'Menu')}>
-          <Icon name="lilak" size={22} />
-        </button>
-      )}
-
       <aside className="pl-side" ref={sideRef} tabIndex={-1}>
         <div className="pl-brand">
           <button type="button" className="pl-logo" disabled={manage && isManager}
