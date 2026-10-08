@@ -24,6 +24,8 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   const setErr = (m) => m && notify(m, 'bad')
   const [drag, setDrag] = useState(false)
   const fileRef = useRef(null)
+  // Which project the service's own card opens, "" = none (the list is shown).
+  const [entry, setEntry] = useState(service.entry_project || '')
 
   async function load() {
     try { setProjects((await launcher.get(`/services/${svc}/projects`)).data) }
@@ -55,6 +57,18 @@ export default function ServiceProjects({ service, canManage, manage = false, on
     setBusy(proj); setErr('')
     try { await launcher.delete(`/services/${svc}/projects/${proj}`); await load(); onChanged?.() }
     catch (e) { setErr(e?.response?.data?.detail || t('portal_proj_delete_fail')) }
+    finally { setBusy('') }
+  }
+  /** A manager nominates one project as the service's entrance — or clears it.
+   *  It changes what the card does for everyone, so it is a manager's call. */
+  async function setEntryProject(proj) {
+    const want = proj === entry ? '' : proj
+    setBusy(proj); setErr('')
+    try {
+      await launcher.put(`/services/${svc}/entry`, { project: want })
+      setEntry(want)
+      onChanged?.()
+    } catch (e) { setErr(e?.response?.data?.detail || t('portal_entry_fail')) }
     finally { setBusy('') }
   }
   async function requestAccess(proj) {
@@ -120,6 +134,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
       )}
 
       <Panel bare title={t('portal_proj_title')} hint={projects ? String(projects.length) : '…'}>
+        {canManage && manage && <Row className="empty">{t('portal_entry_hint')}</Row>}
         {projects === null && <Row className="empty">…</Row>}
         {projects?.length === 0 && <Row className="empty">{t('portal_proj_empty')}</Row>}
         {(projects || []).map((p) => {
@@ -148,6 +163,12 @@ export default function ServiceProjects({ service, canManage, manage = false, on
               )}
               {manage && p.can_enter && p.running && (
                 <Button variant="warning" disabled={busy === p.name} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>
+              )}
+              {canManage && manage && (
+                <Button variant={entry === p.name ? 'primary' : 'secondary'} disabled={busy === p.name}
+                  title={t('portal_entry_hint')} onClick={() => setEntryProject(p.name)}>
+                  {entry === p.name ? `${t('portal_entry_on')} · ${t('portal_entry_clear')}` : t('portal_entry_set')}
+                </Button>
               )}
               {canManage && manage && (
                 <Button variant="dangerSoft" disabled={busy === p.name} title={t('portal_proj_delete')}

@@ -31,6 +31,7 @@ Everything else in this document is split by what each mode must satisfy.
 | `identity` `{accepts_portal_token, link_by}` | ✓ | ✓ | how the user identity is carried in (§7) |
 | `capabilities` `{multi_project, import_export}` | optional | optional | declared capabilities (§3.5) |
 | `icon`, `color` | optional | optional | cosmetic; travel with the data |
+| `entry_project` | optional | optional | one project this service opens straight into (§3.5) |
 
 Missing keys are filled from `registry.KIND_DEFAULTS[kind]` on read, so an empty
 service dir + a `kind` is enough for a managed service of a known kind.
@@ -59,6 +60,12 @@ A service with `capabilities.multi_project` is a **template**: the portal manage
 the **projects** under it (creating, listing, running, deleting them). Each project
 runs as its own instance — `data/<service>/projects/<project>/` data dir + its own
 port — reusing the service's `start` recipe.
+
+`entry_project` names one of them as the service's entrance: the cover then opens
+that project when its card is pressed, with no list in between — for a service
+that is multi-project in shape but has one project in practice. A manager sets it
+per project in manage mode (`PUT /api/services/<svc>/entry`), and `""` clears it;
+the other projects are untouched and still there in manage mode.
 
 **Rule.** The `start.cmd` is run per project with substitutions and env:
 

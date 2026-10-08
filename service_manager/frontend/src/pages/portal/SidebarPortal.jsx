@@ -685,7 +685,9 @@ export default function SidebarPortal({
     const on = ((view === 'service' || view === 'manage' || signedOut) && sel?.svc === key) || projOpen(key)
     // In manage mode a card is a thing to arrange and edit, never a thing to run:
     // even a multi-project service opens its settings instead of its project list.
-    const multi = s.multi_project && !manage && !signedOut
+    // A service that has nominated one project as its entrance is not a list
+    // either: pressing it goes straight in, which is what the nomination means.
+    const multi = s.multi_project && !s.entry_project && !manage && !signedOut
     // The project list is hidden at 64px (.pl-root.mini .pl-plist), so a card
     // marked open while the bar is folded is a card that says it is showing
     // something it is not. One condition drives the chevron AND the list.
@@ -701,6 +703,10 @@ export default function SidebarPortal({
           <button type="button" className="pl-row"
             onClick={() => {
               if (manage && isManager) { openManage(s); return }
+              // One project nominated: the card IS that project.
+              if (!manage && !signedOut && s.multi_project && s.entry_project) {
+                pickProject(s, s.entry_project); return
+              }
               if (!multi) { openService(s); return }
               // A multi-project service has no page of its own. Picking it drops
               // its project list in the bar AND puts its projects in the panel —

@@ -42,6 +42,11 @@ def raw_service(name: str) -> dict:
         "icon": manifest.get("icon"),
         "color": manifest.get("color"),
         "multi_project": bool(caps.get("multi_project")),
+        # A multi-project service can nominate ONE project as its entrance: the
+        # cover then opens that project straight from the card, with no list in
+        # between. The projects are all still there in manage mode — this says
+        # which one a press means, not that the others are gone.
+        "entry_project": manifest.get("entry_project") or "",
         # How the cover opens it: "panel" (inside the portal, in an iframe) or
         # "window" (its own tab). A multi-project service brings its own top bar,
         # command bar and drawer, which read as a second set of chrome inside a

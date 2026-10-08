@@ -129,6 +129,33 @@ def rename_project(svc: str, proj: str, body: RenameProject,
     return {"name": proj, "label": label or None}
 
 
+class EntryProject(BaseModel):
+    project: str = ""        # "" clears it
+
+
+@router.put("/api/services/{svc}/entry")
+def set_entry_project(svc: str, body: EntryProject,
+                      user: models.User = Depends(require_portal_user),
+                      db: Session = Depends(get_db)):
+    """Nominate one project as the service's entrance, or clear it.
+
+    With it set, pressing the service on the cover opens that project rather
+    than listing them — a service that is multi-project in shape but has one
+    project in practice stops asking a question with one answer. A manager's
+    call: it changes what the card does for everyone.
+    """
+    _require_multi(svc)
+    if not permissions.is_admin(user):
+        raise HTTPException(403, "매니저만 바꿀 수 있습니다.")
+    want = (body.project or "").strip()
+    if want and want not in {p["name"] for p in pr.list_projects(svc)}:
+        raise HTTPException(404, f"'{want}' 없음")
+    manifest = registry.read_manifest(svc)
+    manifest["entry_project"] = want or None
+    registry.write_manifest(svc, manifest)
+    return {"service": svc, "entry_project": want}
+
+
 @router.post("/api/services/{svc}/projects/{proj}/start")
 def start_project(svc: str, proj: str, user: models.User = Depends(require_portal_user),
                  db: Session = Depends(get_db)):
