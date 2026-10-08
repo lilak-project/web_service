@@ -132,6 +132,26 @@ const linkedCites = (r) => citesOf(r).filter((c) => c.ref)
  *  or the start of its title when it has none. */
 const refLabel = (r) => (r?.citeKey || '').trim() || (r?.title || '').slice(0, 32) || '논문'
 
+// ─── The cite key ───────────────────────────────────────────────────────────
+// The key is also a file name — the PDFs on disk are named after it — so every
+// part of it is squeezed to what a file name can hold. Punctuation becomes an
+// underscore rather than vanishing, which is how the spreadsheet already spelled
+// a reaction: 12C(p,p)12C → 12C_p_p_12C, X-ray burst → X-ray_burst.
+const slug = (v) => String(v || '').replace(/[^A-Za-z0-9-]+/g, '_').replace(/_+/g, '_')
+  .replace(/^_|_$/g, '')
+/** The tag this paper is filed under. One of its own, chosen; the first one
+ *  when nobody has chosen. */
+const mainTag = (r) => (tagsOf(r).includes(r.mainTag) ? r.mainTag : tagsOf(r)[0] || '')
+const KEY_RULE = '{a1}_{jl}_{year}_{tag}'
+/** The key a paper would be given. Parts nobody filled in leave no gap. */
+const citeKeyFor = (doc, r, rule = KEY_RULE) => rule
+  .replace(/\{([^{}]+)\}/g, (m, k) => {
+    const v = { a1: handleFor(firstAuthor(doc, r)), jl: jShort(doc, r),
+      year: r.year, tag: mainTag(r) }[k.trim()]
+    return v === undefined ? m : slug(v)
+  })
+  .replace(/_+/g, '_').replace(/^_|_$/g, '')
+
 const D = '·'   // a cell with nothing in it still shows its column
 
 // ─── The columns ────────────────────────────────────────────────────────────
@@ -1117,7 +1137,7 @@ function TextRows({ value = [], onChange, add, placeholder, link }) {
 /** Tags: the ones already in use are offered, a new one is just typed. A tag
  *  is a word, so the list of them is the list of words in use — there is
  *  nothing to create first. */
-function TagRows({ value = [], onChange, options }) {
+function TagRows({ value = [], onChange, options, main, onMain }) {
   const [add, setAdd] = useState('')
   const put = () => {
     const t = add.trim()
@@ -1129,8 +1149,14 @@ function TagRows({ value = [], onChange, options }) {
     <div className="rl-rows">
       <div className="rl-rrow">
         {value.map((t) => (
-          <span key={t} className="rl-tag">
-            {t}
+          /* One tag is the MAIN one: it is what the cite key is filed under, so
+             which it is has to be visible and choosable, not just first. */
+          <span key={t} className={`rl-tag${onMain && t === main ? ' rl-main' : ''}`}>
+            {onMain ? (
+              <button type="button" className="rl-tagpick"
+                title={t === main ? '메인 태그' : '메인 태그로'}
+                onClick={() => onMain(t)}>{t}</button>
+            ) : t}
             <button type="button" className="rl-x" title="이 태그 떼기"
               onClick={() => onChange(value.filter((x) => x !== t))}>×</button>
           </span>
@@ -1280,7 +1306,8 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
   // rather than over one.
   const draft = !ref_
   const blank = { id: null, type: 'paper', citeKey: '', title: '', author: '', journal: '',
-    volume: '', pages: '', year: '', doi: '', url: '', tags: [], cites: [], links: [], note: '' }
+    volume: '', pages: '', year: '', doi: '', url: '', tags: [], mainTag: '',
+    cites: [], links: [], note: '' }
   const [f, setF] = useState(ref_ || blank)
   const [sure, setSure] = useState(false)   // delete asks once, in place
   useEffect(() => { setF(ref_ || blank); setSure(false) }, [ref_])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -1288,11 +1315,29 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
   const named = () => (f.citeKey || '').trim() || (f.title || '').trim()
   const jrnNames = (doc.journals || []).map((j) => j.name)
 
+  // The key a paper would be given by the rule, and whether somebody already
+  // has it. A key that exists is not refused — two papers really can be the
+  // same author, journal and year — but it is said out loud.
+  const suggested = citeKeyFor(doc, f)
+  const taken = (f.citeKey || '').trim()
+    && (doc.references || []).some((r) => r.citeKey === f.citeKey.trim() && r.id !== f.id)
+  // A key you typed is yours. One you never touched, on a NEW paper, writes
+  // itself as the fields that make it arrive — the papers already in the list
+  // keep the names their files are under.
+  const keyTyped = useRef(false)
+  useEffect(() => { keyTyped.current = false }, [ref_])
+  useEffect(() => {
+    if (draft && !keyTyped.current && suggested && f.citeKey !== suggested) {
+      setF((s2) => ({ ...s2, citeKey: suggested }))
+    }
+  }, [draft, suggested])   // eslint-disable-line react-hooks/exhaustive-deps
+
   // A half-typed line is not data: blank strings are dropped on the way out.
   const tidy = (r) => ({
     ...r,
     citeKey: String(r.citeKey || '').trim(),
     tags: (r.tags || []).map((x) => String(x).trim()).filter(Boolean),
+    mainTag: tagsOf(r).includes(r.mainTag) ? r.mainTag : '',
     links: (r.links || []).map((x) => String(x).trim()).filter(Boolean),
   })
   const label = (r) => r.citeKey || (r.title || '').slice(0, 24) || '논문'
@@ -1326,10 +1371,15 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
       <div className="rl-rec">
         {draft && (
           <Fld label="붙여넣기">
-            <PasteBox say={say} onTake={(got) => setF((s) => ({ ...s, ...got,
-              // A journal we already know keeps its record's spelling.
-              journal: jrnNames.find((n) => n.toLowerCase() === (got.journal || '').toLowerCase())
-                || got.journal || s.journal }))} />
+            <PasteBox say={say} onTake={(got) => setF((s) => {
+              const { author, ...rest } = got
+              return { ...s, ...rest,
+                // The parser reads ONE string; this form keeps rows.
+                authors: splitAuthors(author).map((n) => ({ name: n, ref: '', corr: false })),
+                // A journal we already know keeps its record's spelling.
+                journal: jrnNames.find((n) => n.toLowerCase() === (got.journal || '').toLowerCase())
+                  || got.journal || s.journal }
+            })} />
           </Fld>
         )}
         <Fld label="종류">
@@ -1339,7 +1389,15 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
         </Fld>
         <Fld label="cite key">
           <input className="rl-in rl-mono" style={{ width: 300 }} value={f.citeKey || ''}
-            onChange={set('citeKey')} placeholder="JAlmeid_ApJ_1983" />
+            onChange={(e) => { keyTyped.current = true; set('citeKey')(e) }}
+            placeholder={suggested || 'JAlmeid_ApJ_1983'} />
+          <button type="button" className="rl-btn" disabled={!suggested || f.citeKey === suggested}
+            title={`${KEY_RULE} → ${suggested || ''}`}
+            onClick={() => { keyTyped.current = true; setF((s2) => ({ ...s2, citeKey: suggested })) }}>
+            자동
+          </button>
+          <span className="rl-hint rl-mono">{KEY_RULE}</span>
+          {taken && <span className="rl-warn">같은 키의 논문이 있습니다.</span>}
         </Fld>
         <Fld label="제목">
           <textarea className="rl-in" rows={2} style={{ width: '100%', minWidth: 260 }}
@@ -1373,8 +1431,10 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
           )}
         </Fld>
         <Fld label="태그">
-          <TagRows value={f.tags || []} options={tags}
+          <TagRows value={f.tags || []} options={tags} main={mainTag(f)}
+            onMain={(t) => setF((s) => ({ ...s, mainTag: t }))}
             onChange={(v) => setF((s) => ({ ...s, tags: v }))} />
+          <span className="rl-hint">태그를 누르면 메인 태그 — cite key의 {'{tag}'} 자리입니다.</span>
         </Fld>
         {!draft && (
           <Fld label="참고문헌">
