@@ -115,6 +115,9 @@ export default function App() {
   const [etabs, setEtabs] = useState([])            // [{ id, label, col }]
   const [eactive, setEactive] = useState({})
   const [ecol, setECol] = useState(0)               // the column a new note opens in
+  // The note a right-click (or 새 노트) just opened: its title takes the caret,
+  // so the first thing you can do with a note is name it.
+  const [fresh, setFresh] = useState(null)
   const [efull, setEFull] = useState(!!VIEW.efull)  // the editor takes the list's width too
   const [query, setQuery] = useState('')
   const [bodyHits, setBodyHits] = useState(null)   // ids whose BODY matched
@@ -223,7 +226,7 @@ export default function App() {
   function openEdit(id, label) {
     const had = etabs.find((t) => t.id === id)
     const col = had ? had.col : ecol
-    if (!had) setEtabs((ts) => [...ts, { id, label, col }])
+    if (!had) { setEtabs((ts) => [...ts, { id, label, col }]); setFresh(id) }
     setEactive((a) => ({ ...a, [col]: id }))
   }
   function closeEdit(id) {
@@ -465,6 +468,7 @@ export default function App() {
                     title={efull ? '목록 다시 보기' : '전체 너비'}>{efull ? '⇥' : '⇤'}</button>
                 </div>
                 <Editor id={cur.id} say={setNote} onSaved={reload}
+                  takeCaret={cur.id === fresh} onCaret={() => setFresh(null)}
                   onPrint={() => printNotes([cur.id])}
                   onClosed={(cid) => { closeEdit(cid); reload() }} />
               </div>
@@ -488,16 +492,32 @@ export default function App() {
 // ─── One note ───────────────────────────────────────────────────────────────
 /** The note is read when the tab opens, not from the list — the list carries a
  *  first line, and this needs the file. */
-function Editor({ id, say, onSaved, onClosed, onPrint }) {
+function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   const [n, setN] = useState(null)
   const [f, setF] = useState(null)
   const [sure, setSure] = useState(false)
   const [open, setOpen] = useState(false)     // the fold beside the title
+  const titleRef = useRef(null)
   useEffect(() => {
     let live = true
     setN(null); setSure(false)
     ask(`/notes/${encodeURIComponent(id)}`)
-      .then(({ body }) => { if (live) { setN(body); setF(body) } })
+      .then(({ body }) => {
+        if (!live) return
+        setN(body); setF(body)
+        if (!takeCaret) return
+        // A note just opened: the caret goes to its title. A name the app chose
+        // is selected (type over it); one a person wrote is left alone, caret
+        // at the end.
+        requestAnimationFrame(() => {
+          const el = titleRef.current
+          if (!el) return
+          el.focus()
+          if (body.title === '제목 없음') el.select()
+          else el.setSelectionRange(el.value.length, el.value.length)
+          onCaret?.()
+        })
+      })
       .catch((e) => say(String(e.message || e)))
     return () => { live = false }
   }, [id])   // eslint-disable-line react-hooks/exhaustive-deps
@@ -549,7 +569,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint }) {
       </div>
 
       <div className="nt-titlerow">
-        <input className="nt-title" value={f.title} placeholder="제목"
+        <input className="nt-title" ref={titleRef} value={f.title} placeholder="제목"
           onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} />
         {/* Everything that is not the title or the body is behind this. */}
         <button type="button" className="nt-fold" onClick={() => setOpen(!open)}
