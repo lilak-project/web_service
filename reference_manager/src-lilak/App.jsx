@@ -112,8 +112,14 @@ const bibOrder = (name) => {
 }
 /** A handle for an author: initials and the family name, the way the
  *  spreadsheet's a1 column was written (J. Almeid → JAlmeid). */
+/** Accents are for reading; a handle and a file name are for typing.
+ *  Łukasik → Lukasik, Schießl → Schiessl, Pârlog → Parlog. */
+const LETTER = { 'ß': 'ss', 'ł': 'l', 'Ł': 'L', 'ø': 'o', 'Ø': 'O', 'đ': 'd', 'Đ': 'D',
+  'æ': 'ae', 'Æ': 'AE', 'œ': 'oe', 'Œ': 'OE', 'þ': 'th', 'ð': 'd', '\u2019': "'" }
+const deburr = (s) => String(s || '').replace(/[^\u0000-\u007f]/g, (c) => LETTER[c] || c)
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 const handleFor = (name) => {
-  const [given, family] = nameParts(name)
+  const [given, family] = nameParts(deburr(name))
   return `${given.map((w) => w.replace(/[^A-Za-z]/g, '')[0] || '').join('')}${family}`
     .replace(/[^\w-]/g, '') || 'author'
 }
@@ -194,7 +200,7 @@ const refLabel = (r) => (r?.citeKey || '').trim() || (r?.title || '').slice(0, 3
 // part of it is squeezed to what a file name can hold. Punctuation becomes an
 // underscore rather than vanishing, which is how the spreadsheet already spelled
 // a reaction: 12C(p,p)12C → 12C_p_p_12C, X-ray burst → X-ray_burst.
-const slug = (v) => String(v || '').replace(/[^A-Za-z0-9-]+/g, '_').replace(/_+/g, '_')
+const slug = (v) => deburr(v).replace(/[^A-Za-z0-9-]+/g, '_').replace(/_+/g, '_')
   .replace(/^_|_$/g, '')
 /** The tag this paper is filed under. One of its own, chosen; the first one
  *  when nobody has chosen. */
