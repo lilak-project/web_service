@@ -40,6 +40,6 @@ open('dist/_check.html', 'w').write('''<!doctype html>
     return json(DOC);
   };
 </script>
-</head><body><div id="root"></div><script type="module" src="assets/%s"></script></body></html>
+</head><body class="rl-page"><div id="root"></div><script type="module" src="assets/%s"></script></body></html>
 ''' % (css, json.dumps(DOC, ensure_ascii=False), js))
 print('harness ready:', css, js, len(DOC['references']), 'refs')
