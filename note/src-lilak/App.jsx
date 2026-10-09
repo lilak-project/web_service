@@ -17,7 +17,7 @@
  */
 import { Children, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  RackTable, RackRow, RackTabs,
+  RackTable, RackRow, RackTabs, RackActions,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
   useEditorPanes, RackPaneStrip,
   bySome, useFacetFilter, FilterBar, FacetRows,
@@ -28,12 +28,14 @@ import {
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { remarkSoftBreaks } from 'lilak-ui/log/Markdown.jsx'
-import MarkdownArea, { TAG_RE } from './MarkdownArea.jsx'
+import MarkdownArea, { TAG_RE, EMBED_RE } from './MarkdownArea.jsx'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
 
 const WIDTH_KEY = projectKey('nt', 'cols')
 const VIEW_KEY = projectKey('nt', 'view')
+/** Where a file a note embeds is served from. */
+const fileSrc = (name) => `${PORTAL_BASE}/api/file/${encodeURIComponent(name)}`
 const api = (p, o) => fetch(`${PORTAL_BASE}/api${p}`, {
   ...o, headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(o?.headers || {}) },
 })
@@ -413,12 +415,11 @@ export default function App() {
 function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   const [n, setN] = useState(null)
   const [f, setF] = useState(null)
-  const [sure, setSure] = useState(false)
   const [open, setOpen] = useState(false)     // the fold beside the title
   const titleRef = useRef(null)
   useEffect(() => {
     let live = true
-    setN(null); setSure(false)
+    setN(null)
     ask(`/notes/${encodeURIComponent(id)}`)
       .then(({ body }) => {
         if (!live) return
@@ -443,14 +444,14 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   // return: a hook that only runs once the note has loaded is a hook the first
   // render did not have, and React drops the whole tree over it (#310) — which
   // is a blank pane, not a missing shortcut.
-  useRackKeys({ onSave: () => { if (f && n) saveNote(false) } })
+  useRackKeys({ onSave: () => { if (f && n) saveNote() } })
 
   if (!f || !n) return <p className="rl-msg">읽는 중…</p>
   const dirty = JSON.stringify(f) !== JSON.stringify(n)
   // Tags live in the BODY now (#태그), so this is what the note will carry the
   // moment it is saved — shown rather than edited.
   const tags = bodyTags(f.body)
-  async function saveNote(andClose) {
+  async function saveNote() {
     const { conflict, body } = await ask(`/notes/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify({ baseVersion: n.version, title: f.title, body: f.body }),
@@ -463,7 +464,6 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
     setN(body); setF(body)
     say('저장했습니다.')
     onSaved?.()
-    if (andClose) onClosed?.(id)
   }
   async function remove() {
     await ask(`/notes/${encodeURIComponent(id)}`, { method: 'DELETE' })
@@ -473,23 +473,14 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
 
   return (
     <div className="nt-edit">
-      {/* The buttons sit above the title: everything below them is the note. */}
-      <div className="nt-acts">
-        <button type="button" className="rl-btn rl-go" disabled={!dirty} onClick={() => saveNote(false)}>save</button>
-        <button type="button" className="rl-btn rl-go" onClick={() => saveNote(true)}>save and exit</button>
-        <button type="button" className="rl-btn" disabled={!dirty} onClick={() => setF(n)}>revert</button>
-        <button type="button" className="rl-btn" onClick={onPrint}>미리보기</button>
-        <span className="rl-sp" />
-        {sure ? (
-          <>
-            <span className="rl-hint">파일이 지워집니다.</span>
-            <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-            <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-          </>
-        ) : (
-          <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-        )}
-      </div>
+      {/* The buttons sit above the title: everything below them is the note.
+          The same bar every editor in every rack-list service wears. */}
+      <RackActions key={id}
+        onSave={() => saveNote()} saveDisabled={!dirty}
+        onCancel={() => onClosed?.(id)}
+        extra={<button type="button" className="rl-btn" onClick={onPrint}>미리보기</button>}
+        onRevert={dirty ? () => setF(n) : null} onDelete={remove}
+        deleteWarn="파일이 지워집니다. 되돌릴 수 없습니다." />
 
       <div className="nt-titlerow">
         <input className="nt-title" ref={titleRef} value={f.title} placeholder="제목"
@@ -513,7 +504,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
         </div>
       )}
 
-      <MarkdownArea value={f.body} placeholder="markdown. #태그 로 태그를, `- [ ] 할 일`로 todos 탭에."
+      <MarkdownArea value={f.body} fileSrc={fileSrc} placeholder="markdown. #태그 로 태그를, `- [ ] 할 일`로 todos 탭에."
         onChange={(v) => setF((s) => ({ ...s, body: v }))} />
     </div>
   )
@@ -546,9 +537,14 @@ const RENDER = {
   h1: tagged('h1'), h2: tagged('h2'), h3: tagged('h3'), h4: tagged('h4'),
 }
 function Rendered({ children }) {
+  // `![[name]]` is Obsidian's embed, not markdown — here it is turned into the
+  // markdown image it means. Only on the way to the page: the file keeps its
+  // own spelling.
+  const md = String(children || '').replace(EMBED_RE,
+    (_, name) => `![${name}](${fileSrc(name)})`)
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkSoftBreaks]} components={RENDER}>
-      {children}
+      {md}
     </ReactMarkdown>
   )
 }

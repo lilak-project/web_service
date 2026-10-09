@@ -35,6 +35,9 @@ PROJECT = os.environ.get("PORTAL_PROJECT", "")
 DIST = Path(os.environ.get("NOTE_DIST_DIR", "/app/note/dist"))
 NOTES = DATA / "notes"
 TEMPLATES = DATA / "templates"
+# What a note points at: images and anything else it embeds. Obsidian keeps
+# these beside the notes in the vault, and a note names one by file name alone.
+FILES = DATA / "files"
 
 app = FastAPI(title="note")
 
@@ -305,6 +308,18 @@ def search(q: str = "", _: dict = Depends(identity)) -> dict:
                              "text": ln.strip()[:160]})
                 break
     return {"hits": hits}
+
+
+@app.get("/api/file/{name}")
+def get_file(name: str, _: dict = Depends(identity)):
+    """A file a note embeds — `![[name.png]]`, which is Obsidian's spelling and
+    names the file alone. It never leaves the project's files folder."""
+    if not name or "/" in name or "\\" in name or name.startswith("."):
+        raise HTTPException(400, "잘못된 파일 이름입니다.")
+    p = (FILES / name).resolve()
+    if not str(p).startswith(str(FILES.resolve())) or not p.is_file():
+        raise HTTPException(404, "그 파일이 없습니다.")
+    return FileResponse(p)
 
 
 @app.get("/api/whoami")

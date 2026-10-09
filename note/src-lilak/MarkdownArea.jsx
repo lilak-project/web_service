@@ -100,7 +100,7 @@ const checkRule = $inputRule((ctx) => new InputRule(/^\[([ xX]?)\]\s$/, (state, 
  *     and escaped, it stops being a tag. */
 const tidy = (md) => md.replace(/\\#/g, '#')
 
-const make = (root, value, onMarkdown) => Editor.make()
+const make = (root, value, onMarkdown, fileSrc) => Editor.make()
   .config((ctx) => {
     ctx.set(rootCtx, root)
     ctx.set(defaultValueCtx, value)
@@ -118,9 +118,10 @@ const make = (root, value, onMarkdown) => Editor.make()
   .use(activeLine)
   .use(checkRule)
   .use(tagInDoc)
+  .use(embedInDoc(fileSrc))
   .create()
 
-export default function MarkdownArea({ value, onChange }) {
+export default function MarkdownArea({ value, onChange, fileSrc }) {
   const host = useRef(null)
   const ed = useRef(null)
   const cb = useRef(onChange)
@@ -131,7 +132,7 @@ export default function MarkdownArea({ value, onChange }) {
 
   useEffect(() => {
     let dead = false
-    make(host.current, value, (md) => { mine.current = md; cb.current(md) })
+    make(host.current, value, (md) => { mine.current = md; cb.current(md) }, fileSrc)
       .then((e) => { if (dead) e.destroy(); else ed.current = e })
     return () => { dead = true; ed.current?.destroy(); ed.current = null }
   }, [])   // eslint-disable-line react-hooks/exhaustive-deps
@@ -143,7 +144,8 @@ export default function MarkdownArea({ value, onChange }) {
     mine.current = value
     const e = ed.current
     ed.current = null
-    e.destroy().then(() => make(host.current, value, (md) => { mine.current = md; cb.current(md) })
+    e.destroy().then(() => make(host.current, value,
+      (md) => { mine.current = md; cb.current(md) }, fileSrc)
       .then((next) => { ed.current = next }))
   }, [value])   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -174,6 +176,35 @@ export default function MarkdownArea({ value, onChange }) {
 
   return <div className="nt-wy" ref={host} onMouseDown={onClick} />
 }
+
+/** `![[name.png]]` — Obsidian's embed, which is not markdown and so is not
+ *  anybody's engine's job. It is shown as a WIDGET beside the text rather than
+ *  parsed into an image node: the text stays exactly what the file says, and
+ *  the file stays something Obsidian can still read. */
+export const EMBED_RE = /!\[\[([^\]]+)\]\]/g
+const embedInDoc = (src) => $prose(() => new Plugin({
+  key: new PluginKey('nt-embed'),
+  props: {
+    decorations(state) {
+      const marks = []
+      state.doc.descendants((node, pos) => {
+        if (!node.isText) return true
+        for (const m of node.text.matchAll(EMBED_RE)) {
+          const at = pos + m.index + m[0].length
+          marks.push(Decoration.widget(at, () => {
+            const img = document.createElement('img')
+            img.className = 'nt-embed'
+            img.src = src(m[1])
+            img.alt = m[1]
+            return img
+          }, { side: 1, key: `embed:${m[1]}` }))
+        }
+        return true
+      })
+      return DecorationSet.create(state.doc, marks)
+    },
+  },
+}))
 
 /** `#태그` — Obsidian's spelling, and markdown keeps it apart from a heading
  *  (`# ` has a space after the hash). */

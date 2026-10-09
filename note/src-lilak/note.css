@@ -56,6 +56,16 @@
 /* A todo that is done is still worth seeing — just not first. */
 .rl-hit.rl-done .rl-c { color: var(--rk-mute); text-decoration: line-through; }
 
+/* A file a note embeds, shown where it is named. */
+.nt-embed {
+  display: block;
+  max-width: 100%;
+  margin: 6px 0;
+  border: 1px solid var(--rk-line);
+  border-radius: 2px;
+}
+.nt-sheet img { max-width: 100%; margin: 3mm 0; }
+
 /* A tag, drawn as a tag: a label with its point to the left and the hole it
    hangs by. The shape is one clip-path, so changing it to a plain pill is one
    line. Used in the editor (a decoration over the text, which stays `#태그`)
@@ -132,13 +142,8 @@
    Everything that is not the title or the body is behind one fold, because a
    note is mostly body and the pane was mostly fields. */
 .nt-edit { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.nt-acts {
-  flex: 0 0 auto;
-  display: flex; align-items: center; gap: 6px;
-  height: 32px; padding: 0 11px;
-  border-bottom: 1px solid var(--rk-line);
-  background: var(--rk-gut);
-}
+/* The actions are RackActions now (.rl-acts, sticky at the top of the pane),
+   so this service no longer dresses its own. */
 .nt-titlerow {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 8px;
