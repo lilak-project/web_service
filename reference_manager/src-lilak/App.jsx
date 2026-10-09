@@ -877,11 +877,18 @@ function ListOut({ list, picked, tokens, say, open, setOpen }) {
  *  whose file is named after its key. Manager only — it is the one setting that
  *  decides what the backend will open. */
 function Settings({ doc, onSave, say }) {
-  const roots = (doc.settings || {}).pdfRoots || []
+  // A settings page is a record like any other: you change it, you look at
+  // what you changed, and you save. It used to write on every keystroke of a
+  // path — a half-typed root is a root the service would have tried to read.
+  const saved = (doc.settings || {}).pdfRoots || []
+  const [roots, setRoots] = useState(saved)
   const [busy, setBusy] = useState(false)
   const [found, setFound] = useState(null)
+  useEffect(() => { setRoots(saved) }, [saved.join('\u0000')])  // eslint-disable-line react-hooks/exhaustive-deps
+  const tidy = (v) => v.map((x) => String(x).trim()).filter(Boolean)
+  const dirty = tidy(roots).join('\u0000') !== tidy(saved).join('\u0000')
 
-  const setRoots = (v) => onSave({ settings: { ...(doc.settings || {}), pdfRoots: v } },
+  const save = () => onSave({ settings: { ...(doc.settings || {}), pdfRoots: tidy(roots) } },
     '허용 루트를 저장했습니다.')
 
   async function linkAll() {
@@ -908,6 +915,15 @@ function Settings({ doc, onSave, say }) {
 
   return (
     <div className="rl-edit">
+      {/* The scan is this page's own doing, so it rides with save; it reads the
+          roots the SERVICE has, which is why it waits for them to be saved. */}
+      <RackActions onSave={save} saveDisabled={!dirty} onRevert={() => setRoots(saved)}
+        hint={dirty ? '저장하지 않은 변경이 있습니다.' : ''}
+        extra={(
+          <button type="button" className="rl-btn" disabled={busy || dirty || !saved.length}
+            title={dirty ? '먼저 저장하세요' : '파일 이름이 cite key와 같으면 연결합니다'}
+            onClick={linkAll}>{busy ? '훑는 중…' : '루트를 훑어 연결'}</button>
+        )} />
       <div className="rl-rec">
         <Fld label="PDF 허용 루트">
           <TextRows value={roots} add="+ 루트" placeholder="/Users/…/Papers"
@@ -919,11 +935,9 @@ function Settings({ doc, onSave, say }) {
         </Fld>
         <Fld label="전부 자동 연결">
           <div className="rl-rows">
-            <div className="rl-rrow">
-              <button type="button" className="rl-btn rl-go" disabled={busy || !roots.length}
-                onClick={linkAll}>{busy ? '훑는 중…' : '루트를 훑어 연결'}</button>
-              <span className="rl-hint">파일 이름이 cite key와 같으면 연결합니다.</span>
-            </div>
+            <span className="rl-hint">
+              위의 <b>루트를 훑어 연결</b>이 저장된 루트를 훑습니다.
+            </span>
             {found && (
               <span className="rl-hint">
                 파일 {found.files}개 · 새로 연결 {found.linked} · 이미 있던 것 {found.already}
