@@ -25,6 +25,7 @@ import {
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
 // and one newline means one line break, because a note is typed, not typeset.
 import Markdown from 'lilak-ui/log/Markdown.jsx'
+import MarkdownArea, { TAG_RE } from './MarkdownArea.jsx'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
 
@@ -42,6 +43,15 @@ async function ask(p, o) {
 
 const D = '·'
 const tagsOf = (n) => (n.tags || []).filter(Boolean)
+/** The tags a body carries. `#태그` is Obsidian's spelling and markdown's own
+ *  rule keeps it apart from a heading: `# ` has a space after the hash. */
+export function bodyTags(body, also = []) {
+  const out = [...(also || [])]
+  for (const m of String(body || '').matchAll(TAG_RE)) {
+    if (!out.includes(m[2])) out.push(m[2])
+  }
+  return out
+}
 const inTag = (n, t) => tagsOf(n).includes(t)
 
 const COLS = [
@@ -430,8 +440,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint }) {
   const [n, setN] = useState(null)
   const [f, setF] = useState(null)
   const [sure, setSure] = useState(false)
-  const [preview, setPreview] = useState(false)
-  const [field, setField] = useState('')
+  const [open, setOpen] = useState(false)     // the fold beside the title
   useEffect(() => {
     let live = true
     setN(null); setSure(false)
@@ -441,14 +450,15 @@ function Editor({ id, say, onSaved, onClosed, onPrint }) {
     return () => { live = false }
   }, [id])   // eslint-disable-line react-hooks/exhaustive-deps
   if (!f || !n) return <p className="rl-msg">읽는 중…</p>
-  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const dirty = JSON.stringify(f) !== JSON.stringify(n)
+  // Tags live in the BODY now (#태그), so this is what the note will carry the
+  // moment it is saved — shown rather than edited.
+  const tags = bodyTags(f.body, f.tags)
 
   async function saveNote(andClose) {
     const { conflict, body } = await ask(`/notes/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      body: JSON.stringify({ baseVersion: n.version, title: f.title, date: f.date,
-                             tags: f.tags, fields: f.fields, body: f.body }),
+      body: JSON.stringify({ baseVersion: n.version, title: f.title, body: f.body }),
     })
     if (conflict) {
       say(body.detail || '다른 곳에서 바뀌었습니다.')
@@ -467,89 +477,51 @@ function Editor({ id, say, onSaved, onClosed, onPrint }) {
   }
 
   return (
-    <div className="rl-edit">
-      <div className="rl-rec">
-        <span className="rl-fl">제목</span>
-        <div className="rl-fv">
-          <input className="rl-in" style={{ flex: 1, minWidth: 180 }} value={f.title} onChange={set('title')} />
-        </div>
-        <span className="rl-fl">날짜</span>
-        <div className="rl-fv">
-          <input className="rl-in rl-mono" style={{ width: 130 }} value={f.date} onChange={set('date')}
-            placeholder="2026-10-08" />
-          <span className="rl-hint rl-mono">{f.id}.md</span>
-        </div>
-        <span className="rl-fl">태그</span>
-        <div className="rl-fv">
-          <input className="rl-in" style={{ flex: 1, minWidth: 180 }} value={(f.tags || []).join(' ')}
-            onChange={(e) => setF((s) => ({ ...s, tags: e.target.value.split(/[\s,]+/).filter(Boolean) }))}
-            placeholder="공백으로 구분" />
-        </div>
-        {/* Any other front-matter key. A note may carry fields this app never
-            heard of; they are shown, kept, and can be added to. */}
-        {Object.entries(f.fields || {}).map(([k, v]) => (
-          <div key={k} style={{ display: 'contents' }}>
-            <span className="rl-fl rl-mono">{k}</span>
-            <div className="rl-fv">
-              <input className="rl-in" style={{ flex: 1, minWidth: 180 }} value={String(v ?? '')}
-                onChange={(e) => setF((s) => ({ ...s, fields: { ...s.fields, [k]: e.target.value } }))} />
-              <button type="button" className="rl-x" title="이 속성 지우기"
-                onClick={() => setF((s) => {
-                  const next = { ...s.fields }; delete next[k]; return { ...s, fields: next }
-                })}>×</button>
-            </div>
-          </div>
-        ))}
-        <span className="rl-fl">속성 추가</span>
-        <div className="rl-fv">
-          <input className="rl-in" style={{ width: 160 }} value={field} placeholder="이름"
-            onChange={(e) => setField(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addField() } }} />
-          <button type="button" className="rl-btn" disabled={!field.trim()} onClick={addField}>+ 속성</button>
-        </div>
+    <div className="nt-edit">
+      {/* The buttons sit above the title: everything below them is the note. */}
+      <div className="nt-acts">
+        <button type="button" className="rl-btn rl-go" disabled={!dirty} onClick={() => saveNote(false)}>save</button>
+        <button type="button" className="rl-btn rl-go" onClick={() => saveNote(true)}>save and exit</button>
+        <button type="button" className="rl-btn" disabled={!dirty} onClick={() => setF(n)}>revert</button>
+        <button type="button" className="rl-btn" onClick={onPrint}>인쇄 · PDF</button>
+        <span className="rl-sp" />
+        {sure ? (
+          <>
+            <span className="rl-hint">파일이 지워집니다.</span>
+            <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
+            <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
+          </>
+        ) : (
+          <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
+        )}
       </div>
 
-      <div className="nt-bodybar">
-        <button type="button" className={`rl-btn${preview ? '' : ' on'}`} onClick={() => setPreview(false)}>쓰기</button>
-        <button type="button" className={`rl-btn${preview ? ' on' : ''}`} onClick={() => setPreview(true)}>미리보기</button>
-        <span className="rl-hint">{f.body.split(/\s+/).filter(Boolean).length}단어</span>
-        <span className="rl-sp" />
-        <button type="button" className="rl-btn" onClick={onPrint}>인쇄 · PDF</button>
+      <div className="nt-titlerow">
+        <input className="nt-title" value={f.title} placeholder="제목"
+          onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} />
+        {/* Everything that is not the title or the body is behind this. */}
+        <button type="button" className="nt-fold" onClick={() => setOpen(!open)}
+          title={open ? '접기' : '날짜 · 태그 · 파일 이름'} aria-expanded={open}>
+          <i className="rl-caret">{open ? '▾' : '▸'}</i>
+          {tags.length ? <span className="nt-tagline">{tags.map((t) => `#${t}`).join(' ')}</span> : null}
+        </button>
       </div>
-      {preview ? (
-        <div className="nt-preview"><Markdown>{f.body}</Markdown></div>
-      ) : (
-        <textarea className="nt-body" value={f.body} spellCheck={false}
-          onChange={set('body')} placeholder="markdown. `- [ ] 할 일`은 todos 탭에 모입니다." />
+      {open && (
+        <div className="nt-meta-open">
+          <span className="rl-hint">{f.date || '날짜 없음'}</span>
+          <span className="rl-hint rl-mono">{f.id}.md</span>
+          {Object.entries(f.fields || {}).map(([k, v]) => (
+            <span key={k} className="rl-hint"><b className="rl-mono">{k}</b> {String(v ?? '')}</span>
+          ))}
+          <span className="rl-sp" />
+          <span className="rl-hint">{f.body.split(/\s+/).filter(Boolean).length}단어</span>
+        </div>
       )}
 
-      <div className="rl-rec">
-        <span className="rl-fl" />
-        <div className="rl-fv">
-          <button type="button" className="rl-btn rl-go" disabled={!dirty} onClick={() => saveNote(false)}>save</button>
-          <button type="button" className="rl-btn rl-go" onClick={() => saveNote(true)}>save and exit</button>
-          <button type="button" className="rl-btn" disabled={!dirty} onClick={() => setF(n)}>revert</button>
-          <span className="rl-gap" />
-          {sure ? (
-            <>
-              <span className="rl-hint">파일이 지워집니다.</span>
-              <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-              <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-            </>
-          ) : (
-            <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-          )}
-        </div>
-      </div>
+      <MarkdownArea value={f.body} placeholder="markdown. #태그 로 태그를, `- [ ] 할 일`로 todos 탭에."
+        onChange={(v) => setF((s) => ({ ...s, body: v }))} />
     </div>
   )
-
-  function addField() {
-    const k = field.trim()
-    if (!k) return
-    setF((s) => ({ ...s, fields: { ...s.fields, [k]: '' } }))
-    setField('')
-  }
 }
 
 // ─── Printing ───────────────────────────────────────────────────────────────

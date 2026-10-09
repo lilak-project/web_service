@@ -98,3 +98,47 @@
   .nt-sheet :where(h1, h2, h3) { break-after: avoid; }
   .nt-sheet pre, .nt-sheet blockquote, .nt-sheet table { break-inside: avoid; }
 }
+
+/* ── the editor: a title, and then the note ──────────────────────────────
+   Everything that is not the title or the body is behind one fold, because a
+   note is mostly body and the pane was mostly fields. */
+.nt-edit { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.nt-acts {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 11px;
+  border-bottom: 1px solid var(--rk-line);
+  background: var(--rk-gut);
+}
+.nt-titlerow {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 11px 2px;
+}
+.nt-title {
+  flex: 1; min-width: 0;
+  height: 30px; padding: 0;
+  border: 0; background: none;
+  font: inherit; font-size: 17px; color: var(--rk-ink);
+}
+.nt-title:focus { outline: none; }
+.nt-title::placeholder { color: var(--rk-mute); }
+.nt-fold {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 6px;
+  max-width: 50%;
+  height: 22px; padding: 0 6px;
+  border: 1px solid transparent; border-radius: 0;
+  background: none; font: inherit; font-size: var(--rk-fs);
+  color: var(--rk-mute); cursor: pointer;
+}
+.nt-fold:hover { border-color: var(--rk-edge); color: var(--rk-dim); }
+.nt-tagline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rk-cite-t); }
+.nt-meta-open {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 12px;
+  padding: 2px 11px 6px;
+}
+/* The body takes everything that is left — to the right edge, to the bottom. */
+.nt-cm { flex: 1; min-height: 0; border-top: 1px solid var(--rk-line); overflow: hidden; }
+.nt-cm .cm-editor { height: 100%; }

@@ -43,6 +43,10 @@ app = FastAPI(title="note")
 # which is how "속성 추가하기" works without a schema.
 KNOWN = ("title", "date", "tags")
 TODO_RE = re.compile(r"^(\s*[-*]\s+\[)([ xX])(\]\s*)(.*)$")
+# `#태그` written in the body, the way Obsidian spells one. A heading is `# `
+# WITH a space after the hash, so the two cannot be confused — which is why the
+# tag needs no field of its own.
+TAG_RE = re.compile(r"(?:^|[\s(])#([^\s#.,;:!?()\[\]{}'\"]+)")
 
 
 def _now() -> str:
@@ -119,11 +123,17 @@ def _read(p: Path) -> dict:
     meta, body = _split(text)
     extra = {k: v for k, v in meta.items() if k not in KNOWN}
     d = meta.get("date")
+    # Front matter first (an imported note may carry tags there), then the ones
+    # written in the body. One list, in the order they were met.
+    tags = _as_tags(meta.get("tags"))
+    for m in TAG_RE.finditer(body):
+        if m.group(1) not in tags:
+            tags.append(m.group(1))
     return {
         "id": p.stem,
         "title": str(meta.get("title") or p.stem),
         "date": (d.isoformat() if isinstance(d, (date, datetime)) else str(d or "")),
-        "tags": _as_tags(meta.get("tags")),
+        "tags": tags,
         "fields": extra,
         "body": body,
         # A STRING on purpose: st_mtime_ns is ~1.8e18, past JavaScript's safe
@@ -228,10 +238,15 @@ def put_note(note_id: str, body: SaveBody, _: dict = Depends(identity)):
         return JSONResponse(status_code=409, content={
             "detail": "이 노트가 그 사이에 바뀌었습니다. 최신 내용을 불러옵니다.",
             "current": cur})
+    # `tags` is only written when a client asks for it. Left alone, the front
+    # matter keeps whatever it had and the body's #tags stay in the body —
+    # writing the read-back list there would copy every inline tag into the
+    # front matter on the first save.
+    old_meta, _ = _split(p.read_text(encoding="utf-8"))
     meta = {
         "title": cur["title"] if body.title is None else body.title.strip(),
         "date": cur["date"] if body.date is None else body.date.strip(),
-        "tags": cur["tags"] if body.tags is None else _as_tags(body.tags),
+        "tags": _as_tags(old_meta.get("tags")) if body.tags is None else _as_tags(body.tags),
         **(cur["fields"] if body.fields is None else body.fields),
     }
     _atomic_write(p, _join(meta, cur["body"] if body.body is None else body.body))
