@@ -19,7 +19,7 @@ import { Children, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import {
   RackTable, RackRow, RackTabs, RackActions,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
-  useEditorPanes, RackPaneStrip,
+  useEditorPanes, RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
   bySome, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, authHeaders,
 } from 'lilak-ui/racklist'
@@ -71,6 +71,14 @@ export function bodyTags(body) {
   return out
 }
 const inTag = (n, t) => tagsOf(n).includes(t)
+/** A tag lives in the body and nowhere else, so renaming one is an edit to the
+ *  text: `#old` becomes `#new` wherever the tag rule says a tag starts. The
+ *  character in front is kept — it is what made it a tag rather than part of a
+ *  word, and `#oldish` is a different tag entirely. */
+export function renameBodyTag(body, from, to) {
+  return String(body || '').replace(TAG_RE, (m, lead, name) =>
+    (name === from ? `${lead}#${to}` : m))
+}
 
 const COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
@@ -231,6 +239,12 @@ export default function App() {
       .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
   }, [notes, tab, clsSort])
 
+  // Tags drift here too — the same merge as the other racks, except the fold
+  // is one PUT per note, because a tag is text inside the file.
+  const onTags = tab?.kind === 'classes'
+  const merge = useMergeMode(onTags)
+  const mergeCols = useMemo(() => [{ k: 'chk', w: 26, min: 26, fix: true }, ...clsCols], [clsCols])
+
   const showEdit = panes.showing && !!index
   // Two editor columns need the room the list was using; one does not.
   const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
@@ -270,6 +284,31 @@ export default function App() {
       openEdit(body.id, body.title)
       setNote(template ? `'${template}' 템플릿으로 만들었습니다.` : '새 노트를 만들었습니다.')
     } catch (e) { setNote(String(e.message || e)) }
+  }
+  /** Folding tags here is not one document save: a tag is text inside a file,
+   *  so it is one save per note. A save can fail or lose a race, so it stops
+   *  at the first one that does and says how far it got — half a merge the
+   *  user knows about beats a whole one they do not. */
+  async function mergeTags(gone, to, users) {
+    let done = 0
+    let stopped = ''
+    for (const u of users) {
+      try {
+        const { body: cur } = await ask(`/notes/${encodeURIComponent(u.id)}`)
+        let text = cur.body
+        for (const g of gone) text = renameBodyTag(text, g, to)
+        if (text === cur.body) continue
+        const { conflict, body } = await putNote(u.id, cur.version, { title: cur.title, body: text })
+        if (conflict) { stopped = `'${cur.title}'이(가) 그 사이 바뀌었습니다`; break }
+        if (body) done += 1
+      } catch (e) { stopped = String(e.message || e); break }
+    }
+    await reload()
+    panes.close('mergetags')
+    merge.off()
+    setNote(stopped
+      ? `${stopped} — 노트 ${done}편까지 바꿨습니다.`
+      : `태그 ${gone.length + 1}개를 '${to}' 하나로 합쳤습니다 · 노트 ${done}편`)
   }
   async function toggleTodo(t) {
     try {
@@ -312,6 +351,11 @@ export default function App() {
           )}
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={() => preview([...picked])}>미리보기 ({picked.size})</button>
+          {onTags && (
+            <RackMergeButtons merge={merge} noun="태그"
+              onOpen={(names) => panes.open({ id: 'mergetags', kind: 'mergetags', names,
+                label: `태그 ${names.length}개 합치기` })} />
+          )}
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {tabs.length > FIXED.length && (
@@ -415,13 +459,22 @@ export default function App() {
             )}
 
             {index && tab?.kind === 'classes' && (
-              <RackTable cols={clsCols} onDrag={drag('c:')} sort={clsSort}
-                onSort={(k) => setClsSort((s) => (s.k === k ? { k, dir: -s.dir } : { k, dir: 1 }))}>
-                {classes.map((r, i) => (
-                  <RackRow key={r.name} cols={clsCols} tone={TONE} className="rl-hit"
-                    onClick={() => openTab({ id: `tag:${r.name}`, kind: 'notes', tag: r.name, label: r.name })}
-                    cell={{ num: i + 1, name: r.name, count: r.count }} />
-                ))}
+              <RackTable cols={merge.mode ? mergeCols : clsCols} onDrag={drag('c:')} sort={clsSort}
+                onSort={(k) => setClsSort((s) => (s.k === k ? { k, dir: -s.dir } : { k, dir: 1 }))}
+                head={merge.mode ? merge.head(classes.map((r) => r.name)) : null}>
+                {classes.map((r, i) => {
+                  const chosen = merge.mode && merge.has(r.name)
+                  return (
+                  <RackRow key={r.name} cols={merge.mode ? mergeCols : clsCols} tone={TONE}
+                    className={`rl-hit${chosen ? ' on' : ''}`}
+                    onClick={() => (merge.mode ? merge.toggle(r.name)
+                      : openTab({ id: `tag:${r.name}`, kind: 'notes', tag: r.name, label: r.name }))}
+                    cell={{
+                      ...(merge.mode ? { chk: <input type="checkbox" checked={chosen} tabIndex={-1}
+                        readOnly aria-label={`${r.name} 선택`} /> } : {}),
+                      num: i + 1, name: r.name, count: r.count }} />
+                  )
+                })}
                 {classes.length === 0 && <p className="rl-msg">아직 태그가 없습니다.</p>}
               </RackTable>
             )}
@@ -433,10 +486,23 @@ export default function App() {
             return (
               <div key={c} className="rl-pane rl-epane" onMouseDown={() => panes.setCol(c)}>
                 <RackPaneStrip panes={panes} col={c} />
+                {cur.kind === 'mergetags' ? (() => {
+                  const all = [...new Set(notes.flatMap(tagsOf))]
+                  const live = (cur.names || []).filter((t) => all.includes(t))
+                  const users = notes.filter((n) => live.some((t) => inTag(n, t)))
+                  return (
+                    <RackMerge names={cur.names || []} noun="태그" exists={all}
+                      count={(t) => notes.filter((n) => inTag(n, t)).length}
+                      users={users.map((n) => n.title || n.id)}
+                      onMerge={(gone, to) => mergeTags(gone, to, users)}
+                      onCancel={() => panes.close(cur.id)} />
+                  )
+                })() : (
                 <Editor id={cur.id} say={setNote} onSaved={reload}
                   takeCaret={cur.id === fresh} onCaret={() => setFresh(null)}
                   onPrint={() => preview([cur.id])}
                   onClosed={(cid) => { panes.close(cid); reload() }} />
+                )}
               </div>
             )
           })}
