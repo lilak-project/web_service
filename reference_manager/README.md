@@ -37,6 +37,11 @@ authors[] tags[] cites[] pdf links note
 
 ### 저자는 줄이다
 
+표와 편집기는 **풀네임이 있으면 풀네임**을 보여준다 — `Jung Woo Lee`는 누구인지
+바로 알지만 `J. W. Lee`는 한 번 더 생각하게 한다. 인용과 **cite key는 줄임이름**을
+쓴다 (`{abv author}`, `{a1}`): 키는 인용이고, 풀네임을 따라가면 `AKarakas`가
+어느 날 `AIKarakas`가 된다.
+
 ```js
 authors: [ { name: 'C. Y. Tsang', ref: '<author id>', corr: false }, … ]
 ```

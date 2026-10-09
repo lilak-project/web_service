@@ -44,10 +44,19 @@ const splitAuthors = (text) => String(text || '')
   .split(AUTHOR_SPLIT).map((x) => x.trim().replace(/,$/, '')).filter(Boolean)
 const authorRows = (r) => (r.authors || []).filter((a) => a && (a.name || a.ref))
 /** A registered author is spelled by their record, so fixing a name fixes it
- *  on every paper at once. */
-const autName = (doc, a) => (a?.ref
-  ? ((doc?.authors || []).find((x) => x.id === a.ref)?.name || a.name || '')
-  : (a?.name || ''))
+ *  on every paper at once — and by the fullest spelling it has, because
+ *  'Jung Woo Lee' tells you who it is and 'J. W. Lee' makes you work it out.
+ *  The short one is still what a citation uses; see {abv author}. */
+const autRec = (doc, a) => (a?.ref ? (doc?.authors || []).find((x) => x.id === a.ref) : null)
+const autName = (doc, a) => {
+  const rec = autRec(doc, a)
+  return (rec && (rec.fullName || rec.name)) || a?.name || ''
+}
+/** The citation spelling, whatever the row shows. */
+const autShort = (doc, a) => {
+  const rec = autRec(doc, a)
+  return (rec && (rec.name || rec.fullName)) || a?.name || ''
+}
 const authorList = (doc, r) => authorRows(r).map((a) => autName(doc, a)).filter(Boolean)
 const authorString = (doc, r) => authorList(doc, r).join(' and ')
 const firstAuthor = (doc, r) => authorList(doc, r)[0] || ''
@@ -115,8 +124,13 @@ const jShort = (doc, r) => journalRec(doc, r)?.shortName || r.journal || r.inst 
 // A journal carries three names: what it is called, the short one a table can
 // hold (ApJ) and the one a citation uses (Astrophys. J.).
 const jAbbrev = (doc, r) => journalRec(doc, r)?.abbrev || journalRec(doc, r)?.name || r.journal || ''
+const shortRefName = (doc, r) => {
+  const rows = authorRows(r)
+  const one = autShort(doc, rows[0] || {})
+  return rows.length > 1 ? `${one} et al.` : one
+}
 const shortRef = (doc, r) => [
-  etAl(doc, r), [jAbbrev(doc, r), r.volume, r.pages].filter(Boolean).join(' '),
+  shortRefName(doc, r), [jAbbrev(doc, r), r.volume, r.pages].filter(Boolean).join(' '),
 ].filter(Boolean).join(', ') + (r.year ? ` (${r.year})` : '')
 
 // A paper points at ONE journal and carries any number of tags. A topic set
@@ -199,7 +213,9 @@ const ruleFor = (r, settings) => (settings?.keyRules || {})[r?.type]
 const citeKeyFor = (doc, r, rule = ruleFor(r, doc?.settings)) => rule
   .replace(/\{([^{}]+)\}/g, (m, k) => {
     const v = {
-      a1: handleFor(firstAuthor(doc, r)),
+      // From the CITATION spelling, not the full name: a key is a citation,
+      // and 'Amanda I. Karakas' must not quietly turn AKarakas into AIKarakas.
+      a1: handleFor(autShort(doc, authorRows(r)[0] || {})),
       jl: jShort(doc, r),
       year: r.year,
       // RIKEN counts PACs and RAON uses the year: say the year once, not twice.
@@ -221,11 +237,11 @@ const COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
   { k: 'type', w: 56, min: 40, label: 'type', drop: 1180 },
-  { k: 'citeKey', w: 186, min: 90, label: 'cite key' },
+  { k: 'citeKey', w: 150, min: 80, label: 'key' },
+  { k: 'a1', w: 134, min: 70, label: 'first author' },
   { k: 'year', w: 46, min: 38, label: 'year', num: true },
   { k: 'jl', w: 86, min: 40, label: 'journal' },
-  { k: 'title', w: 330, min: 120, label: 'title' },
-  { k: 'a1', w: 134, min: 70, label: 'first author', drop: 1040 },
+  { k: 'title', w: 260, min: 120, label: 'title' },
   { k: 'tags', w: 180, min: 60, label: 'tags', drop: 1320 },
   { k: 'pdf', w: 38, min: 30, label: 'pdf', num: true },
   { k: 'cites', w: 44, min: 34, label: 'cites', num: true, drop: 860 },
@@ -259,6 +275,7 @@ const TOKENS = (doc) => ({
     return rec?.bibName || bibOrder(autName(doc, a))
   }).filter(Boolean).join(' and '),
   'first author': (r) => firstAuthor(doc, r),
+  'abv author': (r) => autShort(doc, authorRows(r)[0] || {}),
   'et al.': (r) => etAl(doc, r),
   jl: (r) => jShort(doc, r),
   journal: (r) => jAbbrev(doc, r),
