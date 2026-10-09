@@ -2330,3 +2330,10 @@ button.asset-row-open {
    not — the way out. */
 .am-rack-out { color: var(--rk-brand-t, var(--rk-dim)); opacity: .8; }
 .am-rack-out:hover { opacity: 1; }
+
+/* My List's head and actions, at rack density. The forms they open (request,
+   settings, the hide/delete questions) keep their own shape — they are forms,
+   not lists. */
+.am-mylist-head { height: auto; padding: 6px 11px; }
+.am-mylist-head .mylist-head-grid { width: 100%; gap: 6px; }
+.am-mylist-acts { height: auto; flex-wrap: wrap; padding: 6px 11px; border-bottom: 0; }

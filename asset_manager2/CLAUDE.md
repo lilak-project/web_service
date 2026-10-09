@@ -47,11 +47,20 @@ shape author_manager and reference_manager have:
   manifest, plus the way out), a strip of tabs (Assets · My List · Class ·
   History · 알림, and 스캔), the body, and one status line, which is where a
   notice lands;
-- **Assets** is `AssetRack`: the dense table, with the right pane holding either
-  the asset's CARD (`AssetRow`, unchanged — edit, photos, history, requests all
-  still happen in it) or `NewAssetCard` while you are adding one;
-- the other tabs render the page they always had, inside a scrolling pane
-  (`.am-rack-loose`). They are the next ones to redraw.
+- **every tab is a table**, and each one's right pane holds the card that was
+  already written for that record — the rack shows those components, it does not
+  reimplement them:
+  - Assets → `AssetRack`, pane: `AssetRow`, or `NewAssetCard` while adding;
+  - My List → `MyListTable`, pane: `AssetRow`; the list's name and location sit
+    on one line and its twelve actions on another, as rack buttons driven by the
+    same `rowTop`/`rowBottom`/`rowAdmin` arrays as before;
+  - Class → `ClassRack` (Location | Type on the command line), pane: `ClassCard`,
+    or `NewClassCard` while adding;
+  - History → `HistoryRack`, pane: `HistoryCard`;
+  - 알림 → `NoticeRack`, a table of what was said and when.
+
+The forms those actions open (request, settings, the hide/delete questions) keep
+their own shape: they are forms, not lists.
 
 `index.html` sets `body class="rl-page"`, so rack.css's page rules apply — this
 app IS one, unlike asset_manager which only borrowed the table.

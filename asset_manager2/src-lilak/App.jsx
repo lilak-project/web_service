@@ -1769,9 +1769,9 @@ function App() {
             onChangeSettings={changeSettings}
           />
         )}
-        {tab === 'history' && <RecordsPage records={latestRecords} assets={viewAssets} me={authUser?.email || ''} notify={show} myListSet={myListSet} toggleMyList={toggleMyList} onAdd={addListToMyList} onRemove={removeListFromMyList} isAdmin={isAdmin} onDelete={deleteRecord} onRename={renameRecord} onCancelRequest={cancelRequest} onApprove={approveRecord} showField={showField} />}
+        {tab === 'history' && <HistoryRack records={latestRecords} assets={viewAssets} me={authUser?.email || ''} notify={show} myListSet={myListSet} toggleMyList={toggleMyList} onAdd={addListToMyList} onRemove={removeListFromMyList} isAdmin={isAdmin} onDelete={deleteRecord} onRename={renameRecord} onCancelRequest={cancelRequest} onApprove={approveRecord} showField={showField} />}
         {tab === 'classification' && (
-          <ClassificationPage
+          <ClassRack
             assets={viewAssets}
             canEditPhotos={canEditPhotos}
             notify={show}
@@ -1795,20 +1795,7 @@ function App() {
             onPhotoType={(n) => setCapture({ kind: 'type', name: n })}
           />
         )}
-        {tab === 'notices' && (
-          <div className="stack">
-            {noticeLog.length === 0 && <Card><p className="muted">알림이 없습니다.</p></Card>}
-            {noticeLog.map((n, i) => (
-              <Card key={`${n.at}-${i}`}>
-                <div className="notice-item">
-                  <span className={`notice-dot is-${n.kind || 'info'}`} />
-                  <span className="notice-item-text">{n.text}</span>
-                  <span className="notice-item-time">{formatNoticeTime(n.at)}</span>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
+        {tab === 'notices' && <NoticeRack log={noticeLog} />}
         </RackFrame>
       </main>
       {scanning && <ScannerModal onResult={onScanResult} onResultMany={onScanMany} onClose={() => setScanning(false)} />}
@@ -3022,11 +3009,11 @@ function MyListPage({ assets, expandedId, setExpandedId, myPhotos, toggleMyList,
     >
       <input ref={importRef} type="file" accept=".hwpx,.json,.pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f) }} />
       {dragOver && <div className="drop-hint">HWPX / JSON 파일을 놓으면 My List에 추가됩니다</div>}
-      <Card>
+      <div className="rl-cmd am-mylist-head">
         <div className="mylist-head-grid">
-          <span className="mylist-icon-cell"><PencilSimple size={18} weight="fill" color={BRAND} /></span>
+          <span className="mylist-icon-cell"><PencilSimple size={16} weight="fill" color={BRAND} /></span>
           <Input size="md" className={`span-rest${titleReq ? ' is-req-empty' : ''}`} value={listName} placeholder="목록 이름" onChange={(event) => setListName(event.target.value)} />
-          <span className="mylist-icon-cell"><MapPin size={18} weight="fill" color={BRAND} /></span>
+          <span className="mylist-icon-cell"><MapPin size={16} weight="fill" color={BRAND} /></span>
           <span className="loc-input-wrap">
             <input
               className={`loc-input${locReq ? ' is-req-empty' : ''}`}
@@ -3058,28 +3045,22 @@ function MyListPage({ assets, expandedId, setExpandedId, myPhotos, toggleMyList,
         </div>
         {!locOpen && (
           <>
-            <div className="mylist-actions">
-              {rowTop.map((item) => (
-                <button key={item.key} type="button" className={`mylist-btn${item.active ? ' is-active' : ''}${item.cls ? ` ${item.cls}` : ''}`} disabled={item.disabled} onClick={item.onClick}>
-                  <item.Glyph size={20} weight="fill" color={item.active ? '#ffffff' : item.iconColor || '#3d5a80'} />
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
-            <div className="mylist-actions">
-              {rowBottom.map((item) => (
-                <button key={item.key} type="button" className={`mylist-btn tone-amber${item.active ? ' is-active' : ''}${item.cls ? ` ${item.cls}` : ''}`} disabled={item.disabled} onClick={item.onClick}>
-                  <item.Glyph size={20} weight="fill" color="currentColor" />
-                  <span>{item.label}</span>
+            <div className="rl-cmd am-mylist-acts">
+              {[...rowTop, ...rowBottom].map((item) => (
+                <button key={item.key} type="button"
+                  className={`rl-btn${item.active ? ' on' : ''}${item.key === 'update' || item.key === 'request' ? ' rl-go' : ''}`}
+                  disabled={item.disabled} onClick={item.onClick}>
+                  {item.label}
                 </button>
               ))}
             </div>
             {rowAdmin.length > 0 && (
-              <div className="mylist-actions">
+              <div className="rl-cmd am-mylist-acts">
                 {rowAdmin.map((item) => (
-                  <button key={item.key} type="button" className={`mylist-btn${item.active ? ' is-active' : ''}${item.cls ? ` ${item.cls}` : ''}`} disabled={item.disabled} onClick={item.onClick}>
-                    <item.Glyph size={20} weight="fill" color={item.active ? '#ffffff' : item.iconColor || '#3d5a80'} />
-                    <span>{item.label}</span>
+                  <button key={item.key} type="button"
+                    className={`rl-btn${item.active ? ' on' : ''}${item.key === 'delete' ? ' rl-danger' : ''}`}
+                    disabled={item.disabled} onClick={item.onClick}>
+                    {item.label}
                   </button>
                 ))}
               </div>
@@ -3187,7 +3168,7 @@ function MyListPage({ assets, expandedId, setExpandedId, myPhotos, toggleMyList,
             )}
           </>
         )}
-      </Card>
+      </div>
       {settingsOpen && isAdmin ? (
         <>
           <Card>
@@ -3279,37 +3260,24 @@ function MyListPage({ assets, expandedId, setExpandedId, myPhotos, toggleMyList,
           ))}
         </div>
       ) : (
-        <>
-          <div className="list-toolbar">
-            <span className="list-count">총 {assets.length}개</span>
-            <SortBar sort={sort} setSort={setSort} withAdded />
-          </div>
-          <div className="result-list result-list-full">
-            {empty && <Card><p className="muted">My List가 비어 있습니다.</p></Card>}
-            {assets.map((asset) => (
-              <AssetRow
-                key={asset.assetId}
-                asset={asset}
-                expanded={expandedId === asset.assetId}
-                onToggle={() => { onSeenNew?.(asset.assetId); setExpandedId(expandedId === asset.assetId ? '' : asset.assetId) }}
-                inMyList
-                isNew={newIds?.has(asset.assetId)}
-                shots={myPhotos[asset.assetId]}
-                onToggleMyList={() => toggleMyList(asset.assetId)}
-                onCapture={() => onCapture(asset.assetId)}
-                onCaptureSlot={onCaptureSlot}
-                recordAction={recordAction}
-                updateAsset={updateAsset}
-                locationPhoto={locationPhoto}
-                records={records}
-                classOptions={classOptions}
-                isAdmin={isAdmin}
-                canEditPhotos={canEditPhotos}
-                showField={showField}
-              />
-            ))}
-          </div>
-        </>
+        <MyListTable
+          assets={assets}
+          expandedId={expandedId}
+          setExpandedId={(id) => { if (id) onSeenNew?.(id); setExpandedId(id) }}
+          newIds={newIds}
+          myPhotos={myPhotos}
+          toggleMyList={toggleMyList}
+          onCapture={onCapture}
+          onCaptureSlot={onCaptureSlot}
+          recordAction={recordAction}
+          updateAsset={updateAsset}
+          locationPhoto={locationPhoto}
+          records={records}
+          classOptions={classOptions}
+          isAdmin={isAdmin}
+          canEditPhotos={canEditPhotos}
+          showField={showField}
+        />
       )}
     </div>
   )
@@ -4165,6 +4133,320 @@ function RackFrame({ on, children, tabs, tab, setTab, count, project, note, onSc
           <span>{note || '줄을 누르면 오른쪽에 카드가 열립니다. 체크는 My List.'}</span>
         </footer>
       </section>
+    </div>
+  )
+}
+
+// ─── History, as a rack ─────────────────────────────────────────────────────
+const REC_COLS = [
+  { k: 'num', w: 42, min: 32, fix: true, label: '#' },
+  { k: 'name', w: 210, min: 90, label: '이름' },
+  { k: 'type', w: 92, min: 60, label: '종류' },
+  { k: 'count', w: 54, min: 40, label: '개수', num: true },
+  { k: 'user', w: 110, min: 60, label: '사용자', drop: 980 },
+  { k: 'at', w: 150, min: 90, label: '시각' },
+  { k: 'location', w: 150, min: 70, label: '위치', drop: 860 },
+]
+const REC_TONE = { name: 'ink', type: 'dim', user: 'dim', at: 'dim', location: 'dim' }
+
+function HistoryRack({ records, assets, me, myListSet, toggleMyList, onAdd, onRemove,
+  isAdmin, onDelete, onRename, onCancelRequest, onApprove, notify, showField }) {
+  const [sel, setSel] = useState('')
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState({ k: 'at', dir: -1 })
+  const { drag, sized } = useColumnWidths(`${NS}.rack.rec`, REC_COLS)
+  const vw = useRackWidth()
+  const assetMap = useMemo(() => Object.fromEntries(assets.map((a) => [a.assetId, a])), [assets])
+  const cols = useMemo(() => sized(REC_COLS, sel ? Math.round(vw / 2) : vw), [sized, vw, sel])
+
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const seen = records.filter((r) => isAdmin || (r.type !== 'hide' && r.type !== 'unhide'))
+    const kept = !q ? seen : seen.filter((r) => [r.name, r.user, ...(r.assetIds || [])]
+      .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
+    const get = (r) => (sort.k === 'count' ? (r.assetIds || []).length
+      : sort.k === 'at' ? r.createdAt || ''
+        : String(r[sort.k] ?? ''))
+    return [...kept].sort((a, b) => {
+      const x = get(a), y = get(b)
+      if (typeof x === 'number') return (x - y) * sort.dir
+      return String(x).localeCompare(String(y), 'ko', { numeric: true }) * sort.dir
+    })
+  }, [records, isAdmin, query, sort])
+  const chosen = rows.find((r) => r.id === sel) || null
+
+  return (
+    <>
+      <div className="rl-cmd">
+        <span className="rl-n">{rows.length}건</span>
+        <span className="rl-sp" />
+        <input type="search" className="rl-find" value={query}
+          placeholder="제목 · 작성자 · 자산번호"
+          onChange={(e) => setQuery(e.target.value)} />
+      </div>
+      <div className="rl-body">
+        <div className="rl-pane">
+          <RackTable cols={cols} onDrag={drag('r:')} sort={sort}
+            onSort={(k) => setSort((s) => (s.k === k ? { k, dir: -s.dir } : { k, dir: 1 }))}>
+            {rows.map((r, i) => (
+              <RackRow key={r.id} cols={cols} tone={REC_TONE}
+                className={`rl-hit${r.id === sel ? ' on' : ''}`}
+                onClick={() => setSel(r.id)}
+                cell={{
+                  num: i + 1,
+                  name: r.name || r.id,
+                  type: typeLabel(r.type) + (r.pending ? ' · 대기' : ''),
+                  count: (r.assetIds || []).length,
+                  user: r.user ? String(r.user).split('@')[0] : '·',
+                  at: formatDate(r.createdAt) || '·',
+                  location: r.location || '·',
+                }} />
+            ))}
+            {rows.length === 0 && <p className="rl-msg">기록이 없습니다.</p>}
+          </RackTable>
+        </div>
+        {chosen && (
+          <div className="rl-pane rl-epane am-rack-card">
+            <HistoryCard
+              key={chosen.id}
+              record={chosen}
+              assetMap={assetMap}
+              myListSet={myListSet}
+              isAdmin={isAdmin}
+              me={me}
+              open
+              onToggle={() => setSel('')}
+              onAdd={onAdd}
+              onRemove={onRemove}
+              onDelete={(id) => { onDelete(id); setSel('') }}
+              onRename={onRename}
+              onCancelRequest={onCancelRequest}
+              onApprove={onApprove}
+              toggleMyList={toggleMyList}
+              notify={notify}
+              showField={showField}
+            />
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ─── Classes (locations, types), as a rack ──────────────────────────────────
+const CLS_COLS = [
+  { k: 'num', w: 42, min: 32, fix: true, label: '#' },
+  { k: 'name', w: 300, min: 110, label: '이름' },
+  { k: 'count', w: 70, min: 46, label: '물품', num: true },
+  { k: 'detail', w: 280, min: 90, label: '주소 · 설명', drop: 900 },
+  { k: 'at', w: 120, min: 80, label: '최근변경', drop: 760 },
+]
+
+function ClassRack(props) {
+  const [kind, setKind] = useState('location')
+  const [sel, setSel] = useState('')
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState({ k: 'name', dir: 1 })
+  const [creating, setCreating] = useState(false)
+  const { drag, sized } = useColumnWidths(`${NS}.rack.cls`, CLS_COLS)
+  const vw = useRackWidth()
+  const cfg = CLASS_CONFIG[kind]
+  const list = kind === 'location' ? props.locationList : props.typeList
+  const cols = useMemo(() => sized(CLS_COLS, sel || creating ? Math.round(vw / 2) : vw),
+    [sized, vw, sel, creating])
+
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const kept = !q ? list : list.filter((c) => String(c.name).toLowerCase().includes(q))
+    const get = (c) => (sort.k === 'count' ? c.count || 0
+      : sort.k === 'at' ? c.lastUpdate || ''
+        : sort.k === 'detail' ? (c.address || c.description || '')
+          : String(c.name || ''))
+    return [...kept].sort((a, b) => {
+      const x = get(a), y = get(b)
+      if (typeof x === 'number') return (x - y) * sort.dir
+      return String(x).localeCompare(String(y), 'ko', { numeric: true }) * sort.dir
+    })
+  }, [list, query, sort])
+  const chosen = rows.find((c) => c.name === sel) || null
+
+  // Every handler is the one the card already used; only the frame is new.
+  const on = kind === 'location' ? {
+    onUpdate: props.onUpdateLocation, onMerge: props.onMergeLocation, onDelete: props.onDeleteLocation,
+    onAddAll: props.onAddAllLocation, onPhoto: props.onPhotoLocation, onCreate: props.onCreateLocation,
+  } : {
+    onUpdate: props.onUpdateType, onMerge: props.onMergeType, onDelete: props.onDeleteType,
+    onAddAll: props.onAddAllType, onPhoto: props.onPhotoType, onCreate: props.onCreateType,
+  }
+
+  return (
+    <>
+      <div className="rl-cmd">
+        <button type="button" className={`rl-btn${kind === 'location' ? ' on' : ''}`}
+          onClick={() => { setKind('location'); setSel(''); setCreating(false) }}>Location</button>
+        <button type="button" className={`rl-btn${kind === 'type' ? ' on' : ''}`}
+          onClick={() => { setKind('type'); setSel(''); setCreating(false) }}>Type</button>
+        <span className="rl-gap" />
+        <button type="button" className={`rl-btn rl-go${creating ? ' on' : ''}`}
+          onClick={() => { setCreating((v) => !v); setSel('') }}>{cfg.createLabel}</button>
+        <span className="rl-sp" />
+        <input type="search" className="rl-find" value={query}
+          placeholder={cfg.searchPlaceholder} onChange={(e) => setQuery(e.target.value)} />
+      </div>
+      <div className="rl-body">
+        <div className="rl-pane">
+          <RackTable cols={cols} onDrag={drag('cl:')} sort={sort}
+            onSort={(k) => setSort((s) => (s.k === k ? { k, dir: -s.dir } : { k, dir: 1 }))}>
+            {rows.map((c, i) => (
+              <RackRow key={c.name} cols={cols} tone={{ name: 'ink', detail: 'dim', at: 'dim' }}
+                className={`rl-hit${c.name === sel ? ' on' : ''}`}
+                onClick={() => { setSel(c.name); setCreating(false) }}
+                cell={{
+                  num: i + 1,
+                  name: c.name,
+                  count: c.count || 0,
+                  detail: c.address || c.description || '·',
+                  at: formatDate(c.lastUpdate) || '·',
+                }} />
+            ))}
+            {rows.length === 0 && <p className="rl-msg">{list.length ? '검색 결과가 없습니다.' : cfg.emptyText}</p>}
+          </RackTable>
+        </div>
+        {creating && (
+          <div className="rl-pane rl-epane am-rack-card">
+            <NewClassCard cfg={cfg} onCreate={(...a) => { on.onCreate(...a); setCreating(false) }} />
+          </div>
+        )}
+        {!creating && chosen && (
+          <div className="rl-pane rl-epane am-rack-card">
+            <ClassCard
+              key={`${kind}:${chosen.name}`}
+              cfg={cfg}
+              rec={chosen}
+              assets={props.assets}
+              myListSet={props.myListSet}
+              isAdmin={props.isAdmin}
+              open
+              onToggle={() => setSel('')}
+              onUpdate={on.onUpdate}
+              onMerge={on.onMerge}
+              onDelete={(...a) => { on.onDelete(...a); setSel('') }}
+              onPhoto={on.onPhoto}
+              onAddAll={on.onAddAll}
+              toggleMyList={props.toggleMyList}
+              canEditPhotos={props.canEditPhotos}
+              notify={props.notify}
+              showField={props.showField}
+            />
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ─── Notices, as a rack ─────────────────────────────────────────────────────
+const NOTE_COLS = [
+  { k: 'num', w: 42, min: 32, fix: true, label: '#' },
+  { k: 'at', w: 140, min: 90, label: '시각' },
+  { k: 'text', w: 520, min: 160, label: '알림' },
+]
+
+function NoticeRack({ log }) {
+  return (
+    <div className="rl-body">
+      <div className="rl-pane">
+        <RackTable cols={NOTE_COLS} onDrag={() => {}}>
+          {log.map((n, i) => (
+            <RackRow key={`${n.at}-${i}`} cols={NOTE_COLS} tone={{ text: 'ink', at: 'dim' }}
+              className="rl-hit"
+              cell={{ num: i + 1, at: formatNoticeTime(n.at), text: n.text }} />
+          ))}
+          {log.length === 0 && <p className="rl-msg">알림이 없습니다.</p>}
+        </RackTable>
+      </div>
+    </div>
+  )
+}
+
+/** The width the TABLE has, which is what decides when a column leaves. */
+function useRackWidth() {
+  const [vw, setVw] = useState(() => (typeof window === 'undefined' ? 1400 : window.innerWidth))
+  useEffect(() => {
+    const on = () => setVw(window.innerWidth)
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [])
+  return vw
+}
+
+/** My List's own table: the assets you have gathered, with the card beside it.
+ *  Same columns as the Assets table minus the ones a chosen set does not need
+ *  to repeat — you picked these, so what matters is where they are now. */
+function MyListTable({ assets, expandedId, setExpandedId, newIds, myPhotos, toggleMyList,
+  onCapture, onCaptureSlot, recordAction, updateAsset, locationPhoto, records,
+  classOptions, isAdmin, canEditPhotos, showField }) {
+  const [sort, setSort] = useState({ k: 'assetId', dir: 1 })
+  const { drag, sized } = useColumnWidths(`${NS}.rack.my`, RACK_COLS)
+  const vw = useRackWidth()
+  const sel = expandedId
+  const cols = useMemo(
+    () => sized(RACK_COLS.filter((c) => c.k !== 'chk' && (c.fix || c.k === 'assetId' || showField(c.k))),
+      sel ? Math.round(vw / 2) : vw),
+    [sized, vw, showField, sel])
+  const rows = useMemo(() => {
+    const get = (a) => (sort.k === 'lastUpdate' ? a.lastUpdate || '' : String(a[sort.k] ?? ''))
+    return [...assets].sort((a, b) => String(get(a)).localeCompare(String(get(b)), 'ko', { numeric: true }) * sort.dir)
+  }, [assets, sort])
+  const chosen = rows.find((a) => a.assetId === sel) || null
+
+  return (
+    <div className="rl-body">
+      <div className="rl-pane">
+        <RackTable cols={cols} onDrag={drag('my:')} sort={sort}
+          onSort={(k) => setSort((s) => (s.k === k ? { k, dir: -s.dir } : { k, dir: 1 }))}>
+          {rows.map((a, i) => (
+            <RackRow key={a.assetId} cols={cols} tone={RACK_TONE}
+              className={`rl-hit${a.assetId === sel ? ' on' : ''}${newIds?.has(a.assetId) ? ' rl-edited' : ''}`}
+              onClick={() => setExpandedId(a.assetId === sel ? '' : a.assetId)}
+              cell={{
+                num: i + 1,
+                assetId: a.assetId,
+                name: a.name || '·',
+                location: a.location || '·',
+                type: a.type || '·',
+                assetClass: a.assetClass || '·',
+                accountHolder: a.accountHolder || '·',
+                lastUpdate: rackDate(a.lastUpdate) || '·',
+              }} />
+          ))}
+          {rows.length === 0 && <p className="rl-msg">My List가 비어 있습니다.</p>}
+        </RackTable>
+      </div>
+      {chosen && (
+        <div className="rl-pane rl-epane am-rack-card">
+          <AssetRow
+            key={chosen.assetId}
+            asset={chosen}
+            expanded
+            onToggle={() => setExpandedId('')}
+            inMyList
+            isNew={newIds?.has(chosen.assetId)}
+            shots={myPhotos[chosen.assetId]}
+            onToggleMyList={() => toggleMyList(chosen.assetId)}
+            onCapture={() => onCapture(chosen.assetId)}
+            onCaptureSlot={onCaptureSlot}
+            recordAction={recordAction}
+            updateAsset={updateAsset}
+            locationPhoto={locationPhoto}
+            records={records}
+            classOptions={classOptions}
+            isAdmin={isAdmin}
+            canEditPhotos={canEditPhotos}
+            showField={showField}
+          />
+        </div>
+      )}
     </div>
   )
 }
