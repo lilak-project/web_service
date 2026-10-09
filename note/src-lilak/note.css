@@ -98,7 +98,12 @@
 
 /* The note read inside its own pane: the print sheet, scrolling. */
 .nt-read { flex: 1; min-height: 0; overflow: auto; background: #fff; color: #111; }
-.nt-read .nt-sheet { max-width: 170mm; padding: 8mm 10mm; }
+/* Read in the pane, not on paper: the note takes the width it was given, the
+   way the editor does. 170mm is for the page that prints. */
+.nt-read .nt-sheet {
+  max-width: none; padding: 12px 16px 24px;
+  font-family: var(--rk-sans); font-size: var(--rk-fs);
+}
 
 /* The kit's body is a RACK screen that never scrolls; this one is paper. */
 body.nt-paper { overflow: auto; background: #fff; }
