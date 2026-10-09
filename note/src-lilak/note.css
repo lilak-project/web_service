@@ -59,16 +59,16 @@
 /* A file a note embeds, shown where it is named — the `![[file]]` widget and
    a plain markdown `![alt](url)` are the same picture to the reader.
 
-   A picture stays inside the pane and under two thirds of the screen, so a
-   phone screenshot never takes the whole note with it; one that should be a
-   different size says so for itself, `![[file|400]]`, and that width still
-   has the height to answer to. */
+   A picture stays inside the pane and under 40% of the screen's height, so a
+   phone photo is something the note contains rather than something that fills
+   it; one that should be a different size says so for itself,
+   `![[file|400]]`, and that width still has the height to answer to. */
 .nt-embed,
 .nt-prose img:not(.ProseMirror-separator),
 .nt-sheet img {
   display: block;
   max-width: 100%;
-  max-height: 66vh;
+  max-height: 40vh;
   width: auto;
   height: auto;
   object-fit: contain;

@@ -288,13 +288,18 @@ const takeFiles = (upload) => $prose(() => new Plugin({
 const hasFiles = (dt) => !!dt && (
   [...(dt.types || [])].includes('Files') || (dt.files && dt.files.length > 0))
 
+/** What a dropped picture comes in at. Not the stylesheet's cap, which is
+ *  what a picture may grow to: a photo is 480px wide until someone says
+ *  otherwise, and saying otherwise is deleting the number. */
+const DROPPED_W = 480
+
 async function stow(view, at, files, upload) {
   for (const file of files) {
     // One at a time: the names come back in the order they were dropped, and
     // the second insert has to know where the first one ended.
     const name = await upload(file)
     if (!name) continue
-    const text = `![[${name}]]`
+    const text = `![[${name}${file.type?.startsWith('image/') ? `|${DROPPED_W}` : ''}]]`
     view.dispatch(view.state.tr.insertText(text, at))
     at += text.length
   }
