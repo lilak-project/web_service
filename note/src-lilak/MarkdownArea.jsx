@@ -117,6 +117,7 @@ const make = (root, value, onMarkdown) => Editor.make()
   .use(listener)
   .use(activeLine)
   .use(checkRule)
+  .use(tagInDoc)
   .create()
 
 export default function MarkdownArea({ value, onChange }) {
@@ -175,6 +176,26 @@ export default function MarkdownArea({ value, onChange }) {
 }
 
 /** `#태그` — Obsidian's spelling, and markdown keeps it apart from a heading
- *  (`# ` has a space after the hash). Read out of the markdown rather than
- *  marked in the editor: the body is the only place a tag is written. */
+ *  (`# ` has a space after the hash). */
 export const TAG_RE = /(^|[\s(])#([^\s#.,;:!?()[\]{}'"]+)/g
+
+/** A tag drawn as a tag. Only a DECORATION: the text in the document is still
+ *  `#태그` and so is the file — nothing is turned into a node that the
+ *  serializer would have to turn back. */
+const tagInDoc = $prose(() => new Plugin({
+  key: new PluginKey('nt-tag-chip'),
+  props: {
+    decorations(state) {
+      const marks = []
+      state.doc.descendants((node, pos) => {
+        if (!node.isText) return true
+        for (const m of node.text.matchAll(TAG_RE)) {
+          const from = pos + m.index + m[1].length
+          marks.push(Decoration.inline(from, from + 1 + m[2].length, { class: 'nt-tag-in' }))
+        }
+        return true
+      })
+      return DecorationSet.create(state.doc, marks)
+    },
+  },
+}))
