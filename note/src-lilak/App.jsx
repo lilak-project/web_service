@@ -75,7 +75,7 @@ const inTag = (n, t) => tagsOf(n).includes(t)
 const COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
-  { k: 'date', w: 92, min: 70, label: 'date' },
+  { k: 'date', w: 100, min: 84, label: 'date' },   // a whole 2026-08-04 at 15px
   { k: 'title', w: 260, min: 100, label: 'title' },
   { k: 'tags', w: 170, min: 60, label: 'tags' },
   { k: 'todo', w: 52, min: 40, label: '할 일', num: true },
