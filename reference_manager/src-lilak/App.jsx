@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs,
-  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useFindKey, useNote, useViewState,
+  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId,
   authHeaders, fetchDoc, putDoc,
@@ -469,6 +469,16 @@ export default function App() {
     setEtabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
     setEactive(t.id)
   }
+  // ⌘X closes the record you are in, ⌘N starts whatever this tab makes.
+  useRackKeys({
+    onClose: () => eactive && closeEdit(eactive),
+    onNew: () => (tab?.kind === 'classes' && tab.of === 'author'
+      ? openEdit({ id: 'newaut', kind: 'editaut', who: null, label: '새 저자' })
+      : tab?.kind === 'classes' && tab.of === 'journal'
+        ? openEdit({ id: 'newjrn', kind: 'editjrn', who: null, label: '새 저널' })
+        : openEdit({ id: 'new', kind: 'edit', who: null, label: '새 논문' })),
+  })
+
   function closeEdit(id) {
     setEtabs((ts) => {
       const left = ts.filter((t) => t.id !== id)
@@ -991,6 +1001,8 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef,
     aliases: [], email: '', orcid: '', note: '' }
   const [f, setF] = useState(rec || blank)
   const [sure, setSure] = useState(false)
+  // ⌘S saves and stays; closing is ⌘X's job.
+  useRackKeys({ onSave: () => (draft ? create() : update(true)) })
   useEffect(() => { setF(rec || blank); setSure(false) }, [id, rec])  // eslint-disable-line react-hooks/exhaustive-deps
   if (!draft && !rec) return <p className="rl-msg">그 저자를 찾을 수 없습니다.</p>
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
@@ -1014,7 +1026,7 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef,
       references: (doc.references || []).map((r) => ({ ...r, authors: link(r.authors) })),
     }, `${a.tag} 등록 · ${hits}줄 연결`)) onCreated?.(a)
   }
-  async function update() {
+  async function update(keep) {
     const a = { ...f, tag, name: named, aliases: (f.aliases || []).map((x) => String(x).trim()).filter(Boolean) }
     // Every spelling this record holds links the rows that use it: the other
     // two names are spellings too, not decoration.
@@ -1024,10 +1036,11 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef,
       ? { ...x, ref: a.id } : x))
     const hits = (doc.references || []).reduce((n, r) => n + (r.authors || [])
       .filter((x) => !x.ref && spellings.includes(x.name)).length, 0)
-    if (await onSave({
+    const ok = await onSave({
       authors: (doc.authors || []).map((x) => (x.id === rec.id ? a : x)),
       references: (doc.references || []).map((r) => ({ ...r, authors: link(r.authors) })),
-    }, hits ? `저장 · ${hits}줄 새로 연결` : '저장했습니다.')) onDone?.(rec.id)
+    }, hits ? `저장 · ${hits}줄 새로 연결` : '저장했습니다.')
+    if (ok && !keep) onDone?.(rec.id)
   }
   async function remove() {
     // The papers keep the name as text: what goes is the record, not the fact
@@ -1500,6 +1513,8 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
     cites: [], links: [], note: '', pdf: null }
   const [f, setF] = useState(ref_ || blank)
   const [sure, setSure] = useState(false)   // delete asks once, in place
+  // ⌘S saves and stays; closing is ⌘X's job.
+  useRackKeys({ onSave: () => (draft ? create() : update(true)) })
   useEffect(() => { setF(ref_ || blank); setSure(false) }, [ref_])  // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const named = () => (f.citeKey || '').trim() || (f.title || '').trim()
@@ -1538,14 +1553,14 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
     const r = { ...tidy(f), id: newId(), createdAt: now, updatedAt: now }
     if (await onSave({ references: [r, ...doc.references] }, `${label(r)} 등록됨`)) onCreated?.(r.id, label(r))
   }
-  async function update() {
+  async function update(keep) {
     const ok = await onSave({
       references: doc.references.map((r) => (r.id === f.id
         ? { ...tidy(f), updatedAt: new Date().toISOString() } : r)),
     })
     // The record was an errand, not a destination: a save that landed closes
     // the tab it came from.
-    if (ok) onDone?.(f.id)
+    if (ok && !keep) onDone?.(f.id)
   }
   async function remove() {
     // A paper other papers cite is removed from their citation lists too, or
@@ -1690,6 +1705,8 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone }) {
   const blank = { name: '', shortName: '', abbrev: '', publisher: '', issn: '', url: '' }
   const [f, setF] = useState(rec || blank)
   const [sure, setSure] = useState(false)
+  // ⌘S saves and stays; closing is ⌘X's job.
+  useRackKeys({ onSave: () => (draft ? create() : update(true)) })
   useEffect(() => { setF(rec || blank); setSure(false) }, [name, rec])  // eslint-disable-line react-hooks/exhaustive-deps
   if (!draft && !rec) return <p className="rl-msg">그 저널을 찾을 수 없습니다.</p>
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
@@ -1704,7 +1721,7 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone }) {
     const j = { ...f, name: named, shortName: (f.shortName || named).trim() }
     if (onSave({ journals: [...(doc.journals || []), j] }, `저널 '${named}' 등록됨`)) onCreated?.(named)
   }
-  async function update() {
+  async function update(keep) {
     const j = { ...f, name: named, shortName: (f.shortName || named).trim() }
     // A journal is referenced by its name, so a rename has to travel to every
     // paper that names it — otherwise they point at a journal that is gone.
@@ -1713,7 +1730,7 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone }) {
       references: named === rec.name ? doc.references
         : doc.references.map((r) => (r.journal === rec.name ? { ...r, journal: named } : r)),
     }, named === rec.name ? '저장했습니다.' : `'${rec.name}' → '${named}' · 논문 ${users}편도 함께`)
-    if (ok) onDone?.(named)
+    if (ok && !keep) onDone?.(named)
   }
   async function remove() {
     // The papers keep their journal text: deleting the record loses the
@@ -1787,12 +1804,14 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone }) {
 function EditTag({ name, doc, tags, onSave, isAdmin, onDone }) {
   const [to, setTo] = useState(name)
   const [sure, setSure] = useState(false)
+  // ⌘S saves and stays; closing is ⌘X's job.
+  useRackKeys({ onSave: () => rename(true) })
   useEffect(() => { setTo(name); setSure(false) }, [name])
   const users = (doc.references || []).filter((r) => (r.tags || []).includes(name))
   const named = String(to || '').trim()
   const merging = named && tags.includes(named) && named !== name
 
-  async function rename() {
+  async function rename(keep) {
     if (!named || named === name) return
     const refs = doc.references.map((r) => {
       if (!(r.tags || []).includes(name)) return r
@@ -1806,7 +1825,7 @@ function EditTag({ name, doc, tags, onSave, isAdmin, onDone }) {
     const said = merging
       ? `'${name}' → '${named}'에 합쳤습니다 · 논문 ${users.length}편`
       : `'${name}' → '${named}' · 논문 ${users.length}편`
-    if (await onSave({ references: refs }, said)) onDone?.(name)
+    if (await onSave({ references: refs }, said) && !keep) onDone?.(name)
   }
   async function remove() {
     const refs = doc.references.map((r) => ((r.tags || []).includes(name)

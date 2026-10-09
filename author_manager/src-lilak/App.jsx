@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs,
-  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useFindKey, useToggleKey, useNote, useViewState,
+  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useToggleKey, useNote, useViewState,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
@@ -346,6 +346,15 @@ export default function App() {
     setEtabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
     setEactive(t.id)
   }
+  // ⌘X closes the record you are in, ⌘N starts whatever this tab makes.
+  useRackKeys({
+    onClose: () => eactive && closeEdit(eactive),
+    onNew: () => (tab?.kind === 'classes'
+      ? openEdit({ id: `newcls:${tab.of}`, kind: 'editcls', of: tab.of, who: null,
+          label: tab.of === 'affiliation' ? '새 소속' : '새 그룹' })
+      : openEdit({ id: 'new', kind: 'edit', label: '새 저자', who: null })),
+  })
+
   function closeEdit(id) {
     setEtabs((ts) => {
       const left = ts.filter((t) => t.id !== id)
@@ -1246,6 +1255,8 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
   const blank = { id: null, korFamily: '', korGiven: '', engFirst: '', engMiddle: '', engLast: '' }
   const [f, setF] = useState(author || blank)
   const [sure, setSure] = useState(false)   // delete asks once, in place
+  // ⌘S saves and stays; closing is ⌘X's job.
+  useRackKeys({ onSave: () => (draft ? create() : update(true)) })
   useEffect(() => { setF(author || blank); setSure(false) }, [author])  // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   // Every list you pick a name from reads in name order: the order they were
@@ -1281,13 +1292,13 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
     const a = { ...tidy(f), id: newId(), createdAt: now, updatedAt: now }
     if (await onSave({ authors: [a, ...doc.authors] }, `${anyName(a)} 등록됨`)) onCreated?.(a.id, anyName(a))
   }
-  async function update() {
+  async function update(keep) {
     const ok = await onSave({
       authors: doc.authors.map((a) => (a.id === f.id ? { ...tidy(f), updatedAt: new Date().toISOString() } : a)),
     })
     // The record was an errand, not a destination: a save that landed closes
     // the tab it came from. A save that lost the race keeps it, edits and all.
-    if (ok) onDone?.(f.id)
+    if (ok && !keep) onDone?.(f.id)
   }
   async function remove() {
     if (await onSave({ authors: doc.authors.filter((a) => a.id !== f.id) }, `${anyName(f)} 삭제됨`)) onDeleted?.(f.id)
@@ -1388,6 +1399,8 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel
   const rec = draft ? null : (doc[key] || []).find((r) => r.name === name)
   const [f, setF] = useState(rec || { name: '', shortName: '', fullName: '' })
   const [sure, setSure] = useState(false)
+  // ⌘S saves and stays; closing is ⌘X's job.
+  useRackKeys({ onSave: () => (draft ? create() : update(true)) })
   useEffect(() => { setF(rec || { name: '', shortName: '', fullName: '' }); setSure(false) }, [name, rec])
   if (!draft && !rec) return <p className="rl-msg">그 {what}을 찾을 수 없습니다.</p>
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
@@ -1405,7 +1418,7 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel
     onSave({ [key]: [...(doc[key] || []), { ...tidy(f), name: named, shortName: named }] },
       `'${named}' ${what} 등록됨`).then((ok) => { if (ok) onCreated?.(named) })
   }
-  async function update() {
+  async function update(keep) {
     const renamed = named !== rec.name
     const recs = (doc[key] || []).map((r) => (r.name === rec.name ? { ...tidy(f), name: named, shortName: named } : r))
     // A rename has to travel: the authors point at this name by value.
@@ -1420,7 +1433,8 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel
           : a.groups,
       }))
       : doc.authors
-    if (await onSave({ [key]: recs, authors })) onDone?.(rec.name)
+    const ok = await onSave({ [key]: recs, authors })
+    if (ok && !keep) onDone?.(rec.name)
   }
   async function remove() {
     // Deleting the record without taking it off the authors would leave them
