@@ -1534,7 +1534,11 @@ function MergeTags({ names = [], doc, tags, onSave, onDone, onCancel }) {
                 <span className={t === named ? '' : 'rl-gone'}>{t}</span>
                 <span className="rl-hint">논문 {count(t)}편</span>
                 <span className="rl-sp" />
-                <span className="rl-hint">{t === named ? '남습니다' : '없어집니다'}</span>
+                {/* What goes is the tag. Saying "없어집니다" next to a count of
+                    papers reads as though the papers go with it. */}
+                <span className="rl-hint">{t === named
+                  ? `남습니다 · 합친 뒤 ${users.length}편`
+                  : '이 태그만 떼어집니다'}</span>
               </label>
             ))}
           </div>
@@ -1554,7 +1558,9 @@ function MergeTags({ names = [], doc, tags, onSave, onDone, onCancel }) {
         </Fld>
         <Fld label="영향">
           <div className="rl-rows">
-            <span className="rl-hint">논문 {users.length}편의 태그가 바뀝니다.</span>
+            <span className="rl-hint">
+              논문 {users.length}편의 태그가 바뀝니다 — 논문이 지워지지는 않습니다.
+            </span>
             {moved.length > 0 && (
               <span className="rl-hint">
                 그중 {moved.length}편은 메인 태그가 바뀌므로 cite key도 다시 만들어야 합니다 —
