@@ -126,7 +126,7 @@ export default function App() {
   const [tabs, setTabs] = useState(() => [...FIXED,
     ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
   const [active, setActive] = useState(VIEW.active || 'notes')
-  const panes = useEditorPanes()
+  const panes = useEditorPanes(projectKey('nt', 'panes'))
   // The note a right-click (or 새 노트) just opened: its title takes the caret,
   // so the first thing you can do with a note is name it.
   const [fresh, setFresh] = useState(null)
@@ -155,6 +155,11 @@ export default function App() {
 
   const notes = index?.notes || []
   const tab = tabs.find((t) => t.id === active) || tabs[0]
+  // The editors are kept across a visit to another service: a note deleted in
+  // the meantime must not come back as an editor with nothing behind it.
+  useEffect(() => {
+    if (index) panes.keep((t) => notes.some((n) => n.id === t.id))
+  }, [index])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // The list carries a first line, not the body — so a search that finds
   // nothing locally asks the server to look INSIDE the notes.
@@ -218,7 +223,7 @@ export default function App() {
       .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
   }, [notes, tab, clsSort])
 
-  const showEdit = panes.showing
+  const showEdit = panes.showing && !!index
   // Two editor columns need the room the list was using; one does not.
   const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
 
@@ -235,6 +240,20 @@ export default function App() {
     onClose: () => { const cur = panes.current(panes.cols[0]); if (cur) panes.close(cur.id) },
     onNew: () => create(null),
   })
+
+  // A file dropped anywhere but the editor: the browser's own answer is to
+  // leave the app and show the picture, which inside the portal's frame reads
+  // as the service disappearing. The editor's handler runs first and marks the
+  // drop as taken; what is left here is refused quietly.
+  useEffect(() => {
+    const stop = (e) => { if (!e.defaultPrevented && [...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault() }
+    window.addEventListener('dragover', stop)
+    window.addEventListener('drop', stop)
+    return () => {
+      window.removeEventListener('dragover', stop)
+      window.removeEventListener('drop', stop)
+    }
+  }, [])
 
   async function create(template) {
     try {
@@ -394,7 +413,7 @@ export default function App() {
           </div>)}
 
           {showList && showEdit && <div {...split.handleProps} />}
-          {panes.cols.map((c) => {
+          {showEdit && panes.cols.map((c) => {
             const cur = panes.current(c)
             return (
               <div key={c} className="rl-pane rl-epane" onMouseDown={() => panes.setCol(c)}>
@@ -515,7 +534,10 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
     <div className="nt-edit">
       {/* The buttons sit above the title: everything below them is the note.
           The same bar every editor in every rack-list service wears. */}
+      {/* The note saves itself; save is still here for the hand that wants to
+          press it, and it is the one button that says whether it is needed. */}
       <RackActions key={id}
+        onSave={() => saveNote()} saveDisabled={!dirty}
         hint={dirty ? '쓰는 중…' : '저장됨'}
         onCancel={() => onClosed?.(id)}
         extra={<>

@@ -225,6 +225,19 @@ const takeFiles = (upload) => $prose(() => new Plugin({
   key: new PluginKey('nt-drop'),
   props: {
     handleDOMEvents: {
+      // Without this the browser refuses the drop and opens the file in the
+      // tab instead: a drop only happens where dragover said it could.
+      dragover: (_view, e) => {
+        if (!upload || !hasFiles(e.dataTransfer)) return false
+        e.preventDefault()
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+        return true
+      },
+      dragenter: (_view, e) => {
+        if (!upload || !hasFiles(e.dataTransfer)) return false
+        e.preventDefault()
+        return true
+      },
       drop: (view, e) => {
         const files = [...(e.dataTransfer?.files || [])]
         if (!files.length || !upload) return false
@@ -243,6 +256,10 @@ const takeFiles = (upload) => $prose(() => new Plugin({
     },
   },
 }))
+
+/** A drag carrying files, as against one carrying text out of the note. */
+const hasFiles = (dt) => !!dt && (
+  [...(dt.types || [])].includes('Files') || (dt.files && dt.files.length > 0))
 
 async function stow(view, at, files, upload) {
   for (const file of files) {
