@@ -1395,11 +1395,15 @@ function TagRows({ value = [], onChange, options, main, onMain }) {
         {value.length === 0 && <span className="rl-hint">없음</span>}
       </div>
       <div className="rl-rrow">
+        {/* Leaving the box is as good as pressing the button: a tag typed and
+            then saved used to vanish without a word, which is the worst way
+            for a field to behave. */}
         <input className="rl-in" style={{ width: 220 }} list="rl-tags" value={add}
-          placeholder="태그" onChange={(e) => setAdd(e.target.value)}
+          placeholder="태그" onChange={(e) => setAdd(e.target.value)} onBlur={put}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); put() } }} />
         <datalist id="rl-tags">{options.map((t) => <option key={t} value={t} />)}</datalist>
         <button type="button" className="rl-btn" onClick={put} disabled={!add.trim()}>+ 태그</button>
+        {add.trim() && <span className="rl-warn">엔터를 눌러야 붙습니다</span>}
       </div>
     </div>
   )
