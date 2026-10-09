@@ -28,6 +28,10 @@ import { clipboard } from '@milkdown/kit/plugin/clipboard'
 import { cursor } from '@milkdown/kit/plugin/cursor'
 import { trailing } from '@milkdown/kit/plugin/trailing'
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
+import { bulletListSchema, listItemSchema } from '@milkdown/kit/preset/commonmark'
+import { InputRule } from '@milkdown/kit/prose/inputrules'
+import { findWrapping } from '@milkdown/kit/prose/transform'
+import { $inputRule } from '@milkdown/kit/utils'
 import { $prose } from '@milkdown/kit/utils'
 import { Plugin, PluginKey } from '@milkdown/kit/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
@@ -51,6 +55,40 @@ const activeLine = $prose(() => new Plugin({
       return DecorationSet.create(state.doc, marks)
     },
   },
+}))
+
+/** `[] ` starts a checklist, from anywhere.
+ *
+ *  GFM's own rule is `[ ] ` or `[x] ` and only works INSIDE a list item, so a
+ *  check list cost `- [ ] ` — a bullet first, then the box. This one takes
+ *  `[] `, `[ ] ` and `[x] `, and when there is no list around it, makes one. */
+const checkRule = $inputRule((ctx) => new InputRule(/^\[([ xX]?)\]\s$/, (state, match, start, end) => {
+  const li = listItemSchema.type(ctx)
+  const ul = bulletListSchema.type(ctx)
+  const checked = /[xX]/.test(match[1])
+  const $start = state.doc.resolve(start)
+  // Already an item: this only ticks it, which is what GFM's rule does.
+  for (let d = $start.depth; d > 0; d -= 1) {
+    const node = $start.node(d)
+    if (node.type === li) {
+      return state.tr.deleteRange(start, end)
+        .setNodeMarkup($start.before(d), undefined, { ...node.attrs, checked })
+    }
+  }
+  // A bare paragraph: wrap it in a list and make that item a task.
+  const tr = state.tr.delete(start, end)
+  const range = tr.doc.resolve(tr.mapping.map(start)).blockRange()
+  const wrapping = range && findWrapping(range, ul)
+  if (!wrapping) return null
+  tr.wrap(range, wrapping)
+  // The wrappers open AT range.start in the new document — mapping that
+  // position would carry it past them, which is how the first try wrapped the
+  // paragraph in a plain list and left the box off.
+  for (let at = range.start; at <= range.start + 2; at += 1) {
+    const item = tr.doc.nodeAt(at)
+    if (item?.type === li) { tr.setNodeMarkup(at, undefined, { ...item.attrs, checked }); break }
+  }
+  return tr
 }))
 
 /** What comes back out of the editor is markdown again, and it is the FILE.
@@ -78,6 +116,7 @@ const make = (root, value, onMarkdown) => Editor.make()
   .use(trailing)        // always a paragraph to land in at the end
   .use(listener)
   .use(activeLine)
+  .use(checkRule)
   .create()
 
 export default function MarkdownArea({ value, onChange }) {
