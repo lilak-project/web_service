@@ -19,6 +19,7 @@ import { Children, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import {
   RackTable, RackRow, RackTabs,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
+  useEditorPanes, RackPaneStrip,
   bySome, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, authHeaders,
 } from 'lilak-ui/racklist'
@@ -111,16 +112,10 @@ export default function App() {
   const [tabs, setTabs] = useState(() => [...FIXED,
     ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
   const [active, setActive] = useState(VIEW.active || 'notes')
-  // The editor can be TWO columns, each with its own tabs: two notes open side
-  // by side is the point, and a tab is sent across rather than dragged. A tab
-  // carries the column it is in; a column with no tabs is not drawn.
-  const [etabs, setEtabs] = useState([])            // [{ id, label, col }]
-  const [eactive, setEactive] = useState({})
-  const [ecol, setECol] = useState(0)               // the column a new note opens in
+  const panes = useEditorPanes()
   // The note a right-click (or 새 노트) just opened: its title takes the caret,
   // so the first thing you can do with a note is name it.
   const [fresh, setFresh] = useState(null)
-  const [efull, setEFull] = useState(!!VIEW.efull)  // the editor takes the list's width too
   const [query, setQuery] = useState('')
   const [bodyHits, setBodyHits] = useState(null)   // ids whose BODY matched
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...TODO_COLS])
@@ -175,8 +170,8 @@ export default function App() {
   // After the filter: a dependency array is evaluated where it is written.
   useEffect(() => {
     saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-               active, sort, clsSort, fsel: filter.sel, fon: filter.on, efull })
-  }, [tabs, active, sort, clsSort, filter.sel, filter.on, efull])   // eslint-disable-line react-hooks/exhaustive-deps
+               active, sort, clsSort, fsel: filter.sel, fon: filter.on, efull: panes.full })
+  }, [tabs, active, sort, clsSort, filter.sel, filter.on, panes.full])   // eslint-disable-line react-hooks/exhaustive-deps
 
 
 
@@ -209,10 +204,9 @@ export default function App() {
       .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
   }, [notes, tab, clsSort])
 
-  const ecols = [...new Set(etabs.map((t) => t.col))].sort((a, b) => a - b)
-  const showEdit = ecols.length > 0
+  const showEdit = panes.showing
   // Two editor columns need the room the list was using; one does not.
-  const showList = !showEdit || (vw >= (ecols.length > 1 ? 1500 : 1180) && !efull)
+  const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
 
   function openTab(t) {
     setTabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
@@ -222,46 +216,11 @@ export default function App() {
     setTabs((ts) => ts.filter((t) => t.id !== id))
     if (active === id) setActive('notes')
   }
-  function openEdit(id, label) {
-    const had = etabs.find((t) => t.id === id)
-    const col = had ? had.col : ecol
-    if (!had) { setEtabs((ts) => [...ts, { id, label, col }]); setFresh(id) }
-    setEactive((a) => ({ ...a, [col]: id }))
-  }
-  // ⌘X closes the note you are in, ⌘N starts a new one.
+  const openEdit = (id, label) => { panes.open({ id, label }); setFresh(id) }
   useRackKeys({
-    onClose: () => { const id = eactive[ecol]; if (id) closeEdit(id) },
+    onClose: () => { const cur = panes.current(panes.cols[0]); if (cur) panes.close(cur.id) },
     onNew: () => create(null),
   })
-
-  function closeEdit(id) {
-    const gone = etabs.find((t) => t.id === id)
-    const left = etabs.filter((t) => t.id !== id)
-    setEtabs(left)
-    if (!gone) return
-    const mine = left.filter((t) => t.col === gone.col)
-    setEactive((a) => ({ ...a, [gone.col]: mine.length ? mine[mine.length - 1].id : null }))
-    if (!mine.length) setECol(left.length ? left[left.length - 1].col : 0)
-  }
-  /** Send a note to the other column — which is how the second column comes to
-   *  exist, and how it stops existing when its last tab leaves. */
-  function moveEdit(id) {
-    const t = etabs.find((x) => x.id === id)
-    if (!t) return
-    // Away from where this column stands: the rightmost column sends left, any
-    // other sends right. A single column is on the right of the list, so its
-    // note goes to a new column beside it on the left.
-    const to = t.col >= Math.max(...etabs.map((x) => x.col)) ? t.col - 1 : t.col + 1
-    const left = etabs.filter((x) => x.id !== id && x.col === t.col)
-    setEtabs((ts) => ts.map((x) => (x.id === id ? { ...x, col: to } : x)))
-    setEactive((a) => ({ ...a, [to]: id, [t.col]: left.length ? left[left.length - 1].id : null }))
-    setECol(to)
-  }
-  useEffect(() => {
-    if (!index) return
-    const alive = (t) => (t.tag ? notes.some((n) => inTag(n, t.tag)) : FIXED.some((f) => f.id === t.id))
-    setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
-  }, [index])   // eslint-disable-line react-hooks/exhaustive-deps
 
   async function create(template) {
     try {
@@ -320,10 +279,10 @@ export default function App() {
               탭 닫기 ({tabs.length - FIXED.length})
             </button>
           )}
-          {etabs.length > 0 && (
+          {panes.count > 0 && (
             <button type="button" className="rl-btn" title="편집 패널의 탭을 모두 닫습니다"
-              onClick={() => { setEtabs([]); setEactive({}); setECol(0) }}>
-              편집 닫기 ({etabs.length})
+              onClick={panes.closeAll}>
+              편집 닫기 ({panes.count})
             </button>
           )}
           <span className="rl-gap" />
@@ -357,7 +316,7 @@ export default function App() {
                 <FacetRows f={filter} />
                 {!filter.mode && rows.map((n, i) => {
                   const on = picked.has(n.id)
-                  const open = etabs.some((t) => t.id === n.id)
+                  const open = panes.tabs.some((t) => t.id === n.id)
                   return (
                     <RackRow key={n.id} cols={cols} tone={TONE}
                       className={`rl-hit${on ? ' on' : ''}${open ? ' rl-edited' : ''}`}
@@ -421,37 +380,15 @@ export default function App() {
           </div>)}
 
           {showList && showEdit && <div {...split.handleProps} />}
-          {ecols.map((c) => {
-            const mine = etabs.filter((t) => t.col === c)
-            const cur = mine.find((t) => t.id === eactive[c]) || mine[0]
+          {panes.cols.map((c) => {
+            const cur = panes.current(c)
             return (
-              <div key={c} className="rl-pane rl-epane" onMouseDown={() => setECol(c)}>
-                <div className="nt-strip">
-                  {/* Double-click gives the editor the list's width too. */}
-                  <div className="nt-strip-tabs" onDoubleClick={() => setEFull((v) => !v)}
-                    title="두 번 눌러 전체 너비">
-                    <RackTabs tabs={mine} active={cur?.id} opened
-                      onPick={(id) => setEactive((a) => ({ ...a, [c]: id }))}
-                      onClose={closeEdit} />
-                  </div>
-                  {/* One button, and it is the whole arrangement: a note sent
-                      across opens the other column, and the column closes when
-                      its last note leaves. */}
-                  {/* The arrow says where the note will go, which is away from
-                      the side this column is on. */}
-                  <button type="button" className="rl-btn nt-send" onClick={() => moveEdit(cur.id)}
-                    title={c === ecols[ecols.length - 1] ? '왼쪽으로 보내기' : '오른쪽으로 보내기'}>
-                    {c === ecols[ecols.length - 1] ? '←' : '→'}
-                  </button>
-                  {/* The same thing the double-click does, for anyone who would
-                      never find a double-click. */}
-                  <button type="button" className="rl-btn nt-send" onClick={() => setEFull((v) => !v)}
-                    title={efull ? '목록 다시 보기' : '전체 너비'}>{efull ? '⇥' : '⇤'}</button>
-                </div>
+              <div key={c} className="rl-pane rl-epane" onMouseDown={() => panes.setCol(c)}>
+                <RackPaneStrip panes={panes} col={c} />
                 <Editor id={cur.id} say={setNote} onSaved={reload}
                   takeCaret={cur.id === fresh} onCaret={() => setFresh(null)}
                   onPrint={() => preview([cur.id])}
-                  onClosed={(cid) => { closeEdit(cid); reload() }} />
+                  onClosed={(cid) => { panes.close(cid); reload() }} />
               </div>
             )
           })}

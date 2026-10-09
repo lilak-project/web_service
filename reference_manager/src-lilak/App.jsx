@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs, RackActions,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
+  useEditorPanes, RackPaneStrip,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId,
   authHeaders, fetchDoc, putDoc,
@@ -337,8 +338,7 @@ export default function App() {
   const [active, setActive] = useState(VIEW.active || 'total')
   // The editor is its OWN pane with its OWN tabs: a record you are fixing is
   // not one of the lists, and closing one should not send you somewhere else.
-  const [etabs, setEtabs] = useState([])
-  const [eactive, setEactive] = useState(null)
+  const panes = useEditorPanes()
   const [query, setQuery] = useState('')
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...AUT_COLS])
   const vw = useViewportWidth()
@@ -486,13 +486,10 @@ export default function App() {
     setTabs((ts) => ts.filter((t) => t.id !== id))
     if (active === id) setActive('total')
   }
-  function openEdit(t) {
-    setEtabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
-    setEactive(t.id)
-  }
+  const openEdit = (t) => panes.open(t)
   // ⌘X closes the record you are in, ⌘N starts whatever this tab makes.
   useRackKeys({
-    onClose: () => eactive && closeEdit(eactive),
+    onClose: () => { const cur = panes.current(panes.cols[0]); if (cur) panes.close(cur.id) },
     onNew: () => (tab?.kind === 'classes' && tab.of === 'author'
       ? openEdit({ id: 'newaut', kind: 'editaut', who: null, label: '새 저자' })
       : tab?.kind === 'classes' && tab.of === 'journal'
@@ -500,13 +497,7 @@ export default function App() {
         : openEdit({ id: 'new', kind: 'edit', who: null, label: '새 논문' })),
   })
 
-  function closeEdit(id) {
-    setEtabs((ts) => {
-      const left = ts.filter((t) => t.id !== id)
-      if (id === eactive) setEactive(left.length ? left[left.length - 1].id : null)
-      return left
-    })
-  }
+  const closeEdit = (id) => panes.close(id)
 
   // ── saving one record ──
   async function commit(patch, said) {
@@ -529,9 +520,9 @@ export default function App() {
 
   // The editor takes the right half when there is room for both; below that it
   // has the width to itself while it is open.
-  const etab = etabs.find((t) => t.id === eactive) || null
-  const showEdit = !!etab
-  const showList = !showEdit || vw >= 1180
+  const showEdit = panes.showing
+  // Two editor columns need the room the list was using; one does not.
+  const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
   const allTags = useMemo(() => [...new Set(refs.flatMap(tagsOf))].sort(), [refs])
 
   return (
@@ -573,10 +564,10 @@ export default function App() {
               탭 닫기 ({tabs.length - FIXED.length})
             </button>
           )}
-          {etabs.length > 0 && (
+          {panes.count > 0 && (
             <button type="button" className="rl-btn" title="편집 패널의 탭을 모두 닫습니다"
               onClick={() => { setEtabs([]); setEactive(null) }}>
-              편집 닫기 ({etabs.length})
+              편집 닫기 ({panes.count})
             </button>
           )}
           <FilterBar f={filter} />
@@ -616,7 +607,7 @@ export default function App() {
                   <FacetRows f={filter} labels={{ empty: '이 열에는 값이 없습니다.' }} />
                   {!filter.mode && rows.map((r, i) => {
                     const on = picked.has(r.id)
-                    const edited = etabs.some((t) => t.who === r.id)
+                    const edited = panes.tabs.some((t) => t.who === r.id)
                     return (
                       <RackRow key={r.id || i} cols={cols} tone={TONE}
                         className={`rl-hit${on ? ' on' : ''}${edited ? ' rl-edited' : ''}`}
@@ -721,68 +712,73 @@ export default function App() {
           </div>)}
 
           {showList && showEdit && <div {...split.handleProps} />}
-          {showEdit && (<div className="rl-pane rl-epane" style={showList ? split.rightStyle : undefined}>
-            <RackTabs tabs={etabs} active={eactive} opened
-              onPick={setEactive} onClose={closeEdit} />
+          {panes.cols.map((c) => {
+            const etab = panes.current(c)
+            return (
+              <div key={c} className="rl-pane rl-epane" onMouseDown={() => panes.setCol(c)}
+                style={showList && panes.cols.length === 1 ? split.rightStyle : undefined}>
+                <RackPaneStrip panes={panes} col={c} />
             {etab.kind === 'pdf' ? (() => {
-              const r = refs.find((x) => x.id === etab.who)
-              if (!r || !hasPdf(r)) return <p className="rl-msg">파일이 연결되어 있지 않습니다.</p>
-              return (
-                <div className="rl-pdf">
-                  <div className="rl-pdfbar">
-                    <button type="button" className="rl-path rl-mono" title="경로 복사"
-                      onClick={() => copyPath(r.pdf.path, setNote)}>{r.pdf.path}</button>
-                    <div className="rl-pdfacts">
-                      {onThisMachine && (
+                const r = refs.find((x) => x.id === etab.who)
+                if (!r || !hasPdf(r)) return <p className="rl-msg">파일이 연결되어 있지 않습니다.</p>
+                return (
+                  <div className="rl-pdf">
+                    <div className="rl-pdfbar">
+                      <button type="button" className="rl-path rl-mono" title="경로 복사"
+                        onClick={() => copyPath(r.pdf.path, setNote)}>{r.pdf.path}</button>
+                      <div className="rl-pdfacts">
+                        {onThisMachine && (
+                          <button type="button" className="rl-btn"
+                            onClick={() => revealPdf(r.pdf.path, setNote)}>폴더에서 보기</button>
+                        )}
+                        <a className="rl-btn" href={pdfSrc(r.pdf.path)} target="_blank" rel="noreferrer">새 창</a>
+                        <a className="rl-btn" href={pdfSrc(r.pdf.path, true)} download>내려받기</a>
+                        <span className="rl-sp" />
                         <button type="button" className="rl-btn"
-                          onClick={() => revealPdf(r.pdf.path, setNote)}>폴더에서 보기</button>
-                      )}
-                      <a className="rl-btn" href={pdfSrc(r.pdf.path)} target="_blank" rel="noreferrer">새 창</a>
-                      <a className="rl-btn" href={pdfSrc(r.pdf.path, true)} download>내려받기</a>
-                      <span className="rl-sp" />
-                      <button type="button" className="rl-btn"
-                        onClick={() => copyPath(r.pdf.path, setNote)}>경로 복사</button>
+                          onClick={() => copyPath(r.pdf.path, setNote)}>경로 복사</button>
+                      </div>
                     </div>
+                    <iframe className="rl-pdfview" src={pdfSrc(r.pdf.path)} title={r.pdf.path} />
                   </div>
-                  <iframe className="rl-pdfview" src={pdfSrc(r.pdf.path)} title={r.pdf.path} />
-                </div>
-              )
-            })() : etab.kind === 'edit' ? (
-              <EditRef ref_={etab.who ? refs.find((r) => r.id === etab.who) : null}
-                doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
-                onOpen={(id) => {
-                  const r = refs.find((x) => x.id === id)
-                  if (r) openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label: refLabel(r) })
-                }}
-                onCreated={(id, label) => { closeEdit('new'); openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label }) }}
-                onDone={(id) => closeEdit(`edit:${id}`)}
-                onCancel={() => closeEdit(etab.id)}
-                onDeleted={(id) => {
-                  closeEdit(`edit:${id}`)
-                  setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
-                }} />
-            ) : etab.kind === 'editaut' ? (
-              <EditAuthorRec id={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
-                onCreated={(a) => { closeEdit('newaut'); openEdit({ id: `editaut:${a.id}`, kind: 'editaut', who: a.id, label: a.tag || a.name }) }}
-                onDone={(id) => closeEdit(`editaut:${id}`)}
-                onCancel={() => closeEdit(etab.id)}
-                onOpenRef={(id) => {
-                  const r = refs.find((x) => x.id === id)
-                  if (r) openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label: refLabel(r) })
-                }}
-                onOpenRole={(a, role) => openTab({ id: `aut:${a.id}:${role}`, kind: 'refs',
-                  aut: a.id, role, label: `${a.tag || a.name} ${ROLE_LABEL[role]}` })} />
-            ) : etab.kind === 'editjrn' ? (
-              <EditJournal name={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
-                onCreated={(name) => { closeEdit('newjrn'); openEdit({ id: `editjrn:${name}`, kind: 'editjrn', who: name, label: name }) }}
-                onDone={(name) => closeEdit(`editjrn:${name}`)}
-                onCancel={() => closeEdit(etab.id)} />
-            ) : (
-              <EditTag name={etab.who} doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN}
-                onDone={(name) => closeEdit(`edittag:${name}`)}
-                onCancel={() => closeEdit(etab.id)} />
-            )}
-          </div>)}
+                )
+              })() : etab.kind === 'edit' ? (
+                <EditRef ref_={etab.who ? refs.find((r) => r.id === etab.who) : null}
+                  doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
+                  onOpen={(id) => {
+                    const r = refs.find((x) => x.id === id)
+                    if (r) openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label: refLabel(r) })
+                  }}
+                  onCreated={(id, label) => { closeEdit('new'); openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label }) }}
+                  onDone={(id) => closeEdit(`edit:${id}`)}
+                  onCancel={() => closeEdit(etab.id)}
+                  onDeleted={(id) => {
+                    closeEdit(`edit:${id}`)
+                    setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
+                  }} />
+              ) : etab.kind === 'editaut' ? (
+                <EditAuthorRec id={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+                  onCreated={(a) => { closeEdit('newaut'); openEdit({ id: `editaut:${a.id}`, kind: 'editaut', who: a.id, label: a.tag || a.name }) }}
+                  onDone={(id) => closeEdit(`editaut:${id}`)}
+                  onCancel={() => closeEdit(etab.id)}
+                  onOpenRef={(id) => {
+                    const r = refs.find((x) => x.id === id)
+                    if (r) openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label: refLabel(r) })
+                  }}
+                  onOpenRole={(a, role) => openTab({ id: `aut:${a.id}:${role}`, kind: 'refs',
+                    aut: a.id, role, label: `${a.tag || a.name} ${ROLE_LABEL[role]}` })} />
+              ) : etab.kind === 'editjrn' ? (
+                <EditJournal name={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+                  onCreated={(name) => { closeEdit('newjrn'); openEdit({ id: `editjrn:${name}`, kind: 'editjrn', who: name, label: name }) }}
+                  onDone={(name) => closeEdit(`editjrn:${name}`)}
+                  onCancel={() => closeEdit(etab.id)} />
+              ) : (
+                <EditTag name={etab.who} doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN}
+                  onDone={(name) => closeEdit(`edittag:${name}`)}
+                  onCancel={() => closeEdit(etab.id)} />
+              )}
+              </div>
+            )
+          })}
         </div>
 
         <footer className="rl-foot">

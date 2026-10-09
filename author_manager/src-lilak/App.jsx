@@ -21,7 +21,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs, RackActions,
-  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useToggleKey, useNote, useViewState,
+  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useToggleKey,
+  useEditorPanes, RackPaneStrip, useNote, useViewState,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
@@ -215,8 +216,7 @@ export default function App() {
   const [active, setActive] = useState(VIEW.active || 'total')
   // The editor is its OWN pane with its OWN tabs: a record you are fixing is
   // not one of the lists, and closing one should not send you somewhere else.
-  const [etabs, setEtabs] = useState([])
-  const [eactive, setEactive] = useState(null)
+  const panes = useEditorPanes()
   const [query, setQuery] = useState('')
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS])
   const vw = useViewportWidth()
@@ -311,10 +311,9 @@ export default function App() {
   // The editor pane takes the right half when there is room for both; below
   // that it has the width to itself while it is open, and closing its last tab
   // gives the list back.
-  const etab = etabs.find((t) => t.id === eactive) || null
-  const wide = vw >= 1180
-  const showEdit = !!etab
-  const showList = !showEdit || wide
+  const showEdit = panes.showing
+  // Two editor columns need the room the list was using; one does not.
+  const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
 
   // Counted over the tab's own authors, not the filtered ones: a value that
   // would empty the list is still worth seeing.
@@ -342,26 +341,17 @@ export default function App() {
     setTabs((ts) => ts.filter((t) => t.id !== id))
     if (active === id) setActive('total')
   }
-  function openEdit(t) {
-    setEtabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
-    setEactive(t.id)
-  }
+  const openEdit = (t) => panes.open(t)
   // ⌘X closes the record you are in, ⌘N starts whatever this tab makes.
   useRackKeys({
-    onClose: () => eactive && closeEdit(eactive),
+    onClose: () => { const cur = panes.current(panes.cols[0]); if (cur) panes.close(cur.id) },
     onNew: () => (tab?.kind === 'classes'
       ? openEdit({ id: `newcls:${tab.of}`, kind: 'editcls', of: tab.of, who: null,
           label: tab.of === 'affiliation' ? '새 소속' : '새 그룹' })
       : openEdit({ id: 'new', kind: 'edit', label: '새 저자', who: null })),
   })
 
-  function closeEdit(id) {
-    setEtabs((ts) => {
-      const left = ts.filter((t) => t.id !== id)
-      if (id === eactive) setEactive(left.length ? left[left.length - 1].id : null)
-      return left
-    })
-  }
+  const closeEdit = (id) => panes.close(id)
 
   /** The menu reads in name order, not in the order groups were made: you are
    *  looking for one, and the document's order is not a thing anyone knows. */
@@ -490,10 +480,10 @@ export default function App() {
               탭 닫기 ({tabs.length - FIXED.length})
             </button>
           )}
-          {etabs.length > 0 && (
+          {panes.count > 0 && (
             <button type="button" className="rl-btn" title="편집 패널의 탭을 모두 닫습니다"
               onClick={() => { setEtabs([]); setEactive(null) }}>
-              편집 닫기 ({etabs.length})
+              편집 닫기 ({panes.count})
             </button>
           )}
           <FilterBar f={filter} />
@@ -552,7 +542,7 @@ export default function App() {
                   const affs = affilText(a)
                   const on = picked.has(a.id)
                   // Open in the editor — on its own, or as one of many.
-                  const edited = etabs.some((t) => t.who === a.id || t.ids?.includes(a.id))
+                  const edited = panes.tabs.some((t) => t.who === a.id || t.ids?.includes(a.id))
                   return (
                     <RackRow key={a.id || i} cols={cols} tone={TONE}
                       className={`rl-hit${on ? ' on' : ''}${edited ? ' rl-edited' : ''}`}
@@ -620,35 +610,40 @@ export default function App() {
         </div>)}
 
         {showList && showEdit && <div {...split.handleProps} />}
-        {showEdit && (<div className="rl-pane rl-epane" style={showList ? split.rightStyle : undefined}>
-          <RackTabs tabs={etabs} active={eactive} opened
-            onPick={setEactive} onClose={closeEdit} />
+        {panes.cols.map((c) => {
+          const etab = panes.current(c)
+          return (
+            <div key={c} className="rl-pane rl-epane" onMouseDown={() => panes.setCol(c)}
+              style={showList && panes.cols.length === 1 ? split.rightStyle : undefined}>
+              <RackPaneStrip panes={panes} col={c} />
           {etab.kind === 'many' ? (
-            <EditMany ids={etab.ids} doc={doc} onSave={commit} say={setNote}
-              onDone={() => closeEdit('many')} onCancel={() => closeEdit('many')} />
-          ) : etab.kind === 'edit' ? (
-            <EditAuthor author={etab.who ? authors.find((a) => a.id === etab.who) : null}
-              doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
-              onCreated={(id, label) => {
-                closeEdit('new')
-                openEdit({ id: `edit:${id}`, kind: 'edit', label, who: id })
-              }}
-              onDone={(id) => closeEdit(`edit:${id}`)}
-              onCancel={() => closeEdit(etab.id)}
-              onDeleted={(id) => {
-                closeEdit(`edit:${id}`)
-                setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
-              }} />
-          ) : (
-            <EditClass name={etab.who} of={etab.of} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
-              onCreated={(name) => {
-                closeEdit(`newcls:${etab.of}`)
-                openEdit({ id: `editcls:${etab.of}:${name}`, kind: 'editcls', label: name, of: etab.of, who: name })
-              }}
-              onDone={(name) => closeEdit(`editcls:${etab.of}:${name}`)}
-              onCancel={() => closeEdit(etab.id)} />
-          )}
-        </div>)}
+              <EditMany ids={etab.ids} doc={doc} onSave={commit} say={setNote}
+                onDone={() => closeEdit('many')} onCancel={() => closeEdit('many')} />
+            ) : etab.kind === 'edit' ? (
+              <EditAuthor author={etab.who ? authors.find((a) => a.id === etab.who) : null}
+                doc={doc} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
+                onCreated={(id, label) => {
+                  closeEdit('new')
+                  openEdit({ id: `edit:${id}`, kind: 'edit', label, who: id })
+                }}
+                onDone={(id) => closeEdit(`edit:${id}`)}
+                onCancel={() => closeEdit(etab.id)}
+                onDeleted={(id) => {
+                  closeEdit(`edit:${id}`)
+                  setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
+                }} />
+            ) : (
+              <EditClass name={etab.who} of={etab.of} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
+                onCreated={(name) => {
+                  closeEdit(`newcls:${etab.of}`)
+                  openEdit({ id: `editcls:${etab.of}:${name}`, kind: 'editcls', label: name, of: etab.of, who: name })
+                }}
+                onDone={(name) => closeEdit(`editcls:${etab.of}:${name}`)}
+                onCancel={() => closeEdit(etab.id)} />
+            )}
+            </div>
+          )
+        })}
         </div>
 
         <footer className="rl-foot">
