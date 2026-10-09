@@ -699,13 +699,17 @@ export default function App() {
                   <div className="rl-pdfbar">
                     <button type="button" className="rl-path rl-mono" title="경로 복사"
                       onClick={() => copyPath(r.pdf.path, setNote)}>{r.pdf.path}</button>
-                    <span className="rl-sp" />
-                    {onThisMachine && (
+                    <div className="rl-pdfacts">
+                      {onThisMachine && (
+                        <button type="button" className="rl-btn"
+                          onClick={() => revealPdf(r.pdf.path, setNote)}>폴더에서 보기</button>
+                      )}
+                      <a className="rl-btn" href={pdfSrc(r.pdf.path)} target="_blank" rel="noreferrer">새 창</a>
+                      <a className="rl-btn" href={pdfSrc(r.pdf.path, true)} download>내려받기</a>
+                      <span className="rl-sp" />
                       <button type="button" className="rl-btn"
-                        onClick={() => revealPdf(r.pdf.path, setNote)}>폴더에서 보기</button>
-                    )}
-                    <a className="rl-btn" href={pdfSrc(r.pdf.path)} target="_blank" rel="noreferrer">새 창</a>
-                    <a className="rl-btn" href={pdfSrc(r.pdf.path, true)} download>내려받기</a>
+                        onClick={() => copyPath(r.pdf.path, setNote)}>경로 복사</button>
+                    </div>
                   </div>
                   <iframe className="rl-pdfview" src={pdfSrc(r.pdf.path)} title={r.pdf.path} />
                 </div>
