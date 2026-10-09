@@ -459,6 +459,10 @@ export default function App() {
                     title={c === ecols[ecols.length - 1] ? '왼쪽으로 보내기' : '오른쪽으로 보내기'}>
                     {c === ecols[ecols.length - 1] ? '←' : '→'}
                   </button>
+                  {/* The same thing the double-click does, for anyone who would
+                      never find a double-click. */}
+                  <button type="button" className="rl-btn nt-send" onClick={() => setEFull((v) => !v)}
+                    title={efull ? '목록 다시 보기' : '전체 너비'}>{efull ? '⇥' : '⇤'}</button>
                 </div>
                 <Editor id={cur.id} say={setNote} onSaved={reload}
                   onPrint={() => printNotes([cur.id])}
