@@ -27,8 +27,11 @@ import {
 // and one newline means one line break, because a note is typed, not typeset.
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { remarkSoftBreaks } from 'lilak-ui/log/Markdown.jsx'
 import MarkdownArea, { TAG_RE, EMBED_RE } from './MarkdownArea.jsx'
+import 'katex/dist/katex.min.css'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
 
@@ -555,13 +558,16 @@ const RENDER = {
   h1: tagged('h1'), h2: tagged('h2'), h3: tagged('h3'), h4: tagged('h4'),
 }
 function Rendered({ children }) {
+  // Maths is `$x^2$` and `$$…$$`, which KaTeX draws here and the editor leaves
+  // as the text it is — the file is the same either way.
   // `![[name]]` is Obsidian's embed, not markdown — here it is turned into the
   // markdown image it means. Only on the way to the page: the file keeps its
   // own spelling.
   const md = String(children || '').replace(EMBED_RE,
     (_, name) => `![${name}](${fileSrc(name)})`)
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkSoftBreaks]} components={RENDER}>
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkSoftBreaks]}
+      rehypePlugins={[rehypeKatex]} components={RENDER}>
       {md}
     </ReactMarkdown>
   )

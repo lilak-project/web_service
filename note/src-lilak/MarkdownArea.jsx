@@ -28,10 +28,12 @@ import { clipboard } from '@milkdown/kit/plugin/clipboard'
 import { cursor } from '@milkdown/kit/plugin/cursor'
 import { trailing } from '@milkdown/kit/plugin/trailing'
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
+import { math, mathBlockSchema, mathInlineSchema } from '@milkdown/plugin-math'
+import katex from 'katex'
 import { bulletListSchema, listItemSchema } from '@milkdown/kit/preset/commonmark'
 import { InputRule } from '@milkdown/kit/prose/inputrules'
 import { findWrapping } from '@milkdown/kit/prose/transform'
-import { $inputRule, $remark } from '@milkdown/kit/utils'
+import { $inputRule, $remark, $view } from '@milkdown/kit/utils'
 import { $prose } from '@milkdown/kit/utils'
 import { Plugin, PluginKey } from '@milkdown/kit/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
@@ -115,6 +117,9 @@ const make = (root, value, onMarkdown, fileSrc) => Editor.make()
   .use(cursor)          // a caret you can place beside a table or an image
   .use(trailing)        // always a paragraph to land in at the end
   .use(listener)
+  .use(math)         // `$x$` and `$$…$$` as nodes, so the backslashes survive
+  .use(mathView(mathBlockSchema, true))
+  .use(mathView(mathInlineSchema, false))
   .use(imageAttrs)   // plain markdown `![alt](url)`, which milkdown drops
   .use(activeLine)
   .use(checkRule)
@@ -182,6 +187,72 @@ export default function MarkdownArea({ value, onChange, fileSrc }) {
  *  anybody's engine's job. It is shown as a WIDGET beside the text rather than
  *  parsed into an image node: the text stays exactly what the file says, and
  *  the file stays something Obsidian can still read. */
+/** A formula you can go back into.
+ *
+ *  plugin-math draws `$x$` and `$$…$$` with KaTeX and makes them atoms, which
+ *  means a typo in one can only be deleted, not fixed. Selecting a formula —
+ *  one click — hands back the LaTeX in a field; leaving it draws it again.
+ */
+const mathView = (schema, block) => $view(schema.node, () => (node, view, getPos) => {
+  const dom = document.createElement(block ? 'div' : 'span')
+  dom.className = block ? 'nt-math' : 'nt-math-in'
+  dom.dataset.type = block ? 'math_block' : 'math_inline'
+  const latex = () => (block ? node.attrs.value : node.textContent) || ''
+  const draw = () => {
+    dom.textContent = ''
+    const out = document.createElement(block ? 'div' : 'span')
+    try { katex.render(latex(), out, { displayMode: block, throwOnError: false }) }
+    catch { out.textContent = latex() }
+    dom.appendChild(out)
+  }
+  const edit = () => {
+    const was = latex()
+    dom.textContent = ''
+    const ta = document.createElement('textarea')
+    ta.className = 'nt-math-src'
+    ta.value = was
+    ta.rows = block ? Math.max(1, was.split('\n').length) : 1
+    const commit = () => {
+      const pos = getPos()
+      if (pos == null || ta.value === was) { draw(); return }
+      const tr = view.state.tr
+      if (block) tr.setNodeMarkup(pos, undefined, { value: ta.value })
+      else if (ta.value) tr.replaceWith(pos + 1, pos + node.nodeSize - 1, view.state.schema.text(ta.value))
+      else tr.delete(pos, pos + node.nodeSize)
+      view.dispatch(tr)
+      // The node may still be the selected one, so nothing else will ask for
+      // the formula back: draw it.
+      draw()
+    }
+    ta.addEventListener('blur', commit)
+    ta.addEventListener('keydown', (e) => {
+      // Escape always leaves; Enter leaves an inline formula, where there is
+      // only ever one line to write.
+      if (e.key === 'Escape' || (e.key === 'Enter' && !block)) {
+        e.preventDefault()
+        commit()
+        view.focus()
+      }
+    })
+    dom.appendChild(ta)
+    requestAnimationFrame(() => { ta.focus(); ta.select() })
+  }
+  draw()
+  return {
+    dom,
+    selectNode: edit,
+    deselectNode: draw,
+    stopEvent: (e) => e.target?.tagName === 'TEXTAREA',
+    ignoreMutation: () => true,
+    update: (next) => {
+      if (next.type !== node.type) return false
+      node = next
+      if (!dom.querySelector('textarea')) draw()
+      return true
+    },
+  }
+})
+
 /** remark reads an image with no title as `title: null`, and the image node
  *  declares `validate: 'string'` — ProseMirror then refuses the node and the
  *  picture is dropped on the way in (milkdown 7.22). Give it the empty

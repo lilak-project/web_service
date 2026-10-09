@@ -105,6 +105,23 @@
 /* ── the print page ──────────────────────────────────────────────────────
    Not a RACK screen: a sheet of paper. The browser's own printer writes the
    PDF, so the system's Korean fonts are already there. */
+/* Maths. `$x$` and `$$…$$` are nodes in the editor (so the backslashes
+   survive a save) and KaTeX draws them in both places; a block stands on its
+   own line, the way it does on paper. */
+.nt-prose [data-type='math_block'] {
+  display: block; margin: 8px 0; padding: 2px 0;
+  text-align: center; font-size: 1.1em;
+}
+.nt-prose [data-type='math_block'].ProseMirror-selectednode { background: var(--rk-sel, #eef2ff); }
+/* A formula being written is its LaTeX, in a field the width of the line. */
+.nt-math-src {
+  width: 100%; border: 1px solid var(--rk-dim); border-radius: 2px;
+  padding: 2px 5px; background: var(--rk-panel);
+  font: 12px/1.5 var(--rk-mono, ui-monospace, monospace); color: var(--rk-text);
+  resize: vertical;
+}
+.nt-math-in .nt-math-src { width: auto; min-width: 8em; text-align: left; resize: none; }
+
 /* The note read inside its own pane: the print sheet, scrolling. */
 .nt-read { flex: 1; min-height: 0; overflow: auto; background: #fff; color: #111; }
 .nt-read .nt-sheet { max-width: 170mm; padding: 8mm 10mm; }
