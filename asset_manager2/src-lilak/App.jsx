@@ -806,16 +806,7 @@ function App() {
   // Assets default: most recently edited first.
   const [sort, setSort] = useState({ key: 'lastUpdate', dir: 'desc' })
   const isMobile = useMediaQuery('(max-width: 760px)')
-  // Desktop: the asset list is a rack table, with the card beside it. The card
-  // list is still a press away, and which one you chose is remembered.
-  const wideEnough = useMediaQuery('(min-width: 1024px)')
-  const [rackPref, setRackPref] = useState(() => {
-    try { return localStorage.getItem(`${NS}.deskRack`) !== '0' } catch { return true }
-  })
-  useEffect(() => {
-    try { localStorage.setItem(`${NS}.deskRack`, rackPref ? '1' : '0') } catch { /* private mode */ }
-  }, [rackPref])
-  const deskRack = wideEnough && rackPref
+
 
   // Remembered applicant name/org for request forms, per account.
   const profileKey = `${NS}.profile.${authUser?.email || 'local'}`
@@ -1676,54 +1667,7 @@ function App() {
   const myListSet = useMemo(() => new Set(myList), [myList])
 
   return (
-    <div className={`app${deskRack ? ' is-rack' : ''}`}>
-      <header className="topbar">
-        {notice ? (
-          <div
-            className={`topbar-notice${notice.text.length > 28 ? ' is-long' : ''}`}
-            role="button"
-            onClick={() => {
-              if (noticeTimer.current) { window.clearTimeout(noticeTimer.current); noticeTimer.current = null }
-              setNotice('')
-            }}
-          >
-            <span className={`notice-dot is-${notice.kind}`} />
-            <span className="topbar-notice-text">{notice.text}</span>
-          </div>
-        ) : (
-          <>
-            <div className="topbar-title">
-              <Cube size={isMobile ? 24 : 20} weight="fill" color={BRAND} />
-              {projectName && <span className="topbar-project">{projectName}</span>}
-              {authUser && <span className="topbar-user">{String(authUser.email).split('@')[0]}</span>}
-            </div>
-            <div className="topbar-right" ref={menuRef}>
-              <button type="button" className="topbar-logout" title="메뉴" onClick={() => setMenuOpen((o) => !o)}>
-                <ListIcon size={logoutIconSize} weight="bold" color={menuOpen || tab === 'notices' ? '#c98a2e' : BRAND} />
-              </button>
-              {menuOpen && (
-                <div className="topbar-menu-pop">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      if (tab === 'notices') { setTab(prevTabRef.current) } else { prevTabRef.current = tab; setTab('notices') }
-                    }}
-                  >
-                    <Bell size={17} weight="fill" /> 알림
-                  </button>
-                  <button type="button" onClick={() => { setMenuOpen(false); show('영어 번역은 준비 중입니다.', 'warn') }}>
-                    <Translate size={17} weight="fill" /> 언어변경
-                  </button>
-                  <button type="button" onClick={signOut}>
-                    <SignOut size={17} weight="fill" /> 나가기
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </header>
+    <div className="app is-rack">
       {SERVER && (
         <div className="ptr-anchor" aria-hidden="true">
           <div
@@ -1735,7 +1679,7 @@ function App() {
         </div>
       )}
       <main
-        className={`page${deskRack ? ' is-rack' : ''}`}
+        className="page is-rack"
         ref={pageRef}
         onScroll={handlePageScroll}
         onTouchStart={SERVER ? onPtrStart : undefined}
@@ -1744,7 +1688,7 @@ function App() {
         onTouchCancel={SERVER ? onPtrCancel : undefined}
       >
         <RackFrame
-          on={deskRack}
+          on
           tabs={[...tabs.filter((t) => !t.fab), { id: 'notices', label: '알림' }]}
           tab={tab}
           setTab={setTab}
@@ -1752,8 +1696,9 @@ function App() {
           project={PORTAL_PROJECT}
           note={notice?.text}
           onScan={() => setScanning(true)}
+          onSignOut={signOut}
         >
-        {tab === 'assets' && deskRack && (
+        {tab === 'assets' && (
           <AssetRack
             query={query}
             setQuery={setQuery}
@@ -1774,41 +1719,12 @@ function App() {
             onAddAll={addAllAssets}
             hiddenFilter={hiddenFilter}
             onCycleHiddenFilter={() => setHiddenFilter((f) => (f === 'all' ? 'hidden' : f === 'hidden' ? 'visible' : 'all'))}
-            onCards={() => setRackPref(false)}
-          />
-        )}
-        {tab === 'assets' && !deskRack && (
-          <AssetListPage
-            onRack={wideEnough ? () => setRackPref(true) : null}
-            query={query}
-            setQuery={setQuery}
-            assets={filteredAssets}
-            expandedId={expandedId}
-            setExpandedId={setExpandedId}
-            myListSet={myListSet}
-            myPhotos={myPhotos}
-            toggleMyList={toggleMyList}
-            onCapture={(id) => setCapture({ kind: 'asset', id })}
-            onCaptureSlot={(id, slot) => setCapture({ kind: 'slot', id, slot })}
-            recordAction={recordAction}
-            updateAsset={updateAsset}
-            locationPhoto={locationPhoto}
-            records={latestRecords}
-            sort={sort}
-            setSort={setSort}
             onCreate={createAsset}
             onImportAssets={importAssets}
             existingIds={assets.map((a) => a.assetId)}
             draft={assetDraft}
             onDraftDone={() => setAssetDraft(null)}
-            onAddAll={addAllAssets}
-            classOptions={classOptions}
-            isAdmin={isAdmin}
-            canEditPhotos={canEditPhotos}
-            showField={showField}
             canCreate={canCreate}
-            hiddenFilter={hiddenFilter}
-            onCycleHiddenFilter={() => setHiddenFilter((f) => (f === 'all' ? 'hidden' : f === 'hidden' ? 'visible' : 'all'))}
           />
         )}
         {tab === 'mylist' && (
@@ -1895,38 +1811,6 @@ function App() {
         )}
         </RackFrame>
       </main>
-      <nav className="tabbar">
-        {tabs.map((item) =>
-          item.fab ? (
-            <button key={item.id} type="button" className="tabbar-fab" title={item.label} onClick={() => setScanning(true)}>
-              <item.Glyph size={26} weight="fill" color="#ffffff" />
-            </button>
-          ) : (
-            <button
-              key={item.id}
-              type="button"
-              className={`tabbar-tab${tab === item.id ? ' is-active' : ''}`}
-              onClick={() => {
-                if (tab === item.id) {
-                  // Re-tapping the active tab: close the open card + glide to top.
-                  setExpandedId('')
-                  pageRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-                } else setTab(item.id)
-              }}
-              title={item.label}
-            >
-              <span className="tabbar-glyph">
-                <item.Glyph size={tabIconSize} weight="fill" color={tab === item.id ? BRAND : '#9aa3b2'} />
-                {item.id === 'mylist' && myListBadge > 0 && <span className="tab-badge">{myListBadge}</span>}
-              </span>
-              <span className="tabbar-label">
-                {item.label}
-                {item.id === 'mylist' && myList.length > 0 && <span className="tab-total"> {myList.length}</span>}
-              </span>
-            </button>
-          ),
-        )}
-      </nav>
       {scanning && <ScannerModal onResult={onScanResult} onResultMany={onScanMany} onClose={() => setScanning(false)} />}
       {dialog && <Dialog dialog={dialog} onClose={() => setDialog(null)} />}
       {capture && (
@@ -2577,63 +2461,6 @@ const FIELD_ALIASES = {
   manufacturerProvider: ['제조사', '거래처명', '공급처', 'maker'],
   acquisitionDate: ['취득일', '취득일자'],
   acquisitionPriceKrw: ['취득가', '취득금액', '가격'],
-}
-
-function AssetListPage({ query, setQuery, assets, expandedId, setExpandedId, myListSet, myPhotos, toggleMyList, onCapture, onCaptureSlot, recordAction, updateAsset, locationPhoto, records, sort, setSort, onCreate, onImportAssets, existingIds, onAddAll, classOptions, draft, onDraftDone, isAdmin, hiddenFilter, onCycleHiddenFilter, canEditPhotos, showField, canCreate = true, onRack = null }) {
-  return (
-    <div className="stack">
-      <Card>
-        {/* No autoFocus: opening the Assets tab must not pop the keyboard up. */}
-        <SearchBox query={query} setQuery={setQuery} placeholder="asset number, name, location" />
-      </Card>
-      <div className="list-toolbar">
-        <span className="list-count">
-          총 {assets.length}개
-          <button type="button" className="sort-btn add-all" onClick={() => onAddAll(assets.map((a) => a.assetId))}>전체추가</button>
-        </span>
-        <div className="sort-side">
-          {/* Only on a window wide enough to hold the table. */}
-          {onRack && <button type="button" className="sort-btn" onClick={onRack}>표로 보기</button>}
-          <SortBar sort={sort} setSort={setSort} />
-          {isAdmin && (
-            <button
-              type="button"
-              className={`sort-btn hide-filter${hiddenFilter !== 'all' ? ' is-active' : ''}`}
-              title="숨김 필터: 전체 → 숨김만 → 노출만"
-              onClick={onCycleHiddenFilter}
-            >
-              {hiddenFilter === 'all' ? '전체' : hiddenFilter === 'hidden' ? '숨김만' : '노출만'}
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="result-list result-list-full">
-        {!query.trim() && canCreate && <NewAssetCard onCreate={onCreate} onImportAssets={onImportAssets} existingIds={existingIds} classOptions={classOptions} draft={draft} onDraftDone={onDraftDone} />}
-        {assets.length === 0 && <Card><p className="muted">일치하는 자산이 없습니다.</p></Card>}
-        {assets.map((asset) => (
-          <AssetRow
-            key={asset.assetId}
-            asset={asset}
-            expanded={expandedId === asset.assetId}
-            onToggle={() => setExpandedId(expandedId === asset.assetId ? '' : asset.assetId)}
-            inMyList={myListSet.has(asset.assetId)}
-            shots={myPhotos[asset.assetId]}
-            onToggleMyList={() => toggleMyList(asset.assetId)}
-            onCapture={() => onCapture(asset.assetId)}
-            onCaptureSlot={onCaptureSlot}
-            recordAction={recordAction}
-            updateAsset={updateAsset}
-            locationPhoto={locationPhoto}
-            records={records}
-            classOptions={classOptions}
-            isAdmin={isAdmin}
-            canEditPhotos={canEditPhotos}
-            showField={showField}
-          />
-        ))}
-      </div>
-    </div>
-  )
 }
 
 const EDIT_FIELDS = [
@@ -4161,11 +3988,11 @@ const RACK_COLS = [
   { k: 'num', w: 42, min: 32, fix: true, label: '#' },
   { k: 'assetId', w: 118, min: 70, label: '자산번호' },
   { k: 'name', w: 250, min: 110, label: '자산명' },
-  { k: 'location', w: 140, min: 70, label: '위치' },
+  { k: 'location', w: 140, min: 70, label: '위치', drop: 900 },
   { k: 'type', w: 110, min: 60, label: 'Type', drop: 1240 },
   { k: 'assetClass', w: 120, min: 60, label: '자산분류', drop: 1180 },
   { k: 'accountHolder', w: 112, min: 60, label: '관리책임자', drop: 1440 },
-  { k: 'lastUpdate', w: 96, min: 70, label: '최근변경' },
+  { k: 'lastUpdate', w: 96, min: 70, label: '최근변경', drop: 760 },
 ]
 const RACK_TONE = { name: 'ink', location: 'dim', type: 'dim', assetClass: 'dim', accountHolder: 'dim' }
 const rackDate = (v) => String(v || '').slice(0, 10)
@@ -4173,9 +4000,13 @@ const rackDate = (v) => String(v || '').slice(0, 10)
 function AssetRack({
   query, setQuery, assets, myListSet, myPhotos, toggleMyList, onCapture, onCaptureSlot,
   recordAction, updateAsset, locationPhoto, records, classOptions, isAdmin, canEditPhotos,
-  showField, onAddAll, hiddenFilter, onCycleHiddenFilter, onCards,
+  showField, onAddAll, hiddenFilter, onCycleHiddenFilter,
+  onCreate, onImportAssets, existingIds, draft, onDraftDone, canCreate = true,
 }) {
   const [sel, setSel] = useState('')
+  // Creating takes the pane the card uses: one place on the right where the
+  // record you are working on lives, new or not.
+  const [creating, setCreating] = useState(false)
   const [sort, setSort] = useState({ k: 'assetId', dir: 1 })
   const { drag, sized } = useColumnWidths(`${NS}.rack.cols`, RACK_COLS)
   const [vw, setVw] = useState(() => window.innerWidth)
@@ -4208,7 +4039,11 @@ function AssetRack({
   return (
     <>
         <div className="rl-cmd">
-          <button type="button" className="rl-btn rl-go"
+          {canCreate && (
+            <button type="button" className={`rl-btn rl-go${creating ? ' on' : ''}`}
+              onClick={() => { setCreating((v) => !v); setSel('') }}>+ 새 자산</button>
+          )}
+          <button type="button" className="rl-btn"
             onClick={() => onAddAll(rows.map((a) => a.assetId))}>전체추가</button>
           {isAdmin && (
             <button type="button" className={`rl-btn${hiddenFilter !== 'all' ? ' on' : ''}`}
@@ -4216,8 +4051,6 @@ function AssetRack({
               {hiddenFilter === 'all' ? '전체' : hiddenFilter === 'hidden' ? '숨김만' : '노출만'}
             </button>
           )}
-          <span className="rl-gap" />
-          <button type="button" className="rl-btn" onClick={onCards}>카드로 보기</button>
           <span className="rl-sp" />
           <input type="search" className="rl-find" value={query}
             placeholder="자산번호 · 이름 · 위치"
@@ -4233,7 +4066,7 @@ function AssetRack({
                 return (
                   <RackRow key={a.assetId} cols={cols} tone={RACK_TONE}
                     className={`rl-hit${a.assetId === sel ? ' on' : ''}`}
-                    onClick={() => setSel(a.assetId)}
+                    onClick={() => { setSel(a.assetId); setCreating(false) }}
                     cell={{
                       // The checkbox is My List, which is what a selection is
                       // for in this app — it does not need a second meaning.
@@ -4257,7 +4090,14 @@ function AssetRack({
             </RackTable>
           </div>
 
-          {chosen && (
+          {creating && (
+            <div className="rl-pane rl-epane am-rack-card">
+              <NewAssetCard onCreate={(f) => { onCreate(f); setCreating(false) }}
+                onImportAssets={onImportAssets} existingIds={existingIds}
+                classOptions={classOptions} draft={draft} onDraftDone={onDraftDone} />
+            </div>
+          )}
+          {!creating && chosen && (
             <div className="rl-pane rl-epane am-rack-card">
               {/* The card itself, open: every action it has works here. */}
               <AssetRow
@@ -4296,7 +4136,7 @@ function AssetRack({
  * screen, and one line of status (which is where a notice now lands, since the
  * top bar used to carry it).
  */
-function RackFrame({ on, children, tabs, tab, setTab, count, project, note, onScan }) {
+function RackFrame({ on, children, tabs, tab, setTab, count, project, note, onScan, onSignOut }) {
   if (!on) return children
   const loose = tab !== 'assets'
   return (
@@ -4307,6 +4147,9 @@ function RackFrame({ on, children, tabs, tab, setTab, count, project, note, onSc
           <span className="rl-n">{count}개</span>
           <span className="rl-sp" />
           <span className="rl-n">{project}</span>
+          {onSignOut && (
+            <button type="button" className="rl-tabname am-rack-out" onClick={onSignOut}>나가기</button>
+          )}
         </header>
         <div className="rl-tabs">
           {tabs.map((t) => (

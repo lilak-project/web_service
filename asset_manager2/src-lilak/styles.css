@@ -2324,3 +2324,9 @@ button.asset-row-open {
 .am-rack-loose { overflow-y: auto; padding: 10px 12px 24px; font-size: 14px; }
 .am-rack-loose .stack { display: flex; flex-direction: column; gap: 10px; }
 .am-rack-scan { color: var(--rk-cite-t); }
+
+/* This app IS a rack list (see RackFrame): no phone bars to hide any more, and
+   the nameplate carries the only thing the old top bar had that the portal does
+   not — the way out. */
+.am-rack-out { color: var(--rk-brand-t, var(--rk-dim)); opacity: .8; }
+.am-rack-out:hover { opacity: 1; }

@@ -38,37 +38,30 @@ the single delivery path, and identity is the portal account.)
   holds only shared assets (`seed-assets.js`, `hwpx-export.js`, `template.hwpx`,
   `icons/`, `manifest.webmanifest`), not a second app.
 
-## Two layouts: phone cards, desktop rack
+## One layout: the rack
 
-The asset list has two presentations of the same records:
+There is no card list and no width switch — **this app is a rack list**, the
+shape author_manager and reference_manager have:
 
-- **cards** — the phone-first list (`AssetListPage` → `AssetRow`), the only one
-  below 1024px;
-- **rack** — at 1024px and up, `AssetRack`: the dense table the portal's other
-  list services use, with the CARD ITSELF in a pane beside it. Everything a
-  card does (edit, photos, history, requests) still happens in `AssetRow`;
-  nothing in the table is a second implementation of it.
+- `RackFrame` is the screen: the nameplate (the service's own colour, out of the
+  manifest, plus the way out), a strip of tabs (Assets · My List · Class ·
+  History · 알림, and 스캔), the body, and one status line, which is where a
+  notice lands;
+- **Assets** is `AssetRack`: the dense table, with the right pane holding either
+  the asset's CARD (`AssetRow`, unchanged — edit, photos, history, requests all
+  still happen in it) or `NewAssetCard` while you are adding one;
+- the other tabs render the page they always had, inside a scrolling pane
+  (`.am-rack-loose`). They are the next ones to redraw.
 
-The table parts come from the shared kit, `lilak-ui/racklist` (the same
-`RackTable`/`RackRow`/`useColumnWidths` as author_manager and
-reference_manager), plus `rack.css`. That stylesheet's PAGE rules are scoped to
-`body.rl-page`, which this app does not set — so importing it brings the table
-without taking over the phone layout. `.page.is-rack` hands the rack the whole
-area (the page's own scroll and its 55vh headroom are for the card list).
+`index.html` sets `body class="rl-page"`, so rack.css's page rules apply — this
+app IS one, unlike asset_manager which only borrowed the table.
 
-In rack mode the app's OWN chrome goes: `RackFrame` draws the nameplate, a tab
-strip (Assets · My List · Class · History · 알림, plus 스캔) and one status line,
-and `.app.is-rack` hides `.topbar` and `.tabbar` — inside the portal's panel they
-are a second set of chrome, and the portal already names the service and the
-project. The notice the top bar used to show lands on the status line. Tabs
-other than Assets render their existing page inside a scrolling pane
-(`.am-rack-loose`), so none of them was rewritten.
+A column leaves at the TABLE's width rather than the window's: with the card
+open the table has half of it. Below about 430px the table scrolls sideways;
+this service is meant for a desktop, and the phone-first one is asset_manager.
 
 The manifest says `"open": "panel"` so the portal frames it rather than throwing
 it into a window (the multi-project default).
-
-Which one you are in is remembered in `cens.deskRack`, and each view has a
-button to the other (`카드로 보기` / `표로 보기`).
 
 ## Commands
 
