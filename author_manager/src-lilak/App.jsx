@@ -217,7 +217,7 @@ export default function App() {
   const [active, setActive] = useState(VIEW.active || 'total')
   // The editor is its OWN pane with its OWN tabs: a record you are fixing is
   // not one of the lists, and closing one should not send you somewhere else.
-  const panes = useEditorPanes()
+  const panes = useEditorPanes(projectKey('am', 'panes'))
   const [query, setQuery] = useState('')
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS])
   const vw = useViewportWidth()
@@ -249,7 +249,15 @@ export default function App() {
       return false
     }
     setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
-  }, [doc])
+    // The editors outlive a visit to another service too, so a record that has
+    // gone since must not come back as an editor for nothing.
+    panes.keep((t) => {
+      if (!t.who) return true                   // a draft belongs to nobody
+      if (t.kind === 'editcls') return (doc[t.of === 'group' ? 'groups' : 'affiliations'] || [])
+        .some((r) => r.name === t.who)
+      return (doc.authors || []).some((a) => a.id === t.who)
+    })
+  }, [doc])   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!tabs.some((t) => t.id === active)) setActive('total')
   }, [tabs, active])
@@ -312,7 +320,7 @@ export default function App() {
   // The editor pane takes the right half when there is room for both; below
   // that it has the width to itself while it is open, and closing its last tab
   // gives the list back.
-  const showEdit = panes.showing
+  const showEdit = panes.showing && !!doc
   // Two editor columns need the room the list was using; one does not.
   const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
 
@@ -615,7 +623,7 @@ export default function App() {
         </div>)}
 
         {showList && showEdit && <div {...split.handleProps} />}
-        {panes.cols.map((c) => {
+        {showEdit && panes.cols.map((c) => {
           const etab = panes.current(c)
           return (
             <div key={c} className="rl-pane rl-epane" onMouseDown={() => panes.setCol(c)}

@@ -362,7 +362,7 @@ export default function App() {
   const [active, setActive] = useState(VIEW.active || 'total')
   // The editor is its OWN pane with its OWN tabs: a record you are fixing is
   // not one of the lists, and closing one should not send you somewhere else.
-  const panes = useEditorPanes()
+  const panes = useEditorPanes(projectKey('rm', 'panes'))
   const [query, setQuery] = useState('')
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...AUT_COLS])
   const vw = useViewportWidth()
@@ -393,7 +393,16 @@ export default function App() {
       return false
     }
     setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
-  }, [doc])
+    // The editors are kept across a visit to another service, so the same is
+    // true of them: a record that has since gone cannot be edited.
+    panes.keep((t) => {
+      if (!t.who) return true                    // a draft belongs to nobody
+      if (t.kind === 'editjrn') return (doc.journals || []).some((j) => j.name === t.who)
+      if (t.kind === 'editaut') return (doc.authors || []).some((x) => x.id === t.who)
+      if (t.kind === 'edittag') return (doc.references || []).some((r) => inTag(r, t.who))
+      return (doc.references || []).some((r) => r.id === t.who)   // edit · pdf
+    })
+  }, [doc])   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!tabs.some((t) => t.id === active)) setActive('total')
   }, [tabs, active])
@@ -550,7 +559,7 @@ export default function App() {
 
   // The editor takes the right half when there is room for both; below that it
   // has the width to itself while it is open.
-  const showEdit = panes.showing
+  const showEdit = panes.showing && !!doc
   // Two editor columns need the room the list was using; one does not.
   const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
   const allTags = useMemo(() => [...new Set(refs.flatMap(tagsOf))].sort(), [refs])
@@ -742,7 +751,7 @@ export default function App() {
           </div>)}
 
           {showList && showEdit && <div {...split.handleProps} />}
-          {panes.cols.map((c) => {
+          {showEdit && panes.cols.map((c) => {
             const etab = panes.current(c)
             return (
               <div key={c} className="rl-pane rl-epane" onMouseDown={() => panes.setCol(c)}
