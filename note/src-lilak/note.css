@@ -173,9 +173,14 @@
   border-radius: 1px;
   background: var(--rk-line);
 }
-/* Inside a list the bar has the list's padding to climb back out of. */
-.nt-prose li::before { left: -38px; }
-.nt-prose li li::before { left: -58px; }
+/* Inside a list the bar has the list's padding to climb back out of — one
+   step per level, so a bar stands in the gutter however deep its line is.
+   (A custom property cannot add to itself, so the levels are written out;
+   four is deeper than a note goes.) */
+.nt-prose li::before { left: calc(-18px - 1.5em); }
+.nt-prose li li::before { left: calc(-18px - 3em); }
+.nt-prose li li li::before { left: calc(-18px - 4.5em); }
+.nt-prose li li li li::before { left: calc(-18px - 6em); }
 .nt-prose :where(ul, ol) > *::before,
 .nt-prose li:not([data-item-type="task"]) > p::before,
 .nt-prose blockquote > p::before { content: none; }
