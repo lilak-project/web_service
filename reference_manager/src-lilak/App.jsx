@@ -1811,32 +1811,44 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone, onCancel }
  *  renaming it everywhere, merging it into another, or taking it off. */
 function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
   const [to, setTo] = useState(name)
+  // Tags that are the same thing under another spelling. They are folded into
+  // this one, which is the one that survives.
+  const [absorb, setAbsorb] = useState([])
   // ⌘S saves and stays; closing is ⌘X's job.
   useRackKeys({ onSave: () => rename(true) })
-  useEffect(() => { setTo(name) }, [name])
-  const users = (doc.references || []).filter((r) => (r.tags || []).includes(name))
+  useEffect(() => { setTo(name); setAbsorb([]) }, [name])
   const named = String(to || '').trim()
-  const merging = named && tags.includes(named) && named !== name
+  // Every tag this save gets rid of, and every paper that wears one of them.
+  const gone = useMemo(() => [name, ...absorb.filter((t) => t && t !== name)], [name, absorb])
+  const users = (doc.references || []).filter((r) => (r.tags || []).some((t) => gone.includes(t)))
+  const merging = absorb.length > 0 || (named && tags.includes(named) && named !== name)
 
   async function rename(keep) {
-    if (!named || named === name) return
+    if (!named || (named === name && !absorb.length)) return
+    const drop = new Set(gone)
     const refs = doc.references.map((r) => {
-      if (!(r.tags || []).includes(name)) return r
+      if (!(r.tags || []).some((t) => drop.has(t))) return r
       const next = []
       for (const t of r.tags) {
-        const v = t === name ? named : t
+        const v = drop.has(t) ? named : t
         if (!next.includes(v)) next.push(v)     // merging into a tag it already has
       }
-      return { ...r, tags: next }
+      // The main tag is what the cite key is filed under: a tag that has just
+      // stopped existing cannot stay the one the key is named for.
+      const main = drop.has(r.mainTag) ? named : r.mainTag
+      return { ...r, tags: next, ...(main === r.mainTag ? {} : { mainTag: main }) }
     })
-    const said = merging
-      ? `'${name}' → '${named}'에 합쳤습니다 · 논문 ${users.length}편`
-      : `'${name}' → '${named}' · 논문 ${users.length}편`
+    const said = absorb.length
+      ? `${gone.length}개 태그를 '${named}'으로 합쳤습니다 · 논문 ${users.length}편`
+      : merging
+        ? `'${name}' → '${named}'에 합쳤습니다 · 논문 ${users.length}편`
+        : `'${name}' → '${named}' · 논문 ${users.length}편`
     if (await onSave({ references: refs }, said) && !keep) onDone?.(name)
   }
   async function remove() {
     const refs = doc.references.map((r) => ((r.tags || []).includes(name)
-      ? { ...r, tags: r.tags.filter((t) => t !== name) } : r))
+      ? { ...r, tags: r.tags.filter((t) => t !== name),
+          ...(r.mainTag === name ? { mainTag: '' } : {}) } : r))
     if (await onSave({ references: refs }, `'${name}' 태그를 ${users.length}편에서 뗐습니다.`)) onDone?.(name)
   }
 
@@ -1844,7 +1856,8 @@ function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
     <div className="rl-edit">
       <RackActions key={name}
         saveLabel={merging ? '합치기' : 'save'}
-        onSave={() => rename(!merging)} saveDisabled={!named || named === name}
+        onSave={() => rename(!merging)}
+        saveDisabled={!named || (named === name && !absorb.length)}
         onCancel={onCancel} onRevert={() => setTo(name)}
         onDelete={isAdmin ? remove : null}
         deleteWarn={`논문 ${users.length}편에서 이 태그를 뗍니다. 되돌릴 수 없습니다.`} />
@@ -1853,7 +1866,17 @@ function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
           <input className="rl-in" style={{ width: 260 }} list="rl-tags-all" value={to || ''}
             onChange={(e) => setTo(e.target.value)} />
           <datalist id="rl-tags-all">{tags.map((t) => <option key={t} value={t} />)}</datalist>
-          {merging && <span className="rl-hint">이미 있는 태그입니다 — 합쳐집니다.</span>}
+          {named !== name && tags.includes(named)
+            && <span className="rl-hint">이미 있는 태그입니다 — 합쳐집니다.</span>}
+        </Fld>
+        <Fld label="합칠 태그">
+          <TagRows value={absorb} options={tags.filter((t) => t !== name && !absorb.includes(t))}
+            onChange={(v) => setAbsorb(v.filter((t) => t !== named))} />
+          <span className="rl-hint">
+            {absorb.length
+              ? `이 ${absorb.length}개가 '${named || name}'이 됩니다 — 합쳐서 논문 ${users.length}편`
+              : '같은 뜻의 다른 태그를 적으면 이 태그로 합쳐집니다.'}
+          </span>
         </Fld>
         <Fld label="쓰는 논문">
           <div className="rl-rows">
