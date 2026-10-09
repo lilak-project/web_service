@@ -908,12 +908,16 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
       return { ...a, affiliations, groups, updatedAt: now }
     })
     const n = ids.length
-    if (await onSave({ authors }, `${n}명 한번에 저장했습니다.`)) onDone?.()
+    // save saves: the selection is still the selection, and the next field you
+    // want to set for all of them is in the form you are looking at.
+    await onSave({ authors }, `${n}명 한번에 저장했습니다.`)
   }
 
   if (!people.length) return <p className="rl-msg">선택된 저자가 없습니다.</p>
   return (
     <div className="rl-tab-body">
+      <RackActions onSave={save} onCancel={onCancel}
+        onRevert={() => { setF(base); setDrop({ aff: [], grp: [] }); setAdd2({ aff: [], grp: [] }) }} />
       <div className="rl-rec">
         <Fld label="대상">
           <div className="rl-rows">
@@ -1006,8 +1010,6 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
           </div>
         </Fld>
       </div>
-      <RackActions onSave={save} onCancel={onCancel}
-        onRevert={() => { setF(base); setDrop({ aff: [], grp: [] }); setAdd2({ aff: [], grp: [] }) }} />
     </div>
   )
 }
@@ -1294,6 +1296,11 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
 
   return (
     <div className="rl-tab-body">
+      <RackActions key={author?.id || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named()}
+        hint={draft && !named() ? '별명이나 이름 하나는 있어야 합니다.' : ''}
+        onSave={() => update(true)} onCancel={onCancel} onRevert={() => setF(author)}
+        onDelete={isAdmin ? remove : null} />
       <div className="rl-rec">
         <Fld label="한글 이름">
           <input className="rl-in" style={{ width: 90 }} value={f.korFamily || ''} onChange={set('korFamily')} placeholder="성" />
@@ -1339,11 +1346,6 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
       {/* Out of the field grid and stuck to the bottom: on a long record the way
           to save it was below the fold, and a form you have to scroll to leave
           is a form you leave by accident. */}
-      <RackActions key={author?.id || 'new'} draft={draft}
-        onCreate={create} createDisabled={!named()}
-        hint={draft && !named() ? '별명이나 이름 하나는 있어야 합니다.' : ''}
-        onSave={() => update(true)} onCancel={onCancel} onRevert={() => setF(author)}
-        onDelete={isAdmin ? remove : null} />
     </div>
   )
 }
@@ -1405,6 +1407,12 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel
 
   return (
     <div className="rl-tab-body">
+      <RackActions key={name || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named || taken}
+        hint={draft && !named ? '이름이 있어야 합니다.' : ''}
+        onSave={() => update(true)} saveDisabled={!named || taken} onCancel={onCancel}
+        onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
+        deleteWarn={`${users ? `저자 ${users}명의 목록에서도 빠집니다.` : '쓰는 저자가 없습니다.'} 되돌릴 수 없습니다.`} />
       <div className="rl-rec">
         <Fld label="이름">
           {/* name is what the authors point at, shortName is what the record
@@ -1453,12 +1461,6 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel
             onChange={(v) => setF((s) => ({ ...s, links: v }))} />
         </Fld>
       </div>
-      <RackActions key={name || 'new'} draft={draft}
-        onCreate={create} createDisabled={!named || taken}
-        hint={draft && !named ? '이름이 있어야 합니다.' : ''}
-        onSave={() => update(true)} saveDisabled={!named || taken} onCancel={onCancel}
-        onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
-        deleteWarn={`${users ? `저자 ${users}명의 목록에서도 빠집니다.` : '쓰는 저자가 없습니다.'} 되돌릴 수 없습니다.`} />
     </div>
   )
 }

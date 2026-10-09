@@ -1104,6 +1104,12 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onCancel, 
 
   return (
     <div className="rl-edit">
+      <RackActions key={id || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named || taken}
+        hint={draft && !named ? '이름이 있어야 합니다.' : ''}
+        onSave={() => update(true)} saveDisabled={!named || taken} onCancel={onCancel}
+        onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
+        deleteWarn={`이름은 논문 ${mine.length}편에 글자로 남습니다. 되돌릴 수 없습니다.`} />
       <div className="rl-rec">
         <Fld label="줄임이름">
           <input className="rl-in" style={{ width: 240 }} value={f.name || ''} onChange={set('name')}
@@ -1183,12 +1189,6 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onCancel, 
           </Fld>
         )}
       </div>
-      <RackActions key={id || 'new'} draft={draft}
-        onCreate={create} createDisabled={!named || taken}
-        hint={draft && !named ? '이름이 있어야 합니다.' : ''}
-        onSave={() => update(true)} saveDisabled={!named || taken} onCancel={onCancel}
-        onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
-        deleteWarn={`이름은 논문 ${mine.length}편에 글자로 남습니다. 되돌릴 수 없습니다.`} />
     </div>
   )
 }
@@ -1601,6 +1601,11 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
 
   return (
     <div className="rl-edit">
+      <RackActions key={ref_?.id || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named()}
+        hint={draft && !named() ? 'cite key나 제목 하나는 있어야 합니다.' : ''}
+        onSave={() => update(true)} onCancel={onCancel} onRevert={() => setF(ref_)}
+        onDelete={isAdmin ? remove : null} />
       <div className="rl-rec">
         {draft && (
           <Fld label="붙여넣기">
@@ -1709,11 +1714,6 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
             value={f.note || ''} onChange={set('note')} />
         </Fld>
       </div>
-      <RackActions key={ref_?.id || 'new'} draft={draft}
-        onCreate={create} createDisabled={!named()}
-        hint={draft && !named() ? 'cite key나 제목 하나는 있어야 합니다.' : ''}
-        onSave={() => update(true)} onCancel={onCancel} onRevert={() => setF(ref_)}
-        onDelete={isAdmin ? remove : null} />
     </div>
   )
 }
@@ -1759,6 +1759,12 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone, onCancel }
 
   return (
     <div className="rl-edit">
+      <RackActions key={name || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named || taken}
+        hint={draft ? (named ? '' : '이름이 있어야 합니다.') : `${users}편이 이 저널입니다.`}
+        onSave={() => update(true)} saveDisabled={!named || taken} onCancel={onCancel}
+        onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
+        deleteWarn="논문의 저널 이름은 글자로 남습니다. 되돌릴 수 없습니다." />
       <div className="rl-rec">
         <Fld label="이름">
           <input className="rl-in" style={{ width: 320 }} value={f.name || ''} onChange={set('name')}
@@ -1785,12 +1791,6 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone, onCancel }
           <input className="rl-in" style={{ width: 320 }} value={f.url || ''} onChange={set('url')} />
         </Fld>
       </div>
-      <RackActions key={name || 'new'} draft={draft}
-        onCreate={create} createDisabled={!named || taken}
-        hint={draft ? (named ? '' : '이름이 있어야 합니다.') : `${users}편이 이 저널입니다.`}
-        onSave={() => update(true)} saveDisabled={!named || taken} onCancel={onCancel}
-        onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
-        deleteWarn="논문의 저널 이름은 글자로 남습니다. 되돌릴 수 없습니다." />
     </div>
   )
 }
@@ -1830,6 +1830,12 @@ function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
 
   return (
     <div className="rl-edit">
+      <RackActions key={name}
+        saveLabel={merging ? '합치기' : 'save'}
+        onSave={() => rename(!merging)} saveDisabled={!named || named === name}
+        onCancel={onCancel} onRevert={() => setTo(name)}
+        onDelete={isAdmin ? remove : null}
+        deleteWarn={`논문 ${users.length}편에서 이 태그를 뗍니다. 되돌릴 수 없습니다.`} />
       <div className="rl-rec">
         <Fld label="태그">
           <input className="rl-in" style={{ width: 260 }} list="rl-tags-all" value={to || ''}
@@ -1847,12 +1853,6 @@ function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
           </div>
         </Fld>
       </div>
-      <RackActions key={name}
-        saveLabel={merging ? '합치기' : 'save'}
-        onSave={() => rename(!merging)} saveDisabled={!named || named === name}
-        onCancel={onCancel} onRevert={() => setTo(name)}
-        onDelete={isAdmin ? remove : null}
-        deleteWarn={`논문 ${users.length}편에서 이 태그를 뗍니다. 되돌릴 수 없습니다.`} />
     </div>
   )
 }
