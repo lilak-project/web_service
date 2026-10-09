@@ -92,8 +92,7 @@ const TODO_COLS = [
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
   { k: 'text', w: 420, min: 120, label: '할 일' },
   { k: 'title', w: 220, min: 80, label: 'note' },
-  { k: 'date', w: 92, min: 70, label: 'date' },
-  { k: 'tags', w: 160, min: 60, label: 'tags', drop: 1040 },
+  { k: 'date', w: 100, min: 84, label: 'date' },
 ]
 const TONE = { title: 'ink', text: 'ink', date: 'dim', tags: 'dim', excerpt: 'dim' }
 
@@ -106,9 +105,16 @@ const SORTERS = {
   excerpt: (n) => n.excerpt || '',
 }
 const TODO_SORTERS = {
-  text: (t) => t.text || '', title: (t) => t.title || '',
-  date: (t) => t.date || '', tags: (t) => (t.tags || []).join(' '),
+  text: (t) => t.text || '', title: (t) => t.title || '', date: (t) => t.date || '',
 }
+
+/** Which todos the tab shows. A list of things to do is mostly the ones not
+ *  done; the done ones are a record, and both together are the whole note. */
+const TODO_SCOPES = [
+  { k: 'open', label: '남은 일', is: (t) => !t.done },
+  { k: 'all', label: '전체', is: () => true },
+  { k: 'done', label: '끝난 일', is: (t) => t.done },
+]
 const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count }
 
 const FIXED = [
@@ -137,6 +143,7 @@ export default function App() {
   const split = usePaneSplit(projectKey('nt', 'split'))
   const [sort, setSort] = useState(VIEW.sort || null)
   const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'count', dir: -1 })
+  const [tscope, setTscope] = useState(VIEW.tscope || 'open')
   const findRef = useRef(null)
   useFindKey(findRef)
 
@@ -189,8 +196,8 @@ export default function App() {
   // After the filter: a dependency array is evaluated where it is written.
   useEffect(() => {
     saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-               active, sort, clsSort, fsel: filter.sel, fon: filter.on, efull: panes.full })
-  }, [tabs, active, sort, clsSort, filter.sel, filter.on, panes.full])   // eslint-disable-line react-hooks/exhaustive-deps
+               active, sort, clsSort, tscope, fsel: filter.sel, fon: filter.on, efull: panes.full })
+  }, [tabs, active, sort, clsSort, tscope, filter.sel, filter.on, panes.full])   // eslint-disable-line react-hooks/exhaustive-deps
 
 
 
@@ -207,13 +214,14 @@ export default function App() {
 
   const todoRows = useMemo(() => {
     const q = query.trim().toLowerCase()
+    const keep = (TODO_SCOPES.find((x) => x.k === tscope) || TODO_SCOPES[0]).is
     const list = tab?.kind === 'todos'
-      ? todos.filter((t) => !q || [t.text, t.title, ...(t.tags || [])]
+      ? todos.filter(keep).filter((t) => !q || [t.text, t.title, ...(t.tags || [])]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
       : []
     const s = sort && TODO_SORTERS[sort.k] ? sort : { k: 'date', dir: -1 }
     return [...list].sort(bySome(TODO_SORTERS[s.k], s.dir))
-  }, [todos, tab, query, sort])
+  }, [todos, tab, query, sort, tscope])
 
 
   const classes = useMemo(() => {
@@ -320,6 +328,12 @@ export default function App() {
           )}
           <span className="rl-gap" />
           {tab?.kind === 'notes' && <FilterBar f={filter} />}
+          {tab?.kind === 'todos' && TODO_SCOPES.map((x) => (
+            <button key={x.k} type="button" className={`rl-btn${tscope === x.k ? ' on' : ''}`}
+              onClick={() => setTscope(x.k)}>
+              {x.label} ({todos.filter(x.is).length})
+            </button>
+          ))}
           <span className="rl-sp" />
           {/* One box: the list, or — while the filter is choosing — the values
               on offer. */}
@@ -381,6 +395,8 @@ export default function App() {
                 {todoRows.map((t, i) => (
                   <RackRow key={`${t.id}:${t.line}`} cols={todoCols} tone={TONE}
                     className={`rl-hit${t.done ? ' rl-done' : ''}`}
+                    title="눌러서 끝냄 · 오른쪽 클릭으로 그 노트"
+                    onClick={() => toggleTodo(t)}
                     onContextMenu={(e) => { e.preventDefault(); openEdit(t.id, t.title) }}
                     cell={{
                       chk: <input type="checkbox" checked={t.done} aria-label={t.text}
@@ -392,7 +408,6 @@ export default function App() {
                           onClick={(e) => { e.stopPropagation(); openEdit(t.id, t.title) }}>{t.title}</button>
                       ),
                       date: t.date || D,
-                      tags: (t.tags || []).join(' ') || D,
                     }} />
                 ))}
                 {todoRows.length === 0 && <p className="rl-msg">할 일이 없습니다 — 노트에 `- [ ] 할 일`을 적으면 여기 모입니다.</p>}
