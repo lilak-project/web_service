@@ -1,0 +1,29 @@
+.rl-shot { display: inline-flex; flex-direction: column; gap: 4px; margin-right: 12px; }
+.rl-shot-img {
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 92px;
+  padding: 0;
+  border: 1px solid var(--rk-edge);
+  background: var(--rk-gut);
+  cursor: pointer;
+  overflow: hidden;
+}
+.rl-shot-img.is-empty { color: var(--rk-mute); cursor: default; }
+.rl-shot-img img { width: 100%; height: 100%; object-fit: cover; }
+.rl-shot-line { display: flex; align-items: center; gap: 5px; }
+
+/* A photo at its own size, over everything, until it is pressed again. */
+.rl-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  border: 0;
+  background: rgba(15, 23, 42, .72);
+  cursor: zoom-out;
+}
+.rl-lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; }

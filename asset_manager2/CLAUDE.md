@@ -10,10 +10,18 @@ started from nothing on purpose: asset_manager is the phone-first app people
 use, and dragging its screen towards a table mixed two designs in one place.
 This one is the table.
 
-Right now it is one tab, `assets`: the list, and the editor that opens in the
-pane beside it when you right-click a row. Anything else the old app does
-(My List, classes, history, photos, QR, requests) is NOT here yet — it comes
-back a screen at a time, drawn as a rack, or not at all.
+Two tabs, both tables:
+
+- **assets** — every asset. Right-click a row to edit it, photos included.
+- **lists** — every list. A list is a RECORD in the data (what the old app
+  saved from My List), so History and My List are the same thing here: you tick
+  assets, press 리스트 만들기, and the list opens for the rest.
+
+There is no My List: a working set you had to fill before you could act on it
+was a second selection beside the checkboxes. The checkboxes make the list.
+
+Not here (yet): classes as records, QR scanning, HWPX/XLSX export, the request
+form's applicant fields.
 
 ## The app
 
@@ -29,16 +37,30 @@ back a screen at a time, drawn as a rack, or not at all.
   (`__PORTAL_SERVICE__` → `brandStyle()`).
 
 Editing: right-click a row → a tab in the editor pane; `+ 새 자산` opens a draft
-in the same pane; save closes the tab, delete asks once in place and is a
-manager's call. A location and a type are offered from what the other assets
-already use — they are words, not records.
+in the same pane. The pane, its tabs and columns, the split, the action bar and
+the filter are the kit's (`useEditorPanes`, `RackPaneStrip`, `usePaneSplit`,
+`RackActions`, `useFacetFilter`), so this service behaves like the others
+because it IS the same code. A location and a type are offered from what the
+other assets already use — they are words, not records.
+
+**Photos** are two slots on the asset, `photo2` (sticker) and `photo1` (whole),
+the names the old app wrote. A picked file is shrunk to 1280px / jpeg 0.82
+before it goes in: the document is sent whole on every save, so a 4MB phone
+photo would be paid for on every keystroke after it.
+
+**A list's editor** is what My List could do, done to a list that exists: its
+name, type and the place its assets are going; 위치 적용 writes that place onto
+every asset in it and stamps the list; 선택한 자산 담기 adds what is ticked in
+the table; an asset row presses through to its own editor, × takes it out. A
+manager also gets 숨김 · 숨김 해제 · 자산째 삭제; someone who is not one asks
+with 승인 요청 and the list waits. delete removes the LIST — the assets stay.
 
 ## Data
 
 One document per portal project, served by `backend/main.py` at `/api/data`:
 `{version, assets, records, locations, types, settings}`. A PUT sends the
 `baseVersion` it edited; if someone saved first it comes back 409 and the
-client reloads rather than overwriting them. This app writes `assets` only.
+client reloads rather than overwriting them. This app writes `assets` and `records`.
 
 `data/asset_manager2/projects/<project>/data.json` — its own data dir, seeded
 by copying a project's file from asset_manager. Nothing here touches the live
