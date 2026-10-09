@@ -50,7 +50,21 @@ authors: [ { name: 'C. Y. Tsang', ref: '<author id>', corr: false }, … ]
 
 ### cite key는 규칙이 쓴다
 
-`{a1}_{jl}_{year}_{tag}` — 첫 저자의 handle · 저널의 짧은 이름 · 해 · **메인 태그**.
+종류마다 규칙이 다르다. 키는 그것이 **무엇인지** 말해야 하는데, 제안서는 저널이
+아니라 기관의 위원회로 가기 때문이다.
+
+| 종류 | 규칙 | 예 |
+|---|---|---|
+| paper · thesis · report | `{a1}_{jl}_{year}_{tag}` | `MBTsang_PRC_2001_isoscaling` |
+| **proposal** | `{inst}_PAC{pac}_{a1}_{tag}` | `RIKEN_PAC27_JWLee_STARK` |
+
+`pac`은 PAC 뒤에 그대로 들어가는 값이다 — RIKEN은 회차를 센다(PAC27), RAON과
+JYFL은 해를 쓴다(2026). 추측하지 않고 레코드가 들고 있다. 기관은 표의 journal
+열에 함께 나온다: 둘 다 "어디로 갔는가"다.
+
+`settings.keyRules`에 종류별로 적으면 기본 규칙을 덮어쓴다.
+
+공통 부분: `{a1}`은 첫 저자의 handle, `{tag}`는 **메인 태그**.
 키는 **파일 이름이기도 해서** 각 조각을 파일 이름이 담을 수 있는 글자로 줄인다:
 문장부호는 사라지지 않고 밑줄이 된다 (`12C(p,p)12C` → `12C_p_p_12C`,
 `X-ray burst` → `X-ray_burst`) — 시트가 이미 쓰던 그 표기다. 빈 조각은 빈 자리를

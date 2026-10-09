@@ -109,7 +109,8 @@ const handleFor = (name) => {
 }
 /** A journal is referenced by its record `name`; the table shows the short one. */
 const journalRec = (doc, r) => (doc?.journals || []).find((j) => j.name === r.journal) || null
-const jShort = (doc, r) => journalRec(doc, r)?.shortName || r.journal || ''
+/** Where it went: the journal for a paper, the institution for a proposal. */
+const jShort = (doc, r) => journalRec(doc, r)?.shortName || r.journal || r.inst || ''
 // A journal carries three names: what it is called, the short one a table can
 // hold (ApJ) and the one a citation uses (Astrophys. J.).
 const jAbbrev = (doc, r) => journalRec(doc, r)?.abbrev || journalRec(doc, r)?.name || r.journal || ''
@@ -183,12 +184,20 @@ const slug = (v) => String(v || '').replace(/[^A-Za-z0-9-]+/g, '_').replace(/_+/
 /** The tag this paper is filed under. One of its own, chosen; the first one
  *  when nobody has chosen. */
 const mainTag = (r) => (tagsOf(r).includes(r.mainTag) ? r.mainTag : tagsOf(r)[0] || '')
-const KEY_RULE = '{a1}_{jl}_{year}_{tag}'
-/** The key a paper would be given. Parts nobody filled in leave no gap. */
-const citeKeyFor = (doc, r, rule = KEY_RULE) => rule
+// A key says what the thing IS, and a proposal is not a paper: it goes to an
+// institution's committee, not to a journal. RIKEN numbers its PACs (PAC27),
+// RAON and JYFL use the year — so what follows PAC is a field, not a guess.
+const KEY_RULES = {
+  paper: '{a1}_{jl}_{year}_{tag}',
+  proposal: '{inst}_PAC{pac}_{a1}_{tag}',
+}
+const ruleFor = (r, settings) => (settings?.keyRules || {})[r?.type]
+  || KEY_RULES[r?.type] || KEY_RULES.paper
+/** The key a record would be given. Parts nobody filled in leave no gap. */
+const citeKeyFor = (doc, r, rule = ruleFor(r, doc?.settings)) => rule
   .replace(/\{([^{}]+)\}/g, (m, k) => {
     const v = { a1: handleFor(firstAuthor(doc, r)), jl: jShort(doc, r),
-      year: r.year, tag: mainTag(r) }[k.trim()]
+      year: r.year, tag: mainTag(r), inst: r.inst, pac: r.pac }[k.trim()]
     return v === undefined ? m : slug(v)
   })
   .replace(/_+/g, '_').replace(/^_|_$/g, '')
@@ -249,6 +258,8 @@ const TOKENS = (doc) => ({
   doi: (r) => r.doi || '',
   url: (r) => r.url || '',
   'short ref': (r) => shortRef(doc, r),
+  inst: (r) => r.inst || '',
+  pac: (r) => r.pac || '',
   tags: (r) => tagsOf(r).join(' '),
 })
 const PRESETS = [
@@ -1453,7 +1464,7 @@ function PasteBox({ onTake, say }) {
   )
 }
 
-const TYPES = ['paper', 'thesis', 'report', 'writing']
+const TYPES = ['paper', 'proposal', 'thesis', 'report', 'writing']
 
 function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDone, onCancel, onOpen, say }) {
   /** Registering the author on this row registers them everywhere: the record
@@ -1492,7 +1503,7 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
   const draft = !ref_
   const blank = { id: null, type: 'paper', citeKey: '', title: '', author: '', journal: '',
     volume: '', pages: '', year: '', doi: '', url: '', tags: [], mainTag: '',
-    cites: [], links: [], note: '', pdf: null }
+    inst: '', pac: '', cites: [], links: [], note: '', pdf: null }
   const [f, setF] = useState(ref_ || blank)
   // ⌘S saves and stays; closing is ⌘X's job.
   useRackKeys({ onSave: () => (draft ? create() : update(true)) })
@@ -1578,11 +1589,11 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
             onChange={(e) => { keyTyped.current = true; set('citeKey')(e) }}
             placeholder={suggested || 'JAlmeid_ApJ_1983'} />
           <button type="button" className="rl-btn" disabled={!suggested || f.citeKey === suggested}
-            title={`${KEY_RULE} → ${suggested || ''}`}
+            title={`${ruleFor(f, doc.settings)} → ${suggested || ''}`}
             onClick={() => { keyTyped.current = true; setF((s2) => ({ ...s2, citeKey: suggested })) }}>
             자동
           </button>
-          <span className="rl-hint rl-mono">{KEY_RULE}</span>
+          <span className="rl-hint rl-mono">{ruleFor(f, doc.settings)}</span>
           {taken && <span className="rl-warn">같은 키의 논문이 있습니다.</span>}
         </Fld>
         <Fld label="제목">
@@ -1593,7 +1604,22 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
           <AuthorRows value={f.authors || []} doc={doc} onRegister={registerAuthor}
             onChange={(v) => setF((s) => ({ ...s, authors: v }))} />
         </Fld>
-        <Fld label="저널">
+        {f.type === 'proposal' && (
+          <Fld label="기관 · PAC">
+            <input className="rl-in" style={{ width: 150 }} value={f.inst || ''}
+              onChange={set('inst')} placeholder="RIKEN" list="rl-insts" />
+            <datalist id="rl-insts">
+              {[...new Set((doc.references || []).map((r) => r.inst).filter(Boolean))]
+                .map((n) => <option key={n} value={n} />)}
+            </datalist>
+            <input className="rl-in rl-mono" style={{ width: 90 }} value={f.pac || ''}
+              onChange={set('pac')} placeholder="27" />
+            <span className="rl-hint">
+              PAC 뒤에 들어갑니다 — RIKEN은 번호(27), RAON·JYFL은 해(2026).
+            </span>
+          </Fld>
+        )}
+        <Fld label={f.type === 'proposal' ? '저널 (해당 없음)' : '저널'}>
           <input className="rl-in" style={{ width: 300 }} list="rl-jrns" value={f.journal || ''}
             onChange={set('journal')} />
           <datalist id="rl-jrns">{jrnNames.map((n) => <option key={n} value={n} />)}</datalist>
