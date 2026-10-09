@@ -469,7 +469,7 @@ export default function App() {
       return (doc?.authors || []).map((a) => {
         const mine = refs.filter((r) => authorRows(r).some((x) => x.ref === a.id))
         const n = (role) => mine.filter((r) => autRoles(r, a.id).includes(role)).length
-        return { id: a.id, name: a.name, tag: a.tag, count: mine.length,
+        return { id: a.id, name: a.fullName || a.name, tag: a.tag, count: mine.length,
           first: n('first'), second: n('second'), corr: n('corr'), other: n('other'),
           // Every spelling this person is known by, so the search box finds
           // them by the full name or by #handle, not only by what the row shows.
@@ -765,6 +765,10 @@ export default function App() {
                     const r = refs.find((x) => x.id === id)
                     if (r) openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label: refLabel(r) })
                   }}
+                  onOpenAuthor={(id) => {
+                    const a = (doc.authors || []).find((x) => x.id === id)
+                    if (a) openEdit({ id: `editaut:${id}`, kind: 'editaut', who: id, label: a.tag || a.name })
+                  }}
                   onCreated={(id, label) => { closeEdit('new'); openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label }) }}
                   onDone={(id) => closeEdit(`edit:${id}`)}
                   onCancel={() => closeEdit(etab.id)}
@@ -947,7 +951,7 @@ function Settings({ doc, onSave, say }) {
  *  name nobody has registered yet. */
 const SHOWN = 3   // an author list is long; the first three say whose paper it is
 
-function AuthorRows({ value = [], doc, onChange, onRegister }) {
+function AuthorRows({ value = [], doc, onChange, onRegister, onOpenAuthor }) {
   // 291 authors is a real paper (LIGO), and a form that shows all of them is a
   // form you cannot read past. The rest are one press away.
   const [open, setOpen] = useState(false)
@@ -983,9 +987,10 @@ function AuthorRows({ value = [], doc, onChange, onRegister }) {
             <span className="rl-hint rl-mono" style={{ width: 22, textAlign: 'right' }}>{i + 1}</span>
             {rec ? (
               <span className="rl-tag">
-                #{rec.tag}
-                <button type="button" className="rl-x" title="연결 끊기"
-                  onClick={() => row(i, { ref: '', name: rec.name })}>×</button>
+                {/* The handle is the way IN to that person; unlinking is its
+                    own button, and it says so rather than wearing an ×. */}
+                <button type="button" className="rl-tagpick" title={`${rec.fullName || rec.name} 편집`}
+                  onClick={() => onOpenAuthor?.(rec.id)}>#{rec.tag}</button>
               </span>
             ) : (
               <>
@@ -993,7 +998,9 @@ function AuthorRows({ value = [], doc, onChange, onRegister }) {
                   placeholder="이름 또는 #handle"
                   onChange={(e) => {
                     const v = e.target.value
-                    const id = byKey.get(v.trim().toLowerCase())
+                    // Two letters at least: a record whose whole name is 'J'
+                    // (import debris) would otherwise claim the first keystroke.
+                    const id = v.trim().length >= 2 ? byKey.get(v.trim().toLowerCase()) : null
                     row(i, id ? { ref: id, name: '' } : { name: v })
                   }} />
                 <button type="button" className="rl-btn" disabled={!String(a.name || '').trim()}
@@ -1001,11 +1008,15 @@ function AuthorRows({ value = [], doc, onChange, onRegister }) {
                   onClick={() => onRegister?.(a.name)}>등록</button>
               </>
             )}
-            <span className="rl-hint">{rec ? rec.name : ''}</span>
+            <span className="rl-hint">{rec ? (rec.fullName || rec.name) : ''}</span>
             <label className="rl-hint" title="corresponding author">
               <input type="checkbox" checked={!!a.corr}
                 onChange={(e) => row(i, { corr: e.target.checked })} /> corr.
             </label>
+            {rec && (
+              <button type="button" className="rl-x" title="연결 끊기 (이름만 남김)"
+                onClick={() => row(i, { ref: '', name: rec.name })}>↩</button>
+            )}
             <button type="button" className="rl-x" title="위로" onClick={() => move(i, -1)}>↑</button>
             <button type="button" className="rl-x" title="아래로" onClick={() => move(i, 1)}>↓</button>
             <button type="button" className="rl-x" title="이 줄 지우기"
@@ -1175,7 +1186,7 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onCancel, 
       <RackActions key={id || 'new'} draft={draft}
         onCreate={create} createDisabled={!named || taken}
         hint={draft && !named ? '이름이 있어야 합니다.' : ''}
-        onSave={update} saveDisabled={!named || taken} onCancel={onCancel}
+        onSave={() => update(true)} saveDisabled={!named || taken} onCancel={onCancel}
         onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
         deleteWarn={`이름은 논문 ${mine.length}편에 글자로 남습니다. 되돌릴 수 없습니다.`} />
     </div>
@@ -1220,9 +1231,11 @@ function PdfRow({ value, citeKey, onChange, say }) {
         if (p) { set(p); say('경로를 받았습니다 — 허용 루트 안이어야 열립니다.') }
       }}>
       <div className="rl-rrow">
-        <input className="rl-in rl-mono" style={{ width: 360 }} value={path}
+        <input className="rl-in rl-mono" style={{ width: '100%', minWidth: 260 }} value={path}
           placeholder="Finder에서 끌어다 놓거나 경로를 붙여넣으세요"
           onChange={(e) => set(e.target.value)} />
+      </div>
+      <div className="rl-rrow">
         {path && (
           <>
             <a className="rl-btn" href={pdfSrc(path)} target="_blank" rel="noreferrer">열기</a>
@@ -1489,7 +1502,7 @@ function PasteBox({ onTake, say }) {
 
 const TYPES = ['paper', 'proposal', 'thesis', 'report', 'writing']
 
-function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDone, onCancel, onOpen, say }) {
+function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDone, onCancel, onOpen, onOpenAuthor, say }) {
   /** Registering the author on this row registers them everywhere: the record
    *  is created and every row in every paper that spells the name this way
    *  points at it. That is the whole convenience — 44 rows saying
@@ -1625,6 +1638,7 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
         </Fld>
         <Fld label="저자">
           <AuthorRows value={f.authors || []} doc={doc} onRegister={registerAuthor}
+            onOpenAuthor={onOpenAuthor}
             onChange={(v) => setF((s) => ({ ...s, authors: v }))} />
         </Fld>
         {f.type === 'proposal' && (
@@ -1698,7 +1712,7 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
       <RackActions key={ref_?.id || 'new'} draft={draft}
         onCreate={create} createDisabled={!named()}
         hint={draft && !named() ? 'cite key나 제목 하나는 있어야 합니다.' : ''}
-        onSave={update} onCancel={onCancel} onRevert={() => setF(ref_)}
+        onSave={() => update(true)} onCancel={onCancel} onRevert={() => setF(ref_)}
         onDelete={isAdmin ? remove : null} />
     </div>
   )
@@ -1774,7 +1788,7 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone, onCancel }
       <RackActions key={name || 'new'} draft={draft}
         onCreate={create} createDisabled={!named || taken}
         hint={draft ? (named ? '' : '이름이 있어야 합니다.') : `${users}편이 이 저널입니다.`}
-        onSave={update} saveDisabled={!named || taken} onCancel={onCancel}
+        onSave={() => update(true)} saveDisabled={!named || taken} onCancel={onCancel}
         onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
         deleteWarn="논문의 저널 이름은 글자로 남습니다. 되돌릴 수 없습니다." />
     </div>
@@ -1834,8 +1848,8 @@ function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
         </Fld>
       </div>
       <RackActions key={name}
-        saveLabel={merging ? '합치고 나가기' : 'save and exit'}
-        onSave={rename} saveDisabled={!named || named === name}
+        saveLabel={merging ? '합치기' : 'save'}
+        onSave={() => rename(!merging)} saveDisabled={!named || named === name}
         onCancel={onCancel} onRevert={() => setTo(name)}
         onDelete={isAdmin ? remove : null}
         deleteWarn={`논문 ${users.length}편에서 이 태그를 뗍니다. 되돌릴 수 없습니다.`} />

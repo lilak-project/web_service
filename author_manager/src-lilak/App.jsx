@@ -1342,7 +1342,7 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
       <RackActions key={author?.id || 'new'} draft={draft}
         onCreate={create} createDisabled={!named()}
         hint={draft && !named() ? '별명이나 이름 하나는 있어야 합니다.' : ''}
-        onSave={update} onCancel={onCancel} onRevert={() => setF(author)}
+        onSave={() => update(true)} onCancel={onCancel} onRevert={() => setF(author)}
         onDelete={isAdmin ? remove : null} />
     </div>
   )
@@ -1456,7 +1456,7 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel
       <RackActions key={name || 'new'} draft={draft}
         onCreate={create} createDisabled={!named || taken}
         hint={draft && !named ? '이름이 있어야 합니다.' : ''}
-        onSave={update} saveDisabled={!named || taken} onCancel={onCancel}
+        onSave={() => update(true)} saveDisabled={!named || taken} onCancel={onCancel}
         onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
         deleteWarn={`${users ? `저자 ${users}명의 목록에서도 빠집니다.` : '쓰는 저자가 없습니다.'} 되돌릴 수 없습니다.`} />
     </div>
