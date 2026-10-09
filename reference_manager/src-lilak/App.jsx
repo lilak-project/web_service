@@ -123,6 +123,9 @@ const shortRef = (doc, r) => [
 const tagsOf = (r) => (r.tags || []).filter(Boolean)
 const inTag = (r, t) => tagsOf(r).includes(t)
 const inJrn = (r, name) => r.journal === name
+/** Is the paper itself on disk? `pdf` is {mode:'path'|'file', path} — the file
+ *  the key is named after. */
+const hasPdf = (r) => !!(r.pdf && (r.pdf.path || r.pdf.name))
 /** Papers this one lists, and papers that list it — one is stored, the other
  *  is counted, because storing both is two places to disagree. */
 const citesOf = (r) => (r.cites || []).filter((c) => c && (c.ref || c.raw))
@@ -167,6 +170,7 @@ const COLS = [
   { k: 'title', w: 330, min: 120, label: 'title' },
   { k: 'a1', w: 134, min: 70, label: 'first author', drop: 1040 },
   { k: 'tags', w: 180, min: 60, label: 'tags', drop: 1320 },
+  { k: 'pdf', w: 38, min: 30, label: 'pdf', num: true },
   { k: 'cites', w: 44, min: 34, label: 'cites', num: true, drop: 860 },
   { k: 'by', w: 44, min: 34, label: 'cited by', num: true, drop: 860 },
 ]
@@ -178,6 +182,7 @@ const CLS_COLS = [
 ]
 /** Which columns are the record's own words (ink) and which are about it (dim). */
 const TONE = { title: 'ink', type: 'dim', jl: 'dim', a1: 'dim', tags: 'dim' }
+
 
 // ─── The listing rule ───────────────────────────────────────────────────────
 // A preset fills in a TEMPLATE and the template makes the text, so a shape
@@ -228,6 +233,7 @@ const SORTERS = (doc) => ({
   a1: (r) => firstAuthor(doc, r),
   tags: (r) => tagsOf(r).join(' '),
   cites: (r) => citesOf(r).length || null,
+  pdf: (r) => (hasPdf(r) ? 'pdf' : ''),
 })
 const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r.full }
 
@@ -562,6 +568,10 @@ export default function App() {
                           tags: tagsOf(r).join(' ') || D,
                           // A count you can press: the number is also the way
                           // to the papers it counts.
+                          // ✓ when the file is there, nothing when it is not —
+                          // a column you can sort and filter on.
+                          pdf: hasPdf(r)
+                            ? <span className="rl-ok" title={r.pdf.path}>✓</span> : D,
                           cites: linkedCites(r).length ? (
                             <button type="button" className="rl-lnk" title="이 논문이 인용한 것"
                               onClick={(e) => {
