@@ -19,9 +19,11 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  RackTable, RackRow, RackTabs,
-  useColumnWidths, useViewportWidth, useSelection, useFindKey, useNote, useViewState,
-  bySome, facetOf, passesFilter,
+  RackTable, RackRow, RackTabs, RackActions, RackField as Fld,
+  useColumnWidths, useViewportWidth, useSelection, useFindKey, useToggleKey,
+  useNote, useViewState, usePaneSplit, useRackKeys,
+  useEditorPanes, RackPaneStrip, useFacetFilter, FilterBar, FacetRows,
+  bySome,
   PORTAL_PROJECT, projectKey, brandStyle, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
@@ -90,21 +92,15 @@ export default function App() {
   const [note, setNote] = useNote()
   const [tabs] = useState(FIXED)
   const [active, setActive] = useState('assets')
-  // The editor is its OWN pane with its OWN tabs: a record you are fixing is
-  // not one of the lists, and closing one should not send you somewhere else.
-  const [etabs, setEtabs] = useState([])
-  const [eactive, setEactive] = useState(null)
+  // The editor's panes, its tabs, the split between them and the filter are the
+  // kit's — every rack-list service behaves the same way because it is the same
+  // code, not the same intention.
+  const panes = useEditorPanes(projectKey('am2', 'panes'))
+  const split = usePaneSplit(projectKey('am2', 'split'))
   const [query, setQuery] = useState('')
   const { drag, sized } = useColumnWidths(WIDTH_KEY, COLS)
   const vw = useViewportWidth()
   const [sort, setSort] = useState(VIEW.sort || null)
-  // Filtering has a MODE. In it the labels stop sorting and start choosing
-  // which column's values you are picking from; the picks pile up across
-  // columns until they are applied.
-  const [fmode, setFmode] = useState(false)
-  const [fcol, setFcol] = useState(null)
-  const [fsel, setFsel] = useState(VIEW.fsel || {})
-  const [fon, setFon] = useState(!!VIEW.fon)
   const findRef = useRef(null)
   useFindKey(findRef)
 
@@ -112,7 +108,6 @@ export default function App() {
     if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
     fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
   }, [])
-  useEffect(() => { saveView({ active, sort, fsel, fon }) }, [active, sort, fsel, fon])
 
   const assets = doc?.assets || []
   const tab = tabs.find((t) => t.id === active) || tabs[0]
@@ -123,23 +118,25 @@ export default function App() {
     () => [...assets].sort(bySome(SORTERS[sort?.k || 'assetId'], sort?.dir ?? 1)),
     [assets, sort])
 
-  const passes = useCallback((a) => passesFilter(a, fsel, SORTERS), [fsel])
+  const filter = useFacetFilter(scope, SORTERS, { sel: VIEW.fsel, on: VIEW.fon })
+  // Below the filter on purpose: a dependency array is evaluated where it is
+  // written, and `filter` does not exist yet further up.
+  useEffect(() => { saveView({ active, sort, fsel: filter.sel, fon: filter.on }) },
+    [active, sort, filter.sel, filter.on])
   const rows = useMemo(() => {
-    const kept = fon ? scope.filter(passes) : scope
+    const kept = filter.on ? scope.filter(filter.passes) : scope
     const q = query.trim().toLowerCase()
     if (!q) return kept
     return kept.filter((a) => [a.assetId, a.name, a.location, a.type, a.assetClass,
       a.accountHolder, a.spec, a.memo, a.description]
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [scope, query, fon, passes])
+  }, [scope, query, filter.on, filter.passes])
+  // An asset is known by its 자산번호 — the document has no other id for one,
+  // so that is what a selection holds.
+  const keys = useMemo(() => rows.map((a) => ({ id: a.assetId })), [rows])
   const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
-    = useSelection(rows)
-
-  // Counted over every asset, not the filtered ones: a value that would empty
-  // the list is still worth seeing.
-  const facet = useMemo(() => facetOf(scope, SORTERS[fcol]), [fcol, scope])
-  const picked_ = (k) => fsel[k] || []
-  const facetTotal = Object.values(fsel).reduce((t, v) => t + v.length, 0)
+    = useSelection(keys)
+  useToggleKey(toggleAll)
 
   // The values already in use, offered when editing — a location or a type is a
   // word other assets already use, not a thing to create first.
@@ -148,23 +145,22 @@ export default function App() {
     type: [...new Set(assets.map((a) => a.type).filter(Boolean))].sort(),
   }), [assets])
 
-  // The editor pane takes the right half when there is room for both; below
-  // that it has the width to itself while it is open.
-  const etab = etabs.find((t) => t.id === eactive) || null
-  const showEdit = !!etab
-  const showList = !showEdit || vw >= 1180
-
-  function openEdit(t) {
-    setEtabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
-    setEactive(t.id)
-  }
-  function closeEdit(id) {
-    setEtabs((ts) => {
-      const left = ts.filter((t) => t.id !== id)
-      if (id === eactive) setEactive(left.length ? left[left.length - 1].id : null)
-      return left
-    })
-  }
+  // Two columns of records fit above 1500, one above 1180, and below that the
+  // editor has the width while it is open.
+  const showEdit = panes.showing && !!doc
+  const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
+  const openEdit = (t) => panes.open(t)
+  const closeEdit = (id) => panes.close(id)
+  // ⌘N a new record, ⌘S save it, ⌘X leave it — the keys every rack list has.
+  useRackKeys({
+    onNew: () => openEdit({ id: 'new', kind: 'edit', who: null, label: '새 자산' }),
+    onClose: () => { const cur = panes.current(panes.cols[0]); if (cur) panes.close(cur.id) },
+  })
+  // A tab for an asset the document no longer has cannot be shown.
+  useEffect(() => {
+    if (!doc) return
+    panes.keep((t) => !t.who || assets.some((a) => a.assetId === t.who))
+  }, [doc])
 
   /** Whole-document save, version-guarded: 409 means someone else got there
    *  first, and the answer is to read again rather than overwrite them. */
@@ -198,24 +194,7 @@ export default function App() {
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
           <span className="rl-gap" />
-          {fmode ? (
-            <>
-              <button type="button" className="rl-btn rl-go"
-                onClick={() => { setFmode(false); setFon(facetTotal > 0) }}>
-                필터 적용{facetTotal ? ` (${facetTotal})` : ''}
-              </button>
-              <button type="button" className="rl-btn" onClick={() => setFmode(false)}>취소</button>
-              <span className="rl-hint">레이블을 눌러 종류를 고르세요.</span>
-            </>
-          ) : fon ? (
-            <>
-              <button type="button" className="rl-btn rl-danger"
-                onClick={() => { setFon(false); setFsel({}); setFcol(null) }}>필터 풀기</button>
-              <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 고치기</button>
-            </>
-          ) : (
-            <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 선택</button>
-          )}
+          <FilterBar f={filter} />
           <span className="rl-sp" />
           <input ref={findRef} type="search" className="rl-find" value={query}
             placeholder="자산번호 · 이름 · 위치 · 메모   (⌘F)"
@@ -223,7 +202,7 @@ export default function App() {
         </div>
 
         <div className="rl-body">
-          {showList && (<div className="rl-pane">
+          {showList && (<div className="rl-pane" style={showEdit ? split.leftStyle : undefined}>
             <RackTabs tabs={tabs} active={active} fixed={FIXED} onPick={setActive} />
 
             {err && <p className="rl-msg">{err}</p>}
@@ -231,7 +210,7 @@ export default function App() {
 
             {doc && (
               <RackTable cols={cols} onDrag={drag('')}
-                facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
+                facet={filter.tableFacet}
                 sort={sort || { k: 'assetId', dir: 1 }}
                 onSort={(k) => setSort((s) => {
                   // The implicit order counts as the current one, so the first
@@ -239,25 +218,11 @@ export default function App() {
                   const now = s || { k: 'assetId', dir: 1 }
                   return now.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
                 })}
-                head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
-                {fmode && !fcol && <p className="rl-msg">위의 레이블을 눌러 어떤 종류로 걸를지 고르세요.</p>}
-                {fmode && fcol && facet.length === 0 && <p className="rl-msg">이 열에는 값이 없습니다.</p>}
-                {fmode && fcol && facet.map(({ v, count }) => {
-                  const on = picked_(fcol).includes(v)
-                  return (
-                    <button key={v} type="button" className={`rl-frow${on ? ' on' : ''}`}
-                      onClick={() => setFsel((s) => {
-                        const cur = s[fcol] || []
-                        return { ...s, [fcol]: on ? cur.filter((x) => x !== v) : [...cur, v] }
-                      })}>
-                      <span className="rl-fv">{v}</span>
-                      <span className="rl-fn">{count}</span>
-                    </button>
-                  )
-                })}
-                {!fmode && rows.map((a, i) => {
-                  const on = picked.has(a.id || a.assetId)
-                  const edited = etabs.some((t) => t.who === (a.id || a.assetId))
+                head={filter.mode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
+                <FacetRows f={filter} />
+                {!filter.mode && rows.map((a, i) => {
+                  const on = picked.has(a.assetId)
+                  const edited = panes.tabs.some((t) => t.who === a.assetId)
                   return (
                     <RackRow key={a.id || a.assetId || i} cols={cols} tone={TONE}
                       className={`rl-hit${on ? ' on' : ''}${edited ? ' rl-edited' : ''}`}
@@ -281,33 +246,32 @@ export default function App() {
                       }} />
                   )
                 })}
-                {!fmode && rows.length === 0 && <p className="rl-msg">해당하는 자산이 없습니다.</p>}
+                {!filter.mode && rows.length === 0 && <p className="rl-msg">해당하는 자산이 없습니다.</p>}
               </RackTable>
             )}
           </div>)}
 
-          {showEdit && (<div className="rl-pane rl-epane">
-            <RackTabs tabs={etabs} active={eactive} opened onPick={setEactive} onClose={closeEdit} />
-            <EditAsset
-              asset={etab.who ? assets.find((a) => a.assetId === etab.who) : null}
-              doc={doc} options={options} onSave={commit} isAdmin={IS_ADMIN}
-              onCreated={(id) => {
-                // One updater: closing the draft and opening the record it
-                // became are a single move, and two of them raced — the draft
-                // stayed and the pane kept showing the empty form.
-                const next = { id: `edit:${id}`, kind: 'edit', who: id, label: id }
-                setEtabs((ts) => {
-                  const left = ts.filter((t) => t.id !== 'new')
-                  return left.some((t) => t.id === next.id) ? left : [...left, next]
-                })
-                setEactive(next.id)
-              }}
-              onDone={(id) => closeEdit(`edit:${id}`)}
-              onDeleted={(id) => {
-                closeEdit(`edit:${id}`)
-                setPicked((s) => { const n = new Set(s); n.delete(id); return n })
-              }} />
-          </div>)}
+          {showList && showEdit && <div {...split.handleProps} />}
+
+          {showEdit && panes.cols.map((c) => {
+            const etab = panes.current(c)
+            return (
+              <div key={c} className="rl-pane rl-epane" onMouseDown={() => panes.setCol(c)}
+                style={showList && panes.cols.length === 1 ? split.rightStyle : undefined}>
+                <RackPaneStrip panes={panes} col={c} />
+                <EditAsset
+                  key={etab.id}
+                  asset={etab.who ? assets.find((a) => a.assetId === etab.who) : null}
+                  doc={doc} options={options} onSave={commit} isAdmin={IS_ADMIN}
+                  onCreated={(id) => { panes.close('new'); panes.open({ id: `edit:${id}`, kind: 'edit', who: id, label: id }) }}
+                  onCancel={() => panes.close(etab.id)}
+                  onDeleted={(id) => {
+                    panes.close(`edit:${id}`)
+                    setPicked((s) => { const n = new Set(s); n.delete(id); return n })
+                  }} />
+              </div>
+            )
+          })}
         </div>
 
         <footer className="rl-foot">
@@ -322,20 +286,16 @@ export default function App() {
 
 // ─── Editing ────────────────────────────────────────────────────────────────
 // The record reads at the readable size, not the list's: finding is dense,
-// reading and typing are not.
-function Fld({ label, children }) {
-  return (<><span className="rl-fl">{label}</span><div className="rl-fv">{children}</div></>)
-}
-
-function EditAsset({ asset, doc, options, onSave, isAdmin, onCreated, onDeleted, onDone }) {
+// reading and typing are not. The rows and the action bar are the kit's, so
+// this editor is left the same way every other rack-list editor is.
+function EditAsset({ asset, doc, options, onSave, isAdmin, onCreated, onDeleted, onCancel }) {
   // No asset means a DRAFT: the same form, and saving puts it in the document
   // rather than over one. One form, two jobs, so a field added here is added to
   // both at once.
   const draft = !asset
   const blank = useMemo(() => Object.fromEntries(FIELDS.map((f) => [f.k, ''])), [])
   const [f, setF] = useState(asset || blank)
-  const [sure, setSure] = useState(false)   // delete asks once, in place
-  useEffect(() => { setF(asset || blank); setSure(false) }, [asset, blank])
+  useEffect(() => { setF(asset || blank) }, [asset, blank])
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const id = String(f.assetId || '').trim()
   const taken = (doc?.assets || []).some((a) => a.assetId === id && a.assetId !== asset?.assetId)
@@ -348,13 +308,12 @@ function EditAsset({ asset, doc, options, onSave, isAdmin, onCreated, onDeleted,
   }
   async function update() {
     const now = new Date().toISOString()
-    const ok = await onSave({
+    // save SAVES; leaving is ⌘X or the tab's own ×. The editor stays where it
+    // is, so a second change does not need the record opened again.
+    await onSave({
       assets: doc.assets.map((a) => (a.assetId === asset.assetId
         ? { ...f, assetId: id, lastUpdate: now } : a)),
     })
-    // The record was an errand, not a destination: a save that landed closes
-    // the tab it came from. A save that lost the race keeps it, edits and all.
-    if (ok) onDone?.(asset.assetId)
   }
   async function remove() {
     if (await onSave({ assets: doc.assets.filter((a) => a.assetId !== asset.assetId) },
@@ -363,6 +322,17 @@ function EditAsset({ asset, doc, options, onSave, isAdmin, onCreated, onDeleted,
 
   return (
     <div className="rl-edit">
+      <RackActions key={asset?.assetId || 'new'}
+        draft={draft}
+        createDisabled={!id || taken}
+        hint={draft && !id ? '자산번호가 있어야 합니다.' : ''}
+        onCreate={create}
+        saveDisabled={!id || taken}
+        onSave={update}
+        onCancel={onCancel}
+        onRevert={() => setF(asset)}
+        onDelete={isAdmin && !draft ? remove : null}
+      />
       <div className="rl-rec">
         {FIELDS.map((fd) => (
           <Fld key={fd.k} label={fd.l}>
@@ -384,36 +354,6 @@ function EditAsset({ asset, doc, options, onSave, isAdmin, onCreated, onDeleted,
             )}
           </Fld>
         ))}
-        <Fld label="">
-          {draft ? (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!id || taken} onClick={create}>등록</button>
-              <span className="rl-hint">{id ? '' : '자산번호가 있어야 합니다.'}</span>
-            </>
-          ) : (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!id || taken} onClick={update}>save and exit</button>
-              <button type="button" className="rl-btn" onClick={() => setF(asset)}>revert</button>
-              {isAdmin && (
-                <>
-                  <span className="rl-gap" />
-                  {/* Asked in place: window.confirm never appears inside the
-                      portal's frame, so a dialog would delete with no question
-                      asked at all. */}
-                  {sure ? (
-                    <>
-                      <span className="rl-hint">되돌릴 수 없습니다.</span>
-                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-                    </>
-                  ) : (
-                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </Fld>
       </div>
     </div>
   )
