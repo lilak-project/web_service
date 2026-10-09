@@ -18,8 +18,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs,
-  useColumnWidths, useViewportWidth, useSelection, useFindKey, useNote, useViewState,
-  bySome, facetOf, passesFilter,
+  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useFindKey, useNote, useViewState,
+  bySome, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, authHeaders,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
@@ -123,12 +123,9 @@ export default function App() {
   const [bodyHits, setBodyHits] = useState(null)   // ids whose BODY matched
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...TODO_COLS])
   const vw = useViewportWidth()
+  const split = usePaneSplit(projectKey('nt', 'split'))
   const [sort, setSort] = useState(VIEW.sort || null)
   const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'count', dir: -1 })
-  const [fmode, setFmode] = useState(false)
-  const [fcol, setFcol] = useState(null)
-  const [fsel, setFsel] = useState(VIEW.fsel || {})
-  const [fon, setFon] = useState(!!VIEW.fon)
   const findRef = useRef(null)
   useFindKey(findRef)
 
@@ -144,10 +141,6 @@ export default function App() {
     if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
     reload()
   }, [reload])
-  useEffect(() => {
-    saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-               active, sort, clsSort, fsel, fon, efull })
-  }, [tabs, active, sort, clsSort, fsel, fon, efull])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const notes = index?.notes || []
   const tab = tabs.find((t) => t.id === active) || tabs[0]
@@ -176,16 +169,23 @@ export default function App() {
     return [...list].sort(bySome(SORTERS[sort?.k || 'date'], sort?.dir ?? -1))
   }, [notes, sort])
   const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
+  const filter = useFacetFilter(scope, SORTERS, { sel: VIEW.fsel, on: VIEW.fon })
+  // After the filter: a dependency array is evaluated where it is written.
+  useEffect(() => {
+    saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
+               active, sort, clsSort, fsel: filter.sel, fon: filter.on, efull })
+  }, [tabs, active, sort, clsSort, filter.sel, filter.on, efull])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  const passes = useCallback((n) => passesFilter(n, fsel, SORTERS), [fsel])
+
+
   const rows = useMemo(() => {
-    const kept = fon ? scope.filter(passes) : scope
+    const kept = filter.on ? scope.filter(filter.passes) : scope
     const q = query.trim().toLowerCase()
     if (!q) return kept
     return kept.filter((n) => [n.title, n.date, n.excerpt, ...tagsOf(n)]
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
       || bodyHits?.has(n.id))
-  }, [scope, fon, passes, query, bodyHits])
+  }, [scope, filter.on, filter.passes, query, bodyHits])
   const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
     = useSelection(rows)
 
@@ -199,9 +199,6 @@ export default function App() {
     return [...list].sort(bySome(TODO_SORTERS[s.k], s.dir))
   }, [todos, tab, query, sort])
 
-  const facet = useMemo(() => facetOf(scope, SORTERS[fcol]), [fcol, scope])
-  const picked_ = (k) => fsel[k] || []
-  const facetTotal = Object.values(fsel).reduce((t, v) => t + v.length, 0)
 
   const classes = useMemo(() => {
     if (tab?.kind !== 'classes') return []
@@ -322,31 +319,18 @@ export default function App() {
             </button>
           )}
           <span className="rl-gap" />
-          {tab?.kind === 'notes' && (fmode ? (
-            <>
-              <button type="button" className="rl-btn rl-go"
-                onClick={() => { setFmode(false); setFon(facetTotal > 0) }}>
-                필터 적용{facetTotal ? ` (${facetTotal})` : ''}
-              </button>
-              <button type="button" className="rl-btn" onClick={() => setFmode(false)}>취소</button>
-            </>
-          ) : fon ? (
-            <>
-              <button type="button" className="rl-btn rl-danger"
-                onClick={() => { setFon(false); setFsel({}); setFcol(null) }}>필터 풀기</button>
-              <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 고치기</button>
-            </>
-          ) : (
-            <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 선택</button>
-          ))}
+          {tab?.kind === 'notes' && <FilterBar f={filter} />}
           <span className="rl-sp" />
-          <input ref={findRef} type="search" className="rl-find" value={query}
-            placeholder="제목 · 태그 · 본문   (⌘F)"
-            onChange={(e) => setQuery(e.target.value)} />
+          {/* One box: the list, or — while the filter is choosing — the values
+              on offer. */}
+          <input ref={findRef} type="search" className="rl-find"
+            value={filter.mode ? filter.find : query}
+            placeholder={filter.mode ? '고를 값 찾기   (⌘F)' : '제목 · 태그 · 본문   (⌘F)'}
+            onChange={(e) => (filter.mode ? filter.setFind : setQuery)(e.target.value)} />
         </div>
 
         <div className="rl-body">
-          {showList && (<div className="rl-pane">
+          {showList && (<div className="rl-pane" style={showEdit ? split.leftStyle : undefined}>
             <RackTabs tabs={tabs} active={active} fixed={FIXED}
               onPick={setActive} onClose={closeTab} />
 
@@ -355,27 +339,15 @@ export default function App() {
 
             {index && tab?.kind === 'notes' && (
               <RackTable cols={cols} onDrag={drag('')}
-                facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
+                facet={filter.tableFacet}
                 sort={sort || { k: 'date', dir: -1 }}
                 onSort={(k) => setSort((s) => {
                   const now = s || { k: 'date', dir: -1 }
                   return now.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
                 })}
-                head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
-                {fmode && !fcol && <p className="rl-msg">위의 레이블을 눌러 어떤 종류로 걸를지 고르세요.</p>}
-                {fmode && fcol && facet.map(({ v, count }) => {
-                  const on = picked_(fcol).includes(v)
-                  return (
-                    <button key={v} type="button" className={`rl-frow${on ? ' on' : ''}`}
-                      onClick={() => setFsel((s) => {
-                        const cur = s[fcol] || []
-                        return { ...s, [fcol]: on ? cur.filter((x) => x !== v) : [...cur, v] }
-                      })}>
-                      <span className="rl-fv">{v}</span><span className="rl-fn">{count}</span>
-                    </button>
-                  )
-                })}
-                {!fmode && rows.map((n, i) => {
+                head={filter.mode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
+                <FacetRows f={filter} />
+                {!filter.mode && rows.map((n, i) => {
                   const on = picked.has(n.id)
                   const open = etabs.some((t) => t.id === n.id)
                   return (
@@ -398,7 +370,7 @@ export default function App() {
                       }} />
                   )
                 })}
-                {!fmode && rows.length === 0 && <p className="rl-msg">해당하는 노트가 없습니다.</p>}
+                {!filter.mode && rows.length === 0 && <p className="rl-msg">해당하는 노트가 없습니다.</p>}
               </RackTable>
             )}
 
@@ -440,6 +412,7 @@ export default function App() {
             )}
           </div>)}
 
+          {showList && showEdit && <div {...split.handleProps} />}
           {ecols.map((c) => {
             const mine = etabs.filter((t) => t.col === c)
             const cur = mine.find((t) => t.id === eactive[c]) || mine[0]
