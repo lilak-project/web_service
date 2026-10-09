@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs, RackActions,
+  RackField as Fld, RackTextRows as TextRows,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useToggleKey,
   useEditorPanes, RackPaneStrip, useNote, useViewState,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
@@ -1014,13 +1015,6 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
   )
 }
 
-// ─── Editing ────────────────────────────────────────────────────────────────
-// The record reads at the readable size, not the list's: finding is dense,
-// reading and typing are not.
-function Fld({ label, children }) {
-  return (<><span className="rl-fl">{label}</span><div className="rl-fv">{children}</div></>)
-}
-
 /** Every address, and which one is THE address. The list and the
  *  representative are one field because they are one question: a 대표 that is
  *  not in the list, or a list with no 대표, is a record disagreeing with
@@ -1057,27 +1051,6 @@ function EmailRows({ value = [], rep, onChange }) {
             ? '대표를 고르지 않으면 맨 위가 대표가 됩니다.' : '')}
         </span>
       </div>
-    </div>
-  )
-}
-
-/** A list of plain strings — links — one line each. */
-function TextRows({ value = [], onChange, add, placeholder, link }) {
-  return (
-    <div className="rl-rows">
-      {value.length === 0 && <span className="rl-hint">없음</span>}
-      {value.map((v, i) => (
-        <div key={i} className="rl-rrow">
-          <input className="rl-in" style={{ width: 300 }} placeholder={placeholder} value={v}
-            onChange={(e) => onChange(value.map((x, j) => (j === i ? e.target.value : x)))} />
-          {link && /^https?:\/\//.test(v) && (
-            <a href={v} target="_blank" rel="noreferrer" className="rl-hint">열기</a>
-          )}
-          <button type="button" className="rl-x" title="이 줄 지우기"
-            onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
-        </div>
-      ))}
-      <button type="button" className="rl-btn" onClick={() => onChange([...value, ''])}>{add}</button>
     </div>
   )
 }

@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs, RackActions,
+  RackField as Fld, RackTextRows as TextRows,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
   useEditorPanes, RackPaneStrip,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
@@ -1354,34 +1355,6 @@ function CitedBy({ refs, mine, onOpen }) {
           </div>
         )
       })}
-    </div>
-  )
-}
-
-// ─── Editing ────────────────────────────────────────────────────────────────
-// The record reads at the readable size, not the list's: finding is dense,
-// reading and typing are not.
-function Fld({ label, children }) {
-  return (<><span className="rl-fl">{label}</span><div className="rl-fv">{children}</div></>)
-}
-
-/** A list of plain strings — links — one line each. */
-function TextRows({ value = [], onChange, add, placeholder, link }) {
-  return (
-    <div className="rl-rows">
-      {value.length === 0 && <span className="rl-hint">없음</span>}
-      {value.map((v, i) => (
-        <div key={i} className="rl-rrow">
-          <input className="rl-in" style={{ width: 320 }} placeholder={placeholder} value={v}
-            onChange={(e) => onChange(value.map((x, j) => (j === i ? e.target.value : x)))} />
-          {link && /^https?:\/\//.test(v) && (
-            <a href={v} target="_blank" rel="noreferrer" className="rl-hint">열기</a>
-          )}
-          <button type="button" className="rl-x" title="이 줄 지우기"
-            onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
-        </div>
-      ))}
-      <button type="button" className="rl-btn" onClick={() => onChange([...value, ''])}>{add}</button>
     </div>
   )
 }
