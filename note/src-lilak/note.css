@@ -56,6 +56,17 @@
 /* A todo that is done is still worth seeing — just not first. */
 .rl-hit.rl-done .rl-c { color: var(--rk-mute); text-decoration: line-through; }
 
+/* A tag, where a note is read: the same blue the rest of RACK cites with. */
+.nt-tag {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--rk-cite, #dbeafe);
+  color: var(--rk-cite-t, #1d4ed8);
+  font-size: .9em;
+}
+.nt-sheet .nt-tag { background: #eef2ff; color: #3730a3; }
+
 /* ── the print page ──────────────────────────────────────────────────────
    Not a RACK screen: a sheet of paper. The browser's own printer writes the
    PDF, so the system's Korean fonts are already there. */

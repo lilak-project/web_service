@@ -15,16 +15,18 @@
  * The table, tabs, selection and portal plumbing are the kit's `racklist`,
  * shared with author_manager and reference_manager.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Children, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs,
-  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useFindKey, useNote, useViewState,
+  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
   bySome, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, authHeaders,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
 // and one newline means one line break, because a note is typed, not typeset.
-import Markdown from 'lilak-ui/log/Markdown.jsx'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { remarkSoftBreaks } from 'lilak-ui/log/Markdown.jsx'
 import MarkdownArea, { TAG_RE } from './MarkdownArea.jsx'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
@@ -226,6 +228,12 @@ export default function App() {
     if (!had) { setEtabs((ts) => [...ts, { id, label, col }]); setFresh(id) }
     setEactive((a) => ({ ...a, [col]: id }))
   }
+  // ⌘X closes the note you are in, ⌘N starts a new one.
+  useRackKeys({
+    onClose: () => { const id = eactive[ecol]; if (id) closeEdit(id) },
+    onNew: () => create(null),
+  })
+
   function closeEdit(id) {
     const gone = etabs.find((t) => t.id === id)
     const left = etabs.filter((t) => t.id !== id)
@@ -271,11 +279,11 @@ export default function App() {
       await reload()
     } catch (e) { setNote(String(e.message || e)) }
   }
-  /** The browser's own printer, in a tab of its own: a PDF with Korean in it
-   *  needs the system's fonts, which is the one thing a JS pdf library makes
-   *  hard and a print dialog makes free. */
-  function printNotes(ids) {
-    if (!ids.length) { setNote('인쇄할 노트를 고르세요.'); return }
+  /** The note as it reads, in a tab of its own — and that page is also what
+   *  prints, because a PDF with Korean in it needs the system's fonts, which is
+   *  the one thing a JS pdf library makes hard and a print dialog makes free. */
+  function preview(ids) {
+    if (!ids.length) { setNote('볼 노트를 고르세요.'); return }
     window.open(`${PORTAL_BASE}/?print=${ids.join(',')}`, '_blank', 'noopener')
   }
 
@@ -303,7 +311,7 @@ export default function App() {
             </select>
           )}
           <button type="button" className="rl-btn" disabled={!picked.size}
-            onClick={() => printNotes([...picked])}>인쇄 · PDF ({picked.size})</button>
+            onClick={() => preview([...picked])}>미리보기 ({picked.size})</button>
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {tabs.length > FIXED.length && (
@@ -442,7 +450,7 @@ export default function App() {
                 </div>
                 <Editor id={cur.id} say={setNote} onSaved={reload}
                   takeCaret={cur.id === fresh} onCaret={() => setFresh(null)}
-                  onPrint={() => printNotes([cur.id])}
+                  onPrint={() => preview([cur.id])}
                   onClosed={(cid) => { closeEdit(cid); reload() }} />
               </div>
             )
@@ -500,6 +508,8 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   // moment it is saved — shown rather than edited.
   const tags = bodyTags(f.body)
 
+  // ⌘S saves the note you are in, wherever the caret is.
+  useRackKeys({ onSave: () => saveNote(false) })
   async function saveNote(andClose) {
     const { conflict, body } = await ask(`/notes/${encodeURIComponent(id)}`, {
       method: 'PUT',
@@ -528,7 +538,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
         <button type="button" className="rl-btn rl-go" disabled={!dirty} onClick={() => saveNote(false)}>save</button>
         <button type="button" className="rl-btn rl-go" onClick={() => saveNote(true)}>save and exit</button>
         <button type="button" className="rl-btn" disabled={!dirty} onClick={() => setF(n)}>revert</button>
-        <button type="button" className="rl-btn" onClick={onPrint}>인쇄 · PDF</button>
+        <button type="button" className="rl-btn" onClick={onPrint}>미리보기</button>
         <span className="rl-sp" />
         {sure ? (
           <>
@@ -569,19 +579,51 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   )
 }
 
+// ─── Reading ────────────────────────────────────────────────────────────────
+/** The body, rendered — with `#태그` drawn as a tag rather than left as the
+ *  text it is in the file. react-markdown hands text through as strings, so the
+ *  tags are picked out of those on the way to the page. */
+function tagify(children) {
+  return Children.map(children, (child) => {
+    if (typeof child !== 'string') return child
+    const out = []
+    let last = 0
+    for (const m of child.matchAll(TAG_RE)) {
+      const at = m.index + m[1].length
+      if (at > last) out.push(child.slice(last, at))
+      out.push(<span className="nt-tag" key={at}>#{m[2]}</span>)
+      last = at + 1 + m[2].length
+    }
+    out.push(child.slice(last))
+    return out
+  })
+}
+const tagged = (Tag) => function Tagged({ node, children, ...rest }) {
+  return <Tag {...rest}>{tagify(children)}</Tag>
+}
+const RENDER = {
+  p: tagged('p'), li: tagged('li'), td: tagged('td'), blockquote: tagged('blockquote'),
+  h1: tagged('h1'), h2: tagged('h2'), h3: tagged('h3'), h4: tagged('h4'),
+}
+function Rendered({ children }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkSoftBreaks]} components={RENDER}>
+      {children}
+    </ReactMarkdown>
+  )
+}
+
 // ─── Printing ───────────────────────────────────────────────────────────────
 /** The notes, rendered as a document and handed to the browser's printer —
  *  which is also its PDF writer, with the system's fonts, which is the whole
  *  reason not to carry a PDF library and a 10MB Korean font. */
 export function PrintView({ ids }) {
   const [notes, setNotes] = useState(null)
-  // The dialog opens by itself, because that is what pressing 인쇄 asked for.
-  // `&auto=0` is for reading the page without it — and for a test that should
-  // not hang on a print dialog.
-  const auto = new URLSearchParams(window.location.search).get('auto') !== '0'
+  // No dialog of its own: this is the note as it reads, and printing is one of
+  // the things you may then do with it.
   useEffect(() => {
     Promise.all(ids.map((id) => ask(`/notes/${encodeURIComponent(id)}`).then((r) => r.body)))
-      .then((ns) => { setNotes(ns); if (auto) setTimeout(() => window.print(), 400) })
+      .then(setNotes)
       .catch(() => setNotes([]))
   }, [])   // eslint-disable-line react-hooks/exhaustive-deps
   if (!notes) return <p className="nt-print-msg">읽는 중…</p>
@@ -590,16 +632,18 @@ export function PrintView({ ids }) {
     <div className="nt-print">
       <div className="nt-print-bar">
         <button type="button" onClick={() => window.print()}>인쇄 · PDF로 저장</button>
-        <span>저장 대화상자에서 “PDF로 저장”을 고르세요.</span>
+        <span>인쇄 대화상자에서 “PDF로 저장”을 고르면 파일이 됩니다.</span>
       </div>
       {notes.map((n) => (
         <article key={n.id} className="nt-sheet">
           <h1>{n.title}</h1>
+          {/* The tags are in the body, drawn as tags — repeating them here
+              would be the same words twice. */}
           <p className="nt-meta">
-            {n.date}{tagsOf(n).length ? ` · ${tagsOf(n).join(' · ')}` : ''}
+            {n.date}
             {Object.entries(n.fields || {}).map(([k, v]) => ` · ${k}: ${v}`)}
           </p>
-          <Markdown>{n.body}</Markdown>
+          <Rendered>{n.body}</Rendered>
         </article>
       ))}
     </div>
