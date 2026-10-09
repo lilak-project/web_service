@@ -1,118 +1,114 @@
 /**
- * MarkdownArea — the note body, styled as you type.
+ * MarkdownArea — the note body, written the way it will be read.
  *
- * CodeMirror 6 with the markdown language and a highlight style: a heading is
- * bigger WHILE you write it, bold is bold, code is mono, a #tag is a tag. The
- * markup stays visible (## is still ##) — that is source mode, which is what a
- * note you may also open in Obsidian should look like. Hiding the markers is a
- * further step (decorations that fold the syntax) and is not needed to type.
+ * Milkdown on ProseMirror: the text is a contenteditable, so the editing
+ * habits are the system's own — triple-click takes the line, ⇧⌘→ takes the
+ * rest of it, the caret and IME behave. And the markup is not on screen:
+ * **bold** is bold, `## ` makes a heading as you type it, `- [ ]` is a
+ * checkbox you click.
  *
- * Only the pieces that are used are imported: state, view, commands, language,
- * lang-markdown. No search, no autocomplete, no lint.
+ * Assembled from the kit's own pieces rather than taken ready-made (Crepe),
+ * which carries a slash menu, a toolbar, block handles and a hundred
+ * code-block language modes — 1.9MB of editor for a notes pane that wants a
+ * page and a caret.
+ *
+ * It reads and writes MARKDOWN, which is the file on disk. A body that goes
+ * through here comes back in Milkdown's spelling of the same markup (which
+ * bullet, how many blank lines), so the file is normalised on the first save.
  */
 import { useEffect, useRef } from 'react'
-import { EditorState } from '@codemirror/state'
 import {
-  EditorView, keymap, placeholder as cmPlaceholder, drawSelection,
-  highlightActiveLine, MatchDecorator, ViewPlugin, Decoration,
-} from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { tags as t } from '@lezer/highlight'
+  Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx, editorViewCtx,
+  remarkStringifyOptionsCtx,
+} from '@milkdown/kit/core'
+import { commonmark } from '@milkdown/kit/preset/commonmark'
+import { gfm } from '@milkdown/kit/preset/gfm'
+import { history } from '@milkdown/kit/plugin/history'
+import { clipboard } from '@milkdown/kit/plugin/clipboard'
+import { cursor } from '@milkdown/kit/plugin/cursor'
+import { trailing } from '@milkdown/kit/plugin/trailing'
+import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
 
-/** RACK's own vocabulary, applied to markdown: one family, sizes that step,
- *  nothing bold that is not bold in the text. */
-const style = HighlightStyle.define([
-  { tag: t.heading1, fontSize: '19px', color: 'var(--rk-ink)', lineHeight: 2 },
-  { tag: t.heading2, fontSize: '16px', color: 'var(--rk-ink)', lineHeight: 2 },
-  { tag: t.heading3, fontSize: '14px', color: 'var(--rk-ink)' },
-  { tag: [t.heading4, t.heading5, t.heading6], color: 'var(--rk-ink)' },
-  { tag: t.strong, fontWeight: '600', color: 'var(--rk-ink)' },
-  { tag: t.emphasis, fontStyle: 'italic' },
-  { tag: t.strikethrough, textDecoration: 'line-through', color: 'var(--rk-mute)' },
-  { tag: [t.monospace, t.contentSeparator], color: '#9a3412' },
-  { tag: [t.link, t.url], color: 'var(--rk-cite-t)', textDecoration: 'underline' },
-  { tag: t.quote, color: 'var(--rk-dim)' },
-  { tag: t.list, color: 'var(--rk-dim)' },
-  { tag: t.processingInstruction, color: 'var(--rk-mute)' },   // the ## and ** themselves
-])
+/** What comes back out of the editor is markdown again, and it is the FILE.
+ *  Two corrections on the way:
+ *   - `-` bullets, because that is what the file was written with and a
+ *     serializer's default should not restyle someone's notes.
+ *   - `\#` → `#`. remark escapes a hash that starts a line in case it is a
+ *     heading; CommonMark needs `# ` with a space, so `#태그` never was one —
+ *     and escaped, it stops being a tag. */
+const tidy = (md) => md.replace(/\\#/g, '#')
 
-/** `#태그` — a tag, the way Obsidian spells one. A heading is `# ` WITH a
- *  space after the hash, so the two cannot be confused. */
-export const TAG_RE = /(^|[\s(])#([^\s#.,;:!?()[\]{}'"]+)/g
-const tagMark = Decoration.mark({ class: 'cm-note-tag' })
-// The match may start on the space before the #, so the decoration starts
-// after that first group rather than at the match.
-const tagDeco = new MatchDecorator({
-  regexp: TAG_RE,
-  decorate: (add, from, to, m) => add(from + m[1].length, to, tagMark),
-})
-const tagPlugin = ViewPlugin.fromClass(class {
-  constructor(view) { this.decorations = tagDeco.createDeco(view) }
-  update(u) { this.decorations = tagDeco.updateDeco(u, this.decorations) }
-}, { decorations: (v) => v.decorations })
+const make = (root, value, onMarkdown) => Editor.make()
+  .config((ctx) => {
+    ctx.set(rootCtx, root)
+    ctx.set(defaultValueCtx, value)
+    ctx.update(editorViewOptionsCtx, (prev) => ({ ...prev, attributes: { class: 'nt-prose' } }))
+    ctx.update(remarkStringifyOptionsCtx, (prev) => ({ ...prev, bullet: '-', rule: '-' }))
+    ctx.get(listenerCtx).markdownUpdated((_, md) => onMarkdown(tidy(md)))
+  })
+  .use(commonmark)      // headings, lists, emphasis, links, code
+  .use(gfm)             // tables, strikethrough, and the task list checkboxes
+  .use(history)         // ⌘Z, on top of the browser's own editing
+  .use(clipboard)       // paste markdown as markdown
+  .use(cursor)          // a caret you can place beside a table or an image
+  .use(trailing)        // always a paragraph to land in at the end
+  .use(listener)
+  .create()
 
-const theme = EditorView.theme({
-  '&': { height: '100%', fontSize: '13px', color: 'var(--rk-text)', background: 'var(--rk-panel)' },
-  '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': {
-    fontFamily: 'var(--rk-sans, ui-sans-serif), system-ui',
-    lineHeight: '1.7',
-    padding: '10px 14px',
-    overflow: 'auto',
-  },
-  '.cm-content': { caretColor: 'var(--rk-ink)' },
-  '.cm-line': { padding: '0' },
-  '.cm-activeLine': { background: '#fffdf4' },
-  '.cm-note-tag': {
-    background: 'var(--rk-cite)', color: 'var(--rk-cite-t)',
-    borderRadius: '2px', padding: '0 3px',
-  },
-})
-
-export default function MarkdownArea({ value, onChange, placeholder = '' }) {
+export default function MarkdownArea({ value, onChange }) {
   const host = useRef(null)
-  const view = useRef(null)
+  const ed = useRef(null)
   const cb = useRef(onChange)
   cb.current = onChange
+  // What the editor itself last produced: an update that merely came back from
+  // a save must not be loaded over what is being typed.
+  const mine = useRef(value)
 
   useEffect(() => {
-    const v = new EditorView({
-      parent: host.current,
-      state: EditorState.create({
-        doc: value,
-        extensions: [
-          history(),
-          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-          drawSelection(),
-          highlightActiveLine(),
-          EditorView.lineWrapping,
-          markdown({ base: markdownLanguage }),
-          syntaxHighlighting(style),
-          tagPlugin,
-          theme,
-          cmPlaceholder(placeholder),
-          EditorView.updateListener.of((u) => {
-            if (u.docChanged) cb.current(u.state.doc.toString())
-          }),
-        ],
-      }),
-    })
-    view.current = v
-    return () => { v.destroy(); view.current = null }
+    let dead = false
+    make(host.current, value, (md) => { mine.current = md; cb.current(md) })
+      .then((e) => { if (dead) e.destroy(); else ed.current = e })
+    return () => { dead = true; ed.current?.destroy(); ed.current = null }
   }, [])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The note was reloaded (saved, or someone else's edit came back): replace
-  // the document, but never while it merely differs because you are typing.
+  // A note that changed underneath (a reload, someone else's save) is a new
+  // document; one that merely echoes our own typing is not.
   useEffect(() => {
-    const v = view.current
-    if (!v) return
-    const cur = v.state.doc.toString()
-    if (value !== cur && !v.hasFocus) {
-      v.dispatch({ changes: { from: 0, to: cur.length, insert: value } })
-    }
-  }, [value])
+    if (!ed.current || value === mine.current) return
+    mine.current = value
+    const e = ed.current
+    ed.current = null
+    e.destroy().then(() => make(host.current, value, (md) => { mine.current = md; cb.current(md) })
+      .then((next) => { ed.current = next }))
+  }, [value])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div className="nt-cm" ref={host} />
+  /** A checkbox drawn by CSS is still a checkbox: pressing one flips the
+   *  node, the serializer writes `- [x]`, and the caret stays where it was.
+   *  (The alternative was a web-component list item and everything under it.) */
+  function onClick(e) {
+    const li = e.target.closest?.('li[data-item-type="task"]')
+    if (!li) return
+    const box = li.getBoundingClientRect()
+    if (e.clientX - box.left > 20) return      // only the box, not the text
+    e.preventDefault()
+    ed.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      const $pos = view.state.doc.resolve(view.posAtDOM(li, 0))
+      for (let depth = $pos.depth; depth > 0; depth -= 1) {
+        const node = $pos.node(depth)
+        if (node.type.name === 'list_item') {
+          view.dispatch(view.state.tr.setNodeMarkup($pos.before(depth), undefined,
+            { ...node.attrs, checked: !node.attrs.checked }))
+          return
+        }
+      }
+    })
+  }
+
+  return <div className="nt-wy" ref={host} onMouseDown={onClick} />
 }
+
+/** `#태그` — Obsidian's spelling, and markdown keeps it apart from a heading
+ *  (`# ` has a space after the hash). Read out of the markdown rather than
+ *  marked in the editor: the body is the only place a tag is written. */
+export const TAG_RE = /(^|[\s(])#([^\s#.,;:!?()[\]{}'"]+)/g

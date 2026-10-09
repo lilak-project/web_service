@@ -139,6 +139,77 @@
   display: flex; align-items: center; gap: 12px;
   padding: 2px 11px 6px;
 }
-/* The body takes everything that is left — to the right edge, to the bottom. */
-.nt-cm { flex: 1; min-height: 0; border-top: 1px solid var(--rk-line); overflow: hidden; }
-.nt-cm .cm-editor { height: 100%; }
+/* The body takes everything that is left — to the right edge, to the bottom.
+   The editor is a page: one family, sizes that step, nothing bold that is not
+   bold in the text. No active-line tint, no visible markup. */
+.nt-wy { flex: 1; min-height: 0; border-top: 1px solid var(--rk-line); overflow: auto; background: var(--rk-panel); }
+.nt-wy .milkdown { height: 100%; }
+.nt-prose {
+  min-height: 100%;
+  padding: 12px 16px 40vh;
+  outline: none;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--rk-text);
+  caret-color: var(--rk-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.nt-prose > :first-child { margin-top: 0; }
+.nt-prose :where(h1, h2, h3, h4, h5, h6) {
+  margin: 1.1em 0 .35em; font-weight: 600; color: var(--rk-ink); line-height: 1.35;
+}
+.nt-prose h1 { font-size: 20px; }
+.nt-prose h2 { font-size: 16.5px; }
+.nt-prose h3 { font-size: 14.5px; }
+.nt-prose :where(h4, h5, h6) { font-size: 13.5px; color: var(--rk-dim); }
+.nt-prose p { margin: 0 0 .55em; }
+.nt-prose :where(ul, ol) { margin: 0 0 .55em; padding-left: 1.5em; }
+.nt-prose li { margin: .1em 0; }
+.nt-prose li p { margin: 0; }
+/* A task item wears its box, drawn from the node's own state. Clicking it
+   flips the node (see MarkdownArea), so nothing is stored twice. */
+.nt-prose li[data-item-type="task"] { list-style: none; position: relative; padding-left: 4px; }
+.nt-prose li[data-item-type="task"]::before {
+  content: '';
+  position: absolute; left: -17px; top: .42em;
+  width: 12px; height: 12px;
+  border: 1px solid var(--rk-dim); border-radius: 2px;
+  background: var(--rk-panel);
+  cursor: pointer;
+}
+.nt-prose li[data-item-type="task"][data-checked="true"]::before {
+  border-color: var(--rk-cite-t); background: var(--rk-cite-t);
+}
+.nt-prose li[data-item-type="task"][data-checked="true"]::after {
+  content: '';
+  position: absolute; left: -14px; top: .62em;
+  width: 6px; height: 3px;
+  border-left: 1.6px solid #fff; border-bottom: 1.6px solid #fff;
+  transform: rotate(-45deg);
+  pointer-events: none;
+}
+.nt-prose li[data-item-type="task"][data-checked="true"] > p { color: var(--rk-mute); }
+.nt-prose input[type="checkbox"] { width: 13px; height: 13px; accent-color: var(--rk-cite-t); }
+.nt-prose blockquote {
+  margin: 0 0 .55em; padding: 0 0 0 11px;
+  border-left: 2px solid var(--rk-edge); color: var(--rk-dim);
+}
+.nt-prose code {
+  font-family: var(--rk-mono); font-size: 12.5px;
+  background: var(--rk-gut); padding: 0 4px; border-radius: 2px; color: #9a3412;
+}
+.nt-prose pre {
+  margin: 0 0 .55em; padding: 9px 11px;
+  background: var(--rk-gut); border: 1px solid var(--rk-line);
+  font-family: var(--rk-mono); font-size: 12.5px; overflow-x: auto;
+}
+.nt-prose pre code { background: none; padding: 0; color: inherit; }
+.nt-prose a { color: var(--rk-cite-t); text-decoration: underline; text-underline-offset: 2px; }
+.nt-prose hr { margin: 1em 0; border: 0; border-top: 1px solid var(--rk-edge); }
+.nt-prose table { border-collapse: collapse; margin: 0 0 .55em; }
+.nt-prose :where(th, td) { border: 1px solid var(--rk-line); padding: 2px 8px; }
+.nt-prose th { background: var(--rk-gut); font-weight: 600; }
+.nt-prose img { max-width: 100%; }
+/* ProseMirror's own: the gap cursor and a selected node. */
+.nt-prose .ProseMirror-selectednode { outline: 2px solid var(--rk-cite-t); }
