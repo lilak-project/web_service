@@ -304,7 +304,32 @@ export default function SidebarPortal({
   const miniBefore = useRef(null)
   const viewBefore = useRef(null)
 
+  // ── peeking ──────────────────────────────────────────────────────────────
+  // Resting the pointer on the folded rail for a second opens it; taking the
+  // pointer away folds it again. It is a LOOK, not a decision: it is not
+  // written down, so a reload still comes back folded, and the first press
+  // inside makes it an ordinary open that stays.
+  const peek = useRef(false)
+  const peekT = useRef(null)
+  const stopPeekTimer = () => { clearTimeout(peekT.current); peekT.current = null }
+  function onSideEnter() {
+    if (!mini || peek.current || manageRef.current) return
+    if (window.innerWidth < PHONE) return          // a drawer, and there is no hover
+    stopPeekTimer()
+    peekT.current = setTimeout(() => { peek.current = true; setMini(false) }, 1000)
+  }
+  function onSideLeave() {
+    stopPeekTimer()
+    if (!peek.current || manageRef.current) return
+    peek.current = false
+    setMini(true)
+  }
+  // A press is a decision: whatever happens next, this is no longer a peek.
+  const endPeek = () => { stopPeekTimer(); peek.current = false }
+  useEffect(() => stopPeekTimer, [])
+
   useEffect(() => {
+    if (peek.current) return                       // a look is not a preference
     localStorage.setItem(MINI_KEY, mini ? '1' : '0')
     // Collapsing hides the project lists; close them too, so expanding again does
     // not reveal a list the user last saw minutes ago.
@@ -828,7 +853,8 @@ export default function SidebarPortal({
   return (
     <div className={`pl-root${mini ? ' mini' : ''}${view === 'settings' ? ' settings' : ''}`
       + `${manage && isManager ? ' managing' : ''}${cmd ? ' cmd' : ''}`}>
-      <aside className="pl-side" ref={sideRef} tabIndex={-1}>
+      <aside className="pl-side" ref={sideRef} tabIndex={-1}
+        onMouseEnter={onSideEnter} onMouseLeave={onSideLeave} onMouseDown={endPeek}>
         <div className="pl-brand">
           <button type="button" className="pl-logo" disabled={manage && isManager}
             onClick={() => setMini((m) => !m)}
