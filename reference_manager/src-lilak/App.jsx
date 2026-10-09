@@ -129,7 +129,12 @@ const inJrn = (r, name) => r.journal === name
 const hasPdf = (r) => !!(r.pdf && (r.pdf.path || r.pdf.name))
 /** The service reads the file for the browser: file:// cannot be opened from
  *  an http page, and the path is on the machine the backend runs on. */
-const pdfSrc = (r) => `${PORTAL_BASE}/api/file?path=${encodeURIComponent(r.pdf.path)}`
+const pdfSrc = (path, dl) => `${PORTAL_BASE}/api/file?path=${encodeURIComponent(path)}`
+  + (dl ? '&download=1' : '')
+/** Revealing a file opens the file manager of the machine the BACKEND is on.
+ *  That is only useful when it is also the machine you are looking at. */
+const onThisMachine = typeof location !== 'undefined'
+  && ['localhost', '127.0.0.1', '[::1]', ''].includes(location.hostname)
 async function revealPdf(path, say) {
   try {
     const res = await fetch(`${PORTAL_BASE}/api/reveal`, {
@@ -137,8 +142,15 @@ async function revealPdf(path, say) {
       body: JSON.stringify({ path }),
     })
     const got = await res.json().catch(() => ({}))
-    say(res.ok ? 'Finder에서 열었습니다.' : (got.detail || '열 수 없습니다.'))
+    say(res.ok ? `${got.where || '파일 관리자'}에서 열었습니다.` : (got.detail || '열 수 없습니다.'))
   } catch (e) { say(String(e.message || e)) }
+}
+/** Where the file IS, as text you can take with you. Opening the host's file
+ *  manager was tried and dropped: the page is in a frame on a server, and
+ *  telling you the path is the honest version of that. */
+async function copyPath(path, say) {
+  try { await navigator.clipboard.writeText(path); say('경로를 복사했습니다.') }
+  catch { say('복사 실패 — 경로를 직접 선택해 복사하세요.') }
 }
 /** A path dropped from Finder arrives as a file:// URL. */
 const droppedPath = (e) => {
@@ -679,13 +691,17 @@ export default function App() {
               return (
                 <div className="rl-pdf">
                   <div className="rl-pdfbar">
-                    <span className="rl-hint rl-mono">{r.pdf.path}</span>
+                    <button type="button" className="rl-path rl-mono" title="경로 복사"
+                      onClick={() => copyPath(r.pdf.path, setNote)}>{r.pdf.path}</button>
                     <span className="rl-sp" />
-                    <button type="button" className="rl-btn"
-                      onClick={() => revealPdf(r.pdf.path, setNote)}>Finder에서 보기</button>
-                    <a className="rl-btn" href={pdfSrc(r)} target="_blank" rel="noreferrer">새 창</a>
+                    {onThisMachine && (
+                      <button type="button" className="rl-btn"
+                        onClick={() => revealPdf(r.pdf.path, setNote)}>폴더에서 보기</button>
+                    )}
+                    <a className="rl-btn" href={pdfSrc(r.pdf.path)} target="_blank" rel="noreferrer">새 창</a>
+                    <a className="rl-btn" href={pdfSrc(r.pdf.path, true)} download>내려받기</a>
                   </div>
-                  <iframe className="rl-pdfview" src={pdfSrc(r)} title={r.pdf.path} />
+                  <iframe className="rl-pdfview" src={pdfSrc(r.pdf.path)} title={r.pdf.path} />
                 </div>
               )
             })() : etab.kind === 'edit' ? (
@@ -1168,10 +1184,14 @@ function PdfRow({ value, citeKey, onChange, say }) {
           onChange={(e) => set(e.target.value)} />
         {path && (
           <>
-            <a className="rl-btn" href={`${PORTAL_BASE}/api/file?path=${encodeURIComponent(path)}`}
-              target="_blank" rel="noreferrer">열기</a>
+            <a className="rl-btn" href={pdfSrc(path)} target="_blank" rel="noreferrer">열기</a>
+            <a className="rl-btn" href={pdfSrc(path, true)} download>내려받기</a>
+            {onThisMachine && (
+              <button type="button" className="rl-btn"
+                onClick={() => revealPdf(path, say)}>폴더에서 보기</button>
+            )}
             <button type="button" className="rl-btn"
-              onClick={() => revealPdf(path, say)}>Finder에서 보기</button>
+              onClick={() => copyPath(path, say)}>경로 복사</button>
             <button type="button" className="rl-x" title="연결 끊기" onClick={() => set('')}>×</button>
           </>
         )}

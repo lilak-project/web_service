@@ -18,9 +18,12 @@ on it is rejected with 409 + the current document, and the client reloads.
 import json
 import os
 import subprocess
+import sys
+import shutil
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -159,34 +162,68 @@ def _inside(path: Path, roots: list[Path]) -> Optional[Path]:
 
 
 @app.get("/api/file")
-def get_file(path: str, _: dict = Depends(identity)):
+def get_file(path: str, download: int = 0, _: dict = Depends(identity)):
     """Serve one PDF out of an allowed root. `path` is relative to a root, or
-    absolute and under one."""
+    absolute and under one.
+
+    Inline by default, so it can be read in the page. `download=1` asks for it
+    as a file instead — which is the only way to get at it when the service is
+    on another machine than the person reading it."""
     roots = _roots()
     if not roots:
         raise HTTPException(409, "허용 루트가 설정되지 않았습니다.")
     real = _inside(Path(path), roots)
     if not real:
         raise HTTPException(404, "그 경로의 파일이 없거나 허용 루트 밖입니다.")
-    return FileResponse(real, media_type="application/pdf", filename=real.name)
+    if download:
+        return FileResponse(real, media_type="application/pdf", filename=real.name)
+    return FileResponse(real, media_type="application/pdf",
+                        headers={"content-disposition": f'inline; filename="{real.name}"'})
 
 
 class RevealBody(BaseModel):
     path: str
 
 
+def _reveal_cmd(real: Path) -> tuple[list[str], str]:
+    """Show a file in the desktop's own file manager, whichever one that is.
+
+    macOS and Windows both have a 'select this file' call. Linux has one only
+    through the file manager's D-Bus interface, and not every desktop answers
+    it, so the folder itself is the fallback — a folder that opens beats a file
+    that does not."""
+    p = str(real)
+    if sys.platform == "darwin":
+        return ["open", "-R", p], "Finder"
+    if os.name == "nt":
+        return ["explorer", f"/select,{p}"], "탐색기"
+    if shutil.which("dbus-send"):
+        return ([
+            "dbus-send", "--session", "--print-reply",
+            "--dest=org.freedesktop.FileManager1", "--type=method_call",
+            "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
+            f'array:string:file://{quote(p)}', 'string:""',
+        ], "파일 관리자")
+    if shutil.which("xdg-open"):
+        return ["xdg-open", str(real.parent)], "파일 관리자(폴더)"
+    return [], ""
+
+
 @app.post("/api/reveal")
 def reveal(body: RevealBody, _: dict = Depends(identity)):
-    """Show the file in the host's file manager. Only works when the backend is
-    on the machine the files are — which is the same condition as the link."""
+    """Show the file where it lives. Only works when the backend runs on the
+    machine with the screen — the same condition as the link itself."""
     real = _inside(Path(body.path), _roots())
     if not real:
         raise HTTPException(404, "그 경로의 파일이 없거나 허용 루트 밖입니다.")
+    cmd, what = _reveal_cmd(real)
+    if not cmd:
+        raise HTTPException(501, "이 환경에서는 파일 관리자를 열 수 없습니다.")
     try:
-        subprocess.Popen(["open", "-R", str(real)])
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as exc:
         raise HTTPException(500, f"열 수 없습니다: {exc}")
-    return {"ok": True, "path": str(real)}
+    return {"ok": True, "where": what, "path": str(real)}
 
 
 @app.get("/api/scan")
