@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs,
-  useColumnWidths, useViewportWidth, useSelection, useFindKey, useNote, useViewState,
+  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useFindKey, useNote, useViewState,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId,
   authHeaders, fetchDoc, putDoc,
@@ -321,6 +321,7 @@ export default function App() {
   const [query, setQuery] = useState('')
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...AUT_COLS])
   const vw = useViewportWidth()
+  const split = usePaneSplit(projectKey('rm', 'split'))
   const [sort, setSort] = useState(VIEW.sort || null)
   const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'name', dir: 1 })
   const [outOpen, setOutOpen] = useState(false)
@@ -562,7 +563,7 @@ export default function App() {
         </div>
 
         <div className="rl-body">
-          {showList && (<div className="rl-pane">
+          {showList && (<div className="rl-pane" style={showEdit ? split.leftStyle : undefined}>
             <RackTabs tabs={tabs} active={active} fixed={FIXED}
               onPick={setActive} onClose={closeTab} />
 
@@ -688,7 +689,8 @@ export default function App() {
             )}
           </div>)}
 
-          {showEdit && (<div className="rl-pane rl-epane">
+          {showList && showEdit && <div {...split.handleProps} />}
+          {showEdit && (<div className="rl-pane rl-epane" style={showList ? split.rightStyle : undefined}>
             <RackTabs tabs={etabs} active={eactive} opened
               onPick={setEactive} onClose={closeEdit} />
             {etab.kind === 'pdf' ? (() => {
