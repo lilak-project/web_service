@@ -502,14 +502,17 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
       .catch((e) => say(String(e.message || e)))
     return () => { live = false }
   }, [id])   // eslint-disable-line react-hooks/exhaustive-deps
+  // ⌘S saves the note you are in, wherever the caret is. ABOVE the early
+  // return: a hook that only runs once the note has loaded is a hook the first
+  // render did not have, and React drops the whole tree over it (#310) — which
+  // is a blank pane, not a missing shortcut.
+  useRackKeys({ onSave: () => { if (f && n) saveNote(false) } })
+
   if (!f || !n) return <p className="rl-msg">읽는 중…</p>
   const dirty = JSON.stringify(f) !== JSON.stringify(n)
   // Tags live in the BODY now (#태그), so this is what the note will carry the
   // moment it is saved — shown rather than edited.
   const tags = bodyTags(f.body)
-
-  // ⌘S saves the note you are in, wherever the caret is.
-  useRackKeys({ onSave: () => saveNote(false) })
   async function saveNote(andClose) {
     const { conflict, body } = await ask(`/notes/${encodeURIComponent(id)}`, {
       method: 'PUT',
