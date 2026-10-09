@@ -206,6 +206,22 @@ const slug = (v) => deburr(v).replace(/[^A-Za-z0-9-]+/g, '_').replace(/_+/g, '_'
 /** The tag this paper is filed under. One of its own, chosen; the first one
  *  when nobody has chosen. */
 const mainTag = (r) => (tagsOf(r).includes(r.mainTag) ? r.mainTag : tagsOf(r)[0] || '')
+/** Every paper wearing one of `from` wears `to` instead — once, and its main
+ *  tag follows. A key is filed under the main tag, so one left naming a tag
+ *  that has gone would quietly move to whichever tag happens to be first. */
+const foldTags = (doc, from, to) => {
+  const drop = new Set(from)
+  return (doc.references || []).map((r) => {
+    if (!(r.tags || []).some((t) => drop.has(t))) return r
+    const next = []
+    for (const t of r.tags) {
+      const v = drop.has(t) ? to : t
+      if (!next.includes(v)) next.push(v)
+    }
+    const main = drop.has(r.mainTag) ? to : r.mainTag
+    return { ...r, tags: next, ...(main === r.mainTag ? {} : { mainTag: main }) }
+  })
+}
 // A key says what the thing IS, and a proposal is not a paper: it goes to an
 // institution's committee, not to a journal. RIKEN numbers its PACs (PAC27),
 // RAON and JYFL use the year — so what follows PAC is a field, not a guess.
@@ -413,8 +429,18 @@ export default function App() {
   const sorters = useMemo(() => SORTERS(doc), [doc])
 
   const cols = useMemo(() => sized(COLS, vw), [sized, vw])
+  // Merging tags is picking several and saying which one they become, so the
+  // tag list turns into a list you pick from. It is a mode because the same
+  // click otherwise opens the tag's papers.
+  const onTags = tab?.kind === 'classes' && tab.of === 'tag'
+  const [merge, setMerge] = useState(false)
+  const [chosenTags, setChosenTags] = useState(() => new Set())
+  useEffect(() => {
+    if (!onTags) { setMerge(false); setChosenTags(new Set()) }
+  }, [onTags])
   const clsCols = useMemo(() => sized(tab?.of === 'author' ? AUT_COLS : CLS_COLS, vw, 'c:'),
     [sized, vw, tab])
+  const mergeCols = useMemo(() => [{ k: 'chk', w: 26, min: 26, fix: true }, ...clsCols], [clsCols])
 
   /** How many papers in the list cite this one. Counted once for the whole
    *  document rather than per row, which would be 87² comparisons a render. */
@@ -593,6 +619,20 @@ export default function App() {
               + 새 논문
             </button>
           )}
+          {onTags && (
+            <button type="button" className={`rl-btn rl-tabonly${merge ? ' on' : ''}`}
+              title="태그 여러 개를 골라 하나로 합칩니다"
+              onClick={() => { setMerge(!merge); setChosenTags(new Set()) }}>
+              {merge ? '합치기 모드 끄기' : '합치기 모드'}
+            </button>
+          )}
+          {onTags && merge && (
+            <button type="button" className="rl-btn rl-go" disabled={chosenTags.size < 2}
+              onClick={() => openEdit({ id: 'mergetags', kind: 'mergetags',
+                names: [...chosenTags], label: `태그 ${chosenTags.size}개 합치기` })}>
+              합치기 ({chosenTags.size})
+            </button>
+          )}
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
@@ -710,10 +750,17 @@ export default function App() {
             )}
 
             {doc && tab?.kind === 'classes' && (
-              <RackTable cols={clsCols} onDrag={drag('c:')} sort={clsSort}
-                onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}>
+              <RackTable cols={merge ? mergeCols : clsCols} onDrag={drag('c:')} sort={clsSort}
+                onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}
+                head={merge ? {
+                  all: classes.length > 0 && classes.every((r) => chosenTags.has(r.name)),
+                  some: classes.some((r) => chosenTags.has(r.name)),
+                  onAll: () => setChosenTags((s2) => (classes.every((r) => s2.has(r.name))
+                    ? new Set() : new Set(classes.map((r) => r.name)))),
+                } : null}>
                 {classes.map((r, i) => {
                   const key = tab.of === 'author' ? r.id : r.name
+                  const chosen = merge && chosenTags.has(r.name)
                   // On an author's row every count is a way in: press 1st and
                   // you get the papers they lead, not all of them.
                   const roleCell = (role, n) => (n ? (
@@ -725,11 +772,18 @@ export default function App() {
                       }}>{n}</button>
                   ) : D)
                   return (
-                    <RackRow key={key} cols={clsCols} tone={TONE} className="rl-hit"
-                      onClick={() => openTab({
-                        id: `${tab.of}:${key}`, kind: 'refs', label: r.tag || r.name,
-                        ...CLS_OF[tab.of].open(key),
-                      })}
+                    <RackRow key={key} cols={merge ? mergeCols : clsCols} tone={TONE}
+                      className={`rl-hit${chosen ? ' on' : ''}`}
+                      onClick={() => (merge
+                        ? setChosenTags((s2) => {
+                          const n = new Set(s2)
+                          if (n.has(r.name)) n.delete(r.name); else n.add(r.name)
+                          return n
+                        })
+                        : openTab({
+                          id: `${tab.of}:${key}`, kind: 'refs', label: r.tag || r.name,
+                          ...CLS_OF[tab.of].open(key),
+                        }))}
                       onContextMenu={(e) => {
                         e.preventDefault()
                         openEdit(tab.of === 'author'
@@ -742,7 +796,11 @@ export default function App() {
                         num: i + 1, name: r.name, tag: r.tag || D, count: r.count,
                         first: roleCell('first', r.first), second: roleCell('second', r.second),
                         corr: roleCell('corr', r.corr), other: roleCell('other', r.other),
-                      } : { num: i + 1, name: r.name, count: r.count, full: r.full || D }} />
+                      } : {
+                        ...(merge ? { chk: <input type="checkbox" checked={chosen} tabIndex={-1}
+                          readOnly aria-label={`${r.name} 선택`} /> } : {}),
+                        num: i + 1, name: r.name, count: r.count, full: r.full || D,
+                      }} />
                   )
                 })}
                 {classes.length === 0 && <p className="rl-msg">아직 없습니다.</p>}
@@ -813,6 +871,10 @@ export default function App() {
                 <EditJournal name={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
                   onCreated={(name) => { closeEdit('newjrn'); openEdit({ id: `editjrn:${name}`, kind: 'editjrn', who: name, label: name }) }}
                   onDone={(name) => closeEdit(`editjrn:${name}`)}
+                  onCancel={() => closeEdit(etab.id)} />
+              ) : etab.kind === 'mergetags' ? (
+                <MergeTags names={etab.names || []} doc={doc} tags={allTags} onSave={commit}
+                  onDone={() => { closeEdit('mergetags'); setMerge(false); setChosenTags(new Set()) }}
                   onCancel={() => closeEdit(etab.id)} />
               ) : (
                 <EditTag name={etab.who} doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN}
@@ -1418,6 +1480,104 @@ function TagRows({ value = [], onChange, options, main, onMain }) {
   )
 }
 
+/**
+ * Several tags into one.
+ *
+ * The question a merge has to answer is which spelling survives and which
+ * disappear, so that is what the panel shows: one row per tag with the papers
+ * behind it, the survivor marked, the rest struck through. The name can also
+ * be one that does not exist yet — then all of them go.
+ */
+function MergeTags({ names = [], doc, tags, onSave, onDone, onCancel }) {
+  const refs = doc.references || []
+  const live = useMemo(() => names.filter((n) => tags.includes(n)), [names, tags])
+  const count = useCallback((t) => refs.filter((r) => (r.tags || []).includes(t)).length, [refs])
+  // The one with the most papers is the one most likely meant; it is a start,
+  // not a decision.
+  const [keep, setKeep] = useState(() => [...live].sort((a, b) => count(b) - count(a))[0] || '')
+  const [to, setTo] = useState(keep)
+  useEffect(() => { const k = [...live].sort((a, b) => count(b) - count(a))[0] || ''
+    setKeep(k); setTo(k) }, [live.join('\u0000')])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const named = String(to || '').trim()
+  const gone = live.filter((t) => t !== named)
+  const users = refs.filter((r) => (r.tags || []).some((t) => live.includes(t)))
+  const moved = refs.filter((r) => gone.includes(r.mainTag))
+  const fresh = named && !tags.includes(named)
+
+  async function run() {
+    if (!named || !gone.length) return
+    if (await onSave({ references: foldTags(doc, gone, named) },
+      `태그 ${live.length}개를 '${named}' 하나로 합쳤습니다 · 논문 ${users.length}편`)) onDone?.()
+  }
+
+  if (live.length < 2) {
+    return (
+      <div className="rl-edit">
+        <RackActions onSave={onCancel} saveLabel="닫기" onCancel={null} />
+        <p className="rl-msg">합칠 태그가 남아 있지 않습니다.</p>
+      </div>
+    )
+  }
+  return (
+    <div className="rl-edit">
+      <RackActions key={live.join('\u0000')} saveLabel="합치기" onSave={run}
+        saveDisabled={!named || !gone.length} onCancel={onCancel}
+        hint={`${live.length}개 → 1개 · 논문 ${users.length}편`} />
+      <div className="rl-rec">
+        <Fld label="남길 태그">
+          <div className="rl-rows">
+            {live.map((t) => (
+              <label key={t} className={`rl-rrow rl-hit${t === named ? ' on' : ''}`}>
+                <input type="radio" name="rl-keep" checked={t === named}
+                  onChange={() => { setKeep(t); setTo(t) }} />
+                <span className={t === named ? '' : 'rl-gone'}>{t}</span>
+                <span className="rl-hint">논문 {count(t)}편</span>
+                <span className="rl-sp" />
+                <span className="rl-hint">{t === named ? '남습니다' : '없어집니다'}</span>
+              </label>
+            ))}
+          </div>
+        </Fld>
+        <Fld label="이름">
+          <input className="rl-in" style={{ width: 260 }} value={to || ''}
+            onChange={(e) => setTo(e.target.value)} />
+          <button type="button" className="rl-btn" disabled={to === keep}
+            onClick={() => setTo(keep)}>← 고른 것으로</button>
+          {fresh && <span className="rl-hint">새 이름입니다 — 고른 {live.length}개가 모두 이것이 됩니다.</span>}
+        </Fld>
+        <Fld label="없어지는 태그">
+          <div className="rl-rrow">
+            {gone.length === 0 && <span className="rl-hint">없음</span>}
+            {gone.map((t) => <span key={t} className="rl-tag rl-gone">{t}</span>)}
+          </div>
+        </Fld>
+        <Fld label="영향">
+          <div className="rl-rows">
+            <span className="rl-hint">논문 {users.length}편의 태그가 바뀝니다.</span>
+            {moved.length > 0 && (
+              <span className="rl-hint">
+                그중 {moved.length}편은 메인 태그가 바뀌므로 cite key도 다시 만들어야 합니다 —
+                {' '}{moved.slice(0, 6).map((r) => r.citeKey).join(', ')}
+                {moved.length > 6 ? ' …' : ''}
+              </span>
+            )}
+          </div>
+        </Fld>
+        <Fld label="쓰는 논문">
+          <div className="rl-rows">
+            {users.length === 0 && <span className="rl-hint">없음</span>}
+            {users.slice(0, 12).map((r) => (
+              <span key={r.id} className="rl-hint">{r.citeKey || (r.title || '').slice(0, 40)}</span>
+            ))}
+            {users.length > 12 && <span className="rl-hint">… 모두 {users.length}편</span>}
+          </div>
+        </Fld>
+      </div>
+    </div>
+  )
+}
+
 // ─── Pasting a citation ─────────────────────────────────────────────────────
 /** What a publisher's site hands you is a BibTeX entry or a RIS block, so
  *  typing the fields again is work a parser can do. Anything it cannot read is
@@ -1825,19 +1985,7 @@ function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
 
   async function rename(keep) {
     if (!named || (named === name && !absorb.length)) return
-    const drop = new Set(gone)
-    const refs = doc.references.map((r) => {
-      if (!(r.tags || []).some((t) => drop.has(t))) return r
-      const next = []
-      for (const t of r.tags) {
-        const v = drop.has(t) ? named : t
-        if (!next.includes(v)) next.push(v)     // merging into a tag it already has
-      }
-      // The main tag is what the cite key is filed under: a tag that has just
-      // stopped existing cannot stay the one the key is named for.
-      const main = drop.has(r.mainTag) ? named : r.mainTag
-      return { ...r, tags: next, ...(main === r.mainTag ? {} : { mainTag: main }) }
-    })
+    const refs = foldTags(doc, gone, named)
     const said = absorb.length
       ? `${gone.length}개 태그를 '${named}'으로 합쳤습니다 · 논문 ${users.length}편`
       : merging
