@@ -28,6 +28,7 @@ import { clipboard } from '@milkdown/kit/plugin/clipboard'
 import { cursor } from '@milkdown/kit/plugin/cursor'
 import { trailing } from '@milkdown/kit/plugin/trailing'
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
+import { imageSchema } from '@milkdown/kit/preset/commonmark'
 import { math, mathBlockSchema, mathInlineSchema } from '@milkdown/plugin-math'
 import katex from 'katex'
 import { bulletListSchema, listItemSchema } from '@milkdown/kit/preset/commonmark'
@@ -100,9 +101,15 @@ const checkRule = $inputRule((ctx) => new InputRule(/^\[([ xX]?)\]\s$/, (state, 
  *   - `\#` → `#`. remark escapes a hash that starts a line in case it is a
  *     heading; CommonMark needs `# ` with a space, so `#태그` never was one —
  *     and escaped, it stops being a tag. */
-const tidy = (md) => md.replace(/\\#/g, '#')
+/** What remark escapes on the way out and this app means literally: a `#tag`
+ *  at the start of a line, and the `![[file]]` embeds, whose brackets remark
+ *  would hand back as `!\[\[file]]` — unreadable to Obsidian and to us. Only
+ *  those two shapes, so an escape someone wrote stays an escape. */
+const tidy = (md) => md
+  .replace(/\\#/g, '#')
+  .replace(/!\\\[\\\[([^\]]+)\]\]/g, '![[$1]]')
 
-const make = (root, value, onMarkdown, fileSrc) => Editor.make()
+const make = (root, value, onMarkdown, fileSrc, onFiles) => Editor.make()
   .config((ctx) => {
     ctx.set(rootCtx, root)
     ctx.set(defaultValueCtx, value)
@@ -120,6 +127,8 @@ const make = (root, value, onMarkdown, fileSrc) => Editor.make()
   .use(math)         // `$x$` and `$$…$$` as nodes, so the backslashes survive
   .use(mathView(mathBlockSchema, true))
   .use(mathView(mathInlineSchema, false))
+  .use(imageView)
+  .use(takeFiles(onFiles))
   .use(imageAttrs)   // plain markdown `![alt](url)`, which milkdown drops
   .use(activeLine)
   .use(checkRule)
@@ -127,7 +136,7 @@ const make = (root, value, onMarkdown, fileSrc) => Editor.make()
   .use(embedInDoc(fileSrc))
   .create()
 
-export default function MarkdownArea({ value, onChange, fileSrc }) {
+export default function MarkdownArea({ value, onChange, fileSrc, onFiles }) {
   const host = useRef(null)
   const ed = useRef(null)
   const cb = useRef(onChange)
@@ -138,7 +147,7 @@ export default function MarkdownArea({ value, onChange, fileSrc }) {
 
   useEffect(() => {
     let dead = false
-    make(host.current, value, (md) => { mine.current = md; cb.current(md) }, fileSrc)
+    make(host.current, value, (md) => { mine.current = md; cb.current(md) }, fileSrc, onFiles)
       .then((e) => { if (dead) e.destroy(); else ed.current = e })
     return () => { dead = true; ed.current?.destroy(); ed.current = null }
   }, [])   // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,7 +160,7 @@ export default function MarkdownArea({ value, onChange, fileSrc }) {
     const e = ed.current
     ed.current = null
     e.destroy().then(() => make(host.current, value,
-      (md) => { mine.current = md; cb.current(md) }, fileSrc)
+      (md) => { mine.current = md; cb.current(md) }, fileSrc, onFiles)
       .then((next) => { ed.current = next }))
   }, [value])   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -187,6 +196,66 @@ export default function MarkdownArea({ value, onChange, fileSrc }) {
  *  anybody's engine's job. It is shown as a WIDGET beside the text rather than
  *  parsed into an image node: the text stays exactly what the file says, and
  *  the file stays something Obsidian can still read. */
+/** A markdown picture, with `![alt|400](url)` taken as a width — the same
+ *  spelling the `![[file|400]]` embeds use. */
+const imageView = $view(imageSchema.node, () => (node) => {
+  const img = document.createElement('img')
+  const paint = () => {
+    const [alt, w] = embedSpec(node.attrs.alt || '')
+    img.src = node.attrs.src
+    img.alt = alt
+    img.title = node.attrs.title || ''
+    img.style.width = w ? `${w}px` : ''
+  }
+  paint()
+  return {
+    dom: img,
+    update: (next) => {
+      if (next.type !== node.type) return false
+      node = next
+      paint()
+      return true
+    },
+  }
+})
+
+/** A file dropped (or pasted) into a note is stored beside the notes and named
+ *  where it fell, which is the whole of "putting a picture in". */
+const takeFiles = (upload) => $prose(() => new Plugin({
+  key: new PluginKey('nt-drop'),
+  props: {
+    handleDOMEvents: {
+      drop: (view, e) => {
+        const files = [...(e.dataTransfer?.files || [])]
+        if (!files.length || !upload) return false
+        e.preventDefault()
+        const at = view.posAtCoords({ left: e.clientX, top: e.clientY })?.pos
+        stow(view, at ?? view.state.selection.from, files, upload)
+        return true
+      },
+      paste: (view, e) => {
+        const files = [...(e.clipboardData?.files || [])]
+        if (!files.length || !upload) return false
+        e.preventDefault()
+        stow(view, view.state.selection.from, files, upload)
+        return true
+      },
+    },
+  },
+}))
+
+async function stow(view, at, files, upload) {
+  for (const file of files) {
+    // One at a time: the names come back in the order they were dropped, and
+    // the second insert has to know where the first one ended.
+    const name = await upload(file)
+    if (!name) continue
+    const text = `![[${name}]]`
+    view.dispatch(view.state.tr.insertText(text, at))
+    at += text.length
+  }
+}
+
 /** A formula you can go back into.
  *
  *  plugin-math draws `$x$` and `$$…$$` with KaTeX and makes them atoms, which
@@ -266,6 +335,17 @@ const imageAttrs = $remark('nt-image-attrs', () => () => (tree) => {
 })
 
 export const EMBED_RE = /!\[\[([^\]]+)\]\]/g
+
+/** `name|400` — Obsidian's way of saying how wide this one picture should be.
+ *  Everything else is left to the stylesheet, which keeps a picture inside the
+ *  pane and under two thirds of the screen. */
+export function embedSpec(spec) {
+  const text = String(spec || '')
+  const bar = text.lastIndexOf('|')
+  if (bar < 0) return [text, null]
+  const w = parseInt(text.slice(bar + 1), 10)
+  return Number.isFinite(w) && w > 0 ? [text.slice(0, bar).trim(), w] : [text, null]
+}
 const embedInDoc = (src) => $prose(() => new Plugin({
   key: new PluginKey('nt-embed'),
   props: {
@@ -276,10 +356,12 @@ const embedInDoc = (src) => $prose(() => new Plugin({
         for (const m of node.text.matchAll(EMBED_RE)) {
           const at = pos + m.index + m[0].length
           marks.push(Decoration.widget(at, () => {
+            const [name, w] = embedSpec(m[1])
             const img = document.createElement('img')
             img.className = 'nt-embed'
-            img.src = src(m[1])
-            img.alt = m[1]
+            img.src = src(name)
+            img.alt = name
+            if (w) img.style.width = `${w}px`
             return img
           }, { side: 1, key: `embed:${m[1]}` }))
           // The `![[…]]` itself only shows on the line the caret is in, the way

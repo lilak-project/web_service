@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -38,6 +38,8 @@ TEMPLATES = DATA / "templates"
 # What a note points at: images and anything else it embeds. Obsidian keeps
 # these beside the notes in the vault, and a note names one by file name alone.
 FILES = DATA / "files"
+# A note holds a picture or a scan, not a disk image.
+MAX_FILE = 32 << 20
 
 app = FastAPI(title="note")
 
@@ -320,6 +322,25 @@ def get_file(name: str, _: dict = Depends(identity)):
     if not str(p).startswith(str(FILES.resolve())) or not p.is_file():
         raise HTTPException(404, "그 파일이 없습니다.")
     return FileResponse(p)
+
+
+@app.post("/api/file")
+async def put_file(f: UploadFile = File(...), _: dict = Depends(identity)):
+    """A file dropped into a note. It lands beside the notes under its own
+    name, the way a vault keeps it; a name already taken grows a number rather
+    than overwriting someone else's picture."""
+    raw = await f.read(MAX_FILE + 1)
+    if len(raw) > MAX_FILE:
+        raise HTTPException(413, f"파일이 너무 큽니다 ({MAX_FILE // (1 << 20)}MB까지).")
+    name = _slug(Path(f.filename or "file").name) or "file"
+    stem, ext = os.path.splitext(name)
+    FILES.mkdir(parents=True, exist_ok=True)
+    n = 1
+    while (FILES / name).exists():
+        name = f"{stem}-{n}{ext}"
+        n += 1
+    (FILES / name).write_bytes(raw)
+    return {"name": name}
 
 
 @app.get("/api/whoami")

@@ -30,7 +30,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { remarkSoftBreaks } from 'lilak-ui/log/Markdown.jsx'
-import MarkdownArea, { TAG_RE, EMBED_RE } from './MarkdownArea.jsx'
+import MarkdownArea, { TAG_RE, EMBED_RE, embedSpec } from './MarkdownArea.jsx'
 import 'katex/dist/katex.min.css'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
@@ -39,6 +39,15 @@ const WIDTH_KEY = projectKey('nt', 'cols')
 const VIEW_KEY = projectKey('nt', 'view')
 /** Where a file a note embeds is served from. */
 const fileSrc = (name) => `${PORTAL_BASE}/api/file/${encodeURIComponent(name)}`
+/** A file dropped into a note: stored beside the notes, named back. Not `api`
+ *  — a multipart body writes its own content type, boundary and all. */
+async function putFile(file) {
+  const form = new FormData()
+  form.append('f', file)
+  const r = await fetch(`${PORTAL_BASE}/api/file`, { method: 'POST', headers: authHeaders(), body: form })
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `올리지 못했습니다 (${r.status}).`)
+  return (await r.json()).name
+}
 const api = (p, o) => fetch(`${PORTAL_BASE}/api${p}`, {
   ...o, headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(o?.headers || {}) },
 })
@@ -553,6 +562,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
         </div>
       ) : (
         <MarkdownArea value={f.body} fileSrc={fileSrc} placeholder="markdown. #태그 로 태그를, `- [ ] 할 일`로 todos 탭에."
+          onFiles={(file) => putFile(file).catch((e) => { say(String(e.message || e)); return null })}
           onChange={(v) => setF((s) => ({ ...s, body: v }))} />
       )}
     </div>
@@ -581,9 +591,16 @@ function tagify(children) {
 const tagged = (Tag) => function Tagged({ node, children, ...rest }) {
   return <Tag {...rest}>{tagify(children)}</Tag>
 }
+/** `![alt|400](…)` — the width rides in the alt text, as it does in the
+ *  editor and in Obsidian. */
+function Img({ node, alt, ...rest }) {
+  const [text, w] = embedSpec(alt || '')
+  return <img alt={text} {...rest} style={w ? { width: `${w}px` } : undefined} />
+}
 const RENDER = {
   p: tagged('p'), li: tagged('li'), td: tagged('td'), blockquote: tagged('blockquote'),
   h1: tagged('h1'), h2: tagged('h2'), h3: tagged('h3'), h4: tagged('h4'),
+  img: Img,
 }
 function Rendered({ children }) {
   // Maths is `$x^2$` and `$$…$$`, which KaTeX draws here and the editor leaves
@@ -591,8 +608,10 @@ function Rendered({ children }) {
   // `![[name]]` is Obsidian's embed, not markdown — here it is turned into the
   // markdown image it means. Only on the way to the page: the file keeps its
   // own spelling.
-  const md = String(children || '').replace(EMBED_RE,
-    (_, name) => `![${name}](${fileSrc(name)})`)
+  const md = String(children || '').replace(EMBED_RE, (_, spec) => {
+    const [name] = embedSpec(spec)
+    return `![${spec}](${fileSrc(name)})`
+  })
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkSoftBreaks]}
       rehypePlugins={[rehypeKatex]} components={RENDER}>

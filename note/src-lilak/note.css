@@ -57,16 +57,29 @@
 .rl-hit.rl-done .rl-c { color: var(--rk-mute); text-decoration: line-through; }
 
 /* A file a note embeds, shown where it is named — the `![[file]]` widget and
-   a plain markdown `![alt](url)` are the same picture to the reader. */
+   a plain markdown `![alt](url)` are the same picture to the reader.
+
+   A picture stays inside the pane and under two thirds of the screen, so a
+   phone screenshot never takes the whole note with it; one that should be a
+   different size says so for itself, `![[file|400]]`, and that width still
+   has the height to answer to. */
 .nt-embed,
-.nt-prose img:not(.ProseMirror-separator) {
+.nt-prose img:not(.ProseMirror-separator),
+.nt-sheet img {
   display: block;
   max-width: 100%;
+  max-height: 66vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.nt-embed,
+.nt-prose img:not(.ProseMirror-separator) {
   margin: 6px 0;
   border: 1px solid var(--rk-line);
   border-radius: 2px;
 }
-.nt-sheet img { max-width: 100%; margin: 3mm 0; }
+.nt-sheet img { margin: 3mm 0; }
 
 /* The `![[file]]` that put it there: hidden until the caret is on that line,
    so a note reads as pictures and shows its wiring where you are editing. */
@@ -165,6 +178,8 @@ body.nt-paper #root { height: auto; min-height: 100%; }
      ground as a block of its own after the last line. */
   html, body, #root { height: auto; overflow: visible; background: #fff; }
   .nt-tag { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  /* Paper, not a screen: two thirds of a page rather than of a window. */
+  .nt-sheet img { max-height: 170mm; }
   .nt-print-bar { display: none; }
   .nt-sheet { max-width: none; padding: 0; }
   /* One note per page, and a heading never left alone at the foot of one. */
