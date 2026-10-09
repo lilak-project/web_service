@@ -156,21 +156,33 @@
   word-break: break-word;
 }
 .nt-prose > :first-child { margin-top: 0; }
-/* A bar beside every line of writing, lit on the one the caret is in — and on
-   all of them while a selection spans several. Same idea as the row you are on
-   in the table, at the size of a line. It sits beside the TEXT, so inside a
-   list it follows the item's indent rather than standing apart from it. */
-.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote) { position: relative; }
-.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote)::before {
+/* A column of its own at the left, and every line's bar stands in it — all at
+   the same x, whatever the line is indented to. The bar for a list item backs
+   out of the list's own indent to land on the same line as the rest. Lit on the
+   line the caret is in (and on each of them while a selection spans several).
+
+   The gutter is real space: .nt-prose is padded by it, so nothing is written
+   over the bars. */
+.nt-prose { padding-left: 26px; }
+.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote, li) { position: relative; }
+.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote, li)::before {
   content: '';
   position: absolute;
-  left: -11px; top: .18em; bottom: .18em;
+  left: -18px; top: .18em; bottom: .18em;
   width: 3px;
   border-radius: 1px;
   background: var(--rk-line);
 }
-.nt-prose .nt-at::before { background: var(--rk-cite-t); }
+/* Inside a list the bar has the list's padding to climb back out of. */
+.nt-prose li::before { left: -38px; }
+.nt-prose li li::before { left: -58px; }
+.nt-prose :where(ul, ol) > *::before,
+.nt-prose li:not([data-item-type="task"]) > p::before,
 .nt-prose blockquote > p::before { content: none; }
+.nt-prose li::before { content: ''; }
+/* The lit one. A list item is lit by the paragraph inside it. */
+.nt-prose .nt-at::before { background: var(--rk-cite-t); }
+.nt-prose li:has(> .nt-at)::before { background: var(--rk-cite-t); }
 .nt-prose :where(h1, h2, h3, h4, h5, h6) {
   margin: 1.1em 0 .35em; font-weight: 600; color: var(--rk-ink); line-height: 1.35;
 }
@@ -182,10 +194,12 @@
 .nt-prose :where(ul, ol) { margin: 0 0 .55em; padding-left: 1.5em; }
 .nt-prose li { margin: .1em 0; }
 .nt-prose li p { margin: 0; }
-/* A task item wears its box, drawn from the node's own state. Clicking it
-   flips the node (see MarkdownArea), so nothing is stored twice. */
-.nt-prose li[data-item-type="task"] { list-style: none; position: relative; padding-left: 4px; }
-.nt-prose li[data-item-type="task"]::before {
+/* A task item wears its box, drawn from the node's own state. Clicking it flips
+   the node (see MarkdownArea), so nothing is stored twice. The box is drawn on
+   the PARAGRAPH inside the item, which leaves the item's own ::before for the
+   bar in the gutter — one pseudo-element each, and the two do not fight. */
+.nt-prose li[data-item-type="task"] { list-style: none; }
+.nt-prose li[data-item-type="task"] > p::before {
   content: '';
   position: absolute; left: -17px; top: .42em;
   width: 12px; height: 12px;
@@ -193,10 +207,10 @@
   background: var(--rk-panel);
   cursor: pointer;
 }
-.nt-prose li[data-item-type="task"][data-checked="true"]::before {
+.nt-prose li[data-item-type="task"][data-checked="true"] > p::before {
   border-color: var(--rk-cite-t); background: var(--rk-cite-t);
 }
-.nt-prose li[data-item-type="task"][data-checked="true"]::after {
+.nt-prose li[data-item-type="task"][data-checked="true"] > p::after {
   content: '';
   position: absolute; left: -14px; top: .62em;
   width: 6px; height: 3px;
@@ -229,8 +243,16 @@
 /* ProseMirror's own: the gap cursor and a selected node. */
 .nt-prose .ProseMirror-selectednode { outline: 2px solid var(--rk-cite-t); }
 
-/* The editor pane's side and width are the reader's call: the strip is a
-   handle (double-click = all of it, drag across the middle = the other side). */
-.nt-grab { flex: 0 0 auto; cursor: grab; }
-.nt-grab:active { cursor: grabbing; }
-.rl-epane.nt-left { order: -1; border-left: 0; border-right: 1px solid var(--rk-edge); }
+/* An editor column: its tabs, and the one button that moves a note to the
+   other column. Two columns is two notes side by side, which is what a split
+   is for; there is nothing to drag. */
+.nt-strip { flex: 0 0 auto; display: flex; align-items: stretch; background: var(--rk-gut); }
+.nt-strip-tabs { flex: 1; min-width: 0; }
+.nt-strip-tabs .rl-tabs { background: none; }
+.rl-btn.nt-send {
+  flex: 0 0 auto;
+  height: 26px; width: 26px; padding: 0;
+  border: 0; border-left: 1px solid var(--rk-edge); border-bottom: 1px solid var(--rk-edge);
+  background: var(--rk-gut); color: var(--rk-dim);
+}
+.rl-btn.nt-send:hover { background: var(--rk-head); color: var(--rk-ink); }

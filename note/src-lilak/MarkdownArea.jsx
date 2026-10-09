@@ -114,7 +114,9 @@ export default function MarkdownArea({ value, onChange }) {
     const li = e.target.closest?.('li[data-item-type="task"]')
     if (!li) return
     const box = li.getBoundingClientRect()
-    if (e.clientX - box.left > 20) return      // only the box, not the text
+    const dx = e.clientX - box.left
+    // The box only: the text is to the right of it, the gutter bar to the left.
+    if (dx > 2 || dx < -24) return
     e.preventDefault()
     ed.current?.action((ctx) => {
       const view = ctx.get(editorViewCtx)

@@ -108,13 +108,13 @@ export default function App() {
   const [tabs, setTabs] = useState(() => [...FIXED,
     ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
   const [active, setActive] = useState(VIEW.active || 'notes')
-  const [etabs, setEtabs] = useState([])
-  const [eactive, setEactive] = useState(null)
-  // Where the editor sits and how much it takes: double-click its tab strip to
-  // give it the whole width, drag the strip to the other side to swap. Both are
-  // remembered with the rest of the view.
-  const [eside, setESide] = useState(VIEW.eside === 'left' ? 'left' : 'right')
-  const [efull, setEFull] = useState(!!VIEW.efull)
+  // The editor can be TWO columns, each with its own tabs: two notes open side
+  // by side is the point, and a tab is sent across rather than dragged. A tab
+  // carries the column it is in; a column with no tabs is not drawn.
+  const [etabs, setEtabs] = useState([])            // [{ id, label, col }]
+  const [eactive, setEactive] = useState({ 0: null, 1: null })
+  const [ecol, setECol] = useState(0)               // the column a new note opens in
+  const [efull, setEFull] = useState(!!VIEW.efull)  // the editor takes the list's width too
   const [query, setQuery] = useState('')
   const [bodyHits, setBodyHits] = useState(null)   // ids whose BODY matched
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...TODO_COLS])
@@ -142,8 +142,8 @@ export default function App() {
   }, [reload])
   useEffect(() => {
     saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-               active, sort, clsSort, fsel, fon, eside, efull })
-  }, [tabs, active, sort, clsSort, fsel, fon, eside, efull])   // eslint-disable-line react-hooks/exhaustive-deps
+               active, sort, clsSort, fsel, fon, efull })
+  }, [tabs, active, sort, clsSort, fsel, fon, efull])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const notes = index?.notes || []
   const tab = tabs.find((t) => t.id === active) || tabs[0]
@@ -206,9 +206,10 @@ export default function App() {
       .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
   }, [notes, tab, clsSort])
 
-  const etab = etabs.find((t) => t.id === eactive) || null
-  const showEdit = !!etab
-  const showList = !showEdit || (vw >= 1180 && !efull)
+  const ecols = [0, 1].filter((c) => etabs.some((t) => t.col === c))
+  const showEdit = ecols.length > 0
+  // Two editor columns need the room the list was using; one does not.
+  const showList = !showEdit || (vw >= (ecols.length > 1 ? 1500 : 1180) && !efull)
 
   function openTab(t) {
     setTabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
@@ -219,15 +220,30 @@ export default function App() {
     if (active === id) setActive('notes')
   }
   function openEdit(id, label) {
-    setEtabs((ts) => (ts.some((x) => x.id === id) ? ts : [...ts, { id, label }]))
-    setEactive(id)
+    const had = etabs.find((t) => t.id === id)
+    const col = had ? had.col : ecol
+    if (!had) setEtabs((ts) => [...ts, { id, label, col }])
+    setEactive((a) => ({ ...a, [col]: id }))
   }
   function closeEdit(id) {
-    setEtabs((ts) => {
-      const left = ts.filter((t) => t.id !== id)
-      if (id === eactive) setEactive(left.length ? left[left.length - 1].id : null)
-      return left
-    })
+    const gone = etabs.find((t) => t.id === id)
+    const left = etabs.filter((t) => t.id !== id)
+    setEtabs(left)
+    if (!gone) return
+    const mine = left.filter((t) => t.col === gone.col)
+    setEactive((a) => ({ ...a, [gone.col]: mine.length ? mine[mine.length - 1].id : null }))
+    if (!mine.length) setECol(left.length ? left[left.length - 1].col : 0)
+  }
+  /** Send a note to the other column — which is how the second column comes to
+   *  exist, and how it stops existing when its last tab leaves. */
+  function moveEdit(id) {
+    const t = etabs.find((x) => x.id === id)
+    if (!t) return
+    const to = t.col === 0 ? 1 : 0
+    const left = etabs.filter((x) => x.id !== id && x.col === t.col)
+    setEtabs((ts) => ts.map((x) => (x.id === id ? { ...x, col: to } : x)))
+    setEactive((a) => ({ ...a, [to]: id, [t.col]: left.length ? left[left.length - 1].id : null }))
+    setECol(to)
   }
   useEffect(() => {
     if (!index) return
@@ -294,7 +310,7 @@ export default function App() {
           )}
           {etabs.length > 0 && (
             <button type="button" className="rl-btn" title="편집 패널의 탭을 모두 닫습니다"
-              onClick={() => { setEtabs([]); setEactive(null) }}>
+              onClick={() => { setEtabs([]); setEactive({ 0: null, 1: null }); setECol(0) }}>
               편집 닫기 ({etabs.length})
             </button>
           )}
@@ -417,24 +433,33 @@ export default function App() {
             )}
           </div>)}
 
-          {showEdit && (<div className={`rl-pane rl-epane${eside === 'left' ? ' nt-left' : ''}`}>
-            {/* The strip is the handle: double-click for the whole width, drag
-                it past the middle to put the editor on that side. */}
-            <div draggable className="nt-grab"
-              onDoubleClick={() => setEFull((v) => !v)}
-              title="두 번 눌러 전체 너비 · 끌어서 좌우 바꾸기"
-              onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'pane') }}
-              onDragEnd={(e) => {
-                const mod = e.currentTarget.closest('.rl-mod')?.getBoundingClientRect()
-                if (!mod || !e.clientX) return
-                setESide(e.clientX < mod.left + mod.width / 2 ? 'left' : 'right')
-              }}>
-              <RackTabs tabs={etabs} active={eactive} opened onPick={setEactive} onClose={closeEdit} />
-            </div>
-            <Editor id={etab.id} say={setNote} onSaved={reload}
-              onPrint={() => printNotes([etab.id])}
-              onClosed={(id) => { closeEdit(id); reload() }} />
-          </div>)}
+          {ecols.map((c) => {
+            const mine = etabs.filter((t) => t.col === c)
+            const cur = mine.find((t) => t.id === eactive[c]) || mine[0]
+            return (
+              <div key={c} className="rl-pane rl-epane" onMouseDown={() => setECol(c)}>
+                <div className="nt-strip">
+                  {/* Double-click gives the editor the list's width too. */}
+                  <div className="nt-strip-tabs" onDoubleClick={() => setEFull((v) => !v)}
+                    title="두 번 눌러 전체 너비">
+                    <RackTabs tabs={mine} active={cur?.id} opened
+                      onPick={(id) => setEactive((a) => ({ ...a, [c]: id }))}
+                      onClose={closeEdit} />
+                  </div>
+                  {/* One button, and it is the whole arrangement: a note sent
+                      across opens the other column, and the column closes when
+                      its last note leaves. */}
+                  <button type="button" className="rl-btn nt-send" onClick={() => moveEdit(cur.id)}
+                    title={c === 0 ? '오른쪽으로 보내기' : '왼쪽으로 보내기'}>
+                    {c === 0 ? '→' : '←'}
+                  </button>
+                </div>
+                <Editor id={cur.id} say={setNote} onSaved={reload}
+                  onPrint={() => printNotes([cur.id])}
+                  onClosed={(cid) => { closeEdit(cid); reload() }} />
+              </div>
+            )
+          })}
         </div>
 
         <footer className="rl-foot">
