@@ -28,6 +28,30 @@ import { clipboard } from '@milkdown/kit/plugin/clipboard'
 import { cursor } from '@milkdown/kit/plugin/cursor'
 import { trailing } from '@milkdown/kit/plugin/trailing'
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
+import { $prose } from '@milkdown/kit/utils'
+import { Plugin, PluginKey } from '@milkdown/kit/prose/state'
+import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
+
+/** A bar in the margin beside every line, lit on the one the caret is in —
+ *  and on all of them when a selection spans several. The bar itself is CSS on
+ *  every block; this only says which are current. */
+const activeLine = $prose(() => new Plugin({
+  key: new PluginKey('nt-active-line'),
+  props: {
+    decorations(state) {
+      const { from, to } = state.selection
+      const marks = []
+      state.doc.nodesBetween(from, to, (node, pos) => {
+        if (node.isTextblock) {
+          marks.push(Decoration.node(pos, pos + node.nodeSize, { class: 'nt-at' }))
+          return false
+        }
+        return true
+      })
+      return DecorationSet.create(state.doc, marks)
+    },
+  },
+}))
 
 /** What comes back out of the editor is markdown again, and it is the FILE.
  *  Two corrections on the way:
@@ -53,6 +77,7 @@ const make = (root, value, onMarkdown) => Editor.make()
   .use(cursor)          // a caret you can place beside a table or an image
   .use(trailing)        // always a paragraph to land in at the end
   .use(listener)
+  .use(activeLine)
   .create()
 
 export default function MarkdownArea({ value, onChange }) {

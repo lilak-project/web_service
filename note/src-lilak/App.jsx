@@ -110,6 +110,11 @@ export default function App() {
   const [active, setActive] = useState(VIEW.active || 'notes')
   const [etabs, setEtabs] = useState([])
   const [eactive, setEactive] = useState(null)
+  // Where the editor sits and how much it takes: double-click its tab strip to
+  // give it the whole width, drag the strip to the other side to swap. Both are
+  // remembered with the rest of the view.
+  const [eside, setESide] = useState(VIEW.eside === 'left' ? 'left' : 'right')
+  const [efull, setEFull] = useState(!!VIEW.efull)
   const [query, setQuery] = useState('')
   const [bodyHits, setBodyHits] = useState(null)   // ids whose BODY matched
   const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...TODO_COLS])
@@ -137,8 +142,8 @@ export default function App() {
   }, [reload])
   useEffect(() => {
     saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-               active, sort, clsSort, fsel, fon })
-  }, [tabs, active, sort, clsSort, fsel, fon])   // eslint-disable-line react-hooks/exhaustive-deps
+               active, sort, clsSort, fsel, fon, eside, efull })
+  }, [tabs, active, sort, clsSort, fsel, fon, eside, efull])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const notes = index?.notes || []
   const tab = tabs.find((t) => t.id === active) || tabs[0]
@@ -203,7 +208,7 @@ export default function App() {
 
   const etab = etabs.find((t) => t.id === eactive) || null
   const showEdit = !!etab
-  const showList = !showEdit || vw >= 1180
+  const showList = !showEdit || (vw >= 1180 && !efull)
 
   function openTab(t) {
     setTabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
@@ -412,8 +417,20 @@ export default function App() {
             )}
           </div>)}
 
-          {showEdit && (<div className="rl-pane rl-epane">
-            <RackTabs tabs={etabs} active={eactive} opened onPick={setEactive} onClose={closeEdit} />
+          {showEdit && (<div className={`rl-pane rl-epane${eside === 'left' ? ' nt-left' : ''}`}>
+            {/* The strip is the handle: double-click for the whole width, drag
+                it past the middle to put the editor on that side. */}
+            <div draggable className="nt-grab"
+              onDoubleClick={() => setEFull((v) => !v)}
+              title="두 번 눌러 전체 너비 · 끌어서 좌우 바꾸기"
+              onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'pane') }}
+              onDragEnd={(e) => {
+                const mod = e.currentTarget.closest('.rl-mod')?.getBoundingClientRect()
+                if (!mod || !e.clientX) return
+                setESide(e.clientX < mod.left + mod.width / 2 ? 'left' : 'right')
+              }}>
+              <RackTabs tabs={etabs} active={eactive} opened onPick={setEactive} onClose={closeEdit} />
+            </div>
             <Editor id={etab.id} say={setNote} onSaved={reload}
               onPrint={() => printNotes([etab.id])}
               onClosed={(id) => { closeEdit(id); reload() }} />

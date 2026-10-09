@@ -156,6 +156,21 @@
   word-break: break-word;
 }
 .nt-prose > :first-child { margin-top: 0; }
+/* A bar beside every line of writing, lit on the one the caret is in — and on
+   all of them while a selection spans several. Same idea as the row you are on
+   in the table, at the size of a line. It sits beside the TEXT, so inside a
+   list it follows the item's indent rather than standing apart from it. */
+.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote) { position: relative; }
+.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote)::before {
+  content: '';
+  position: absolute;
+  left: -11px; top: .18em; bottom: .18em;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--rk-line);
+}
+.nt-prose .nt-at::before { background: var(--rk-cite-t); }
+.nt-prose blockquote > p::before { content: none; }
 .nt-prose :where(h1, h2, h3, h4, h5, h6) {
   margin: 1.1em 0 .35em; font-weight: 600; color: var(--rk-ink); line-height: 1.35;
 }
@@ -213,3 +228,9 @@
 .nt-prose img { max-width: 100%; }
 /* ProseMirror's own: the gap cursor and a selected node. */
 .nt-prose .ProseMirror-selectednode { outline: 2px solid var(--rk-cite-t); }
+
+/* The editor pane's side and width are the reader's call: the strip is a
+   handle (double-click = all of it, drag across the middle = the other side). */
+.nt-grab { flex: 0 0 auto; cursor: grab; }
+.nt-grab:active { cursor: grabbing; }
+.rl-epane.nt-left { order: -1; border-left: 0; border-right: 1px solid var(--rk-edge); }
