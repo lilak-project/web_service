@@ -189,15 +189,24 @@ const mainTag = (r) => (tagsOf(r).includes(r.mainTag) ? r.mainTag : tagsOf(r)[0]
 // RAON and JYFL use the year — so what follows PAC is a field, not a guess.
 const KEY_RULES = {
   paper: '{a1}_{jl}_{year}_{tag}',
-  proposal: '{inst}_PAC{pac}_{a1}_{tag}',
+  // The year earns its place only when the PAC number is not already it.
+  proposal: '{inst}_PAC{pac}_{year unless pac}_{a1}_{tag}',
 }
 const ruleFor = (r, settings) => (settings?.keyRules || {})[r?.type]
   || KEY_RULES[r?.type] || KEY_RULES.paper
 /** The key a record would be given. Parts nobody filled in leave no gap. */
 const citeKeyFor = (doc, r, rule = ruleFor(r, doc?.settings)) => rule
   .replace(/\{([^{}]+)\}/g, (m, k) => {
-    const v = { a1: handleFor(firstAuthor(doc, r)), jl: jShort(doc, r),
-      year: r.year, tag: mainTag(r), inst: r.inst, pac: r.pac }[k.trim()]
+    const v = {
+      a1: handleFor(firstAuthor(doc, r)),
+      jl: jShort(doc, r),
+      year: r.year,
+      // RIKEN counts PACs and RAON uses the year: say the year once, not twice.
+      'year unless pac': String(r.pac || '') === String(r.year || '') ? '' : r.year,
+      tag: mainTag(r),
+      inst: r.inst,
+      pac: r.pac,
+    }[k.trim()]
     return v === undefined ? m : slug(v)
   })
   .replace(/_+/g, '_').replace(/^_|_$/g, '')
@@ -260,6 +269,7 @@ const TOKENS = (doc) => ({
   'short ref': (r) => shortRef(doc, r),
   inst: (r) => r.inst || '',
   pac: (r) => r.pac || '',
+  'year unless pac': (r) => (String(r.pac || '') === String(r.year || '') ? '' : (r.year || '')),
   tags: (r) => tagsOf(r).join(' '),
 })
 const PRESETS = [

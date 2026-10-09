@@ -56,10 +56,12 @@ authors: [ { name: 'C. Y. Tsang', ref: '<author id>', corr: false }, … ]
 | 종류 | 규칙 | 예 |
 |---|---|---|
 | paper · thesis · report | `{a1}_{jl}_{year}_{tag}` | `MBTsang_PRC_2001_isoscaling` |
-| **proposal** | `{inst}_PAC{pac}_{a1}_{tag}` | `RIKEN_PAC27_JWLee_STARK` |
+| **proposal** | `{inst}_PAC{pac}_{year unless pac}_{a1}_{tag}` | `RIKEN_PAC27_2026_JWLee_STARK` |
 
 `pac`은 PAC 뒤에 그대로 들어가는 값이다 — RIKEN은 회차를 센다(PAC27), RAON과
-JYFL은 해를 쓴다(2026). 추측하지 않고 레코드가 들고 있다. 기관은 표의 journal
+JYFL은 해를 쓴다(2026). 추측하지 않고 레코드가 들고 있다. 그래서 해는
+`{year unless pac}`으로 들어간다: PAC 번호가 이미 해이면 두 번 말하지 않는다
+(`RAON_PAC2026_JWLee`), 다르면 바로 뒤에 붙는다 (`RIKEN_PAC27_2026_JWLee`). 기관은 표의 journal
 열에 함께 나온다: 둘 다 "어디로 갔는가"다.
 
 `settings.keyRules`에 종류별로 적으면 기본 규칙을 덮어쓴다.
