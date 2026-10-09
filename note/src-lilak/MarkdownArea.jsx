@@ -198,6 +198,9 @@ const embedInDoc = (src) => $prose(() => new Plugin({
             img.alt = m[1]
             return img
           }, { side: 1, key: `embed:${m[1]}` }))
+          // The `![[…]]` itself only shows on the line the caret is in, the way
+          // Obsidian does it — the text and the file keep Obsidian's spelling.
+          marks.push(Decoration.inline(at - m[0].length, at, { class: 'nt-embed-src' }))
         }
         return true
       })

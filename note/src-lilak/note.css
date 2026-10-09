@@ -66,6 +66,11 @@
 }
 .nt-sheet img { max-width: 100%; margin: 3mm 0; }
 
+/* The `![[file]]` that put it there: hidden until the caret is on that line,
+   so a note reads as pictures and shows its wiring where you are editing. */
+.nt-embed-src { display: none; }
+.nt-at .nt-embed-src { display: inline; color: var(--rk-mute); }
+
 /* A tag, drawn as a tag: a label with its point to the left and the hole it
    hangs by. The shape is one clip-path, so changing it to a plain pill is one
    line. Used in the editor (a decoration over the text, which stays `#태그`)
