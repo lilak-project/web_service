@@ -416,6 +416,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   const [n, setN] = useState(null)
   const [f, setF] = useState(null)
   const [open, setOpen] = useState(false)     // the fold beside the title
+  const [read, setRead] = useState(false)    // the note as it reads, in place
   const titleRef = useRef(null)
   useEffect(() => {
     let live = true
@@ -478,11 +479,16 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
       <RackActions key={id}
         onSave={() => saveNote()} saveDisabled={!dirty}
         onCancel={() => onClosed?.(id)}
-        extra={<button type="button" className="rl-btn" onClick={onPrint}>미리보기</button>}
+        extra={<>
+          <button type="button" className={`rl-btn${read ? ' on' : ''}`}
+            onClick={() => setRead(!read)}>{read ? '편집' : '미리보기'}</button>
+          {read ? <button type="button" className="rl-btn" onClick={onPrint}>인쇄 · PDF</button> : null}
+        </>}
         onRevert={dirty ? () => setF(n) : null} onDelete={remove}
         deleteWarn="파일이 지워집니다. 되돌릴 수 없습니다." />
 
-      <div className="nt-titlerow">
+      {/* Reading, the sheet carries the title and the date itself. */}
+      <div className="nt-titlerow" hidden={read}>
         <input className="nt-title" ref={titleRef} value={f.title} placeholder="제목"
           onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} />
         {/* Everything that is not the title or the body is behind this. */}
@@ -492,7 +498,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
           {tags.length ? <span className="nt-tagline">{tags.map((t) => `#${t}`).join(' ')}</span> : null}
         </button>
       </div>
-      {open && (
+      {open && !read && (
         <div className="nt-meta-open">
           <span className="rl-hint">{f.date || '날짜 없음'}</span>
           <span className="rl-hint rl-mono">{f.id}.md</span>
@@ -504,8 +510,20 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
         </div>
       )}
 
-      <MarkdownArea value={f.body} fileSrc={fileSrc} placeholder="markdown. #태그 로 태그를, `- [ ] 할 일`로 todos 탭에."
-        onChange={(v) => setF((s) => ({ ...s, body: v }))} />
+      {read ? (
+        /* The same sheet the print page draws, inside the pane — reading does
+           not need a tab of its own, only printing does. */
+        <div className="nt-read">
+          <article className="nt-sheet">
+            <h1>{f.title}</h1>
+            <p className="nt-meta">{f.date}</p>
+            <Rendered>{f.body}</Rendered>
+          </article>
+        </div>
+      ) : (
+        <MarkdownArea value={f.body} fileSrc={fileSrc} placeholder="markdown. #태그 로 태그를, `- [ ] 할 일`로 todos 탭에."
+          onChange={(v) => setF((s) => ({ ...s, body: v }))} />
+      )}
     </div>
   )
 }

@@ -6,6 +6,9 @@ import App, { PrintView } from './App.jsx'
 // portal's frame: the browser's printer should be handed the notes, not the
 // portal around them.
 const ids = new URLSearchParams(window.location.search).get('print')
+// A sheet of paper is taller than the window: this page scrolls, unlike the
+// RACK screen the kit's body rule was written for.
+if (ids) document.body.classList.add('nt-paper')
 createRoot(document.getElementById('root')).render(
   ids ? <PrintView ids={ids.split(',').filter(Boolean)} /> : <App />,
 )

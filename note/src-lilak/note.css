@@ -105,6 +105,13 @@
 /* ── the print page ──────────────────────────────────────────────────────
    Not a RACK screen: a sheet of paper. The browser's own printer writes the
    PDF, so the system's Korean fonts are already there. */
+/* The note read inside its own pane: the print sheet, scrolling. */
+.nt-read { flex: 1; min-height: 0; overflow: auto; background: #fff; color: #111; }
+.nt-read .nt-sheet { max-width: 170mm; padding: 8mm 10mm; }
+
+/* The kit's body is a RACK screen that never scrolls; this one is paper. */
+body.nt-paper { overflow: auto; background: #fff; }
+body.nt-paper #root { height: auto; min-height: 100%; }
 .nt-print { background: #fff; color: #111; }
 .nt-print-msg { padding: 24px; font-family: var(--rk-sans, system-ui); }
 .nt-print-bar {
@@ -137,6 +144,10 @@
 
 @media print {
   @page { size: A4; margin: 14mm; }
+  /* Paper has no viewport: a root pinned to 100% of it leaves the body's grey
+     ground as a block of its own after the last line. */
+  html, body, #root { height: auto; overflow: visible; background: #fff; }
+  .nt-tag { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .nt-print-bar { display: none; }
   .nt-sheet { max-width: none; padding: 0; }
   /* One note per page, and a heading never left alone at the foot of one. */
