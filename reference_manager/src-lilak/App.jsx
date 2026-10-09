@@ -532,7 +532,13 @@ export default function App() {
         journals: patch.journals || doc.journals,
         authors: patch.authors || doc.authors,
       })
-      if (r.conflict) { setNote('다른 사람이 먼저 저장했습니다 — 새로 읽어주세요.'); return false }
+      if (r.conflict) {
+        // Take what won and keep the edit: the form still holds it, and the
+        // next save is built from the document that is now current.
+        if (r.doc) setDoc(r.doc)
+        setNote('목록이 그 사이 바뀌어 새로 읽었습니다 — 저장을 한 번 더 눌러주세요.')
+        return false
+      }
       setDoc(r.doc)
       setNote(said || '저장했습니다.')
       return true

@@ -419,7 +419,11 @@ export default function App() {
         affiliations: patch.affiliations || doc.affiliations,
         groups: patch.groups || doc.groups,
       })
-      if (r.conflict) { setNote('다른 사람이 먼저 저장했습니다 — 새로 읽어주세요.'); return false }
+      if (r.conflict) {
+        if (r.doc) setDoc(r.doc)
+        setNote('목록이 그 사이 바뀌어 새로 읽었습니다 — 저장을 한 번 더 눌러주세요.')
+        return false
+      }
       setDoc(r.doc)
       setNote(said || '저장했습니다.')
       return true
