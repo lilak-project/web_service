@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  RackTable, RackRow, RackTabs,
+  RackTable, RackRow, RackTabs, RackActions,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useToggleKey, useNote, useViewState,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
@@ -1011,14 +1011,8 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
           </div>
         </Fld>
       </div>
-      <div className="rl-acts">
-        <button type="button" className="rl-btn rl-go" onClick={save}>save and exit</button>
-        <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
-        <span className="rl-sp" />
-        <button type="button" className="rl-btn" onClick={() => {
-          setF(base); setDrop({ aff: [], grp: [] }); setAdd2({ aff: [], grp: [] })
-        }}>revert</button>
-      </div>
+      <RackActions onSave={save} onCancel={onCancel}
+        onRevert={() => { setF(base); setDrop({ aff: [], grp: [] }); setAdd2({ aff: [], grp: [] }) }} />
     </div>
   )
 }
@@ -1254,10 +1248,9 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
   const draft = !author
   const blank = { id: null, korFamily: '', korGiven: '', engFirst: '', engMiddle: '', engLast: '' }
   const [f, setF] = useState(author || blank)
-  const [sure, setSure] = useState(false)   // delete asks once, in place
   // ⌘S saves and stays; closing is ⌘X's job.
   useRackKeys({ onSave: () => (draft ? create() : update(true)) })
-  useEffect(() => { setF(author || blank); setSure(false) }, [author])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setF(author || blank) }, [author])  // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   // Every list you pick a name from reads in name order: the order they were
   // made in is not an order anyone can look something up in.
@@ -1351,43 +1344,11 @@ function EditAuthor({ author, doc, onSave, isAdmin, onCreated, onDeleted, onDone
       {/* Out of the field grid and stuck to the bottom: on a long record the way
           to save it was below the fold, and a form you have to scroll to leave
           is a form you leave by accident. */}
-      <div className="rl-acts">
-        {draft ? (
-          <>
-            <button type="button" className="rl-btn rl-go" disabled={!named()} onClick={create}>등록</button>
-            <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
-            <span className="rl-hint">
-              {named() ? '' : '별명이나 이름 하나는 있어야 합니다.'}
-            </span>
-          </>
-        ) : (
-          <>
-            <button type="button" className="rl-btn rl-go" onClick={update}>save and exit</button>
-            <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
-            {/* Leaving is on the left, undoing and destroying on the right:
-                they are not the same kind of button and should not sit in one
-                row of four. */}
-            <span className="rl-sp" />
-            <button type="button" className="rl-btn" onClick={() => setF(author)}>revert</button>
-            {isAdmin && (
-              <>
-                {/* Asked in place: window.confirm never appears inside the
-                    portal's frame, so a dialog would delete with no question
-                    asked at all. */}
-                {sure ? (
-                  <>
-                    <span className="rl-hint">되돌릴 수 없습니다.</span>
-                    <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-                    <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-                  </>
-                ) : (
-                  <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </div>
+      <RackActions key={author?.id || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named()}
+        hint={draft && !named() ? '별명이나 이름 하나는 있어야 합니다.' : ''}
+        onSave={update} onCancel={onCancel} onRevert={() => setF(author)}
+        onDelete={isAdmin ? remove : null} />
     </div>
   )
 }
@@ -1398,10 +1359,9 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel
   const draft = !name
   const rec = draft ? null : (doc[key] || []).find((r) => r.name === name)
   const [f, setF] = useState(rec || { name: '', shortName: '', fullName: '' })
-  const [sure, setSure] = useState(false)
   // ⌘S saves and stays; closing is ⌘X's job.
   useRackKeys({ onSave: () => (draft ? create() : update(true)) })
-  useEffect(() => { setF(rec || { name: '', shortName: '', fullName: '' }); setSure(false) }, [name, rec])
+  useEffect(() => { setF(rec || { name: '', shortName: '', fullName: '' }) }, [name, rec])
   if (!draft && !rec) return <p className="rl-msg">그 {what}을 찾을 수 없습니다.</p>
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const named = String(f.name || '').trim()
@@ -1498,37 +1458,12 @@ function EditClass({ name, of, doc, onSave, isAdmin, onCreated, onDone, onCancel
             onChange={(v) => setF((s) => ({ ...s, links: v }))} />
         </Fld>
       </div>
-      <div className="rl-acts">
-        {draft ? (
-          <>
-            <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={create}>등록</button>
-            <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
-            {!named && <span className="rl-hint">이름이 있어야 합니다.</span>}
-          </>
-        ) : (
-          <>
-            <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={update}>save and exit</button>
-            <button type="button" className="rl-btn" onClick={() => onCancel?.()}>cancel</button>
-            <span className="rl-sp" />
-            <button type="button" className="rl-btn" onClick={() => setF(rec)}>revert</button>
-            {isAdmin && (
-              <>
-                {sure ? (
-                  <>
-                    <span className="rl-warn">
-                      {users ? `저자 ${users}명의 목록에서도 빠집니다.` : '쓰는 저자가 없습니다.'} 되돌릴 수 없습니다.
-                    </span>
-                    <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-                    <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-                  </>
-                ) : (
-                  <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </div>
+      <RackActions key={name || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named || taken}
+        hint={draft && !named ? '이름이 있어야 합니다.' : ''}
+        onSave={update} saveDisabled={!named || taken} onCancel={onCancel}
+        onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
+        deleteWarn={`${users ? `저자 ${users}명의 목록에서도 빠집니다.` : '쓰는 저자가 없습니다.'} 되돌릴 수 없습니다.`} />
     </div>
   )
 }

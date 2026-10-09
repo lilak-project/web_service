@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  RackTable, RackRow, RackTabs,
+  RackTable, RackRow, RackTabs, RackActions,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId,
@@ -735,6 +735,7 @@ export default function App() {
                 }}
                 onCreated={(id, label) => { closeEdit('new'); openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label }) }}
                 onDone={(id) => closeEdit(`edit:${id}`)}
+                onCancel={() => closeEdit(etab.id)}
                 onDeleted={(id) => {
                   closeEdit(`edit:${id}`)
                   setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
@@ -743,6 +744,7 @@ export default function App() {
               <EditAuthorRec id={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
                 onCreated={(a) => { closeEdit('newaut'); openEdit({ id: `editaut:${a.id}`, kind: 'editaut', who: a.id, label: a.tag || a.name }) }}
                 onDone={(id) => closeEdit(`editaut:${id}`)}
+                onCancel={() => closeEdit(etab.id)}
                 onOpenRef={(id) => {
                   const r = refs.find((x) => x.id === id)
                   if (r) openEdit({ id: `edit:${id}`, kind: 'edit', who: id, label: refLabel(r) })
@@ -752,10 +754,12 @@ export default function App() {
             ) : etab.kind === 'editjrn' ? (
               <EditJournal name={etab.who} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
                 onCreated={(name) => { closeEdit('newjrn'); openEdit({ id: `editjrn:${name}`, kind: 'editjrn', who: name, label: name }) }}
-                onDone={(name) => closeEdit(`editjrn:${name}`)} />
+                onDone={(name) => closeEdit(`editjrn:${name}`)}
+                onCancel={() => closeEdit(etab.id)} />
             ) : (
               <EditTag name={etab.who} doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN}
-                onDone={(name) => closeEdit(`edittag:${name}`)} />
+                onDone={(name) => closeEdit(`edittag:${name}`)}
+                onCancel={() => closeEdit(etab.id)} />
             )}
           </div>)}
         </div>
@@ -994,16 +998,15 @@ function AuthorRows({ value = [], doc, onChange, onRegister }) {
 
 /** An author record. The counts are the point: where this person stands on the
  *  papers they are on, and each of them is a way to that list. */
-function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef, onOpenRole }) {
+function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onCancel, onOpenRef, onOpenRole }) {
   const draft = !id
   const rec = draft ? null : (doc.authors || []).find((a) => a.id === id)
   const blank = { id: null, tag: '', name: '', fullName: '', bibName: '',
     aliases: [], email: '', orcid: '', note: '' }
   const [f, setF] = useState(rec || blank)
-  const [sure, setSure] = useState(false)
   // ⌘S saves and stays; closing is ⌘X's job.
   useRackKeys({ onSave: () => (draft ? create() : update(true)) })
-  useEffect(() => { setF(rec || blank); setSure(false) }, [id, rec])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setF(rec || blank) }, [id, rec])  // eslint-disable-line react-hooks/exhaustive-deps
   if (!draft && !rec) return <p className="rl-msg">그 저자를 찾을 수 없습니다.</p>
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const named = String(f.name || '').trim()
@@ -1134,34 +1137,13 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef,
             </div>
           </Fld>
         )}
-        <Fld label="">
-          {draft ? (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={create}>등록</button>
-              <span className="rl-hint">{named ? '' : '이름이 있어야 합니다.'}</span>
-            </>
-          ) : (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={update}>save and exit</button>
-              <button type="button" className="rl-btn" onClick={() => setF(rec)}>revert</button>
-              {isAdmin && (
-                <>
-                  <span className="rl-gap" />
-                  {sure ? (
-                    <>
-                      <span className="rl-hint">이름은 논문에 글자로 남습니다.</span>
-                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-                    </>
-                  ) : (
-                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </Fld>
       </div>
+      <RackActions key={id || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named || taken}
+        hint={draft && !named ? '이름이 있어야 합니다.' : ''}
+        onSave={update} saveDisabled={!named || taken} onCancel={onCancel}
+        onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
+        deleteWarn={`이름은 논문 ${mine.length}편에 글자로 남습니다. 되돌릴 수 없습니다.`} />
     </div>
   )
 }
@@ -1473,7 +1455,7 @@ function PasteBox({ onTake, say }) {
 
 const TYPES = ['paper', 'thesis', 'report', 'writing']
 
-function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDone, onOpen, say }) {
+function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDone, onCancel, onOpen, say }) {
   /** Registering the author on this row registers them everywhere: the record
    *  is created and every row in every paper that spells the name this way
    *  points at it. That is the whole convenience — 44 rows saying
@@ -1512,10 +1494,9 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
     volume: '', pages: '', year: '', doi: '', url: '', tags: [], mainTag: '',
     cites: [], links: [], note: '', pdf: null }
   const [f, setF] = useState(ref_ || blank)
-  const [sure, setSure] = useState(false)   // delete asks once, in place
   // ⌘S saves and stays; closing is ⌘X's job.
   useRackKeys({ onSave: () => (draft ? create() : update(true)) })
-  useEffect(() => { setF(ref_ || blank); setSure(false) }, [ref_])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setF(ref_ || blank) }, [ref_])  // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const named = () => (f.citeKey || '').trim() || (f.title || '').trim()
   const jrnNames = (doc.journals || []).map((j) => j.name)
@@ -1664,50 +1645,24 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
           <textarea className="rl-in" rows={2} style={{ width: '100%', minWidth: 260 }}
             value={f.note || ''} onChange={set('note')} />
         </Fld>
-        <Fld label="">
-          {draft ? (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!named()} onClick={create}>등록</button>
-              <span className="rl-hint">{named() ? '' : 'cite key나 제목 하나는 있어야 합니다.'}</span>
-            </>
-          ) : (
-            <>
-              <button type="button" className="rl-btn rl-go" onClick={update}>save and exit</button>
-              <button type="button" className="rl-btn" onClick={() => setF(ref_)}>revert</button>
-              {isAdmin && (
-                <>
-                  <span className="rl-gap" />
-                  {/* Asked in place: window.confirm never appears inside the
-                      portal's frame, so a dialog would delete with no question
-                      asked at all. */}
-                  {sure ? (
-                    <>
-                      <span className="rl-hint">되돌릴 수 없습니다.</span>
-                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-                    </>
-                  ) : (
-                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </Fld>
       </div>
+      <RackActions key={ref_?.id || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named()}
+        hint={draft && !named() ? 'cite key나 제목 하나는 있어야 합니다.' : ''}
+        onSave={update} onCancel={onCancel} onRevert={() => setF(ref_)}
+        onDelete={isAdmin ? remove : null} />
     </div>
   )
 }
 
-function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone }) {
+function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone, onCancel }) {
   const draft = !name
   const rec = draft ? null : (doc.journals || []).find((j) => j.name === name)
   const blank = { name: '', shortName: '', abbrev: '', publisher: '', issn: '', url: '' }
   const [f, setF] = useState(rec || blank)
-  const [sure, setSure] = useState(false)
   // ⌘S saves and stays; closing is ⌘X's job.
   useRackKeys({ onSave: () => (draft ? create() : update(true)) })
-  useEffect(() => { setF(rec || blank); setSure(false) }, [name, rec])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setF(rec || blank) }, [name, rec])  // eslint-disable-line react-hooks/exhaustive-deps
   if (!draft && !rec) return <p className="rl-msg">그 저널을 찾을 수 없습니다.</p>
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const named = String(f.name || '').trim()
@@ -1766,47 +1721,24 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone }) {
         <Fld label="url">
           <input className="rl-in" style={{ width: 320 }} value={f.url || ''} onChange={set('url')} />
         </Fld>
-        <Fld label="">
-          {draft ? (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={create}>등록</button>
-              <span className="rl-hint">{named ? '' : '이름이 있어야 합니다.'}</span>
-            </>
-          ) : (
-            <>
-              <button type="button" className="rl-btn rl-go" disabled={!named || taken} onClick={update}>save and exit</button>
-              <button type="button" className="rl-btn" onClick={() => setF(rec)}>revert</button>
-              <span className="rl-hint">{users}편이 이 저널입니다.</span>
-              {isAdmin && (
-                <>
-                  <span className="rl-gap" />
-                  {sure ? (
-                    <>
-                      <span className="rl-hint">논문의 저널 이름은 글자로 남습니다.</span>
-                      <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-                      <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-                    </>
-                  ) : (
-                    <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </Fld>
       </div>
+      <RackActions key={name || 'new'} draft={draft}
+        onCreate={create} createDisabled={!named || taken}
+        hint={draft ? (named ? '' : '이름이 있어야 합니다.') : `${users}편이 이 저널입니다.`}
+        onSave={update} saveDisabled={!named || taken} onCancel={onCancel}
+        onRevert={() => setF(rec)} onDelete={isAdmin ? remove : null}
+        deleteWarn="논문의 저널 이름은 글자로 남습니다. 되돌릴 수 없습니다." />
     </div>
   )
 }
 
 /** A tag has no record: it is a word on some papers. So editing one is
  *  renaming it everywhere, merging it into another, or taking it off. */
-function EditTag({ name, doc, tags, onSave, isAdmin, onDone }) {
+function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
   const [to, setTo] = useState(name)
-  const [sure, setSure] = useState(false)
   // ⌘S saves and stays; closing is ⌘X's job.
   useRackKeys({ onSave: () => rename(true) })
-  useEffect(() => { setTo(name); setSure(false) }, [name])
+  useEffect(() => { setTo(name) }, [name])
   const users = (doc.references || []).filter((r) => (r.tags || []).includes(name))
   const named = String(to || '').trim()
   const merging = named && tags.includes(named) && named !== name
@@ -1851,26 +1783,13 @@ function EditTag({ name, doc, tags, onSave, isAdmin, onDone }) {
             {users.length > 12 && <span className="rl-hint">… 모두 {users.length}편</span>}
           </div>
         </Fld>
-        <Fld label="">
-          <button type="button" className="rl-btn rl-go" disabled={!named || named === name}
-            onClick={rename}>{merging ? '합치고 나가기' : 'save and exit'}</button>
-          <button type="button" className="rl-btn" onClick={() => setTo(name)}>revert</button>
-          {isAdmin && (
-            <>
-              <span className="rl-gap" />
-              {sure ? (
-                <>
-                  <span className="rl-hint">논문 {users.length}편에서 이 태그를 뗍니다.</span>
-                  <button type="button" className="rl-btn rl-danger" onClick={remove}>정말 삭제</button>
-                  <button type="button" className="rl-btn" onClick={() => setSure(false)}>취소</button>
-                </>
-              ) : (
-                <button type="button" className="rl-btn rl-danger" onClick={() => setSure(true)}>delete</button>
-              )}
-            </>
-          )}
-        </Fld>
       </div>
+      <RackActions key={name}
+        saveLabel={merging ? '합치고 나가기' : 'save and exit'}
+        onSave={rename} saveDisabled={!named || named === name}
+        onCancel={onCancel} onRevert={() => setTo(name)}
+        onDelete={isAdmin ? remove : null}
+        deleteWarn={`논문 ${users.length}편에서 이 태그를 뗍니다. 되돌릴 수 없습니다.`} />
     </div>
   )
 }
