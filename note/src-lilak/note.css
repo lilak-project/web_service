@@ -181,9 +181,13 @@ body.nt-paper #root { height: auto; min-height: 100%; }
 .nt-tagline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rk-cite-t); }
 .nt-meta-open {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: 12px;
+  /* A field is as wide as what it says — an imported minute carries a line of
+     attendees, and squeezing that into a column squeezes the date too. */
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px;
   padding: 2px 11px 6px;
+  max-height: 5.5em; overflow-y: auto;
 }
+.nt-meta-open .rl-hint { flex: 0 1 auto; min-width: 0; }
 /* The body takes everything that is left — to the right edge, to the bottom.
    The editor is a page: one family, sizes that step, nothing bold that is not
    bold in the text. No active-line tint, no visible markup. */
