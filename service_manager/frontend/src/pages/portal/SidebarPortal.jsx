@@ -89,6 +89,7 @@ function movedOrder(base, key, target, after) {
  * Still to come: keyboard navigation and the redesigned login card.
  */
 const MINI_KEY = 'portal-mini'
+const PIN_KEY = 'portal-pin'
 const FLAT_KEY = 'portal-flat'
 const SHUT_KEY = 'portal-groups-shut'
 const WIDE = 900          // below this the bar collapses on its own
@@ -278,6 +279,17 @@ export default function SidebarPortal({
   // any click) turns it off.
   const [cmd, setCmd] = useState(false)
   const [cmdKeys, setCmdKeys] = useState([])    // card keys, in the order shown
+  // Pinned: the bar was opened ON PURPOSE, from the switch that names itself,
+  // so nothing that folds it as a side effect may fold it — opening a service,
+  // picking a project, a narrower window. Only the switch (or the logo, which
+  // is the same switch) puts it back.
+  const [pinned, setPinned] = useState(() => {
+    try { return localStorage.getItem(PIN_KEY) === '1' } catch { return false }
+  })
+  const pinnedRef = useRef(pinned)
+  pinnedRef.current = pinned
+  /** Fold, unless the bar is pinned open. Every automatic fold goes through it. */
+  const fold = useCallback(() => { if (!pinnedRef.current) setMini(true) }, [])
   const [sel, setSel] = useState(readSel)        // { svc, proj } — mirrored in the URL
   const [view, setView] = useState(() => (readSel() ? 'service' : 'empty'))  // service|settings|live|empty
   // A Set, not one name: opening a service must not close another. Several
@@ -328,6 +340,7 @@ export default function SidebarPortal({
   const endPeek = () => { stopPeekTimer(); peek.current = false }
   useEffect(() => stopPeekTimer, [])
 
+  useEffect(() => { localStorage.setItem(PIN_KEY, pinned ? '1' : '0') }, [pinned])
   useEffect(() => {
     if (peek.current) return                       // a look is not a preference
     localStorage.setItem(MINI_KEY, mini ? '1' : '0')
@@ -358,11 +371,11 @@ export default function SidebarPortal({
       // when the account finally loaded and re-collapsed a bar that a click
       // had just opened on purpose.
       if (manageRef.current) { setMini(false); return }
-      if (w < WIDE) setMini(true)
+      if (w < WIDE) fold()
     }
     window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
-  }, [])
+  }, [fold])
 
   // One handler for the whole bar's keyboard. It also goes on the open service's
   // document: a service has the focus almost all the time, and the portal never
@@ -432,7 +445,13 @@ export default function SidebarPortal({
   }, [])
 
   const leaveSettings = useCallback(() => {
-    if (miniBefore.current !== null) { setMini(miniBefore.current); miniBefore.current = null }
+    // At phone width settings takes the screen and the bar was folded for it;
+    // coming back restores what it was — but a pinned bar was not folded by a
+    // decision of ours, so it comes back open.
+    if (miniBefore.current !== null) {
+      setMini(pinnedRef.current ? false : miniBefore.current)
+      miniBefore.current = null
+    }
     // Whatever was on screen before settings is no longer where we are going.
     viewBefore.current = null
   }, [])
@@ -474,19 +493,21 @@ export default function SidebarPortal({
     // the one you are already on is how you get the bar back — and pressing it
     // again folds it away, so the rail is a handle for the bar as well as a
     // list of services.
-    if (view === 'service' && sel?.svc === key) { setMini((m) => !m); return }
+    // Pressing what is already open folds the bar away — unless it is pinned,
+    // which is the point of pinning.
+    if (view === 'service' && sel?.svc === key) { if (!pinnedRef.current) setMini((m) => !m); return }
     setSel({ svc: key, proj: '' })
     setView('service')
-    setMini(true)
-  }, [signedOut, leaveSettings, view, sel])
+    fold()
+  }, [signedOut, leaveSettings, view, sel, fold])
 
   /** Manage mode: picking a card shows its settings in the panel, never runs it. */
   const openManage = useCallback((s) => {
     leaveSettings()
     setSel({ svc: cardKey(s), proj: '' })
     setView('manage')
-    if (window.innerWidth < PHONE) setMini(true)
-  }, [])
+    if (window.innerWidth < PHONE) fold()
+  }, [fold])
 
   // `open` is a property of the SERVICE, so it governs its projects too: a service
   // whose chrome belongs in its own tab does not become panel-friendly just
@@ -497,11 +518,14 @@ export default function SidebarPortal({
     // Opening a project gives it the screen, exactly as opening a service does:
     // the bar folds to the rail, and pressing the project you are already in
     // brings the bar back — then folds it again.
-    if (view === 'service' && sel?.svc === s.name && sel?.proj === proj) { setMini((m) => !m); return }
+    if (view === 'service' && sel?.svc === s.name && sel?.proj === proj) {
+      if (!pinnedRef.current) setMini((m) => !m)
+      return
+    }
     setSel({ svc: s.name, proj })
     setView('service')
-    setMini(true)
-  }, [view, sel, leaveSettings])
+    fold()
+  }, [view, sel, leaveSettings, fold])
 
   const projOpen = (name) => openSvcs.has(name)
   const toggleProj = (name) => setOpenSvcs((o) => {
@@ -690,7 +714,7 @@ export default function SidebarPortal({
   const enterLive = () => {
     leaveSettings()
     setView('live')
-    setMini(true)                                // a wall wants the width
+    fold()                                       // a wall wants the width
   }
 
   const selSvc = (cards || []).find((c) => cardKey(c) === sel?.svc)
@@ -857,7 +881,7 @@ export default function SidebarPortal({
         onMouseEnter={onSideEnter} onMouseLeave={onSideLeave} onMouseDown={endPeek}>
         <div className="pl-brand">
           <button type="button" className="pl-logo" disabled={manage && isManager}
-            onClick={() => setMini((m) => !m)}
+            onClick={() => { endPeek(); setPinned(mini); setMini((m) => !m) }}
             title={manage && isManager
               ? L('관리 모드에서는 접을 수 없습니다', 'not while managing')
               : L('사이드바 접기/펼치기', 'collapse / expand')}>
@@ -1018,7 +1042,14 @@ export default function SidebarPortal({
                 modes below it, this one says what pressing it will DO — the
                 caret points the way the bar is about to move. */}
             <button type="button" className={`pl-c2${mini ? ' on' : ''}`}
-              onClick={() => setMini((m) => !m)}>
+              onClick={() => {
+                // Expanding from here PINS: you asked for the bar, not for a
+                // glance at it. Collapsing from here hands it back to the
+                // ordinary behaviour — folding on its own, peeking on hover.
+                endPeek()
+                setPinned(mini)
+                setMini((m) => !m)
+              }}>
               <Icon name={mini ? 'caret-right' : 'caret-left'} size={15} />
               <span className="pl-txt">
                 {mini ? L('사이드바 펼치기', 'Expand sidebar') : L('사이드바 접기', 'Collapse sidebar')}
