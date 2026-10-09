@@ -20,5 +20,6 @@
     "import_export": true
   },
   "icon": null,
-  "color": null
+  "color": null,
+  "open": "panel"
 }
