@@ -145,12 +145,18 @@ async function revealPdf(path, say) {
     say(res.ok ? `${got.where || '파일 관리자'}에서 열었습니다.` : (got.detail || '열 수 없습니다.'))
   } catch (e) { say(String(e.message || e)) }
 }
-/** Where the file IS, as text you can take with you. Opening the host's file
- *  manager was tried and dropped: the page is in a frame on a server, and
- *  telling you the path is the honest version of that. */
+/** Where the file IS, whole. The document keeps a path relative to a root, so
+ *  the service is asked which root it was found under before it is copied —
+ *  a file name on the clipboard is no use to anyone. */
 async function copyPath(path, say) {
-  try { await navigator.clipboard.writeText(path); say('경로를 복사했습니다.') }
-  catch { say('복사 실패 — 경로를 직접 선택해 복사하세요.') }
+  let full = path
+  try {
+    const r = await fetch(`${PORTAL_BASE}/api/realpath?path=${encodeURIComponent(path)}`,
+      { headers: authHeaders() })
+    if (r.ok) full = (await r.json()).path || path
+  } catch { /* the relative path is better than nothing */ }
+  try { await navigator.clipboard.writeText(full); say(`복사했습니다 — ${full}`) }
+  catch { say(full) }     // no clipboard: the status line IS the copy
 }
 /** A path dropped from Finder arrives as a file:// URL. */
 const droppedPath = (e) => {

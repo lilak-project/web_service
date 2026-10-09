@@ -28,7 +28,7 @@ open('dist/_check.html', 'w').write('''<!doctype html>
   window.fetch = (u, o) => {
     // /api/file · /api/scan · /api/reveal are the REAL backend's; strip the
     // portal prefix so they land on it when this page is served by it.
-    if (/\/api\/(file|scan|reveal)/.test(String(u)))
+    if (/[/]api[/](file|scan|reveal|realpath)/.test(String(u)))
       return real(String(u).replace('/pp/reference_manager/check', ''), o);
     if (!String(u).includes('/api/data')) return real(u, o);
     if ((o && o.method || 'GET').toUpperCase() !== 'PUT') return json(DOC);

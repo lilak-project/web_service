@@ -181,6 +181,16 @@ def get_file(path: str, download: int = 0, _: dict = Depends(identity)):
                         headers={"content-disposition": f'inline; filename="{real.name}"'})
 
 
+@app.get("/api/realpath")
+def realpath(path: str, _: dict = Depends(identity)) -> dict:
+    """Where the file actually is. The document stores a path relative to a
+    root, and only the service knows which root it was found under."""
+    real = _inside(Path(path), _roots())
+    if not real:
+        raise HTTPException(404, "그 경로의 파일이 없거나 허용 루트 밖입니다.")
+    return {"path": str(real), "name": real.name}
+
+
 class RevealBody(BaseModel):
     path: str
 
