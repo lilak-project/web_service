@@ -413,6 +413,17 @@ export default function App() {
 }
 
 // ─── One note ───────────────────────────────────────────────────────────────
+/** Only the two things a person writes — and the file keeps a last newline the
+ *  editor does not, which is not a change anyone made. Everything else (the
+ *  version, the date) comes back from the server on every save and would read
+ *  as one. */
+const sameNote = (a, b) => a.title === b.title
+  && String(a.body || '').trimEnd() === String(b.body || '').trimEnd()
+const putNote = (id, baseVersion, v) => ask(`/notes/${encodeURIComponent(id)}`, {
+  method: 'PUT',
+  body: JSON.stringify({ baseVersion, title: v.title, body: v.body }),
+})
+
 /** The note is read when the tab opens, not from the list — the list carries a
  *  first line, and this needs the file. */
 function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
@@ -420,14 +431,17 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   const [f, setF] = useState(null)
   const [open, setOpen] = useState(false)     // the fold beside the title
   const [read, setRead] = useState(false)    // the note as it reads, in place
+  const orig = useRef(null)                  // how the tab found it — revert
+  const live = useRef({})                    // the latest, for the last save
   const titleRef = useRef(null)
+  live.current = { f, n }
   useEffect(() => {
-    let live = true
+    let alive = true
     setN(null)
     ask(`/notes/${encodeURIComponent(id)}`)
       .then(({ body }) => {
-        if (!live) return
-        setN(body); setF(body)
+        if (!alive) return
+        setN(body); setF(body); orig.current = body
         if (!takeCaret) return
         // A note just opened: the caret goes to its title. A name the app chose
         // is selected (type over it); one a person wrote is left alone, caret
@@ -442,8 +456,23 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
         })
       })
       .catch((e) => say(String(e.message || e)))
-    return () => { live = false }
+    return () => { alive = false }
   }, [id])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The note saves itself a moment after you stop typing. A keystroke is not a
+  // decision worth confirming, and a note that is only on screen is a note you
+  // can lose; what you can still undo is the whole sitting, with revert.
+  useEffect(() => {
+    if (!f || !n || sameNote(f, n)) return
+    const t = setTimeout(() => { saveNote() }, 800)
+    return () => clearTimeout(t)
+  }, [f, n])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Closing the tab inside that moment must not drop the last sentence.
+  useEffect(() => () => {
+    const { f: cur, n: disk } = live.current
+    if (cur && disk && !sameNote(cur, disk)) putNote(id, disk.version, cur)
+  }, [id])
   // ⌘S saves the note you are in, wherever the caret is. ABOVE the early
   // return: a hook that only runs once the note has loaded is a hook the first
   // render did not have, and React drops the whole tree over it (#310) — which
@@ -451,22 +480,20 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   useRackKeys({ onSave: () => { if (f && n) saveNote() } })
 
   if (!f || !n) return <p className="rl-msg">읽는 중…</p>
-  const dirty = JSON.stringify(f) !== JSON.stringify(n)
+  const dirty = !sameNote(f, n)
   // Tags live in the BODY now (#태그), so this is what the note will carry the
   // moment it is saved — shown rather than edited.
   const tags = bodyTags(f.body)
   async function saveNote() {
-    const { conflict, body } = await ask(`/notes/${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ baseVersion: n.version, title: f.title, body: f.body }),
-    })
+    const { conflict, body } = await putNote(id, n.version, f)
     if (conflict) {
       say(body.detail || '다른 곳에서 바뀌었습니다.')
       setN(body.current); setF(body.current)
       return
     }
-    setN(body); setF(body)
-    say('저장했습니다.')
+    // Only what is on disk: `f` is what is being typed, and a save that lands
+    // mid-sentence must not take the caret back with it.
+    setN(body)
     onSaved?.()
   }
   async function remove() {
@@ -480,14 +507,15 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
       {/* The buttons sit above the title: everything below them is the note.
           The same bar every editor in every rack-list service wears. */}
       <RackActions key={id}
-        onSave={() => saveNote()} saveDisabled={!dirty}
+        hint={dirty ? '쓰는 중…' : '저장됨'}
         onCancel={() => onClosed?.(id)}
         extra={<>
           <button type="button" className={`rl-btn${read ? ' on' : ''}`}
             onClick={() => setRead(!read)}>{read ? '편집' : '미리보기'}</button>
           {read ? <button type="button" className="rl-btn" onClick={onPrint}>인쇄 · PDF</button> : null}
         </>}
-        onRevert={dirty ? () => setF(n) : null} onDelete={remove}
+        onRevert={() => setF(orig.current)} revertTitle="이 탭을 열었을 때로 되돌립니다"
+        onDelete={remove}
         deleteWarn="파일이 지워집니다. 되돌릴 수 없습니다." />
 
       {/* Reading, the sheet carries the title and the date itself. */}
