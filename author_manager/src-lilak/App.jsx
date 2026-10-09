@@ -22,7 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs,
   useColumnWidths, useViewportWidth, useSelection, useFindKey, useToggleKey, useNote, useViewState,
-  bySome, fill as fillTpl, facetOf, passesFilter,
+  bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
@@ -224,13 +224,6 @@ export default function App() {
   // null = the tab's own order: 한글 이름, or My List's own sequence.
   const [sort, setSort] = useState(VIEW.sort || null)
   const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'name', dir: 1 })
-  // Filtering has a MODE. In it the labels stop sorting and start choosing
-  // which column's values you are picking from; the picks pile up across
-  // columns until they are applied.
-  const [fmode, setFmode] = useState(false)
-  const [fcol, setFcol] = useState(null)       // the column being picked from
-  const [fsel, setFsel] = useState(VIEW.fsel || {})   // { column: [values] }
-  const [fon, setFon] = useState(!!VIEW.fon)   // applied
   const [outOpen, setOutOpen] = useState(false)   // the listing drawer
   const findRef = useRef(null)
   useFindKey(findRef)
@@ -241,10 +234,6 @@ export default function App() {
   }, [])
   // The four fixed tabs are not worth storing; picking mode is not a state you
   // come back to, so only the applied filter is kept.
-  useEffect(() => {
-    saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-               active, sort, clsSort, fsel, fon })
-  }, [tabs, active, sort, clsSort, fsel, fon])
   // A tab for a group or an affiliation that is no longer in the document
   // cannot be shown; it goes, and takes you back to total if you were on it.
   // Nor can one of a kind that no longer exists (My List was a tab once), so an
@@ -288,10 +277,16 @@ export default function App() {
   }, [authors, sort])
   const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
 
-  const passes = useCallback((a) => passesFilter(a, fsel, SORTERS), [fsel])
+  const filter = useFacetFilter(scope, SORTERS, { sel: VIEW.fsel, on: VIEW.fon })
+  // Declared after the filter, because its deps read from it — a dependency
+  // array is evaluated where it is written.
+  useEffect(() => {
+    saveView({ tabs: tabs.filter((t) => !FIXED.some((x) => x.id === t.id)),
+               active, sort, clsSort, fsel: filter.sel, fon: filter.on })
+  }, [tabs, active, sort, clsSort, filter.sel, filter.on])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const rowsOf = useCallback((sc) => {
-    const kept = fon ? sc.filter(passes) : sc
+    const kept = filter.on ? sc.filter(filter.passes) : sc
     const q = query.trim().toLowerCase()
     if (!q) return kept
     // The name with its spaces taken out is searched too: a transliterated
@@ -300,7 +295,7 @@ export default function App() {
       ...(a.affiliations || []).flatMap((x) => [x.tag, x.position, x.dept]),
       ...(a.groups || []).map((g) => g.group)]
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [query, fon, passes])
+  }, [query, filter.on, filter.passes])
   const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
   const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
     = useSelection(rows)
@@ -322,9 +317,6 @@ export default function App() {
 
   // Counted over the tab's own authors, not the filtered ones: a value that
   // would empty the list is still worth seeing.
-  const facet = useMemo(() => facetOf(scope, SORTERS[fcol]), [fcol, scope])
-  const picked_ = (k) => fsel[k] || []
-  const facetTotal = Object.values(fsel).reduce((t, v) => t + v.length, 0)
 
   const classesOf = useCallback((t) => {
     if (t?.kind !== 'classes') return []
@@ -494,27 +486,15 @@ export default function App() {
               편집 닫기 ({etabs.length})
             </button>
           )}
-          {fmode ? (
-            <>
-              <button type="button" className="rl-btn rl-go" onClick={() => { setFmode(false); setFon(facetTotal > 0) }}>
-                필터 적용{facetTotal ? ` (${facetTotal})` : ''}
-              </button>
-              <button type="button" className="rl-btn" onClick={() => setFmode(false)}>취소</button>
-              <span className="rl-hint">레이블을 눌러 종류를 고르세요.</span>
-            </>
-          ) : fon ? (
-            <>
-              <button type="button" className="rl-btn rl-danger"
-                onClick={() => { setFon(false); setFsel({}); setFcol(null) }}>필터 풀기</button>
-              <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 고치기</button>
-            </>
-          ) : (
-            <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 선택</button>
-          )}
+          <FilterBar f={filter} />
           <span className="rl-sp" />
-          <input ref={findRef} type="search" className="rl-find" value={query}
-            placeholder="이름 · 이메일 · 소속 · 그룹   (⌘F · ⌘⏎ 전체선택)"
-            onChange={(e) => setQuery(e.target.value)} />
+          {/* One box: the list, or — while the filter is choosing — the values
+              on offer. */}
+          <input ref={findRef} type="search" className="rl-find"
+            value={filter.mode ? filter.find : query}
+            placeholder={filter.mode ? '고를 값 찾기   (⌘F)'
+              : '이름 · 이메일 · 소속 · 그룹   (⌘F · ⌘⏎ 전체선택)'}
+            onChange={(e) => (filter.mode ? filter.setFind : setQuery)(e.target.value)} />
         </div>
 
         {groupForm && (
@@ -546,7 +526,7 @@ export default function App() {
           {doc && tab?.kind === 'authors' && (
             <>
               <RackTable cols={cols} onDrag={drag('')}
-                facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
+                facet={filter.tableFacet}
                 sort={sort || { k: 'core', dir: 1 }}
                 onSort={(k) => setSort((s2) => {
                   // The implicit order counts as the current one, so the first
@@ -555,26 +535,9 @@ export default function App() {
                   const now = s2 || { k: 'core', dir: 1 }
                   return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
                 })}
-                head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
-                {fmode && !fcol && <p className="rl-msg">위의 레이블을 눌러 어떤 종류로 걸를지 고르세요.</p>}
-                {fmode && fcol && facet.length === 0 && <p className="rl-msg">이 열에는 값이 없습니다.</p>}
-                {fmode && fcol && facet.map(({ v, count }, i) => {
-                  const on = picked_(fcol).includes(v)
-                  return (
-                    <div key={v} className={`rl-row rl-frow rl-hit${on ? ' on' : ''}`}
-                      onClick={() => setFsel((s2) => {
-                        const cur = s2[fcol] || []
-                        return { ...s2, [fcol]: on ? cur.filter((x) => x !== v) : [...cur, v] }
-                      })}>
-                      <span className="rl-chk"><input type="checkbox" checked={on} tabIndex={-1} readOnly
-                        aria-label={`${v} 고르기`} /></span>
-                      <span className="rl-gut">{i + 1}</span>
-                      <span className="rl-c rl-ink">{v}</span>
-                      <span className="rl-c rl-num">{count}</span>
-                    </div>
-                  )
-                })}
-                {!fmode && rows.map((a, i) => {
+                head={filter.mode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
+                <FacetRows f={filter} labels={{ empty: '이 열에는 값이 없습니다.' }} />
+                {!filter.mode && rows.map((a, i) => {
                   const cur = currentAff(a)
                   const affs = affilText(a)
                   const on = picked.has(a.id)
@@ -612,7 +575,7 @@ export default function App() {
                       }} />
                   )
                 })}
-                {!fmode && rows.length === 0 && <p className="rl-msg">해당하는 저자가 없습니다.</p>}
+                {!filter.mode && rows.length === 0 && <p className="rl-msg">해당하는 저자가 없습니다.</p>}
               </RackTable>
               {/* What you ticked is the set you assembled; with nothing ticked
                   the tab itself is the set. */}

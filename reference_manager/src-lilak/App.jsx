@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs,
   useColumnWidths, useViewportWidth, useSelection, useFindKey, useNote, useViewState,
-  bySome, fill as fillTpl, facetOf, passesFilter,
+  bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
@@ -163,7 +163,7 @@ const COLS = [
   { k: 'type', w: 56, min: 40, label: 'type', drop: 1180 },
   { k: 'citeKey', w: 186, min: 90, label: 'cite key' },
   { k: 'year', w: 46, min: 38, label: 'year', num: true },
-  { k: 'jl', w: 64, min: 40, label: 'jl' },
+  { k: 'jl', w: 86, min: 40, label: 'journal' },
   { k: 'title', w: 330, min: 120, label: 'title' },
   { k: 'a1', w: 134, min: 70, label: 'first author', drop: 1040 },
   { k: 'tags', w: 180, min: 60, label: 'tags', drop: 1320 },
@@ -278,12 +278,6 @@ export default function App() {
   const vw = useViewportWidth()
   const [sort, setSort] = useState(VIEW.sort || null)
   const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'name', dir: 1 })
-  // Filtering has a MODE: in it the labels stop sorting and start choosing
-  // which column's values you are picking from.
-  const [fmode, setFmode] = useState(false)
-  const [fcol, setFcol] = useState(null)
-  const [fsel, setFsel] = useState(VIEW.fsel || {})
-  const [fon, setFon] = useState(!!VIEW.fon)
   const [outOpen, setOutOpen] = useState(false)
   const findRef = useRef(null)
   useFindKey(findRef)
@@ -292,10 +286,6 @@ export default function App() {
     if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
     fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
   }, [])
-  useEffect(() => {
-    saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-               active, sort, clsSort, fsel, fon })
-  }, [tabs, active, sort, clsSort, fsel, fon])
   // A tab for something the document no longer has cannot be shown — and
   // neither can one of a kind this service no longer has: collaborations and
   // topic groups were tabs of their own before they became tags, and a stored
@@ -364,24 +354,26 @@ export default function App() {
   }, [refs, sort, byColumn])
   const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
 
-  const passes = useCallback((r) => passesFilter(r, fsel, sorters), [fsel, sorters])
+  const filter = useFacetFilter(scope, sorters, { sel: VIEW.fsel, on: VIEW.fon })
+  // Declared after the filter, because its deps read from it — a dependency
+  // array is evaluated where it is written, and `filter` does not exist yet
+  // further up.
+  useEffect(() => {
+    saveView({ tabs: tabs.filter((t) => !FIXED.some((x) => x.id === t.id)),
+               active, sort, clsSort, fsel: filter.sel, fon: filter.on })
+  }, [tabs, active, sort, clsSort, filter.sel, filter.on])   // eslint-disable-line react-hooks/exhaustive-deps
   const rowsOf = useCallback((sc) => {
-    const kept = fon ? sc.filter(passes) : sc
+    const kept = filter.on ? sc.filter(filter.passes) : sc
     const q = query.trim().toLowerCase()
     if (!q) return kept
     return kept.filter((r) => [r.citeKey, r.title, r.journal, r.year, r.doi,
       ...authorList(doc, r), ...tagsOf(r)]
       .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [query, fon, passes, doc])
+  }, [query, filter.on, filter.passes, doc])
   const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
   const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
     = useSelection(rows)
 
-  // Counted over the tab's own papers, not the filtered ones: a value that
-  // would empty the list is still worth seeing.
-  const facet = useMemo(() => facetOf(scope, sorters[fcol]), [fcol, scope, sorters])
-  const picked_ = (k) => fsel[k] || []
-  const facetTotal = Object.values(fsel).reduce((t, v) => t + v.length, 0)
 
   /** The classes themselves. Tags have no records, so their list is gathered
    *  from what the papers actually use. */
@@ -510,28 +502,18 @@ export default function App() {
               편집 닫기 ({etabs.length})
             </button>
           )}
-          {fmode ? (
-            <>
-              <button type="button" className="rl-btn rl-go"
-                onClick={() => { setFmode(false); setFon(facetTotal > 0) }}>
-                필터 적용{facetTotal ? ` (${facetTotal})` : ''}
-              </button>
-              <button type="button" className="rl-btn" onClick={() => setFmode(false)}>취소</button>
-              <span className="rl-hint">레이블을 눌러 종류를 고르세요.</span>
-            </>
-          ) : fon ? (
-            <>
-              <button type="button" className="rl-btn rl-danger"
-                onClick={() => { setFon(false); setFsel({}); setFcol(null) }}>필터 풀기</button>
-              <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 고치기</button>
-            </>
-          ) : (
-            <button type="button" className="rl-btn" onClick={() => setFmode(true)}>필터 선택</button>
-          )}
+          <FilterBar f={filter} />
           <span className="rl-sp" />
-          <input ref={findRef} type="search" className="rl-find" value={query}
-            placeholder={tab?.kind === 'classes' ? '이 목록에서 찾기   (⌘F)' : '제목 · 저자 · 저널 · 태그   (⌘F)'}
-            onChange={(e) => setQuery(e.target.value)} />
+          {/* One box, and it searches whatever is on screen: the papers, the
+              classes, or — while the filter is choosing — the values on offer,
+              because a column with two thousand of them is not a list you
+              scroll. */}
+          <input ref={findRef} type="search" className="rl-find"
+            value={filter.mode ? filter.find : query}
+            placeholder={filter.mode ? '고를 값 찾기   (⌘F)'
+              : tab?.kind === 'classes' ? '이 목록에서 찾기   (⌘F)'
+                : '제목 · 저자 · 저널 · 태그   (⌘F)'}
+            onChange={(e) => (filter.mode ? filter.setFind : setQuery)(e.target.value)} />
         </div>
 
         <div className="rl-body">
@@ -545,7 +527,7 @@ export default function App() {
             {doc && tab?.kind === 'refs' && (
               <>
                 <RackTable cols={cols} onDrag={drag('')}
-                  facet={fmode ? { col: fcol, count: (k) => picked_(k).length, onPick: setFcol } : null}
+                  facet={filter.tableFacet}
                   sort={sort || { k: 'citeKey', dir: 1 }}
                   onSort={(k) => setSort((s2) => {
                     // The implicit order counts as the current one, so the first
@@ -553,24 +535,9 @@ export default function App() {
                     const now = s2 || { k: 'citeKey', dir: 1 }
                     return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
                   })}
-                  head={fmode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
-                  {fmode && !fcol && <p className="rl-msg">위의 레이블을 눌러 어떤 종류로 걸를지 고르세요.</p>}
-                  {fmode && fcol && facet.length === 0 && <p className="rl-msg">이 열에는 값이 없습니다.</p>}
-                  {fmode && fcol && facet.map(({ v, count }) => {
-                    const on = picked_(fcol).includes(v)
-                    return (
-                      <button key={v} type="button" className={`rl-frow${on ? ' on' : ''}`}
-                        onClick={() => setFsel((s2) => {
-                          const cur = s2[fcol] || []
-                          const next = on ? cur.filter((x) => x !== v) : [...cur, v]
-                          return { ...s2, [fcol]: next }
-                        })}>
-                        <span className="rl-fv">{v}</span>
-                        <span className="rl-fn">{count}</span>
-                      </button>
-                    )
-                  })}
-                  {!fmode && rows.map((r, i) => {
+                  head={filter.mode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
+                  <FacetRows f={filter} labels={{ empty: '이 열에는 값이 없습니다.' }} />
+                  {!filter.mode && rows.map((r, i) => {
                     const on = picked.has(r.id)
                     const edited = etabs.some((t) => t.who === r.id)
                     return (
@@ -614,7 +581,7 @@ export default function App() {
                         }} />
                     )
                   })}
-                  {!fmode && rows.length === 0 && <p className="rl-msg">해당하는 논문이 없습니다.</p>}
+                  {!filter.mode && rows.length === 0 && <p className="rl-msg">해당하는 논문이 없습니다.</p>}
                 </RackTable>
                 <ListOut list={chosen.length ? chosen : scope} picked={chosen.length > 0}
                   tokens={tokens} say={setNote} open={outOpen} setOpen={setOutOpen} />
