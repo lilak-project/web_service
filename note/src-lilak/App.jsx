@@ -43,10 +43,11 @@ async function ask(p, o) {
 
 const D = '·'
 const tagsOf = (n) => (n.tags || []).filter(Boolean)
-/** The tags a body carries. `#태그` is Obsidian's spelling and markdown's own
- *  rule keeps it apart from a heading: `# ` has a space after the hash. */
-export function bodyTags(body, also = []) {
-  const out = [...(also || [])]
+/** The tags a body carries — and the body is the only place one lives.
+ *  `#태그` is Obsidian's spelling, and markdown's own rule keeps it apart from
+ *  a heading: `# ` has a space after the hash. */
+export function bodyTags(body) {
+  const out = []
   for (const m of String(body || '').matchAll(TAG_RE)) {
     if (!out.includes(m[2])) out.push(m[2])
   }
@@ -112,7 +113,7 @@ export default function App() {
   // by side is the point, and a tab is sent across rather than dragged. A tab
   // carries the column it is in; a column with no tabs is not drawn.
   const [etabs, setEtabs] = useState([])            // [{ id, label, col }]
-  const [eactive, setEactive] = useState({ 0: null, 1: null })
+  const [eactive, setEactive] = useState({})
   const [ecol, setECol] = useState(0)               // the column a new note opens in
   const [efull, setEFull] = useState(!!VIEW.efull)  // the editor takes the list's width too
   const [query, setQuery] = useState('')
@@ -206,7 +207,7 @@ export default function App() {
       .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
   }, [notes, tab, clsSort])
 
-  const ecols = [0, 1].filter((c) => etabs.some((t) => t.col === c))
+  const ecols = [...new Set(etabs.map((t) => t.col))].sort((a, b) => a - b)
   const showEdit = ecols.length > 0
   // Two editor columns need the room the list was using; one does not.
   const showList = !showEdit || (vw >= (ecols.length > 1 ? 1500 : 1180) && !efull)
@@ -239,7 +240,10 @@ export default function App() {
   function moveEdit(id) {
     const t = etabs.find((x) => x.id === id)
     if (!t) return
-    const to = t.col === 0 ? 1 : 0
+    // Away from where this column stands: the rightmost column sends left, any
+    // other sends right. A single column is on the right of the list, so its
+    // note goes to a new column beside it on the left.
+    const to = t.col >= Math.max(...etabs.map((x) => x.col)) ? t.col - 1 : t.col + 1
     const left = etabs.filter((x) => x.id !== id && x.col === t.col)
     setEtabs((ts) => ts.map((x) => (x.id === id ? { ...x, col: to } : x)))
     setEactive((a) => ({ ...a, [to]: id, [t.col]: left.length ? left[left.length - 1].id : null }))
@@ -310,7 +314,7 @@ export default function App() {
           )}
           {etabs.length > 0 && (
             <button type="button" className="rl-btn" title="편집 패널의 탭을 모두 닫습니다"
-              onClick={() => { setEtabs([]); setEactive({ 0: null, 1: null }); setECol(0) }}>
+              onClick={() => { setEtabs([]); setEactive({}); setECol(0) }}>
               편집 닫기 ({etabs.length})
             </button>
           )}
@@ -449,9 +453,11 @@ export default function App() {
                   {/* One button, and it is the whole arrangement: a note sent
                       across opens the other column, and the column closes when
                       its last note leaves. */}
+                  {/* The arrow says where the note will go, which is away from
+                      the side this column is on. */}
                   <button type="button" className="rl-btn nt-send" onClick={() => moveEdit(cur.id)}
-                    title={c === 0 ? '오른쪽으로 보내기' : '왼쪽으로 보내기'}>
-                    {c === 0 ? '→' : '←'}
+                    title={c === ecols[ecols.length - 1] ? '왼쪽으로 보내기' : '오른쪽으로 보내기'}>
+                    {c === ecols[ecols.length - 1] ? '←' : '→'}
                   </button>
                 </div>
                 <Editor id={cur.id} say={setNote} onSaved={reload}
@@ -495,7 +501,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint }) {
   const dirty = JSON.stringify(f) !== JSON.stringify(n)
   // Tags live in the BODY now (#태그), so this is what the note will carry the
   // moment it is saved — shown rather than edited.
-  const tags = bodyTags(f.body, f.tags)
+  const tags = bodyTags(f.body)
 
   async function saveNote(andClose) {
     const { conflict, body } = await ask(`/notes/${encodeURIComponent(id)}`, {

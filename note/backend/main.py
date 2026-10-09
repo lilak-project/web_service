@@ -41,7 +41,7 @@ app = FastAPI(title="note")
 # The fields the app knows by name. Anything else in the front matter is kept
 # and handed back untouched — a note may carry fields this app never heard of,
 # which is how "속성 추가하기" works without a schema.
-KNOWN = ("title", "date", "tags")
+KNOWN = ("title", "date")
 TODO_RE = re.compile(r"^(\s*[-*]\s+\[)([ xX])(\]\s*)(.*)$")
 # `#태그` written in the body, the way Obsidian spells one. A heading is `# `
 # WITH a space after the hash, so the two cannot be confused — which is why the
@@ -123,9 +123,11 @@ def _read(p: Path) -> dict:
     meta, body = _split(text)
     extra = {k: v for k, v in meta.items() if k not in KNOWN}
     d = meta.get("date")
-    # Front matter first (an imported note may carry tags there), then the ones
-    # written in the body. One list, in the order they were met.
-    tags = _as_tags(meta.get("tags"))
+    # Tags live in the BODY and nowhere else: `#태그`, which is both Obsidian's
+    # spelling and the only place a reader of the file would look. A `tags:`
+    # key someone leaves in the front matter is kept as an ordinary field, not
+    # read as tags — two places to write one thing is how they disagree.
+    tags = []
     for m in TAG_RE.finditer(body):
         if m.group(1) not in tags:
             tags.append(m.group(1))
@@ -175,7 +177,6 @@ class SaveBody(BaseModel):
     baseVersion: Optional[str] = None
     title: Optional[str] = None
     date: Optional[str] = None
-    tags: Optional[list] = None
     fields: Optional[dict] = None
     body: Optional[str] = None
 
@@ -210,14 +211,14 @@ def get_note(note_id: str, _: dict = Depends(identity)) -> dict:
 @app.post("/api/notes", status_code=201)
 def new_note(body: NewBody, _: dict = Depends(identity)) -> dict:
     title = body.title.strip() or "제목 없음"
-    meta, text = {"title": title, "date": date.today().isoformat(), "tags": []}, ""
+    meta, text = {"title": title, "date": date.today().isoformat()}, ""
     if body.template:
         tp = (TEMPLATES / f"{body.template}.md")
         if tp.is_file():
             tmeta, text = _split(tp.read_text(encoding="utf-8"))
             tmeta.pop("title", None)
+            # The template's own #tags come along in its body, where they live.
             meta = {**{"title": title, "date": date.today().isoformat()}, **tmeta}
-            meta["tags"] = _as_tags(meta.get("tags"))
     stem = f"{meta['date']}-{_slug(title)}"
     p = _path(stem)
     n = 2
@@ -238,15 +239,9 @@ def put_note(note_id: str, body: SaveBody, _: dict = Depends(identity)):
         return JSONResponse(status_code=409, content={
             "detail": "이 노트가 그 사이에 바뀌었습니다. 최신 내용을 불러옵니다.",
             "current": cur})
-    # `tags` is only written when a client asks for it. Left alone, the front
-    # matter keeps whatever it had and the body's #tags stay in the body —
-    # writing the read-back list there would copy every inline tag into the
-    # front matter on the first save.
-    old_meta, _ = _split(p.read_text(encoding="utf-8"))
     meta = {
         "title": cur["title"] if body.title is None else body.title.strip(),
         "date": cur["date"] if body.date is None else body.date.strip(),
-        "tags": _as_tags(old_meta.get("tags")) if body.tags is None else _as_tags(body.tags),
         **(cur["fields"] if body.fields is None else body.fields),
     }
     _atomic_write(p, _join(meta, cur["body"] if body.body is None else body.body))
@@ -291,8 +286,8 @@ def set_todo(body: TodoBody, _: dict = Depends(identity)):
     if not m or (body.text is not None and m.group(4).strip() != body.text.strip()):
         raise HTTPException(409, "그 줄이 바뀌었습니다 — 노트를 다시 읽어주세요.")
     lines[body.line] = f"{m.group(1)}{'x' if body.done else ' '}{m.group(3)}{m.group(4)}"
-    _atomic_write(p, _join({"title": n["title"], "date": n["date"], "tags": n["tags"],
-                            **n["fields"]}, "\n".join(lines)))
+    _atomic_write(p, _join({"title": n["title"], "date": n["date"], **n["fields"]},
+                           "\n".join(lines)))
     return {"ok": True, "id": body.id, "line": body.line, "done": body.done}
 
 
