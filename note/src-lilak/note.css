@@ -157,15 +157,19 @@
 }
 .nt-prose > :first-child { margin-top: 0; }
 /* A column of its own at the left, and every line's bar stands in it — all at
-   the same x, whatever the line is indented to. The bar for a list item backs
-   out of the list's own indent to land on the same line as the rest. Lit on the
-   line the caret is in (and on each of them while a selection spans several).
+   the same x, whatever the line is indented to. Lit on the line the caret is in
+   (and on each of them while a selection spans several).
+
+   The bar belongs to the LINE, so for a list item it is drawn on the item's own
+   paragraph rather than on the item: an item that holds a nested list is as
+   tall as everything under it, and its bar was a blue column behind all of
+   their grey ones.
 
    The gutter is real space: .nt-prose is padded by it, so nothing is written
    over the bars. */
 .nt-prose { padding-left: 26px; }
 .nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote, li) { position: relative; }
-.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote, li)::before {
+.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote)::before {
   content: '';
   position: absolute;
   left: -18px; top: .18em; bottom: .18em;
@@ -173,21 +177,30 @@
   border-radius: 1px;
   background: var(--rk-line);
 }
-/* Inside a list the bar has the list's padding to climb back out of — one
-   step per level, so a bar stands in the gutter however deep its line is.
-   (A custom property cannot add to itself, so the levels are written out;
-   four is deeper than a note goes.) */
-.nt-prose li::before { left: calc(-18px - 1.5em); }
-.nt-prose li li::before { left: calc(-18px - 3em); }
-.nt-prose li li li::before { left: calc(-18px - 4.5em); }
-.nt-prose li li li li::before { left: calc(-18px - 6em); }
-.nt-prose :where(ul, ol) > *::before,
-.nt-prose li:not([data-item-type="task"]) > p::before,
+/* Inside a list the bar has the list's padding to climb back out of — one step
+   per level, so a bar stands in the gutter however deep its line is. (A custom
+   property cannot add to itself, so the levels are written out; four is deeper
+   than a note goes.) */
+.nt-prose li > p::before { left: calc(-18px - 1.5em); }
+.nt-prose li li > p::before { left: calc(-18px - 3em); }
+.nt-prose li li li > p::before { left: calc(-18px - 4.5em); }
+.nt-prose li li li li > p::before { left: calc(-18px - 6em); }
+/* The item itself draws nothing — except a task item, whose paragraph is busy
+   holding the checkbox; there the bar is the item's, one line tall. */
+.nt-prose li::before { content: none; }
+.nt-prose li[data-item-type="task"]::before {
+  content: '';
+  position: absolute;
+  left: calc(-18px - 1.5em); top: .18em; height: 1.1em;
+  width: 3px; border-radius: 1px;
+  background: var(--rk-line);
+}
+.nt-prose li li[data-item-type="task"]::before { left: calc(-18px - 3em); }
+.nt-prose li li li[data-item-type="task"]::before { left: calc(-18px - 4.5em); }
 .nt-prose blockquote > p::before { content: none; }
-.nt-prose li::before { content: ''; }
-/* The lit one. A list item is lit by the paragraph inside it. */
+/* The lit one. A task item is lit by the paragraph inside it. */
 .nt-prose .nt-at::before { background: var(--rk-cite-t); }
-.nt-prose li:has(> .nt-at)::before { background: var(--rk-cite-t); }
+.nt-prose li[data-item-type="task"]:has(> .nt-at)::before { background: var(--rk-cite-t); }
 .nt-prose :where(h1, h2, h3, h4, h5, h6) {
   margin: 1.1em 0 .35em; font-weight: 600; color: var(--rk-ink); line-height: 1.35;
 }
