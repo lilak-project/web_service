@@ -17,6 +17,7 @@ on it is rejected with 409 + the current document, and the client reloads.
 """
 import json
 import os
+import subprocess
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -125,6 +126,81 @@ def get_version(_: dict = Depends(identity)) -> dict:
 @app.get("/api/whoami")
 def whoami(me: dict = Depends(identity)) -> dict:
     return {**me, "project": PROJECT}
+
+
+# ── The PDFs ─────────────────────────────────────────────────────────────────
+# A browser cannot open file:///… from an http page, so the service reads the
+# file for it. Only from the roots the project has listed, and only after the
+# path has been resolved — a symlink out of a root is out of the root.
+
+def _roots() -> list[Path]:
+    with _lock:
+        got = (_read().get("settings") or {}).get("pdfRoots") or []
+    out = []
+    for r in got:
+        try:
+            out.append(Path(r).expanduser().resolve())
+        except Exception:
+            pass
+    return out
+
+
+def _inside(path: Path, roots: list[Path]) -> Optional[Path]:
+    """The real file this path names, if it is under one of the roots."""
+    try:
+        real = (path if path.is_absolute() else None)
+        for root in roots:
+            cand = (real or (root / path)).resolve()
+            if cand.is_file() and (cand == root or root in cand.parents):
+                return cand
+    except Exception:
+        return None
+    return None
+
+
+@app.get("/api/file")
+def get_file(path: str, _: dict = Depends(identity)):
+    """Serve one PDF out of an allowed root. `path` is relative to a root, or
+    absolute and under one."""
+    roots = _roots()
+    if not roots:
+        raise HTTPException(409, "허용 루트가 설정되지 않았습니다.")
+    real = _inside(Path(path), roots)
+    if not real:
+        raise HTTPException(404, "그 경로의 파일이 없거나 허용 루트 밖입니다.")
+    return FileResponse(real, media_type="application/pdf", filename=real.name)
+
+
+class RevealBody(BaseModel):
+    path: str
+
+
+@app.post("/api/reveal")
+def reveal(body: RevealBody, _: dict = Depends(identity)):
+    """Show the file in the host's file manager. Only works when the backend is
+    on the machine the files are — which is the same condition as the link."""
+    real = _inside(Path(body.path), _roots())
+    if not real:
+        raise HTTPException(404, "그 경로의 파일이 없거나 허용 루트 밖입니다.")
+    try:
+        subprocess.Popen(["open", "-R", str(real)])
+    except Exception as exc:
+        raise HTTPException(500, f"열 수 없습니다: {exc}")
+    return {"ok": True, "path": str(real)}
+
+
+@app.get("/api/scan")
+def scan(_: dict = Depends(identity)) -> dict:
+    """Every PDF under the roots, by its file name. The client matches those
+    names against its cite keys — the naming convention IS the link."""
+    found: dict[str, list[str]] = {}
+    for root in _roots():
+        for dirpath, _dirs, names in os.walk(root):
+            for n in names:
+                if n.lower().endswith(".pdf"):
+                    rel = os.path.relpath(os.path.join(dirpath, n), root)
+                    found.setdefault(os.path.splitext(n)[0], []).append(rel)
+    return {"roots": [str(r) for r in _roots()], "files": found}
 
 
 # ── Static SPA (must stay last: the catch-all would shadow /api/*) ────────────

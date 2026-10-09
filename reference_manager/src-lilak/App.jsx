@@ -20,7 +20,8 @@ import {
   RackTable, RackRow, RackTabs,
   useColumnWidths, useViewportWidth, useSelection, useFindKey, useNote, useViewState,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
-  PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
+  PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId,
+  authHeaders, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
 
@@ -126,6 +127,25 @@ const inJrn = (r, name) => r.journal === name
 /** Is the paper itself on disk? `pdf` is {mode:'path'|'file', path} — the file
  *  the key is named after. */
 const hasPdf = (r) => !!(r.pdf && (r.pdf.path || r.pdf.name))
+/** The service reads the file for the browser: file:// cannot be opened from
+ *  an http page, and the path is on the machine the backend runs on. */
+const pdfSrc = (r) => `${PORTAL_BASE}/api/file?path=${encodeURIComponent(r.pdf.path)}`
+async function revealPdf(path, say) {
+  try {
+    const res = await fetch(`${PORTAL_BASE}/api/reveal`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ path }),
+    })
+    const got = await res.json().catch(() => ({}))
+    say(res.ok ? 'Finder에서 열었습니다.' : (got.detail || '열 수 없습니다.'))
+  } catch (e) { say(String(e.message || e)) }
+}
+/** A path dropped from Finder arrives as a file:// URL. */
+const droppedPath = (e) => {
+  const uri = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || ''
+  const one = uri.split(/\r?\n/).find((x) => x.startsWith('file://')) || uri.trim()
+  try { return one.startsWith('file://') ? decodeURI(one.slice(7)) : one } catch { return one }
+}
 /** Papers this one lists, and papers that list it — one is stored, the other
  *  is counted, because storing both is two places to disagree. */
 const citesOf = (r) => (r.cites || []).filter((c) => c && (c.ref || c.raw))
@@ -245,6 +265,7 @@ const FIXED = [
   { id: 'authors', kind: 'classes', label: 'authors', of: 'author' },
   { id: 'journals', kind: 'classes', label: 'journals', of: 'journal' },
   { id: 'tags', kind: 'classes', label: 'tags', of: 'tag' },
+  ...(isManager() ? [{ id: 'settings', kind: 'settings', label: 'settings' }] : []),
 ]
 const CLS_OF = {
   author: { key: 'authors', open: (id) => ({ aut: id, role: 'all' }) },
@@ -570,8 +591,14 @@ export default function App() {
                           // to the papers it counts.
                           // ✓ when the file is there, nothing when it is not —
                           // a column you can sort and filter on.
-                          pdf: hasPdf(r)
-                            ? <span className="rl-ok" title={r.pdf.path}>✓</span> : D,
+                          pdf: hasPdf(r) ? (
+                            <button type="button" className="rl-ok rl-lnk" title={r.pdf.path}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openEdit({ id: `pdf:${r.id}`, kind: 'pdf', who: r.id,
+                                  label: `📄 ${refLabel(r)}` })
+                              }}>✓</button>
+                          ) : D,
                           cites: linkedCites(r).length ? (
                             <button type="button" className="rl-lnk" title="이 논문이 인용한 것"
                               onClick={(e) => {
@@ -596,6 +623,10 @@ export default function App() {
                 <ListOut list={chosen.length ? chosen : scope} picked={chosen.length > 0}
                   tokens={tokens} say={setNote} open={outOpen} setOpen={setOutOpen} />
               </>
+            )}
+
+            {doc && tab?.kind === 'settings' && (
+              <Settings doc={doc} onSave={commit} say={setNote} />
             )}
 
             {doc && tab?.kind === 'classes' && (
@@ -642,7 +673,22 @@ export default function App() {
           {showEdit && (<div className="rl-pane rl-epane">
             <RackTabs tabs={etabs} active={eactive} opened
               onPick={setEactive} onClose={closeEdit} />
-            {etab.kind === 'edit' ? (
+            {etab.kind === 'pdf' ? (() => {
+              const r = refs.find((x) => x.id === etab.who)
+              if (!r || !hasPdf(r)) return <p className="rl-msg">파일이 연결되어 있지 않습니다.</p>
+              return (
+                <div className="rl-pdf">
+                  <div className="rl-pdfbar">
+                    <span className="rl-hint rl-mono">{r.pdf.path}</span>
+                    <span className="rl-sp" />
+                    <button type="button" className="rl-btn"
+                      onClick={() => revealPdf(r.pdf.path, setNote)}>Finder에서 보기</button>
+                    <a className="rl-btn" href={pdfSrc(r)} target="_blank" rel="noreferrer">새 창</a>
+                  </div>
+                  <iframe className="rl-pdfview" src={pdfSrc(r)} title={r.pdf.path} />
+                </div>
+              )
+            })() : etab.kind === 'edit' ? (
               <EditRef ref_={etab.who ? refs.find((r) => r.id === etab.who) : null}
                 doc={doc} tags={allTags} onSave={commit} isAdmin={IS_ADMIN} say={setNote}
                 onOpen={(id) => {
@@ -742,6 +788,78 @@ function ListOut({ list, picked, tokens, say, open, setOpen }) {
         <textarea className="rl-outbox" value={out} readOnly
           placeholder={none ? '이 탭에 논문이 없습니다.' : ''} />
       </>)}
+    </div>
+  )
+}
+
+// ─── Settings ───────────────────────────────────────────────────────────────
+/** What the service may read from disk, and one pass that links every paper
+ *  whose file is named after its key. Manager only — it is the one setting that
+ *  decides what the backend will open. */
+function Settings({ doc, onSave, say }) {
+  const roots = (doc.settings || {}).pdfRoots || []
+  const [busy, setBusy] = useState(false)
+  const [found, setFound] = useState(null)
+
+  const setRoots = (v) => onSave({ settings: { ...(doc.settings || {}), pdfRoots: v } },
+    '허용 루트를 저장했습니다.')
+
+  async function linkAll() {
+    setBusy(true)
+    try {
+      const r = await fetch(`${PORTAL_BASE}/api/scan`, { headers: authHeaders() })
+      const got = await r.json()
+      const files = got.files || {}
+      let linked = 0, already = 0
+      const refs = doc.references.map((x) => {
+        const hits = files[x.citeKey]
+        if (!hits || !hits.length) return x
+        if (x.pdf?.path) { already += 1; return x }
+        const sorted = [...hits].sort((a, b) => a.split('/').length - b.split('/').length)
+        linked += 1
+        return { ...x, pdf: { mode: 'path', path: sorted[0],
+          ...(sorted.length > 1 ? { copies: sorted.slice(1) } : {}) } }
+      })
+      setFound({ files: Object.keys(files).length, linked, already })
+      if (linked) await onSave({ references: refs }, `${linked}편에 파일을 연결했습니다.`)
+      else say('새로 연결할 것이 없습니다.')
+    } catch (e) { say(String(e.message || e)) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="rl-edit">
+      <div className="rl-rec">
+        <Fld label="PDF 허용 루트">
+          <TextRows value={roots} add="+ 루트" placeholder="/Users/…/Papers"
+            onChange={setRoots} />
+          <span className="rl-hint">
+            이 폴더들 안의 파일만 서비스가 읽습니다. 심볼릭 링크를 풀어 확인하므로
+            루트 밖을 가리키는 링크는 거부됩니다.
+          </span>
+        </Fld>
+        <Fld label="전부 자동 연결">
+          <div className="rl-rows">
+            <div className="rl-rrow">
+              <button type="button" className="rl-btn rl-go" disabled={busy || !roots.length}
+                onClick={linkAll}>{busy ? '훑는 중…' : '루트를 훑어 연결'}</button>
+              <span className="rl-hint">파일 이름이 cite key와 같으면 연결합니다.</span>
+            </div>
+            {found && (
+              <span className="rl-hint">
+                파일 {found.files}개 · 새로 연결 {found.linked} · 이미 있던 것 {found.already}
+              </span>
+            )}
+          </div>
+        </Fld>
+        <Fld label="문서">
+          <span className="rl-hint rl-mono">
+            논문 {doc.references.length} · 저널 {(doc.journals || []).length}
+            {' · '}저자 {(doc.authors || []).length}
+            {' · '}파일 연결 {doc.references.filter((r) => r.pdf?.path).length}
+            {' · '}version {doc.version}
+          </span>
+        </Fld>
+      </div>
     </div>
   )
 }
@@ -1003,6 +1121,69 @@ function EditAuthorRec({ id, doc, onSave, isAdmin, onCreated, onDone, onOpenRef,
           )}
         </Fld>
       </div>
+    </div>
+  )
+}
+
+/** A paper's file: where it is, and the three ways to say where.
+ *
+ *  A file picker cannot tell a web page a PATH — only its contents — so the
+ *  path arrives by being dropped from Finder (a file:// URL), pasted (⌥⌘C
+ *  copies one), or found: the file is named after the cite key, so the service
+ *  looks for that name under the roots the project allows.
+ */
+function PdfRow({ value, citeKey, onChange, say }) {
+  const [over, setOver] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const path = value?.path || ''
+  const set = (p) => onChange(p ? { ...(value || {}), mode: 'path', path: p } : null)
+
+  async function look() {
+    const key = String(citeKey || '').trim()
+    if (!key) { say('cite key가 있어야 찾을 수 있습니다.'); return }
+    setBusy(true)
+    try {
+      const r = await fetch(`${PORTAL_BASE}/api/scan`, { headers: authHeaders() })
+      const got = await r.json()
+      const hits = got.files?.[key] || []
+      if (!hits.length) { say(`허용 루트에 ${key}.pdf 가 없습니다.`); return }
+      const sorted = [...hits].sort((a, b) => a.split('/').length - b.split('/').length)
+      onChange({ mode: 'path', path: sorted[0], ...(sorted.length > 1 ? { copies: sorted.slice(1) } : {}) })
+      say(hits.length > 1 ? `${hits.length}개 찾음 — 가장 바깥 것을 연결했습니다.` : '연결했습니다.')
+    } catch (e) { say(String(e.message || e)) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className={`rl-rows${over ? ' rl-over' : ''}`}
+      onDragOver={(e) => { e.preventDefault(); setOver(true) }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault(); setOver(false)
+        const p = droppedPath(e)
+        if (p) { set(p); say('경로를 받았습니다 — 허용 루트 안이어야 열립니다.') }
+      }}>
+      <div className="rl-rrow">
+        <input className="rl-in rl-mono" style={{ width: 360 }} value={path}
+          placeholder="Finder에서 끌어다 놓거나 경로를 붙여넣으세요"
+          onChange={(e) => set(e.target.value)} />
+        {path && (
+          <>
+            <a className="rl-btn" href={`${PORTAL_BASE}/api/file?path=${encodeURIComponent(path)}`}
+              target="_blank" rel="noreferrer">열기</a>
+            <button type="button" className="rl-btn"
+              onClick={() => revealPdf(path, say)}>Finder에서 보기</button>
+            <button type="button" className="rl-x" title="연결 끊기" onClick={() => set('')}>×</button>
+          </>
+        )}
+        {!path && (
+          <button type="button" className="rl-btn rl-go" disabled={busy} onClick={look}>
+            {busy ? '찾는 중…' : '찾기'}
+          </button>
+        )}
+      </div>
+      {(value?.copies || []).length > 0 && (
+        <span className="rl-hint">사본 {value.copies.length}개: {value.copies.join(' · ')}</span>
+      )}
     </div>
   )
 }
@@ -1284,7 +1465,7 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
   const draft = !ref_
   const blank = { id: null, type: 'paper', citeKey: '', title: '', author: '', journal: '',
     volume: '', pages: '', year: '', doi: '', url: '', tags: [], mainTag: '',
-    cites: [], links: [], note: '' }
+    cites: [], links: [], note: '', pdf: null }
   const [f, setF] = useState(ref_ || blank)
   const [sure, setSure] = useState(false)   // delete asks once, in place
   useEffect(() => { setF(ref_ || blank); setSure(false) }, [ref_])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -1424,6 +1605,10 @@ function EditRef({ ref_, doc, tags, onSave, isAdmin, onCreated, onDeleted, onDon
             <CitedBy refs={doc.references} mine={f.id} onOpen={onOpen} />
           </Fld>
         )}
+        <Fld label="pdf">
+          <PdfRow value={f.pdf} citeKey={f.citeKey} say={say}
+            onChange={(v) => setF((s) => ({ ...s, pdf: v }))} />
+        </Fld>
         <Fld label="링크">
           <TextRows value={f.links || []} add="+ 링크" placeholder="https://…" link
             onChange={(v) => setF((s) => ({ ...s, links: v }))} />
