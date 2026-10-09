@@ -1,0 +1,21 @@
+{
+  "name": "asset-manager2-lilak",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lilak:dev": "vite --host 127.0.0.1 --port 5143",
+    "lilak:dev:lan": "vite --host 0.0.0.0 --port 5143",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@vitejs/plugin-react": "^4.3.1",
+    "html5-qrcode": "^2.3.8",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "vite": "^5.3.1"
+  }
+}

@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>자산 목록 작성</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell is-narrow">
+      <header class="topbar">
+        <h1 class="site-title">반출/연장/반입 신청서 작성</h1>
+        <div class="toolbar-row">
+          <button id="zoomToggleBtn" class="ghost-button" type="button">확대</button>
+          <button id="clearAllBtn" class="ghost-button" type="button">전체 비우기</button>
+          <button id="loadListBtn" class="light-button" type="button">목록 불러오기</button>
+          <button id="saveListBtn" class="light-button" type="button">목록 저장하기</button>
+          <button id="saveAllPhotosBtn" class="sky-button" type="button">사진 저장</button>
+          <input id="loadListInput" type="file" accept="application/json,.json,application/hwp+zip,.hwpx" hidden>
+        </div>
+        <div class="pdf-row">
+          <label class="print-setting">
+            <span>글자 크기</span>
+            <input id="printFontSizeInput" type="number" min="8" max="18" value="12" inputmode="numeric">
+          </label>
+          <label class="print-setting">
+            <span>시작 번호</span>
+            <input id="rowStartInput" type="number" min="1" max="9999" value="1" inputmode="numeric">
+          </label>
+          <label class="print-setting">
+            <span>자산설명</span>
+            <select id="printDescriptionSelect">
+              <option value="show" selected>보이기</option>
+              <option value="hide">숨기기</option>
+            </select>
+          </label>
+          <label class="print-setting">
+            <span>사진</span>
+            <select id="printPhotoSelect">
+              <option value="show" selected>보이기</option>
+              <option value="hide">숨기기</option>
+            </select>
+          </label>
+          <button id="exportHwpxBtn" class="light-button export-hwpx-button" type="button">HWPX</button>
+          <button id="exportPdfBtn" class="primary-button export-pdf-button" type="button">PDF</button>
+        </div>
+        <div class="topbar-divider" aria-hidden="true"></div>
+        <div class="request-type-row" role="group" aria-label="신청 유형">
+          <button class="request-type-btn ghost-button" type="button" data-request-type="simple">간편신청</button>
+          <button class="request-type-btn ghost-button is-active" type="button" data-request-type="takeout">반출신청</button>
+          <button class="request-type-btn ghost-button" type="button" data-request-type="extension">연장신청</button>
+          <button class="request-type-btn ghost-button" type="button" data-request-type="return">반입신청</button>
+        </div>
+        <div class="title-block">
+          <label class="title-label" for="documentTitle">제목</label>
+          <input id="documentTitle" class="document-title-input" type="text" value="자산 목록 작성" aria-label="문서 제목">
+          <h1 id="printTitle" class="print-title"></h1>
+          <p id="sheetStatus" class="status-text">자산번호를 입력한 뒤 자산명을 불러올 수 있습니다.</p>
+        </div>
+        <section id="requestInfoPanel" class="request-info-panel" aria-label="신청 정보">
+          <div class="request-grid always-fields">
+            <label>
+              <span>신청자 이름</span>
+              <input class="request-input" data-request-field="applicantName" type="text" placeholder="이름">
+            </label>
+            <label>
+              <span>소속</span>
+              <input class="request-input" data-request-field="applicantOrg" type="text" placeholder="소속">
+            </label>
+          </div>
+          <div class="request-fields" data-request-section="takeout">
+            <label>
+              <span>반출 기간</span>
+              <input class="request-input" data-request-field="takeoutPeriod" type="text" placeholder="2026.05.27.~2026.12.31">
+            </label>
+            <label class="request-wide-field">
+              <span>반출 사유</span>
+              <textarea class="request-input request-textarea" data-request-field="takeoutReason" rows="3" placeholder="****** 실험 준비"></textarea>
+            </label>
+            <label>
+              <span>반출 장소</span>
+              <input class="request-input" data-request-field="takeoutPlace" type="text" placeholder="중이온가속기 연구소">
+            </label>
+            <label>
+              <span>자산공동활용여부</span>
+              <input class="request-input" data-request-field="assetSharing" type="text" placeholder="O/X">
+            </label>
+            <label>
+              <span>국외/국내 반출 여부</span>
+              <input class="request-input" data-request-field="domesticOrInternational" type="text" placeholder="O/X">
+            </label>
+            <label>
+              <span>보안관리대상물품 여부</span>
+              <input class="request-input" data-request-field="securityManagedItem" type="text" placeholder="번호/X/모름">
+            </label>
+            <label>
+              <span>관세감면사후관리 대상물품 면세번호</span>
+              <input class="request-input" data-request-field="customsExemptionNumber" type="text" placeholder="번호/X/모름">
+            </label>
+          </div>
+          <div class="request-fields" data-request-section="extension" hidden>
+            <label>
+              <span>연장 기간</span>
+              <input class="request-input" data-request-field="extensionPeriod" type="text">
+            </label>
+            <label>
+              <span>연장 사유</span>
+              <input class="request-input" data-request-field="extensionReason" type="text">
+            </label>
+          </div>
+          <div class="request-fields" data-request-section="return" hidden>
+            <label>
+              <span>반입 일자</span>
+              <input class="request-input" data-request-field="returnDate" type="text">
+            </label>
+            <label>
+              <span>반입 사유</span>
+              <input class="request-input" data-request-field="returnReason" type="text">
+            </label>
+            <label>
+              <span>반입 장소</span>
+              <input class="request-input" data-request-field="returnPlace" type="text">
+            </label>
+          </div>
+        </section>
+      </header>
+
+      <section class="table-section">
+        <div class="table-wrap" aria-label="자산 목록">
+          <table class="asset-table">
+            <colgroup>
+              <col class="col-index">
+              <col class="col-number">
+              <col class="col-name">
+              <col class="col-photo">
+              <col class="col-photo">
+              <col class="col-description-print print-description-col">
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">자산번호</th>
+                <th class="name-header" scope="col">
+                  <span class="screen-name-label">자산명/자산설명</span>
+                  <span class="print-name-label">자산명</span>
+                </th>
+                <th scope="col">자산번호가 확대된 사진</th>
+                <th scope="col">자산 전체 사진</th>
+                <th class="print-description-header" scope="col">자산설명</th>
+              </tr>
+            </thead>
+            <tbody id="assetRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="actions">
+        <label class="add-count-label" for="addRowCount">추가할 행 수</label>
+        <input id="addRowCount" class="add-count-input" type="number" min="1" max="100" value="1" inputmode="numeric">
+        <button id="addRowBtn" class="primary-button" type="button">행 추가하기</button>
+      </div>
+    </main>
+
+    <template id="rowTemplate">
+      <tr>
+        <td>
+          <div class="row-index-cell">
+            <strong class="row-number"></strong>
+            <button class="clear-text-btn tiny-button ghost-button" type="button">자산번호/자산명 비우기</button>
+            <button class="clear-row-btn tiny-button ghost-button" type="button">행 비우기</button>
+            <button class="delete-row-btn tiny-button danger-button" type="button">행 삭제</button>
+            <button class="save-row-photos-btn tiny-button sky-button" type="button">사진 저장</button>
+            <button class="swap-row-photos-btn tiny-button light-button" type="button">좌우 사진 바꾸기</button>
+          </div>
+        </td>
+        <td>
+          <input class="asset-number-input" type="number" inputmode="numeric" min="0" placeholder="숫자 입력">
+        </td>
+        <td>
+          <div class="name-controls">
+            <textarea class="asset-name-input" rows="2" placeholder="자산명" disabled></textarea>
+            <textarea class="asset-description-input" rows="3" placeholder="자산 설명" disabled></textarea>
+            <div class="button-row">
+              <button class="load-name-btn small-button" type="button">불러오기</button>
+              <button class="manual-name-btn small-button ghost-button" type="button">직접 입력</button>
+            </div>
+            <p class="row-message" aria-live="polite"></p>
+          </div>
+        </td>
+        <td>
+          <div class="photo-cell" data-photo-type="number">
+            <input class="photo-input" type="file" accept="image/*" hidden>
+            <div class="photo-actions">
+              <button class="photo-load-btn small-button violet-button" type="button">찾아보기</button>
+              <button class="photo-clear-btn tiny-button ghost-button" type="button">지우기</button>
+            </div>
+            <div class="drop-zone" tabindex="0">
+              <span>드래그해서 사진 넣기</span>
+              <img class="photo-preview" alt="자산번호 확대 사진 미리보기" draggable="true">
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="photo-cell" data-photo-type="whole">
+            <input class="photo-input" type="file" accept="image/*" hidden>
+            <div class="photo-actions">
+              <button class="photo-load-btn small-button violet-button" type="button">찾아보기</button>
+              <button class="photo-clear-btn tiny-button ghost-button" type="button">지우기</button>
+            </div>
+            <div class="drop-zone" tabindex="0">
+              <span>드래그해서 사진 넣기</span>
+              <img class="photo-preview" alt="자산 전체 사진 미리보기" draggable="true">
+            </div>
+          </div>
+        </td>
+        <td class="print-description-cell">
+          <div class="asset-description-print-text"></div>
+        </td>
+      </tr>
+    </template>
+
+    <dialog id="imageDialog" class="image-dialog">
+      <div class="dialog-header">
+        <strong>사진 확대 보기</strong>
+        <div class="dialog-actions">
+          <button id="rotate90Btn" class="small-button light-button" type="button">90도 돌리기</button>
+          <button id="cropToggleBtn" class="small-button" type="button">잘라내기</button>
+          <button id="applyCropBtn" class="small-button primary-button" type="button" hidden>적용</button>
+          <button id="cancelCropBtn" class="small-button ghost-button" type="button" hidden>취소</button>
+          <button id="closeDialogBtn" class="small-button ghost-button" type="button">닫기</button>
+        </div>
+      </div>
+      <div id="imageStage" class="image-stage">
+        <img id="dialogImage" alt="확대된 자산 사진">
+        <div id="cropBox" class="crop-box" hidden></div>
+      </div>
+    </dialog>
+
+    <script src="hwpx-export.js?v=20260608-font-size-12"></script>
+    <script src="app.js?v=20260608-hwpx-import"></script>
+  </body>
+</html>
