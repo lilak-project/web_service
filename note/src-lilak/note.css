@@ -118,6 +118,19 @@
 /* ── the print page ──────────────────────────────────────────────────────
    Not a RACK screen: a sheet of paper. The browser's own printer writes the
    PDF, so the system's Korean fonts are already there. */
+/* A file is over the note: where it would land, said plainly. */
+.nt-wy { position: relative; }
+.nt-wy.nt-over::after {
+  content: '놓으면 그림이 들어갑니다';
+  position: absolute; inset: 3px; z-index: 3;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 12px;
+  border: 2px dashed var(--rk-cite-t);
+  background: color-mix(in srgb, var(--rk-cite) 55%, transparent);
+  color: var(--rk-cite-t);
+  pointer-events: none;
+}
+
 /* Maths. `$x$` and `$$…$$` are nodes in the editor (so the backslashes
    survive a save) and KaTeX draws them in both places; a block stands on its
    own line, the way it does on paper. */

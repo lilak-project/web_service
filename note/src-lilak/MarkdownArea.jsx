@@ -16,7 +16,7 @@
  * through here comes back in Milkdown's spelling of the same markup (which
  * bullet, how many blank lines), so the file is normalised on the first save.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx, editorViewCtx,
   remarkStringifyOptionsCtx,
@@ -137,6 +137,9 @@ const make = (root, value, onMarkdown, fileSrc, onFiles) => Editor.make()
   .create()
 
 export default function MarkdownArea({ value, onChange, fileSrc, onFiles }) {
+  // A file over the pane says so, so a drop that goes nowhere is visibly a
+  // drop that landed somewhere else.
+  const [over, setOver] = useState(false)
   const host = useRef(null)
   const ed = useRef(null)
   const cb = useRef(onChange)
@@ -189,7 +192,31 @@ export default function MarkdownArea({ value, onChange, fileSrc, onFiles }) {
     })
   }
 
-  return <div className="nt-wy" ref={host} onMouseDown={onClick} />
+  /** The pane takes the drag, not only the text inside it: a picture dropped
+   *  on the margin is a picture meant for the note. ProseMirror's own handler
+   *  gets it first and puts it where the cursor fell; what reaches here
+   *  unclaimed fell outside the text and goes at the end. */
+  const dragging = (e) => {
+    if (!onFiles || !hasFiles(e.dataTransfer)) return false
+    e.preventDefault()
+    setOver(true)
+    return true
+  }
+  const dropped = (e) => {
+    setOver(false)
+    if (e.defaultPrevented || !onFiles || !hasFiles(e.dataTransfer)) return
+    e.preventDefault()
+    const files = [...e.dataTransfer.files]
+    ed.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      stow(view, view.state.doc.content.size, files, onFiles)
+    })
+  }
+  return (
+    <div className={`nt-wy${over ? ' nt-over' : ''}`} ref={host} onMouseDown={onClick}
+      onDragEnter={dragging} onDragOver={dragging} onDrop={dropped}
+      onDragLeave={(e) => { if (!host.current?.contains(e.relatedTarget)) setOver(false) }} />
+  )
 }
 
 /** `![[name.png]]` — Obsidian's embed, which is not markdown and so is not
