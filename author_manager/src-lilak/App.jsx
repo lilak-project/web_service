@@ -24,6 +24,7 @@ import {
   RackField as Fld, RackTextRows as TextRows,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useToggleKey,
   useEditorPanes, RackPaneStrip, useNote, useViewState,
+  useMergeMode, RackMergeButtons, RackMerge,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
@@ -198,6 +199,38 @@ const PRESETS = [
   ['email list', '"{name}" <{email}>'],
 ]
 
+/** Several groups (or affiliations) into one.
+ *
+ *  A person points at one by NAME, so the fold is two things: every row that
+ *  names one of the old ones names the new one instead — once, a person is not
+ *  in a group twice — and the class records themselves go, all but the one
+ *  that survives. Merging into a name nobody has yet renames the first of them
+ *  rather than inventing an empty record. */
+function foldClass(doc, of, gone, to) {
+  const aff = of === 'affiliation'
+  const key = aff ? 'tag' : 'group'
+  const list = aff ? 'affiliations' : 'groups'
+  const drop = new Set(gone)
+  const authors = (doc.authors || []).map((a) => {
+    const rows = a[list] || []
+    if (!rows.some((x) => drop.has(x[key]))) return a
+    const next = []
+    for (const x of rows) {
+      const v = drop.has(x[key]) ? to : x[key]
+      if (next.some((y) => y[key] === v)) continue
+      next.push({ ...x, [key]: v })
+    }
+    return { ...a, [list]: next }
+  })
+  const recs = doc[list] || []
+  let kept = recs.filter((r) => !drop.has(r.name))
+  if (!kept.some((r) => r.name === to)) {
+    const src = recs.find((r) => drop.has(r.name))
+    kept = [...kept, { ...(src || {}), name: to }]
+  }
+  return { authors, [list]: kept }
+}
+
 // ─── Tabs ───────────────────────────────────────────────────────────────────
 const FIXED = [
   // The id stays 'total' — it is in everyone's stored view state — but the
@@ -271,6 +304,12 @@ export default function App() {
   const clsCols = useMemo(
     () => sized(CLS_COLS.filter((c) => !c.group || tab?.of === 'group'), vw, 'c:'),
     [sized, vw, tab])
+  // A list of classes is a list of names people point at, and those drift the
+  // way tags do, so it gets the same merge.
+  const onClasses = tab?.kind === 'classes'
+  const merge = useMergeMode(onClasses)
+  const mergeCols = useMemo(() => [{ k: 'chk', w: 26, min: 26, fix: true }, ...clsCols], [clsCols])
+  const clsNoun = tab?.of === 'affiliation' ? '소속' : '그룹'
 
   // Which authors a tab is about, before the search narrows them. Takes the
   // tab, because an edit beside its list needs BOTH on screen.
@@ -483,6 +522,11 @@ export default function App() {
               remove from group{picked.size ? ` (${picked.size})` : ''}
             </button>
           )}
+          {onClasses && (
+            <RackMergeButtons merge={merge} noun={clsNoun}
+              onOpen={(names) => openEdit({ id: 'mergecls', kind: 'mergecls', of: tab.of, names,
+                label: `${clsNoun} ${names.length}개 합치기` })} />
+          )}
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
@@ -601,21 +645,29 @@ export default function App() {
           )}
 
           {doc && tab?.kind === 'classes' && (
-            <RackTable cols={clsCols} onDrag={drag('c:')} sort={clsSort}
-              onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}>
-              {classes.map((r, i) => (
-                <RackRow key={r.name} cols={clsCols} tone={TONE} className="rl-hit"
-                  onClick={() => openTab({
+            <RackTable cols={merge.mode ? mergeCols : clsCols} onDrag={drag('c:')} sort={clsSort}
+              onSort={(k) => setClsSort((s2) => (s2.k === k ? { k, dir: -s2.dir } : { k, dir: 1 }))}
+              head={merge.mode ? merge.head(classes.map((r) => r.name)) : null}>
+              {classes.map((r, i) => {
+                const chosen = merge.mode && merge.has(r.name)
+                return (
+                <RackRow key={r.name} cols={merge.mode ? mergeCols : clsCols} tone={TONE}
+                  className={`rl-hit${chosen ? ' on' : ''}`}
+                  onClick={() => (merge.mode ? merge.toggle(r.name) : openTab({
                     id: `${tab.of}:${r.name}`, kind: 'authors', label: r.name,
                     ...(tab.of === 'affiliation' ? { aff: r.name } : { grp: r.name }),
-                  })}
+                  }))}
                   onContextMenu={(e) => {
                     e.preventDefault()
                     openEdit({ id: `editcls:${tab.of}:${r.name}`, kind: 'editcls', label: r.name, of: tab.of, who: r.name })
                   }}
-                  cell={{ num: i + 1, name: r.name, count: r.count,
+                  cell={{
+                    ...(merge.mode ? { chk: <input type="checkbox" checked={chosen} tabIndex={-1}
+                      readOnly aria-label={`${r.name} 선택`} /> } : {}),
+                    num: i + 1, name: r.name, count: r.count,
                     type: r.type || D, when: r.when || D, full: r.full || D }} />
-              ))}
+                )
+              })}
               {classes.length === 0 && <p className="rl-msg">등록된 항목이 없습니다.</p>}
             </RackTable>
           )}
@@ -645,7 +697,30 @@ export default function App() {
                   closeEdit(`edit:${id}`)
                   setPicked((s2) => { const n = new Set(s2); n.delete(id); return n })
                 }} />
-            ) : (
+            ) : etab.kind === 'mergecls' ? (() => {
+              const aff = etab.of === 'affiliation'
+              const noun = aff ? '소속' : '그룹'
+              const recs = (aff ? doc.affiliations : doc.groups) || []
+              const all = recs.map((r) => r.name)
+              const live = (etab.names || []).filter((n) => all.includes(n))
+              const inIt = (a, n) => (aff ? inAff(a, n) : inGrp(a, n))
+              const users = authors.filter((a) => live.some((n) => inIt(a, n)))
+              return (
+                <RackMerge names={etab.names || []} noun={noun} exists={all}
+                  count={(n) => authors.filter((a) => inIt(a, n)).length}
+                  users={users.map((a) => anyName(a))}
+                  moved={(to) => users.filter((a) => live.filter((n) => n !== to)
+                    .some((n) => inIt(a, n)) && inIt(a, to)).map((a) => anyName(a))}
+                  movedWhy={`이미 '${noun}'에 둘 다 들어 있어 한 줄로 줄어듭니다`}
+                  onMerge={async (gone, to) => {
+                    if (await commit(foldClass(doc, etab.of, gone, to),
+                      `${noun} ${gone.length + 1}개를 '${to}' 하나로 합쳤습니다 · ${users.length}명`)) {
+                      closeEdit('mergecls'); merge.off()
+                    }
+                  }}
+                  onCancel={() => closeEdit(etab.id)} />
+              )
+            })() : (
               <EditClass name={etab.who} of={etab.of} doc={doc} onSave={commit} isAdmin={IS_ADMIN}
                 onCreated={(name) => {
                   closeEdit(`newcls:${etab.of}`)
