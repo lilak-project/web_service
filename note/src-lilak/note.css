@@ -56,8 +56,10 @@
 /* A todo that is done is still worth seeing — just not first. */
 .rl-hit.rl-done .rl-c { color: var(--rk-mute); text-decoration: line-through; }
 
-/* A file a note embeds, shown where it is named. */
-.nt-embed {
+/* A file a note embeds, shown where it is named — the `![[file]]` widget and
+   a plain markdown `![alt](url)` are the same picture to the reader. */
+.nt-embed,
+.nt-prose img:not(.ProseMirror-separator) {
   display: block;
   max-width: 100%;
   margin: 6px 0;

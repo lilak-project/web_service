@@ -31,7 +31,7 @@ import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
 import { bulletListSchema, listItemSchema } from '@milkdown/kit/preset/commonmark'
 import { InputRule } from '@milkdown/kit/prose/inputrules'
 import { findWrapping } from '@milkdown/kit/prose/transform'
-import { $inputRule } from '@milkdown/kit/utils'
+import { $inputRule, $remark } from '@milkdown/kit/utils'
 import { $prose } from '@milkdown/kit/utils'
 import { Plugin, PluginKey } from '@milkdown/kit/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
@@ -115,6 +115,7 @@ const make = (root, value, onMarkdown, fileSrc) => Editor.make()
   .use(cursor)          // a caret you can place beside a table or an image
   .use(trailing)        // always a paragraph to land in at the end
   .use(listener)
+  .use(imageAttrs)   // plain markdown `![alt](url)`, which milkdown drops
   .use(activeLine)
   .use(checkRule)
   .use(tagInDoc)
@@ -181,6 +182,18 @@ export default function MarkdownArea({ value, onChange, fileSrc }) {
  *  anybody's engine's job. It is shown as a WIDGET beside the text rather than
  *  parsed into an image node: the text stays exactly what the file says, and
  *  the file stays something Obsidian can still read. */
+/** remark reads an image with no title as `title: null`, and the image node
+ *  declares `validate: 'string'` — ProseMirror then refuses the node and the
+ *  picture is dropped on the way in (milkdown 7.22). Give it the empty
+ *  strings it asked for. */
+const imageAttrs = $remark('nt-image-attrs', () => () => (tree) => {
+  const walk = (n) => {
+    if (n.type === 'image') { n.title = n.title || ''; n.alt = n.alt || '' }
+    n.children?.forEach(walk)
+  }
+  walk(tree)
+})
+
 export const EMBED_RE = /!\[\[([^\]]+)\]\]/g
 const embedInDoc = (src) => $prose(() => new Plugin({
   key: new PluginKey('nt-embed'),
