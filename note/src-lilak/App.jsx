@@ -20,6 +20,7 @@ import {
   RackTable, RackRow, RackTabs, RackActions,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
   useEditorPanes, RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
+  RackField, RackTextRows,
   bySome, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, authHeaders,
 } from 'lilak-ui/racklist'
@@ -173,7 +174,13 @@ export default function App() {
   // The editors are kept across a visit to another service: a note deleted in
   // the meantime must not come back as an editor with nothing behind it.
   useEffect(() => {
-    if (index) panes.keep((t) => notes.some((n) => n.id === t.id))
+    if (index) {
+      panes.keep((t) => (t.kind === 'edittag'
+        ? notes.some((n) => inTag(n, t.who))        // the tag is still worn
+        : t.kind                                    // mergetags: not a note
+          ? true
+          : notes.some((n) => n.id === t.id)))
+    }
   }, [index])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // The list carries a first line, not the body — so a search that finds
@@ -289,7 +296,7 @@ export default function App() {
    *  so it is one save per note. A save can fail or lose a race, so it stops
    *  at the first one that does and says how far it got — half a merge the
    *  user knows about beats a whole one they do not. */
-  async function mergeTags(gone, to, users) {
+  async function mergeTags(gone, to, users, said) {
     let done = 0
     let stopped = ''
     for (const u of users) {
@@ -308,7 +315,8 @@ export default function App() {
     merge.off()
     setNote(stopped
       ? `${stopped} — 노트 ${done}편까지 바꿨습니다.`
-      : `태그 ${gone.length + 1}개를 '${to}' 하나로 합쳤습니다 · 노트 ${done}편`)
+      : said ? `${said} · 노트 ${done}편`
+        : `태그 ${gone.length + 1}개를 '${to}' 하나로 합쳤습니다 · 노트 ${done}편`)
   }
   async function toggleTodo(t) {
     try {
@@ -469,6 +477,10 @@ export default function App() {
                     className={`rl-hit${chosen ? ' on' : ''}`}
                     onClick={() => (merge.mode ? merge.toggle(r.name)
                       : openTab({ id: `tag:${r.name}`, kind: 'notes', tag: r.name, label: r.name }))}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      panes.open({ id: `edittag:${r.name}`, kind: 'edittag', who: r.name, label: r.name })
+                    }}
                     cell={{
                       ...(merge.mode ? { chk: <input type="checkbox" checked={chosen} tabIndex={-1}
                         readOnly aria-label={`${r.name} 선택`} /> } : {}),
@@ -497,7 +509,16 @@ export default function App() {
                       onMerge={(gone, to) => mergeTags(gone, to, users)}
                       onCancel={() => panes.close(cur.id)} />
                   )
-                })() : (
+                })() : cur.kind === 'edittag' ? (
+                  <EditTag name={cur.who} notes={notes}
+                    tags={[...new Set(notes.flatMap(tagsOf))].sort()}
+                    onOpen={(id, title) => openEdit(id, title)}
+                    onRename={async (gone, to, users, said) => {
+                      await mergeTags(gone.filter((t) => t !== to), to, users, said)
+                      panes.close(cur.id)
+                    }}
+                    onCancel={() => panes.close(cur.id)} />
+                ) : (
                 <Editor id={cur.id} say={setNote} onSaved={reload}
                   takeCaret={cur.id === fresh} onCaret={() => setFresh(null)}
                   onPrint={() => preview([cur.id])}
@@ -668,6 +689,64 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
           onFiles={(file) => putFile(file).catch((e) => { say(String(e.message || e)); return null })}
           onChange={(v) => setF((s) => ({ ...s, body: v }))} />
       )}
+    </div>
+  )
+}
+
+// ─── One tag ────────────────────────────────────────────────────────────────
+/** A tag is text inside the notes and nowhere else, so renaming one is an edit
+ *  to every note that wears it — and renaming it to a tag that already exists
+ *  is how two tags become one. The same editor either way. */
+function EditTag({ name, notes, tags, onRename, onOpen, onCancel }) {
+  const [to, setTo] = useState(name)
+  const [absorb, setAbsorb] = useState([])
+  const named = String(to || '').trim()
+  const gone = [name, ...absorb.filter((t) => t && t !== name)]
+  const users = notes.filter((n) => gone.some((t) => inTag(n, t)))
+  const merging = absorb.length > 0 || (!!named && named !== name && tags.includes(named))
+  const nothing = !named || (named === name && !absorb.length)
+  function go() {
+    if (nothing) return
+    onRename(gone, named, users, absorb.length
+      ? `태그 ${gone.length}개를 '${named}' 하나로 합쳤습니다`
+      : merging ? `'${name}'을 '${named}'에 합쳤습니다`
+        : `'${name}' → '${named}'`)
+  }
+  useRackKeys({ onSave: () => go() })
+  useEffect(() => { setTo(name); setAbsorb([]) }, [name])
+
+  return (
+    <div className="rl-edit">
+      <RackActions key={name} saveLabel={merging ? '합치기' : 'save'}
+        onSave={go} saveDisabled={nothing} onCancel={onCancel}
+        onRevert={() => { setTo(name); setAbsorb([]) }} />
+      <div className="rl-rec">
+        <RackField label="태그">
+          <input className="rl-in" style={{ width: 260 }} value={to || ''}
+            onChange={(e) => setTo(e.target.value)} />
+          {named !== name && tags.includes(named)
+            && <span className="rl-hint">이미 있는 태그입니다 — 합쳐집니다.</span>}
+        </RackField>
+        <RackField label="합칠 태그">
+          <RackTextRows value={absorb} add="+ 태그" placeholder="태그"
+            onChange={(v) => setAbsorb(v.filter((t) => t && t !== named))} />
+          <span className="rl-hint">
+            {absorb.length
+              ? `이 ${absorb.length}개가 '${named || name}'이 됩니다 — 합쳐서 노트 ${users.length}편`
+              : '같은 뜻의 다른 태그를 적으면 이 태그로 합쳐집니다.'}
+          </span>
+        </RackField>
+        <RackField label="쓰는 노트">
+          <div className="rl-rows">
+            {users.length === 0 && <span className="rl-hint">없음</span>}
+            {users.slice(0, 12).map((n) => (
+              <button key={n.id} type="button" className="rl-lnk"
+                onClick={() => onOpen(n.id, n.title)}>{n.title || n.id}</button>
+            ))}
+            {users.length > 12 && <span className="rl-hint">… 모두 {users.length}편</span>}
+          </div>
+        </RackField>
+      </div>
     </div>
   )
 }
