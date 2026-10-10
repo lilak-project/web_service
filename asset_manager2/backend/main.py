@@ -143,6 +143,13 @@ if _assets.is_dir():
     app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
 
+# The page itself must never be cached: its <script> names a hashed bundle, and
+# a rebuild gives that bundle a new name. A browser holding yesterday's index
+# asks for a file that is no longer there and shows a blank page. The hashed
+# files themselves can be cached forever — that is what the hash is for.
+_NO_STORE = {"Cache-Control": "no-store, must-revalidate"}
+
+
 @app.get("/{path:path}")
 def spa(path: str):
     candidate = DIST / path
@@ -150,5 +157,5 @@ def spa(path: str):
         return FileResponse(candidate)
     index = DIST / "index.html"
     if index.is_file():
-        return FileResponse(index)
+        return FileResponse(index, headers=_NO_STORE)
     raise HTTPException(404, "asset_manager dist not built")

@@ -80,5 +80,8 @@ npm run lilak:dev                                     # 127.0.0.1:5143
 ```
 
 The portal runs `portal-serve.sh`, which rebuilds and then serves `dist/`, so a
-stop & start in manage mode picks up source changes. The manifest
+stop & start in manage mode picks up source changes. The backend serves
+`index.html` with `Cache-Control: no-store` — every build renames the hashed
+bundle, and a browser holding yesterday's index asks for a file that is no
+longer there and shows a blank page. The manifest
 (`data/asset_manager2/service.json`) says `"open": "panel"`.
