@@ -296,6 +296,28 @@ export default function App() {
       setNote(template ? `'${template}' 템플릿으로 만들었습니다.` : '새 노트를 만들었습니다.')
     } catch (e) { setNote(String(e.message || e)) }
   }
+  /** Today's note, under the name it always has. One a day: if today's is
+   *  already there this opens it instead of making a second one, and a
+   *  template called `daily` is used when there is one. */
+  async function openDaily() {
+    const d = new Date()
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const title = `Daily ${day}`
+    const had = notes.find((n) => n.title === title)
+    if (had) { openEdit(had.id, had.title); setNote(`'${title}'을 열었습니다.`); return }
+    try {
+      const template = (index?.templates || []).includes('daily') ? 'daily' : null
+      const { body } = await ask('/notes', { method: 'POST', body: JSON.stringify({ title, template }) })
+      // The tag lives in the body, like every other tag here.
+      if (!bodyTags(body.body).includes('daily')) {
+        await putNote(body.id, body.version,
+          { title, body: body.body ? `${body.body.replace(/\n+$/, '')}\n\n#daily` : '#daily' })
+      }
+      await reload()
+      openEdit(body.id, title)
+      setNote(`'${title}'을 만들었습니다.`)
+    } catch (e) { setNote(String(e.message || e)) }
+  }
   /** Folding tags here is not one document save: a tag is text inside a file,
    *  so it is one save per note. A save can fail or lose a race, so it stops
    *  at the first one that does and says how far it got — half a merge the
@@ -352,6 +374,8 @@ export default function App() {
 
         <div className="rl-cmd">
           <button type="button" className="rl-btn rl-go" onClick={() => create(null)}>+ 새 노트</button>
+          <button type="button" className="rl-btn rl-go" title="오늘 날짜의 노트 — 있으면 열고, 없으면 만듭니다"
+            onClick={openDaily}>daily</button>
           {!!index?.templates?.length && (
             /* A template is a note in templates/ — so this list is a folder
                listing, not a feature with a store behind it. */
