@@ -20,7 +20,7 @@ import {
   RackTable, RackRow, RackTabs, RackActions,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
   useEditorPanes, RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
-  RackField, RackTextRows,
+  RackEditClass,
   bySome, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, authHeaders,
 } from 'lilak-ui/racklist'
@@ -265,6 +265,10 @@ export default function App() {
     if (active === id) setActive('notes')
   }
   const openEdit = (id, label) => { panes.open({ id, label }); setFresh(id) }
+  /** Which notes wear any of these tags — what the tag editor lists. */
+  const tagUsers = useCallback((names) => notes
+    .filter((n) => names.some((t) => inTag(n, t)))
+    .map((n) => ({ id: n.id, label: n.title || n.id })), [notes])
   useRackKeys({
     onClose: () => { const cur = panes.current(panes.cols[0]); if (cur) panes.close(cur.id) },
     onNew: () => create(null),
@@ -510,10 +514,15 @@ export default function App() {
                       onCancel={() => panes.close(cur.id)} />
                   )
                 })() : cur.kind === 'edittag' ? (
-                  <EditTag name={cur.who} notes={notes}
-                    tags={[...new Set(notes.flatMap(tagsOf))].sort()}
-                    onOpen={(id, title) => openEdit(id, title)}
-                    onRename={async (gone, to, users, said) => {
+                  /* The same editor every rack-list service gives a class.
+                     What is ours is the save: a tag is text in the notes, so
+                     renaming one rewrites every note that wears it. */
+                  <RackEditClass name={cur.who} noun="태그" wears="쓰는 노트" unit="편"
+                    exists={[...new Set(notes.flatMap(tagsOf))].sort()}
+                    wearing={tagUsers}
+                    onOpen={(id) => openEdit(id, (notes.find((n) => n.id === id) || {}).title)}
+                    onSave={async (gone, to, said) => {
+                      const users = notes.filter((n) => gone.some((t) => inTag(n, t)))
                       await mergeTags(gone.filter((t) => t !== to), to, users, said)
                       panes.close(cur.id)
                     }}
@@ -689,64 +698,6 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
           onFiles={(file) => putFile(file).catch((e) => { say(String(e.message || e)); return null })}
           onChange={(v) => setF((s) => ({ ...s, body: v }))} />
       )}
-    </div>
-  )
-}
-
-// ─── One tag ────────────────────────────────────────────────────────────────
-/** A tag is text inside the notes and nowhere else, so renaming one is an edit
- *  to every note that wears it — and renaming it to a tag that already exists
- *  is how two tags become one. The same editor either way. */
-function EditTag({ name, notes, tags, onRename, onOpen, onCancel }) {
-  const [to, setTo] = useState(name)
-  const [absorb, setAbsorb] = useState([])
-  const named = String(to || '').trim()
-  const gone = [name, ...absorb.filter((t) => t && t !== name)]
-  const users = notes.filter((n) => gone.some((t) => inTag(n, t)))
-  const merging = absorb.length > 0 || (!!named && named !== name && tags.includes(named))
-  const nothing = !named || (named === name && !absorb.length)
-  function go() {
-    if (nothing) return
-    onRename(gone, named, users, absorb.length
-      ? `태그 ${gone.length}개를 '${named}' 하나로 합쳤습니다`
-      : merging ? `'${name}'을 '${named}'에 합쳤습니다`
-        : `'${name}' → '${named}'`)
-  }
-  useRackKeys({ onSave: () => go() })
-  useEffect(() => { setTo(name); setAbsorb([]) }, [name])
-
-  return (
-    <div className="rl-edit">
-      <RackActions key={name} saveLabel={merging ? '합치기' : 'save'}
-        onSave={go} saveDisabled={nothing} onCancel={onCancel}
-        onRevert={() => { setTo(name); setAbsorb([]) }} />
-      <div className="rl-rec">
-        <RackField label="태그">
-          <input className="rl-in" style={{ width: 260 }} value={to || ''}
-            onChange={(e) => setTo(e.target.value)} />
-          {named !== name && tags.includes(named)
-            && <span className="rl-hint">이미 있는 태그입니다 — 합쳐집니다.</span>}
-        </RackField>
-        <RackField label="합칠 태그">
-          <RackTextRows value={absorb} add="+ 태그" placeholder="태그"
-            onChange={(v) => setAbsorb(v.filter((t) => t && t !== named))} />
-          <span className="rl-hint">
-            {absorb.length
-              ? `이 ${absorb.length}개가 '${named || name}'이 됩니다 — 합쳐서 노트 ${users.length}편`
-              : '같은 뜻의 다른 태그를 적으면 이 태그로 합쳐집니다.'}
-          </span>
-        </RackField>
-        <RackField label="쓰는 노트">
-          <div className="rl-rows">
-            {users.length === 0 && <span className="rl-hint">없음</span>}
-            {users.slice(0, 12).map((n) => (
-              <button key={n.id} type="button" className="rl-lnk"
-                onClick={() => onOpen(n.id, n.title)}>{n.title || n.id}</button>
-            ))}
-            {users.length > 12 && <span className="rl-hint">… 모두 {users.length}편</span>}
-          </div>
-        </RackField>
-      </div>
     </div>
   )
 }

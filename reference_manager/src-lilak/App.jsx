@@ -20,7 +20,7 @@ import {
   RackTable, RackRow, RackTabs, RackActions,
   RackField as Fld, RackTextRows as TextRows,
   useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
-  useEditorPanes, RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
+  useEditorPanes, RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge, RackEditClass,
   bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId,
   authHeaders, fetchDoc, putDoc,
@@ -1864,30 +1864,16 @@ function EditJournal({ name, doc, onSave, isAdmin, onCreated, onDone, onCancel }
 
 /** A tag has no record: it is a word on some papers. So editing one is
  *  renaming it everywhere, merging it into another, or taking it off. */
+/** A tag, in the kit's class editor: the name, the tags to fold into it, and
+ *  the papers that wear it. What is ours is the save — tags are an array on
+ *  every reference, so folding them is one edit to the document — and the
+ *  delete, which takes the tag off the papers and leaves them. */
 function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
-  const [to, setTo] = useState(name)
-  // Tags that are the same thing under another spelling. They are folded into
-  // this one, which is the one that survives.
-  const [absorb, setAbsorb] = useState([])
-  // ⌘S saves and stays; closing is ⌘X's job.
-  useRackKeys({ onSave: () => rename(true) })
-  useEffect(() => { setTo(name); setAbsorb([]) }, [name])
-  const named = String(to || '').trim()
-  // Every tag this save gets rid of, and every paper that wears one of them.
-  const gone = useMemo(() => [name, ...absorb.filter((t) => t && t !== name)], [name, absorb])
-  const users = (doc.references || []).filter((r) => (r.tags || []).some((t) => gone.includes(t)))
-  const merging = absorb.length > 0 || (named && tags.includes(named) && named !== name)
+  const wearing = useCallback((names) => (doc.references || [])
+    .filter((r) => (r.tags || []).some((t) => names.includes(t)))
+    .map((r) => ({ id: r.id, label: r.citeKey || (r.title || '').slice(0, 40) })), [doc])
+  const users = wearing([name])
 
-  async function rename(keep) {
-    if (!named || (named === name && !absorb.length)) return
-    const refs = foldTags(doc, gone, named)
-    const said = absorb.length
-      ? `${gone.length}개 태그를 '${named}'으로 합쳤습니다 · 논문 ${users.length}편`
-      : merging
-        ? `'${name}' → '${named}'에 합쳤습니다 · 논문 ${users.length}편`
-        : `'${name}' → '${named}' · 논문 ${users.length}편`
-    if (await onSave({ references: refs }, said) && !keep) onDone?.(name)
-  }
   async function remove() {
     const refs = doc.references.map((r) => ((r.tags || []).includes(name)
       ? { ...r, tags: r.tags.filter((t) => t !== name),
@@ -1896,41 +1882,14 @@ function EditTag({ name, doc, tags, onSave, isAdmin, onDone, onCancel }) {
   }
 
   return (
-    <div className="rl-edit">
-      <RackActions key={name}
-        saveLabel={merging ? '합치기' : 'save'}
-        onSave={() => rename(!merging)}
-        saveDisabled={!named || (named === name && !absorb.length)}
-        onCancel={onCancel} onRevert={() => setTo(name)}
-        onDelete={isAdmin ? remove : null}
-        deleteWarn={`논문 ${users.length}편에서 이 태그를 뗍니다. 되돌릴 수 없습니다.`} />
-      <div className="rl-rec">
-        <Fld label="태그">
-          <input className="rl-in" style={{ width: 260 }} list="rl-tags-all" value={to || ''}
-            onChange={(e) => setTo(e.target.value)} />
-          <datalist id="rl-tags-all">{tags.map((t) => <option key={t} value={t} />)}</datalist>
-          {named !== name && tags.includes(named)
-            && <span className="rl-hint">이미 있는 태그입니다 — 합쳐집니다.</span>}
-        </Fld>
-        <Fld label="합칠 태그">
-          <TagRows value={absorb} options={tags.filter((t) => t !== name && !absorb.includes(t))}
-            onChange={(v) => setAbsorb(v.filter((t) => t !== named))} />
-          <span className="rl-hint">
-            {absorb.length
-              ? `이 ${absorb.length}개가 '${named || name}'이 됩니다 — 합쳐서 논문 ${users.length}편`
-              : '같은 뜻의 다른 태그를 적으면 이 태그로 합쳐집니다.'}
-          </span>
-        </Fld>
-        <Fld label="쓰는 논문">
-          <div className="rl-rows">
-            {users.length === 0 && <span className="rl-hint">없음</span>}
-            {users.slice(0, 12).map((r) => (
-              <span key={r.id} className="rl-hint">{r.citeKey || (r.title || '').slice(0, 40)}</span>
-            ))}
-            {users.length > 12 && <span className="rl-hint">… 모두 {users.length}편</span>}
-          </div>
-        </Fld>
-      </div>
-    </div>
+    <RackEditClass name={name} noun="태그" wears="쓰는 논문" unit="편"
+      exists={tags} wearing={wearing}
+      onSave={async (gone, to, said) => {
+        const hit = wearing(gone)
+        if (await onSave({ references: foldTags(doc, gone, to) }, `${said} · 논문 ${hit.length}편`)) onDone?.(name)
+      }}
+      onCancel={onCancel}
+      onDelete={isAdmin ? remove : null}
+      deleteWarn={`논문 ${users.length}편에서 이 태그를 뗍니다. 되돌릴 수 없습니다.`} />
   )
 }
