@@ -16,6 +16,9 @@ Two tabs, both tables:
 - **lists** — every list. A list is a RECORD in the data (what the old app
   saved from My List), so History and My List are the same thing here: you tick
   assets, press 리스트 만들기, and the list opens for the rest.
+  Pressing a list opens a tab of its own — its assets, in the order the list
+  holds them, with the same columns as the assets table and 리스트 편집 on the
+  command line. Right-pressing it goes straight to that editor.
 
 There is no My List: a working set you had to fill before you could act on it
 was a second selection beside the checkboxes. The checkboxes make the list.

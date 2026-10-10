@@ -153,8 +153,9 @@ export default function App() {
   const [doc, setDoc] = useState(null)
   const [err, setErr] = useState('')
   const [note, setNote] = useNote()
-  const [tabs] = useState(FIXED)
-  const [active, setActive] = useState('assets')
+  const [tabs, setTabs] = useState(() => [...FIXED,
+    ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
+  const [active, setActive] = useState(VIEW.active || 'assets')
   // The editor's panes, its tabs, the split between them and the filter are the
   // kit's — every rack-list service behaves the same way because it is the same
   // code, not the same intention.
@@ -181,16 +182,27 @@ export default function App() {
   const sorters = onLists ? LIST_SORTERS : SORTERS
   const firstCol = onLists ? 'at' : 'assetId'
 
-  const scope = useMemo(() => (onLists
-    ? [...lists].sort(bySome(LIST_SORTERS[sort?.k || 'at'], sort?.dir ?? -1))
-    : [...assets].sort(bySome(SORTERS[sort?.k || 'assetId'], sort?.dir ?? 1))),
-  [onLists, lists, assets, sort])
+  const scope = useMemo(() => {
+    if (onLists) return [...lists].sort(bySome(LIST_SORTERS[sort?.k || 'at'], sort?.dir ?? -1))
+    let list = assets
+    if (tab?.list) {
+      // A list's own tab: its assets, in the order the list holds them until a
+      // column is pressed — a list is often built in the order it was gathered.
+      const rec = lists.find((r) => r.id === tab.list)
+      const by = Object.fromEntries(assets.map((a) => [a.assetId, a]))
+      list = (rec?.assetIds || []).map((id) => by[id]).filter(Boolean)
+      if (!sort) return list
+    }
+    return [...list].sort(bySome(SORTERS[sort?.k || 'assetId'], sort?.dir ?? 1))
+  }, [onLists, lists, assets, sort, tab])
 
   const filter = useFacetFilter(scope, sorters, { sel: VIEW.fsel, on: VIEW.fon })
   // Below the filter on purpose: a dependency array is evaluated where it is
   // written, and `filter` does not exist yet further up.
-  useEffect(() => { saveView({ active, sort, fsel: filter.sel, fon: filter.on }) },
-    [active, sort, filter.sel, filter.on])
+  useEffect(() => {
+    saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
+               active, sort, fsel: filter.sel, fon: filter.on })
+  }, [tabs, active, sort, filter.sel, filter.on])
   const rows = useMemo(() => {
     const kept = filter.on ? scope.filter(filter.passes) : scope
     const q = query.trim().toLowerCase()
@@ -218,6 +230,14 @@ export default function App() {
   // editor has the width while it is open.
   const showEdit = panes.showing && !!doc
   const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
+  function openTab(t) {
+    setTabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
+    setActive(t.id)
+  }
+  function closeTab(id) {
+    setTabs((ts) => ts.filter((t) => t.id !== id))
+    if (active === id) setActive('lists')
+  }
   const openEdit = (t) => panes.open(t)
   const closeEdit = (id) => panes.close(id)
   // ⌘N a new record, ⌘S save it, ⌘X leave it — the keys every rack list has.
@@ -225,9 +245,15 @@ export default function App() {
     onNew: () => openEdit({ id: 'new', kind: 'edit', who: null, label: '새 자산' }),
     onClose: () => { const cur = panes.current(panes.cols[0]); if (cur) panes.close(cur.id) },
   })
-  // A tab for an asset the document no longer has cannot be shown.
+  // A tab for something the document no longer has cannot be shown — a list
+  // that was deleted takes its tab with it.
   useEffect(() => {
     if (!doc) return
+    setTabs((ts) => {
+      const alive = (t) => FIXED.some((f) => f.id === t.id)
+        || (t.list ? (doc.records || []).some((r) => r.id === t.list) : false)
+      return ts.every(alive) ? ts : ts.filter(alive)
+    })
     panes.keep((t) => !t.who
       || (t.kind === 'list' ? (doc.records || []).some((r) => r.id === t.who)
         : assets.some((a) => a.assetId === t.who)))
@@ -292,6 +318,11 @@ export default function App() {
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
+          {tab?.list && (
+            <button type="button" className="rl-btn rl-tabonly"
+              onClick={() => openEdit({ id: `list:${tab.list}`, kind: 'list', who: tab.list,
+                label: tab.label })}>리스트 편집</button>
+          )}
           <span className="rl-gap" />
           <FilterBar f={filter} />
           <span className="rl-sp" />
@@ -302,7 +333,8 @@ export default function App() {
 
         <div className="rl-body">
           {showList && (<div className="rl-pane" style={showEdit ? split.leftStyle : undefined}>
-            <RackTabs tabs={tabs} active={active} fixed={FIXED} onPick={setActive} />
+            <RackTabs tabs={tabs} active={active} fixed={FIXED}
+              onPick={setActive} onClose={closeTab} />
 
             {err && <p className="rl-msg">{err}</p>}
             {!err && !doc && <p className="rl-msg">읽는 중…</p>}
@@ -325,7 +357,8 @@ export default function App() {
                   return (
                     <RackRow key={r.id} cols={cols} tone={LIST_TONE}
                       className={`rl-hit${on ? ' on' : ''}${edited ? ' rl-edited' : ''}`}
-                      onClick={(e) => hit(i, e.shiftKey)}
+                      onClick={() => openTab({ id: `in:${r.id}`, kind: 'assets', list: r.id,
+                        label: r.name || '리스트' })}
                       onContextMenu={(e) => {
                         e.preventDefault()
                         openEdit({ id: `list:${r.id}`, kind: 'list', who: r.id, label: r.name || '리스트' })
