@@ -66,6 +66,15 @@
 /* ── the print page ──────────────────────────────────────────────────────
    Not a RACK screen: a sheet of paper. The browser's own printer writes the
    PDF, so the system's Korean fonts are already there. */
+/* The way out of a link that is still text: shown where the caret put it. */
+.nt-open {
+  margin-left: 6px; padding: 0 6px;
+  border: 1px solid var(--rk-cite-t); border-radius: 2px;
+  background: var(--rk-cite); color: var(--rk-cite-t);
+  font-size: .85em; text-decoration: none; white-space: nowrap;
+  user-select: none;
+}
+
 /* A file is over the note: where it would land, said plainly. */
 .nt-wy { position: relative; }
 .nt-wy.nt-over::after {

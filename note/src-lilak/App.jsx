@@ -730,10 +730,16 @@ function Img({ node, alt, ...rest }) {
   const [text, w] = embedSpec(alt || '')
   return <img alt={text} {...rest} style={w ? { width: `${w}px` } : undefined} />
 }
+/** A link out of the note opens a tab of its own: this page is inside the
+ *  portal's frame, and a site that refuses to be framed would otherwise just
+ *  not arrive. */
+function Link({ node, ...rest }) {
+  return <a {...rest} target="_blank" rel="noreferrer" />
+}
 const RENDER = {
   p: tagged('p'), li: tagged('li'), td: tagged('td'), blockquote: tagged('blockquote'),
   h1: tagged('h1'), h2: tagged('h2'), h3: tagged('h3'), h4: tagged('h4'),
-  img: Img,
+  img: Img, a: Link,
 }
 function Rendered({ children }) {
   // Maths is `$x^2$` and `$$…$$`, which KaTeX draws here and the editor leaves

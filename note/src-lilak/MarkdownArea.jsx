@@ -129,6 +129,7 @@ const make = (root, value, onMarkdown, fileSrc, onFiles) => Editor.make()
   .use(mathView(mathInlineSchema, false))
   .use(imageView)
   .use(takeFiles(onFiles))
+  .use(linkOpen)
   .use(imageAttrs)   // plain markdown `![alt](url)`, which milkdown drops
   .use(activeLine)
   .use(checkRule)
@@ -244,6 +245,61 @@ const imageView = $view(imageSchema.node, () => (node) => {
       return true
     },
   }
+})
+
+/** A link you can follow without leaving the text.
+ *
+ *  A link inside a contenteditable is text, not a link: the browser gives the
+ *  click to the caret. ⌘-click (or ctrl-click) opens it the way it does
+ *  everywhere else, and a plain click hangs a 열기 beside it — because the
+ *  other thing you may have meant was to edit the words. */
+const linkOpen = $prose(() => {
+  const key = new PluginKey('nt-link')
+  return new Plugin({
+    key,
+    state: {
+      init: () => null,
+      apply(tr, prev) {
+        const set = tr.getMeta(key)
+        if (set !== undefined) return set
+        return tr.docChanged ? null : prev
+      },
+    },
+    props: {
+      handleDOMEvents: {
+        mousedown: (view, e) => {
+          const a = e.target?.closest?.('a[href]')
+          const had = key.getState(view.state)
+          if (!a || a.classList.contains('nt-open')) {
+            if (had) view.dispatch(view.state.tr.setMeta(key, null))
+            return false
+          }
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            window.open(a.href, '_blank', 'noopener')
+            return true
+          }
+          const at = view.posAtDOM(a, a.childNodes.length)
+          view.dispatch(view.state.tr.setMeta(key, { at, href: a.href }))
+          return false
+        },
+      },
+      decorations(state) {
+        const s = key.getState(state)
+        if (!s) return null
+        return DecorationSet.create(state.doc, [Decoration.widget(s.at, () => {
+          const go = document.createElement('a')
+          go.className = 'nt-open'
+          go.href = s.href
+          go.target = '_blank'
+          go.rel = 'noreferrer'
+          go.textContent = '열기 ↗'
+          go.contentEditable = 'false'
+          return go
+        }, { side: 1, key: `open:${s.href}` })])
+      },
+    },
+  })
 })
 
 /** A file dropped (or pasted) into a note is stored beside the notes and named
