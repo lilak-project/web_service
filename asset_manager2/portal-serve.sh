@@ -15,6 +15,9 @@ set -u
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PORT="${1:-${PORT:-8040}}"
 
+PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin"
+export PATH
+
 if command -v npm >/dev/null 2>&1; then
   LILAK_UI_PATH="${LILAK_UI_PATH:-$ROOT_DIR/../lilak_ui}" \
     npm --prefix "$ROOT_DIR" run build \

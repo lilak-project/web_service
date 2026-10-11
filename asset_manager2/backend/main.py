@@ -44,6 +44,7 @@ DATA_FILE = DATA / "data.json"
 SHARED_KEYS = ("assets", "records", "locations", "types", "settings")
 
 _lock = threading.Lock()          # serialize read-modify-write within this process
+KEEP_DAYS = 30                    # daily copies kept under data/backups/
 
 app = FastAPI(title="asset_manager")
 
@@ -60,6 +61,30 @@ def _atomic_write(path: Path, text: str) -> None:
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, path)
+
+
+def _keep(doc: dict) -> None:
+    """The document as it was, before it is replaced.
+
+    Every save overwrites the whole list, so one wrong press used to be the end
+    of it. `data.prev.json` is the step back, and `backups/data-<date>.json` —
+    written once a day, on the first save of that day — is the week-old copy for
+    the mistake nobody noticed at the time. Both are plain documents: to restore
+    one, stop the service and put it back as data.json.
+    """
+    try:
+        text = json.dumps(doc, ensure_ascii=False)
+        _atomic_write(DATA / "data.prev.json", text)
+        day = (DATA / "backups" / f"data-{datetime.now().date().isoformat()}.json")
+        if not day.exists():
+            _atomic_write(day, text)
+            # The document carries its photos inline, so a day's copy is about a
+            # megabyte. A month of them is enough to notice a mistake by.
+            for old_day in sorted(day.parent.glob("data-*.json"))[:-KEEP_DAYS]:
+                old_day.unlink(missing_ok=True)
+    except Exception:
+        # A full disk must not cost the user the save they just made.
+        pass
 
 
 def _blank() -> dict:
@@ -119,6 +144,7 @@ def put_data(body: SaveBody, me: dict = Depends(identity)):
         doc["version"] = cur["version"] + 1
         doc["updatedAt"] = _now()
         doc["updatedBy"] = me.get("email") or me.get("username") or ""
+        _keep(cur)
         _atomic_write(DATA_FILE, json.dumps(doc, ensure_ascii=False))
         return doc
 

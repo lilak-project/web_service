@@ -125,6 +125,7 @@ const LIST_TYPES = [
 const typeLabel = (t) => (LIST_TYPES.find(([k]) => k === t) || [, t || '목록'])[1]
 
 const LIST_COLS = [
+  { k: 'chk', w: 26, min: 26, fix: true },
   { k: 'num', w: 44, min: 32, fix: true, label: '#' },
   { k: 'name', w: 230, min: 100, label: '이름' },
   { k: 'type', w: 96, min: 60, label: '종류' },
@@ -181,9 +182,14 @@ export default function App() {
   const cols = useMemo(() => sized(onLists ? LIST_COLS : COLS, vw), [sized, vw, onLists])
   const sorters = onLists ? LIST_SORTERS : SORTERS
   const firstCol = onLists ? 'at' : 'assetId'
+  // One sort for both tabs, and they do not sort by the same columns: a sort
+  // left on 자산번호 means nothing to a list, so each tab falls back to its own
+  // first column rather than asking for a column that is not there.
+  const ord = useMemo(() => (sort && sorters[sort.k] ? sort
+    : { k: firstCol, dir: onLists ? -1 : 1 }), [sort, sorters, firstCol, onLists])
 
   const scope = useMemo(() => {
-    if (onLists) return [...lists].sort(bySome(LIST_SORTERS[sort?.k || 'at'], sort?.dir ?? -1))
+    if (onLists) return [...lists].sort(bySome(LIST_SORTERS[ord.k], ord.dir))
     let list = assets
     if (tab?.list) {
       // A list's own tab: its assets, in the order the list holds them until a
@@ -193,8 +199,8 @@ export default function App() {
       list = (rec?.assetIds || []).map((id) => by[id]).filter(Boolean)
       if (!sort) return list
     }
-    return [...list].sort(bySome(SORTERS[sort?.k || 'assetId'], sort?.dir ?? 1))
-  }, [onLists, lists, assets, sort, tab])
+    return [...list].sort(bySome(SORTERS[ord.k], ord.dir))
+  }, [onLists, lists, assets, ord, sort, tab])
 
   const filter = useFacetFilter(scope, sorters, { sel: VIEW.fsel, on: VIEW.fon })
   // Below the filter on purpose: a dependency array is evaluated where it is
@@ -225,6 +231,28 @@ export default function App() {
     location: [...new Set(assets.map((a) => a.location).filter(Boolean))].sort(),
     type: [...new Set(assets.map((a) => a.type).filter(Boolean))].sort(),
   }), [assets])
+
+  // A list's own tab is about ONE record, so the actions it carries are the
+  // ops of that record — the same ones its editor has, in a drawer under the
+  // rows instead of a pane beside them.
+  const listRec = lists.find((r) => r.id === tab?.list) || null
+  const [outOpen, setOutOpen] = useState(true)
+  const listOps = useListOps({ rec: listRec, doc, me: ME, isAdmin: IS_ADMIN,
+    onSave: (patch, said) => commit(patch, said), say: setNote,
+    picked, clearPicked, onDeleted: () => closeTab(`in:${listRec?.id}`) })
+
+  const [askDrop, setAskDrop] = useState(false)
+  useEffect(() => { setAskDrop(false) }, [active, picked.size])
+  /** The ticked lists, and the tabs that showed them. The assets stay — a list
+   *  points at assets, it does not hold them. */
+  async function dropLists() {
+    const gone = new Set(picked)
+    if (await commit({ records: lists.filter((r) => !gone.has(r.id)) },
+      `리스트 ${gone.size}개를 지웠습니다.`)) {
+      clearPicked()
+      setTabs((ts) => ts.filter((t) => !gone.has(t.list)))
+    }
+  }
 
   // Two columns of records fit above 1500, one above 1180, and below that the
   // editor has the width while it is open.
@@ -273,7 +301,9 @@ export default function App() {
       user: ME, createdAt: now }
     if (await commit({ records: [rec, ...(doc.records || [])] }, `'${name}' 리스트 ${ids.length}개`)) {
       clearPicked()
-      setActive('lists')
+      // The list it just became, beside what to do with it: its own tab on the
+      // left, its editor on the right.
+      openTab({ id: `in:${rec.id}`, kind: 'assets', list: rec.id, label: name })
       openEdit({ id: `list:${rec.id}`, kind: 'list', who: rec.id, label: name })
     }
   }
@@ -315,6 +345,19 @@ export default function App() {
             <button type="button" className="rl-btn rl-tabonly" disabled={!picked.size}
               onClick={makeList}>리스트 만들기</button>
           )}
+          {onLists && !askDrop && (
+            <button type="button" className="rl-btn rl-danger" disabled={!picked.size}
+              onClick={() => setAskDrop(true)}
+              title="리스트만 지웁니다. 자산은 그대로입니다.">리스트 삭제</button>
+          )}
+          {onLists && askDrop && (
+            <>
+              <button type="button" className="rl-btn rl-danger" onClick={dropLists}>
+                리스트 {picked.size}개를 지웁니다 (자산은 그대로)
+              </button>
+              <button type="button" className="rl-btn" onClick={() => setAskDrop(false)}>취소</button>
+            </>
+          )}
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {picked.size > 0 && <span className="rl-n">{picked.size} 선택</span>}
@@ -342,13 +385,11 @@ export default function App() {
             {doc && (
               <RackTable cols={cols} onDrag={drag('')}
                 facet={filter.tableFacet}
-                sort={sort || { k: firstCol, dir: onLists ? -1 : 1 }}
-                onSort={(k) => setSort((s) => {
+                sort={ord}
+                onSort={(k) => setSort(() => (
                   // The implicit order counts as the current one, so the first
                   // press on the column already sorted turns it over.
-                  const now = s || { k: firstCol, dir: onLists ? -1 : 1 }
-                  return now.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
-                })}
+                  ord.k === k ? { k, dir: -ord.dir } : { k, dir: 1 }))}
                 head={filter.mode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
                 <FacetRows f={filter} />
                 {!filter.mode && onLists && rows.map((r, i) => {
@@ -364,6 +405,9 @@ export default function App() {
                         openEdit({ id: `list:${r.id}`, kind: 'list', who: r.id, label: r.name || '리스트' })
                       }}
                       cell={{
+                        chk: <input type="checkbox" checked={on} tabIndex={-1} readOnly
+                          aria-label={`${r.name || '리스트'} 선택`}
+                          onClick={(e) => { e.stopPropagation(); hit(i, e.shiftKey) }} />,
                         num: i + 1,
                         name: r.name || D,
                         type: typeLabel(r.type) + (r.pending ? ' · 대기' : ''),
@@ -402,6 +446,10 @@ export default function App() {
                 })}
                 {!filter.mode && rows.length === 0 && <p className="rl-msg">해당하는 자산이 없습니다.</p>}
               </RackTable>
+            )}
+            {listRec && (
+              <ListDrawer rec={listRec} ops={listOps} options={options} isAdmin={IS_ADMIN}
+                picked={picked} open={outOpen} setOpen={setOutOpen} />
             )}
           </div>)}
 
@@ -585,29 +633,19 @@ function ShotRows({ value, onChange }) {
   )
 }
 
-/** A list, open. What My List could do, done to a list that already exists:
- *  where its assets are going, what was done with them, and who may say so.
- *
- *  The assets are rows, because that is what they are everywhere else here —
- *  press one to open it, × to take it out of the list. */
-function EditList({ rec, doc, assets, options, me, onSave, isAdmin, say, picked, clearPicked,
-  onCancel, onDeleted, onOpenAsset }) {
+/** Everything a list can have DONE to it, in one place: the editor pane and
+ *  the drawer under a list's own tab are two ways to reach the same actions,
+ *  not two implementations of them. The draft fields live here too, because
+ *  위치 적용 applies the place you just typed. */
+function useListOps({ rec, doc, me, isAdmin, onSave, say, picked, clearPicked, onDeleted }) {
   const [f, setF] = useState(rec || {})
   useEffect(() => { setF(rec || {}) }, [rec])
-  if (!rec) return <p className="rl-msg">그 리스트를 찾을 수 없습니다.</p>
-  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const ids = f.assetIds || []
-  const byId = Object.fromEntries(assets.map((a) => [a.assetId, a]))
-  const mine = ids.map((id) => byId[id] || { assetId: id, name: '(목록에 없는 자산)' })
-  const canModerate = isAdmin || (!!me && rec.user === me)
   const place = String(f.location || '').trim()
 
   const put = (next, said) => onSave({
     records: doc.records.map((r) => (r.id === rec.id ? next : r)),
   }, said)
-
-  /** The list's own fields. */
-  const save = () => put({ ...f, assetIds: ids }, '저장했습니다.')
 
   /** What Update / Check-in / Check-out / Extension did: the place on the list
    *  is written onto every asset in it, and the list says it happened. */
@@ -624,10 +662,6 @@ function EditList({ rec, doc, assets, options, me, onSave, isAdmin, say, picked,
     }, `${ids.length}개를 '${place}'로`)
   }
 
-  /** A non-manager asks instead of doing: the list waits for a manager. */
-  const ask = () => put({ ...f, assetIds: ids, type: f.type === 'request' ? f.type : 'request', pending: true },
-    '승인을 요청했습니다.')
-
   /** Admin: the assets in the list, hidden or shown again. */
   async function setHidden(hidden) {
     const seen = new Set(ids)
@@ -636,64 +670,153 @@ function EditList({ rec, doc, assets, options, me, onSave, isAdmin, say, picked,
     }, hidden ? `${ids.length}개를 숨겼습니다.` : `${ids.length}개의 숨김을 풀었습니다.`)
   }
 
-  /** Admin: the assets themselves go, and the list with them. */
-  async function dropAssets() {
-    const seen = new Set(ids)
-    if (await onSave({
-      assets: doc.assets.filter((a) => !seen.has(a.assetId)),
-      records: doc.records.filter((r) => r.id !== rec.id),
-    }, `자산 ${ids.length}개와 리스트를 지웠습니다.`)) onDeleted?.()
+  return {
+    f, ids, place,
+    set: (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value })),
+    revert: () => setF(rec),
+    canModerate: isAdmin || (!!me && rec?.user === me),
+    /** The list's own fields. */
+    save: () => put({ ...f, assetIds: ids }, '저장했습니다.'),
+    apply,
+    /** A non-manager asks instead of doing: the list waits for a manager. */
+    ask: () => put({ ...f, assetIds: ids, type: f.type === 'request' ? f.type : 'request', pending: true },
+      '승인을 요청했습니다.'),
+    setHidden,
+    /** Just the list: the assets stay where they are. */
+    dropList: async () => {
+      if (await onSave({ records: doc.records.filter((r) => r.id !== rec.id) },
+        `'${rec.name}' 리스트를 지웠습니다.`)) onDeleted?.()
+    },
+    drop: (id) => setF((s) => ({ ...s, assetIds: ids.filter((x) => x !== id) })),
+    addPicked: () => {
+      // A selection is per tab and the lists tab's rows are LISTS: only take
+      // what the document knows as an asset.
+      const real = new Set(doc.assets.map((a) => a.assetId))
+      const add = [...picked].filter((id) => real.has(id) && !ids.includes(id))
+      if (!add.length) { say('더 담을 자산이 없습니다.'); return }
+      setF((s) => ({ ...s, assetIds: [...ids, ...add] }))
+      clearPicked?.()
+      say(`${add.length}개 담았습니다 — 저장하면 리스트에 들어갑니다.`)
+    },
   }
+}
 
-  /** Just the list: the assets stay where they are. */
-  async function dropList() {
-    if (await onSave({ records: doc.records.filter((r) => r.id !== rec.id) },
-      `'${rec.name}' 리스트를 지웠습니다.`)) onDeleted?.()
-  }
+/** The state of a list, said in one line: waiting, applied, or neither. */
+const listState = (rec) => (rec?.pending ? '승인 대기 중'
+  : (rec?.appliedAt ? `적용됨 ${String(rec.appliedAt).slice(0, 10)}` : ''))
 
-  const addPicked = () => {
-    const add = [...picked].filter((id) => !ids.includes(id))
-    if (!add.length) { say('더 담을 자산이 없습니다.'); return }
-    setF((s) => ({ ...s, assetIds: [...ids, ...add] }))
-    clearPicked?.()
-    say(`${add.length}개 담았습니다 — 저장하면 리스트에 들어갑니다.`)
-  }
+/** The list's actions, as the command line of whatever holds them.
+ *
+ *  Nothing here deletes an ASSET. A list is a way of pointing at assets, and
+ *  pointing at them is not owning them: the only place an asset goes away is
+ *  its own editor, one at a time, where you can see what you are deleting. */
+function ListButtons({ ops, rec, isAdmin, picked }) {
+  return (
+    <>
+      <button type="button" className="rl-btn rl-go" onClick={ops.apply}
+        title="리스트의 위치를 자산들에 적용합니다">위치 적용</button>
+      {!isAdmin && <button type="button" className="rl-btn" onClick={ops.ask}>승인 요청</button>}
+      {isAdmin && rec.pending && (
+        <button type="button" className="rl-btn rl-go" onClick={ops.apply}>승인</button>
+      )}
+      <button type="button" className="rl-btn" disabled={!picked?.size}
+        onClick={ops.addPicked}>선택한 자산 담기{picked?.size ? ` (${picked.size})` : ''}</button>
+      {isAdmin && (
+        <>
+          <span className="rl-gap" />
+          <button type="button" className="rl-btn" onClick={() => ops.setHidden(true)}>숨김</button>
+          <button type="button" className="rl-btn" onClick={() => ops.setHidden(false)}>숨김 해제</button>
+        </>
+      )}
+    </>
+  )
+}
+
+/** My List, where it belongs: under the list it is about.
+ *
+ *  The old app gave the working set a page of its own with the buttons on it.
+ *  Here the list IS a tab of assets, so its actions rise from the bottom of
+ *  that tab the way author_manager's 나열 does — the rows stay in sight while
+ *  you say where they are going. */
+function ListDrawer({ rec, ops, options, isAdmin, picked, open, setOpen }) {
+  return (
+    <div className="rl-out">
+      <button type="button" className={`rl-outhead${open ? ' on' : ''}`}
+        onClick={() => setOpen(!open)} aria-expanded={open}>
+        <i className="rl-caret">{open ? '▾' : '▸'}</i>
+        <span>리스트</span>
+        <span className="rl-hint">
+          {`${ops.ids.length}개`}{listState(rec) ? ` · ${listState(rec)}` : ''}
+        </span>
+      </button>
+      {open && (<>
+        <div className="rl-outbar">
+          <span className="rl-hint">이름</span>
+          <input className="rl-in" style={{ width: 190 }} value={ops.f.name || ''}
+            onChange={ops.set('name')} />
+          <span className="rl-hint">종류</span>
+          <select className="rl-in" value={ops.f.type || 'save'} onChange={ops.set('type')}>
+            {LIST_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <span className="rl-hint">위치</span>
+          <input className="rl-in" style={{ width: 200 }} list="am2-location"
+            value={ops.f.location || ''} onChange={ops.set('location')}
+            placeholder="자산들이 갈 곳" />
+          <datalist id="am2-location">
+            {options.location.map((v) => <option key={v} value={v} />)}
+          </datalist>
+          <button type="button" className="rl-btn" onClick={ops.save}>저장</button>
+        </div>
+        <div className="rl-outbar rl-outfoot">
+          <ListButtons ops={ops} rec={rec} isAdmin={isAdmin} picked={picked} />
+          <span className="rl-sp" />
+          {ops.canModerate && (
+            <button type="button" className="rl-btn rl-danger" onClick={ops.dropList}
+              title="리스트만 지웁니다. 자산은 그대로입니다.">리스트 삭제</button>
+          )}
+        </div>
+      </>)}
+    </div>
+  )
+}
+
+/** A list, open. What My List could do, done to a list that already exists:
+ *  where its assets are going, what was done with them, and who may say so.
+ *
+ *  The assets are rows, because that is what they are everywhere else here —
+ *  press one to open it, × to take it out of the list. */
+function EditList({ rec, doc, assets, options, me, onSave, isAdmin, say, picked, clearPicked,
+  onCancel, onDeleted, onOpenAsset }) {
+  const ops = useListOps({ rec, doc, me, isAdmin, onSave, say, picked, clearPicked, onDeleted })
+  if (!rec) return <p className="rl-msg">그 리스트를 찾을 수 없습니다.</p>
+  const { f, ids } = ops
+  const byId = Object.fromEntries(assets.map((a) => [a.assetId, a]))
+  const mine = ids.map((id) => byId[id] || { assetId: id, name: '(목록에 없는 자산)' })
 
   return (
     <div className="rl-edit">
       <RackActions key={rec.id}
-        onSave={save}
+        onSave={ops.save}
         onCancel={onCancel}
-        onRevert={() => setF(rec)}
-        onDelete={canModerate ? dropList : null}
+        onRevert={ops.revert}
+        onDelete={ops.canModerate ? ops.dropList : null}
         deleteWarn="리스트만 지웁니다. 자산은 그대로입니다."
-        extra={(
-          <>
-            <button type="button" className="rl-btn rl-go" onClick={apply}
-              title="리스트의 위치를 자산들에 적용합니다">위치 적용</button>
-            {!isAdmin && (
-              <button type="button" className="rl-btn" onClick={ask}>승인 요청</button>
-            )}
-            {isAdmin && rec.pending && (
-              <button type="button" className="rl-btn rl-go" onClick={apply}>승인</button>
-            )}
-          </>
-        )}
-        hint={rec.pending ? '승인 대기 중' : (rec.appliedAt ? `적용됨 ${String(rec.appliedAt).slice(0, 10)}` : '')}
+        extra={<ListButtons ops={ops} rec={rec} isAdmin={isAdmin} picked={picked} />}
+        hint={listState(rec)}
       />
       <div className="rl-rec">
         <Fld label="이름">
-          <input className="rl-in" style={{ width: 280 }} value={f.name || ''} onChange={set('name')} />
+          <input className="rl-in" style={{ width: 280 }} value={f.name || ''} onChange={ops.set('name')} />
         </Fld>
         <Fld label="종류">
-          <select className="rl-in" value={f.type || 'save'} onChange={set('type')}>
+          <select className="rl-in" value={f.type || 'save'} onChange={ops.set('type')}>
             {LIST_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
           <span className="rl-hint">반출·반입·연장은 위치를 적용하는 같은 동작입니다.</span>
         </Fld>
         <Fld label="위치">
           <input className="rl-in" style={{ width: 240 }} list="am2-location"
-            value={f.location || ''} onChange={set('location')} placeholder="자산들이 갈 곳" />
+            value={f.location || ''} onChange={ops.set('location')} placeholder="자산들이 갈 곳" />
           <datalist id="am2-location">
             {options.location.map((v) => <option key={v} value={v} />)}
           </datalist>
@@ -704,18 +827,6 @@ function EditList({ rec, doc, assets, options, me, onSave, isAdmin, say, picked,
         </Fld>
         <Fld label={`자산 ${ids.length}개`}>
           <div className="rl-rows">
-            <div className="rl-rrow">
-              <button type="button" className="rl-btn" disabled={!picked?.size}
-                onClick={addPicked}>선택한 자산 담기{picked?.size ? ` (${picked.size})` : ''}</button>
-              {isAdmin && (
-                <>
-                  <span className="rl-gap" />
-                  <button type="button" className="rl-btn" onClick={() => setHidden(true)}>숨김</button>
-                  <button type="button" className="rl-btn" onClick={() => setHidden(false)}>숨김 해제</button>
-                  <button type="button" className="rl-btn rl-danger" onClick={dropAssets}>자산째 삭제</button>
-                </>
-              )}
-            </div>
             {mine.length === 0 && <span className="rl-hint">비어 있습니다.</span>}
             {mine.map((a) => (
               <div key={a.assetId} className="rl-rrow">
@@ -724,7 +835,7 @@ function EditList({ rec, doc, assets, options, me, onSave, isAdmin, say, picked,
                 <span>{a.name || '·'}</span>
                 <span className="rl-hint">{a.location || ''}</span>
                 <button type="button" className="rl-x" title="리스트에서 빼기"
-                  onClick={() => setF((s) => ({ ...s, assetIds: ids.filter((x) => x !== a.assetId) }))}>×</button>
+                  onClick={() => ops.drop(a.assetId)}>×</button>
               </div>
             ))}
           </div>

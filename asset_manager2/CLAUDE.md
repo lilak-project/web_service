@@ -51,12 +51,25 @@ the names the old app wrote. A picked file is shrunk to 1280px / jpeg 0.82
 before it goes in: the document is sent whole on every save, so a 4MB phone
 photo would be paid for on every keystroke after it.
 
+**A list's own tab carries its actions in a drawer** under the rows, the way
+author_manager's 나열 panel does (`.rl-out` / `.rl-outhead`, the kit's classes):
+its name, type and destination on one line, the actions on the next. The editor
+pane has the same actions because both call `useListOps` — one set of
+operations, two places to reach them. `CHECKLIST.md` is what is still missing
+from asset_manager.
+
 **A list's editor** is what My List could do, done to a list that exists: its
 name, type and the place its assets are going; 위치 적용 writes that place onto
 every asset in it and stamps the list; 선택한 자산 담기 adds what is ticked in
 the table; an asset row presses through to its own editor, × takes it out. A
-manager also gets 숨김 · 숨김 해제 · 자산째 삭제; someone who is not one asks
-with 승인 요청 and the list waits. delete removes the LIST — the assets stay.
+manager also gets 숨김 · 숨김 해제; someone who is not one asks with 승인 요청
+and the list waits. delete removes the LIST — the assets stay.
+
+**An asset is deleted in its own editor and nowhere else.** A list points at
+assets; pointing at them is not owning them, and one press on a list of a
+thousand used to take all thousand with it — permanently, since the backend
+keeps no older copy. The lists tab ticks like the assets tab (shift for a
+range) and 리스트 삭제 throws away the ticked LISTS, asking once first.
 
 ## Data
 
@@ -66,7 +79,10 @@ One document per portal project, served by `backend/main.py` at `/api/data`:
 client reloads rather than overwriting them. This app writes `assets` and `records`.
 
 `data/asset_manager2/projects/<project>/data.json` — its own data dir, seeded
-by copying a project's file from asset_manager. Nothing here touches the live
+by copying a project's file from asset_manager. Beside it the backend keeps
+what it is about to replace: `data.prev.json` (the step back, every save) and
+`backups/data-<date>.json` (the first save of each day, 30 kept). To restore
+one, stop the service and move the file over `data.json`. Nothing here touches the live
 list.
 
 Per-user browser state, if any is added, goes under `am2.` — both services are
@@ -85,3 +101,11 @@ stop & start in manage mode picks up source changes. The backend serves
 bundle, and a browser holding yesterday's index asks for a file that is no
 longer there and shows a blank page. The manifest
 (`data/asset_manager2/service.json`) says `"open": "panel"`.
+
+`public/sw.js` is a **kill switch, not a PWA worker**. This service began as a
+copy of asset_manager, which registers `sw.js`; whoever opened it then still had
+that worker in scope `/pp/asset_manager2/<project>/` serving the app from its
+cache, so they kept running that day's bundle no matter what was rebuilt — and
+the SPA fallback answered `sw.js` with index.html, which cannot install as a
+module, so the old worker could never be replaced. The file empties the caches,
+unregisters itself and re-navigates the tab. Keep it.
