@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+# Portal entry: build the app (non-fatal), then run the backend on the shared venv.
+set -u
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PORT="${1:-8050}"
+PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+export PATH
+if command -v npm >/dev/null 2>&1; then
+  LILAK_UI_PATH="${LILAK_UI_PATH:-$ROOT_DIR/../lilak_ui}" npm --prefix "$ROOT_DIR" run build \
+    || echo "[portal-serve] build failed; serving existing dist/" >&2
+fi
+cd "$ROOT_DIR/backend"
+ACADEMIC_ACTIVITIES_DATA_DIR="${PORTAL_PROJECT_DATA:-$ROOT_DIR/data}" ACADEMIC_ACTIVITIES_DIST_DIR="$ROOT_DIR/dist" \
+  exec "$ROOT_DIR/../service_manager/.venv/bin/python" -m uvicorn main:app --host 0.0.0.0 --port "$PORT"
