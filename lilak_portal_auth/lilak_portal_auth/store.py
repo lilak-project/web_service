@@ -21,12 +21,14 @@ FastAPI reject every body with 422. The PUT body is a plain dict.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import Body, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
@@ -170,6 +172,12 @@ def _desktop(path: str, how: str) -> list:
         return ["open", "-R", path] if how == "reveal" else ["open", path]
     if os.name == "nt":
         return ["explorer", f"/select,{path}"] if how == "reveal" else ["explorer", path]
+    if how == "reveal" and shutil.which("dbus-send"):
+        # The file manager's own 'select this file', where the desktop answers it.
+        return ["dbus-send", "--session", "--print-reply",
+                "--dest=org.freedesktop.FileManager1", "--type=method_call",
+                "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
+                f"array:string:file://{quote(path)}", 'string:""']
     target = str(Path(path).parent) if how == "reveal" else path
     return ["xdg-open", target]
 
@@ -277,6 +285,83 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         p = Path(rs[0]).expanduser() / name
         p.mkdir()
         return {"ok": True, "path": str(p)}
+
+
+def mount_files(app: FastAPI, doc: Document, setting: str = "fileRoots", exts: tuple = (".pdf",)) -> None:
+    """One file per record, under the roots in settings[setting].
+
+        GET  /api/file?path=[&download=1]   the file, inline (or as a download)
+        GET  /api/realpath?path=            where it actually is
+        POST /api/reveal {path}             show it in the desktop's file manager
+        GET  /api/scan                      every file with one of `exts`, by name
+
+    A record stores a path relative to a root (or absolute and under one). Only
+    files under the roots are served, and only after the path is resolved — a
+    symlink out of a root is out of the root. The scan is what lets a naming
+    convention be the link: a file named after a record's key is that record's.
+    (These were reference_manager's own routes; the paths are unchanged.)"""
+
+    def roots() -> list:
+        with doc.lock:
+            got = (doc.read().get("settings") or {}).get(setting) or []
+        out = []
+        for r in got:
+            try:
+                out.append(Path(r).expanduser().resolve())
+            except Exception:
+                pass
+        return out
+
+    def inside(path: Path, rs: list):
+        try:
+            for root in rs:
+                cand = (path if path.is_absolute() else root / path).resolve()
+                if cand.is_file() and (cand == root or root in cand.parents):
+                    return cand
+        except Exception:
+            return None
+        return None
+
+    def found(path: str) -> Path:
+        rs = roots()
+        if not rs:
+            raise HTTPException(409, "허용 루트가 설정되지 않았습니다.")
+        real = inside(Path(path), rs)
+        if not real:
+            raise HTTPException(404, "그 경로의 파일이 없거나 허용 루트 밖입니다.")
+        return real
+
+    @app.get("/api/file")
+    def get_file(path: str, download: int = 0, _: dict = Depends(identity)):
+        real = found(path)
+        return FileResponse(real, filename=real.name,
+                            content_disposition_type="attachment" if download else "inline")
+
+    @app.get("/api/realpath")
+    def realpath(path: str, _: dict = Depends(identity)) -> dict:
+        real = found(path)
+        return {"path": str(real), "name": real.name}
+
+    @app.post("/api/reveal")
+    def reveal(body: dict = Body(...), _: dict = Depends(identity)):
+        real = found(str(body.get("path") or ""))
+        where = "Finder" if sys.platform == "darwin" else "탐색기" if os.name == "nt" else "파일 관리자"
+        try:
+            subprocess.Popen(_desktop(str(real), "reveal"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as exc:
+            raise HTTPException(500, f"열 수 없습니다: {exc}")
+        return {"ok": True, "where": where, "path": str(real)}
+
+    @app.get("/api/scan")
+    def scan(_: dict = Depends(identity)) -> dict:
+        out: dict = {}
+        for root in roots():
+            for dirpath, _dirs, names in os.walk(root):
+                for n in names:
+                    if n.lower().endswith(tuple(e.lower() for e in exts)):
+                        rel = os.path.relpath(os.path.join(dirpath, n), root)
+                        out.setdefault(unicodedata.normalize("NFC", os.path.splitext(n)[0]), []).append(rel)
+        return {"roots": [str(r) for r in roots()], "files": out}
 
 
 def mount_spa(app: FastAPI, dist: Path, name: str = "service") -> None:

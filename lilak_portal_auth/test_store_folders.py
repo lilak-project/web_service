@@ -1,4 +1,5 @@
-"""mount_folders: a folder by its name, files only inside it.
+"""mount_folders / mount_files: a folder by its name, a file by its path —
+nothing outside the roots.
 
     service_manager/.venv/bin/python lilak_portal_auth/test_store_folders.py
 """
@@ -11,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from lilak_portal_auth import identity
-from lilak_portal_auth.store import Document, mount_folders
+from lilak_portal_auth.store import Document, mount_files, mount_folders
 
 
 def main():
@@ -55,7 +56,30 @@ def main():
         assert c.post("/api/folders/make", json={"name": bad}).status_code in (409, 422), bad
     assert c.post("/api/folders/make", json={"name": "Academic_B"}).status_code == 200
     assert (root / "Academic_B").is_dir()
+    files_check()
     print("ok")
+
+
+def files_check():
+    tmp = Path(tempfile.mkdtemp())
+    root = tmp / "papers"
+    (root / "sub").mkdir(parents=True)
+    (root / "sub" / "JAlmeid_ApJ_1983.pdf").write_bytes(b"%PDF")
+    (tmp / "x.pdf").write_bytes(b"no")
+    os.symlink(tmp / "x.pdf", root / "escape.pdf")
+    doc = Document(tmp / "d.json", keys=("references", "settings"))
+    d = doc.read()
+    d["settings"] = {"pdfRoots": [str(root)]}
+    doc.write(d)
+    app = FastAPI()
+    app.dependency_overrides[identity] = lambda: {}
+    mount_files(app, doc, setting="pdfRoots")
+    c = TestClient(app)
+    assert c.get("/api/scan").json()["files"]["JAlmeid_ApJ_1983"] == ["sub/JAlmeid_ApJ_1983.pdf"]
+    assert c.get("/api/file", params={"path": "sub/JAlmeid_ApJ_1983.pdf"}).content == b"%PDF"
+    for bad in ["escape.pdf", "../x.pdf", str(tmp / "x.pdf")]:
+        assert c.get("/api/file", params={"path": bad}).status_code == 404, bad
+    assert c.get("/api/realpath", params={"path": "sub/JAlmeid_ApJ_1983.pdf"}).json()["name"] == "JAlmeid_ApJ_1983.pdf"
 
 
 if __name__ == "__main__":
