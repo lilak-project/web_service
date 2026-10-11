@@ -578,18 +578,6 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
       .then(({ body }) => {
         if (!alive) return
         setN(body); setF(body); orig.current = body
-        if (!takeCaret) return
-        // A note just opened: the caret goes to its title. A name the app chose
-        // is selected (type over it); one a person wrote is left alone, caret
-        // at the end.
-        requestAnimationFrame(() => {
-          const el = titleRef.current
-          if (!el) return
-          el.focus()
-          if (body.title === '제목 없음') el.select()
-          else el.setSelectionRange(el.value.length, el.value.length)
-          onCaret?.()
-        })
       })
       .catch((e) => say(String(e.message || e)))
     return () => { alive = false }
@@ -609,6 +597,21 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
     const { f: cur, n: disk } = live.current
     if (cur && disk && !sameNote(cur, disk)) putNote(id, disk.version, cur)
   }, [id])
+  // A note just opened: the caret goes to its title. A name the app chose is
+  // selected (type over it); one a person wrote is left alone, caret at the
+  // end. In an EFFECT, not in the fetch's `then`: the field does not exist
+  // until React has drawn the loaded note, and a focus aimed at a ref that is
+  // still null is a focus that silently does not happen.
+  useEffect(() => {
+    if (!takeCaret || !n) return
+    const el = titleRef.current
+    if (!el) return
+    el.focus()
+    if (n.title === '제목 없음') el.select()
+    else el.setSelectionRange(el.value.length, el.value.length)
+    onCaret?.()
+  }, [takeCaret, n])   // eslint-disable-line react-hooks/exhaustive-deps
+
   // ⌘S saves the note you are in, wherever the caret is. ABOVE the early
   // return: a hook that only runs once the note has loaded is a hook the first
   // render did not have, and React drops the whole tree over it (#310) — which
