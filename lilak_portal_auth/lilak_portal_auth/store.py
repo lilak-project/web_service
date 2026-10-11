@@ -55,10 +55,15 @@ class Document:
     browser and must not be clobbered by someone else's save.
     """
 
-    def __init__(self, path: Path, keys: tuple, what: str = "데이터"):
+    def __init__(self, path: Path, keys: tuple, what: str = "데이터", keep_days: int = 0):
         self.path = Path(path)
         self.keys = tuple(keys)
         self.what = what
+        # Every save replaces the whole document, so one wrong press can be the
+        # end of a list. With keep_days set, what a save replaces is kept:
+        # <name>.prev.json every time (the step back) and backups/<name>-<date>.json
+        # on the first save of each day (the copy for the mistake nobody noticed).
+        self.keep_days = keep_days
         self.lock = threading.Lock()
 
     def _empty(self, k: str):
@@ -85,8 +90,28 @@ class Document:
         doc.setdefault("version", 1)
         return doc
 
-    def write(self, doc: dict, who: str = "") -> dict:
+    def keep(self, old: dict) -> None:
+        """Keep the document a save is about to replace. Plain documents: to
+        restore one, stop the service and move it over the live file."""
+        if not self.keep_days:
+            return
+        try:
+            text = json.dumps(old, ensure_ascii=False)
+            stem = self.path.stem
+            atomic_write(self.path.with_name(f"{stem}.prev.json"), text)
+            day = self.path.parent / "backups" / f"{stem}-{datetime.now().date().isoformat()}.json"
+            if not day.exists():
+                atomic_write(day, text)
+                for gone in sorted(day.parent.glob(f"{stem}-*.json"))[:-self.keep_days]:
+                    gone.unlink(missing_ok=True)
+        except Exception:
+            # A full disk must not cost the user the save they just made.
+            pass
+
+    def write(self, doc: dict, who: str = "", replaces: dict = None) -> dict:
         """Bump the version and store. Call under `lock`, after `read`."""
+        if replaces is not None:
+            self.keep(replaces)
         doc["version"] = int(doc.get("version", 0)) + 1
         doc["updatedAt"] = _now()
         doc["updatedBy"] = who
@@ -120,7 +145,7 @@ class Document:
                         if not isinstance(val, dict if k == "settings" else list):
                             raise HTTPException(422, f"'{k}' 형식이 맞지 않습니다.")
                         new[k] = val
-                return doc_.write(new, me.get("email") or me.get("username") or "")
+                return doc_.write(new, me.get("email") or me.get("username") or "", replaces=cur)
 
         @app.get("/api/data/version")
         def get_version(_: dict = Depends(identity)) -> dict:

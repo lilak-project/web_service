@@ -20,16 +20,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs, RackActions, RackField as Fld,
-  useColumnWidths, useViewportWidth, useSelection, useFindKey, useToggleKey,
-  useNote, useViewState, usePaneSplit, useRackKeys,
-  useEditorPanes, RackPaneStrip, useFacetFilter, FilterBar, FacetRows,
+  useRackList, useToggleKey, useRackKeys, RackPaneStrip, FilterBar, FacetRows,
   bySome,
   PORTAL_PROJECT, projectKey, brandStyle, isManager, portalUser, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
 
-const WIDTH_KEY = projectKey('am2', 'cols')
-const VIEW_KEY = projectKey('am2', 'view')
 const IS_ADMIN = isManager()
 const ME = portalUser()?.email || ''
 
@@ -144,86 +140,67 @@ const LIST_SORTERS = {
 }
 const LIST_TONE = { name: 'ink', type: 'dim', location: 'dim', user: 'dim', at: 'dim' }
 
+/** An asset is known by its 자산번호; a list by its id. Module-level, so the
+ *  selection is not rebuilt every render. */
+const assetOrListId = (r) => (r.assetIds ? r.id : r.assetId)
+const sortersFor = (t) => (t?.kind === 'lists' ? LIST_SORTERS : SORTERS)
+
 const FIXED = [
   { id: 'assets', kind: 'assets', label: 'assets' },
   { id: 'lists', kind: 'lists', label: 'lists' },
 ]
 
 export default function App() {
-  const [VIEW, saveView] = useViewState(VIEW_KEY)
   const [doc, setDoc] = useState(null)
-  const [err, setErr] = useState('')
-  const [note, setNote] = useNote()
-  const [tabs, setTabs] = useState(() => [...FIXED,
-    ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
-  const [active, setActive] = useState(VIEW.active || 'assets')
-  // The editor's panes, its tabs, the split between them and the filter are the
-  // kit's — every rack-list service behaves the same way because it is the same
-  // code, not the same intention.
-  const panes = useEditorPanes(projectKey('am2', 'panes'))
-  const split = usePaneSplit(projectKey('am2', 'split'))
-  const [query, setQuery] = useState('')
-  const { drag, sized } = useColumnWidths(WIDTH_KEY, COLS)
-  const vw = useViewportWidth()
-  const [sort, setSort] = useState(VIEW.sort || null)
-  const findRef = useRef(null)
-  useFindKey(findRef)
-
-  useEffect(() => {
-    if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
-    fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
-  }, [])
-
   const assets = doc?.assets || []
-  const tab = tabs.find((t) => t.id === active) || tabs[0]
-
   const lists = doc?.records || []
-  const onLists = tab?.kind === 'lists'
-  const cols = useMemo(() => sized(onLists ? LIST_COLS : COLS, vw), [sized, vw, onLists])
-  const sorters = onLists ? LIST_SORTERS : SORTERS
-  const firstCol = onLists ? 'at' : 'assetId'
+
   // One sort for both tabs, and they do not sort by the same columns: a sort
   // left on 자산번호 means nothing to a list, so each tab falls back to its own
   // first column rather than asking for a column that is not there.
-  const ord = useMemo(() => (sort && sorters[sort.k] ? sort
-    : { k: firstCol, dir: onLists ? -1 : 1 }), [sort, sorters, firstCol, onLists])
-
-  const scope = useMemo(() => {
-    if (onLists) return [...lists].sort(bySome(LIST_SORTERS[ord.k], ord.dir))
+  const scopeOf = useCallback((t, sort) => {
+    const onL = t?.kind === 'lists'
+    const sorters = onL ? LIST_SORTERS : SORTERS
+    const ord = sort && sorters[sort.k] ? sort : { k: onL ? 'at' : 'assetId', dir: onL ? -1 : 1 }
+    if (onL) return [...lists].sort(bySome(LIST_SORTERS[ord.k], ord.dir))
     let list = assets
-    if (tab?.list) {
+    if (t?.list) {
       // A list's own tab: its assets, in the order the list holds them until a
       // column is pressed — a list is often built in the order it was gathered.
-      const rec = lists.find((r) => r.id === tab.list)
-      const by = Object.fromEntries(assets.map((a) => [a.assetId, a]))
+      const rec = lists.find((r) => r.id === t.list)
+      const by = Object.fromEntries(assets.map((x) => [x.assetId, x]))
       list = (rec?.assetIds || []).map((id) => by[id]).filter(Boolean)
       if (!sort) return list
     }
     return [...list].sort(bySome(SORTERS[ord.k], ord.dir))
-  }, [onLists, lists, assets, ord, sort, tab])
+  }, [lists, assets])
+  const search = useCallback((r, q) => (r.assetIds
+    ? [r.name, r.location, r.user, typeLabel(r.type), ...(r.assetIds || [])]
+    : [r.assetId, r.name, r.location, r.type, r.assetClass, r.accountHolder, r.spec, r.memo, r.description])
+    .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)), [])
 
-  const filter = useFacetFilter(scope, sorters, { sel: VIEW.fsel, on: VIEW.fon })
-  // Below the filter on purpose: a dependency array is evaluated where it is
-  // written, and `filter` does not exist yet further up.
-  useEffect(() => {
-    saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-               active, sort, fsel: filter.sel, fon: filter.on })
-  }, [tabs, active, sort, filter.sel, filter.on])
-  const rows = useMemo(() => {
-    const kept = filter.on ? scope.filter(filter.passes) : scope
-    const q = query.trim().toLowerCase()
-    if (!q) return kept
-    return kept.filter((r) => (onLists
-      ? [r.name, r.location, r.user, typeLabel(r.type), ...(r.assetIds || [])]
-      : [r.assetId, r.name, r.location, r.type, r.assetClass, r.accountHolder, r.spec, r.memo, r.description])
-      .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [scope, query, onLists, filter.on, filter.passes])
-  // An asset is known by its 자산번호 — the document has no other id for one,
-  // so that is what a selection holds.
-  const keys = useMemo(() => rows.map((r) => ({ id: onLists ? r.id : r.assetId })), [rows, onLists])
-  const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
-    = useSelection(keys)
+  const L = useRackList({
+    key: 'am2', fixed: FIXED, firstTab: 'assets', scopeOf, search, idOf: assetOrListId,
+    sorters: sortersFor, cols: { '': [...COLS, ...LIST_COLS] },
+  })
+  // The same names the render has always used.
+  const { tab, tabs, openTab, scope, rows, filter, panes, split, vw, findRef, drag } = L
+  const { sort, setSort, query, setQuery, note, setNote, err, setErr } = L
+  const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked } = L
+  // A list's own tab closes back onto the lists it came from.
+  const closeTab = (id) => L.closeTab(id, 'lists')
   useToggleKey(toggleAll)
+
+  useEffect(() => {
+    if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
+    fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
+  }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onLists = tab?.kind === 'lists'
+  const cols = useMemo(() => L.colsOf('', onLists ? LIST_COLS : COLS), [L.colsOf, onLists])   // eslint-disable-line react-hooks/exhaustive-deps
+  const sorters = sortersFor(tab)
+  // The order the arrow shows: the one pressed, or this tab's own first column.
+  const ord = sort && sorters[sort.k] ? sort : { k: onLists ? 'at' : 'assetId', dir: onLists ? -1 : 1 }
 
   // The values already in use, offered when editing — a location or a type is a
   // word other assets already use, not a thing to create first.
@@ -242,7 +219,7 @@ export default function App() {
     picked, clearPicked, onDeleted: () => closeTab(`in:${listRec?.id}`) })
 
   const [askDrop, setAskDrop] = useState(false)
-  useEffect(() => { setAskDrop(false) }, [active, picked.size])
+  useEffect(() => { setAskDrop(false) }, [L.active, picked.size])
   /** The ticked lists, and the tabs that showed them. The assets stay — a list
    *  points at assets, it does not hold them. */
   async function dropLists() {
@@ -250,22 +227,12 @@ export default function App() {
     if (await commit({ records: lists.filter((r) => !gone.has(r.id)) },
       `리스트 ${gone.size}개를 지웠습니다.`)) {
       clearPicked()
-      setTabs((ts) => ts.filter((t) => !gone.has(t.list)))
+      L.keepTabs((t) => !gone.has(t.list))
     }
   }
 
-  // Two columns of records fit above 1500, one above 1180, and below that the
-  // editor has the width while it is open.
-  const showEdit = panes.showing && !!doc
-  const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
-  function openTab(t) {
-    setTabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
-    setActive(t.id)
-  }
-  function closeTab(id) {
-    setTabs((ts) => ts.filter((t) => t.id !== id))
-    if (active === id) setActive('lists')
-  }
+  const showEdit = L.showEdit && !!doc
+  const showList = !showEdit || L.showList
   const openEdit = (t) => panes.open(t)
   const closeEdit = (id) => panes.close(id)
   // ⌘N a new record, ⌘S save it, ⌘X leave it — the keys every rack list has.
@@ -277,11 +244,7 @@ export default function App() {
   // that was deleted takes its tab with it.
   useEffect(() => {
     if (!doc) return
-    setTabs((ts) => {
-      const alive = (t) => FIXED.some((f) => f.id === t.id)
-        || (t.list ? (doc.records || []).some((r) => r.id === t.list) : false)
-      return ts.every(alive) ? ts : ts.filter(alive)
-    })
+    L.keepTabs((t) => (t.list ? (doc.records || []).some((r) => r.id === t.list) : false))
     panes.keep((t) => !t.who
       || (t.kind === 'list' ? (doc.records || []).some((r) => r.id === t.who)
         : assets.some((a) => a.assetId === t.who)))
@@ -376,8 +339,8 @@ export default function App() {
 
         <div className="rl-body">
           {showList && (<div className="rl-pane" style={showEdit ? split.leftStyle : undefined}>
-            <RackTabs tabs={tabs} active={active} fixed={FIXED}
-              onPick={setActive} onClose={closeTab} />
+            <RackTabs tabs={tabs} active={L.active} fixed={FIXED}
+              onPick={L.setActive} onClose={closeTab} />
 
             {err && <p className="rl-msg">{err}</p>}
             {!err && !doc && <p className="rl-msg">읽는 중…</p>}
