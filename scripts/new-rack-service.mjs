@@ -65,10 +65,14 @@ const put = (rel, text, keep = false) => {
 async function keysOf() {
   const f = join(DIR, 'src-lilak', 'def.js')
   const def = (await import(`${pathToFileURL(f).href}?t=${Date.now()}`)).default
-  return [def.item.key, ...(def.classes || []).filter((c) => !c.field).map((c) => c.k), 'settings']
+  return {
+    keys: [def.item.key, ...(def.classes || []).filter((c) => !c.field).map((c) => c.k), 'settings'],
+    // A `folder` field needs the backend to list and open the folders.
+    folders: (def.item.fields || []).some((f) => f.type === 'folder'),
+  }
 }
 async function writeBackend() {
-  const keys = await keysOf()
+  const { keys, folders } = await keysOf()
   const py = keys.map((k) => JSON.stringify(k)).join(', ')
   put('backend/main.py', `"""${NAME} backend — one shared document per portal project.
 
@@ -84,7 +88,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from lilak_portal_auth.store import Document, mount_spa
+from lilak_portal_auth.store import Document, ${folders ? 'mount_folders, ' : ''}mount_spa
 
 DATA = Path(os.environ.get("${ENV}_DATA_DIR", "./data"))
 PROJECT = os.environ.get("PORTAL_PROJECT", "")
@@ -94,7 +98,7 @@ DOC = Document(DATA / "data.json", keys=(${py},), keep_days=30)
 
 app = FastAPI(title="${NAME}")
 DOC.mount(app, project=PROJECT)
-
+${folders ? 'mount_folders(app, DOC)   # a folder per record, under settings.folderRoots\n' : ''}
 # Must stay last: the catch-all would shadow /api/*.
 mount_spa(app, DIST, name="${NAME}")
 `)

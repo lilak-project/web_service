@@ -21,7 +21,10 @@ FastAPI reject every body with 422. The PUT body is a plain dict.
 """
 import json
 import os
+import subprocess
+import sys
 import threading
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -157,6 +160,49 @@ class Document:
         @app.get("/api/whoami")
         def whoami(me: dict = Depends(identity)) -> dict:
             return {**me, "project": project}
+
+
+def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> None:
+    """A folder per record, found by its name: GET /api/folders lists the
+    folders directly under the roots in settings[setting], and POST
+    /api/folders/open {name} opens one in the file manager.
+
+    The naming convention IS the link — a record named Academic_20131207_HIM2013
+    has the folder of that name — so nothing is stored per record. Names are
+    NFC: macOS hands Korean file names back decomposed. Opening takes a NAME
+    from that listing, never a path, so nothing outside the roots is reachable.
+    It opens the file manager of the machine the backend runs on, which helps
+    only when that is the machine you are looking at."""
+
+    def found() -> dict:
+        with doc.lock:
+            roots = (doc.read().get("settings") or {}).get(setting) or []
+        out = {}
+        for r in roots:
+            try:
+                for e in os.scandir(Path(r).expanduser()):
+                    if e.is_dir() and not e.name.startswith("."):
+                        out.setdefault(unicodedata.normalize("NFC", e.name), e.path)
+            except OSError:
+                pass
+        return {"roots": roots, "dirs": out}
+
+    @app.get("/api/folders")
+    def folders(_: dict = Depends(identity)) -> dict:
+        return found()
+
+    @app.post("/api/folders/open")
+    def open_folder(body: dict = Body(...), _: dict = Depends(identity)):
+        path = found()["dirs"].get(unicodedata.normalize("NFC", str(body.get("name") or "")))
+        if not path:
+            raise HTTPException(404, "그 이름의 폴더가 없습니다.")
+        cmd = (["open", path] if sys.platform == "darwin"
+               else ["explorer", path] if os.name == "nt" else ["xdg-open", path])
+        try:
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as exc:
+            raise HTTPException(501, f"열 수 없습니다: {exc}")
+        return {"ok": True, "path": path}
 
 
 def mount_spa(app: FastAPI, dist: Path, name: str = "service") -> None:

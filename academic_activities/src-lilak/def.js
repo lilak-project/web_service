@@ -68,6 +68,9 @@ export default {
       { k: 'papers', label: '논문', type: 'refs', to: PAPERS },
       { k: 'link', label: 'Link', type: 'url' },
       { k: 'key', label: '이름', type: 'text', mono: true, hint: '비워두면 규칙대로 붙습니다 (구분_날짜_행사이름)' },
+      // The folder of the same name under settings.folderRoots — the name IS
+      // the link, so nothing is stored. A new activity shows the name it will get.
+      { k: 'folder', label: '폴더', type: 'folder', get: (r) => r.key || (r.name ? nameKey(r) : '') },
       { k: 'comment', label: 'Comment', type: 'longtext' },
     ],
   },

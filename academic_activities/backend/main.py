@@ -12,7 +12,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from lilak_portal_auth.store import Document, mount_spa
+from lilak_portal_auth.store import Document, mount_folders, mount_spa
 
 DATA = Path(os.environ.get("ACADEMIC_ACTIVITIES_DATA_DIR", "./data"))
 PROJECT = os.environ.get("PORTAL_PROJECT", "")
@@ -22,6 +22,7 @@ DOC = Document(DATA / "data.json", keys=("activities", "places", "proposals", "s
 
 app = FastAPI(title="academic_activities")
 DOC.mount(app, project=PROJECT)
+mount_folders(app, DOC)   # a folder per record, under settings.folderRoots
 
 # Must stay last: the catch-all would shadow /api/*.
 mount_spa(app, DIST, name="academic_activities")
