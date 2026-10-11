@@ -19,16 +19,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs, RackActions,
   RackField as Fld, RackTextRows as TextRows,
-  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
-  useEditorPanes, RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge, RackEditClass,
-  bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
+  useRackList, useRackKeys,
+  RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge, RackEditClass,
+  bySome, fill as fillTpl, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId,
   authHeaders, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
 
-const WIDTH_KEY = projectKey('rm', 'cols')
-const VIEW_KEY = projectKey('rm', 'view')
 const IS_ADMIN = isManager()
 
 // ─── The fields a row shows ─────────────────────────────────────────────────
@@ -369,74 +367,11 @@ const AUT_SORTERS = { name: (r) => r.name, tag: (r) => r.tag, count: (r) => r.co
 const ROLE_LABEL = { all: '', first: '1저자', second: '2저자', corr: 'corr.', other: '그 외' }
 
 export default function App() {
-  const [VIEW, saveView] = useViewState(VIEW_KEY)
   const [doc, setDoc] = useState(null)
-  const [err, setErr] = useState('')
-  const [note, setNote] = useNote()
-  const [tabs, setTabs] = useState(() => [...FIXED,
-    ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
-  const [active, setActive] = useState(VIEW.active || 'total')
-  // The editor is its OWN pane with its OWN tabs: a record you are fixing is
-  // not one of the lists, and closing one should not send you somewhere else.
-  const panes = useEditorPanes(projectKey('rm', 'panes'))
-  const [query, setQuery] = useState('')
-  const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...AUT_COLS])
-  const vw = useViewportWidth()
-  const split = usePaneSplit(projectKey('rm', 'split'))
-  const [sort, setSort] = useState(VIEW.sort || null)
-  const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'name', dir: 1 })
   const [outOpen, setOutOpen] = useState(false)
-  const findRef = useRef(null)
-  useFindKey(findRef)
-
-  useEffect(() => {
-    if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
-    fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
-  }, [])
-  // A tab for something the document no longer has cannot be shown — and
-  // neither can one of a kind this service no longer has: collaborations and
-  // topic groups were tabs of their own before they became tags, and a stored
-  // one would otherwise sit there forever, next to the tag of the same name.
-  useEffect(() => {
-    if (!doc) return
-    const alive = (t) => {
-      if (FIXED.some((f) => f.id === t.id)) return true
-      if (t.jrn) return (doc.journals || []).some((r) => r.name === t.jrn)
-      if (t.tag) return (doc.references || []).some((r) => inTag(r, t.tag))
-      // A citation tab belongs to a paper; without it there is nothing to list.
-      if (t.cites || t.citedBy) return (doc.references || []).some((r) => r.id === (t.cites || t.citedBy))
-      if (t.aut) return (doc.authors || []).some((a) => a.id === t.aut)
-      return false
-    }
-    setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
-    // The editors are kept across a visit to another service, so the same is
-    // true of them: a record that has since gone cannot be edited.
-    panes.keep((t) => {
-      if (!t.who) return true                    // a draft belongs to nobody
-      if (t.kind === 'editjrn') return (doc.journals || []).some((j) => j.name === t.who)
-      if (t.kind === 'editaut') return (doc.authors || []).some((x) => x.id === t.who)
-      if (t.kind === 'edittag') return (doc.references || []).some((r) => inTag(r, t.who))
-      return (doc.references || []).some((r) => r.id === t.who)   // edit · pdf
-    })
-  }, [doc])   // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!tabs.some((t) => t.id === active)) setActive('total')
-  }, [tabs, active])
-
   const refs = doc?.references || []
-  const tab = tabs.find((t) => t.id === active) || tabs[0]
   const tokens = useMemo(() => TOKENS(doc), [doc])
   const sorters = useMemo(() => SORTERS(doc), [doc])
-
-  const cols = useMemo(() => sized(COLS, vw), [sized, vw])
-  // Merging tags is picking several and saying which one they become, so the
-  // tag list turns into a list you pick from. It is a mode because the same
-  // click otherwise opens the tag's papers.
-  const onTags = tab?.kind === 'classes' && tab.of === 'tag'
-  const merge = useMergeMode(onTags)
-  const clsCols = useMemo(() => sized(tab?.of === 'author' ? AUT_COLS : CLS_COLS, vw, 'c:'),
-    [sized, vw, tab])
-  const mergeCols = useMemo(() => [{ k: 'chk', w: 26, min: 26, fix: true }, ...clsCols], [clsCols])
 
   /** How many papers in the list cite this one. Counted once for the whole
    *  document rather than per row, which would be 87² comparisons a render. */
@@ -448,7 +383,7 @@ export default function App() {
 
   const byColumn = useCallback((k, dir) => bySome(sorters[k], dir), [sorters])
 
-  const scopeOf = useCallback((t) => {
+  const scopeOf = useCallback((t, sort) => {
     if (t?.kind !== 'refs') return []
     // Citation tabs: what this paper cites, and what cites it. The first keeps
     // the order the citation numbers give it — a reference list is numbered —
@@ -473,29 +408,56 @@ export default function App() {
     if (t.jrn) list = list.filter((r) => inJrn(r, t.jrn))
     if (t.tag) list = list.filter((r) => inTag(r, t.tag))
     return [...list].sort(byColumn(sort?.k || 'citeKey', sort?.dir ?? 1))
-  }, [refs, sort, byColumn])
-  const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
+  }, [refs, byColumn])
+  const search = useCallback((r, q) => [r.citeKey, r.title, r.journal, r.year, r.doi,
+    ...authorList(doc, r), ...tagsOf(r)]
+    .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)), [doc])
 
-  const filter = useFacetFilter(scope, sorters, { sel: VIEW.fsel, on: VIEW.fon })
-  // Declared after the filter, because its deps read from it — a dependency
-  // array is evaluated where it is written, and `filter` does not exist yet
-  // further up.
+  const L = useRackList({
+    key: 'rm', fixed: FIXED, firstTab: 'total', sorters, scopeOf, search,
+    cols: { '': COLS, 'c:': [...CLS_COLS, ...AUT_COLS] }, clsSort: { k: 'name', dir: 1 },
+  })
+  // The same names the render has always used.
+  const { tab, tabs, openTab, closeTab, scope, rows, filter, panes, split, vw, findRef, drag } = L
+  const { sort, setSort, clsSort, setClsSort, query, setQuery, note, setNote, err, setErr } = L
+  const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked } = L
+
   useEffect(() => {
-    saveView({ tabs: tabs.filter((t) => !FIXED.some((x) => x.id === t.id)),
-               active, sort, clsSort, fsel: filter.sel, fon: filter.on })
-  }, [tabs, active, sort, clsSort, filter.sel, filter.on])   // eslint-disable-line react-hooks/exhaustive-deps
-  const rowsOf = useCallback((sc) => {
-    const kept = filter.on ? sc.filter(filter.passes) : sc
-    const q = query.trim().toLowerCase()
-    if (!q) return kept
-    return kept.filter((r) => [r.citeKey, r.title, r.journal, r.year, r.doi,
-      ...authorList(doc, r), ...tagsOf(r)]
-      .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [query, filter.on, filter.passes, doc])
-  const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
-  const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
-    = useSelection(rows)
+    if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
+    fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
+  }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+  // A tab for something the document no longer has cannot be shown — and
+  // neither can one of a kind this service no longer has (collaborations and
+  // topic groups became tags). The editors outlive a visit to another service,
+  // so a record that has gone since cannot be edited either.
+  useEffect(() => {
+    if (!doc) return
+    L.keepTabs((t) => {
+      if (t.jrn) return (doc.journals || []).some((r) => r.name === t.jrn)
+      if (t.tag) return (doc.references || []).some((r) => inTag(r, t.tag))
+      if (t.cites || t.citedBy) return (doc.references || []).some((r) => r.id === (t.cites || t.citedBy))
+      if (t.aut) return (doc.authors || []).some((a) => a.id === t.aut)
+      return false
+    })
+    panes.keep((t) => {
+      if (!t.who) return true                    // a draft belongs to nobody
+      if (t.kind === 'editjrn') return (doc.journals || []).some((j) => j.name === t.who)
+      if (t.kind === 'editaut') return (doc.authors || []).some((x) => x.id === t.who)
+      if (t.kind === 'edittag') return (doc.references || []).some((r) => inTag(r, t.who))
+      return (doc.references || []).some((r) => r.id === t.who)   // edit · pdf
+    })
+  }, [doc])   // eslint-disable-line react-hooks/exhaustive-deps
 
+  const cols = L.colsOf('')
+  // Merging tags is picking several and saying which one they become, so the
+  // tag list turns into a list you pick from. It is a mode because the same
+  // click otherwise opens the tag's papers.
+  const onTags = tab?.kind === 'classes' && tab.of === 'tag'
+  const merge = useMergeMode(onTags)
+  // Authors and the other classes share the 'c:' widths; each tab shows its own set.
+  const clsCols = useMemo(() => L.colsOf('c:', tab?.of === 'author' ? AUT_COLS : CLS_COLS),
+    [L.colsOf, tab])   // eslint-disable-line react-hooks/exhaustive-deps
+  const mergeCols = useMemo(() => [{ k: 'chk', w: 26, min: 26, fix: true }, ...clsCols], [clsCols])
 
   /** The classes themselves. Tags have no records, so their list is gathered
    *  from what the papers actually use. */
@@ -533,14 +495,6 @@ export default function App() {
     return q ? all.filter((r) => (r.find || r.name.toLowerCase()).includes(q)) : all
   }, [classesOf, tab, query])
 
-  function openTab(t) {
-    setTabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
-    setActive(t.id)
-  }
-  function closeTab(id) {
-    setTabs((ts) => ts.filter((t) => t.id !== id))
-    if (active === id) setActive('total')
-  }
   const openEdit = (t) => panes.open(t)
   // ⌘X closes the record you are in, ⌘N starts whatever this tab makes.
   useRackKeys({
@@ -581,9 +535,8 @@ export default function App() {
 
   // The editor takes the right half when there is room for both; below that it
   // has the width to itself while it is open.
-  const showEdit = panes.showing && !!doc
-  // Two editor columns need the room the list was using; one does not.
-  const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
+  const showEdit = L.showEdit && !!doc
+  const showList = !showEdit || L.showList
   const allTags = useMemo(() => [...new Set(refs.flatMap(tagsOf))].sort(), [refs])
 
   return (
@@ -626,7 +579,7 @@ export default function App() {
           <span className="rl-gap" />
           {tabs.length > FIXED.length && (
             <button type="button" className="rl-btn" title="열어둔 탭을 모두 닫습니다"
-              onClick={() => { setTabs(FIXED); setActive('total') }}>
+              onClick={L.closeOpened}>
               탭 닫기 ({tabs.length - FIXED.length})
             </button>
           )}
@@ -652,8 +605,8 @@ export default function App() {
 
         <div className="rl-body">
           {showList && (<div className="rl-pane" style={showEdit ? split.leftStyle : undefined}>
-            <RackTabs tabs={tabs} active={active} fixed={FIXED}
-              onPick={setActive} onClose={closeTab} />
+            <RackTabs tabs={tabs} active={L.active} fixed={FIXED}
+              onPick={L.setActive} onClose={closeTab} />
 
             {err && <p className="rl-msg">{err}</p>}
             {!err && !doc && <p className="rl-msg">읽는 중…</p>}
