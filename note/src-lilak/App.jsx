@@ -18,11 +18,11 @@
 import { Children, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs, RackActions,
-  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useNote, useViewState,
-  useEditorPanes, RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
+  useRackList, useRackKeys,
+  RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
   RackEditClass,
-  bySome, useFacetFilter, FilterBar, FacetRows,
-  PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, authHeaders,
+  bySome, FilterBar, FacetRows,
+  PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
 // and one newline means one line break, because a note is typed, not typeset.
@@ -36,7 +36,6 @@ import 'katex/dist/katex.min.css'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
 
-const WIDTH_KEY = projectKey('nt', 'cols')
 const VIEW_KEY = projectKey('nt', 'view')
 /** Where a file a note embeds is served from. */
 const fileSrc = (name) => `${PORTAL_BASE}/api/file/${encodeURIComponent(name)}`
@@ -133,28 +132,43 @@ const FIXED = [
 ]
 
 export default function App() {
-  const [VIEW, saveView] = useViewState(VIEW_KEY)
   const [index, setIndex] = useState(null)       // { notes, templates }
   const [todos, setTodos] = useState([])
-  const [err, setErr] = useState('')
-  const [note, setNote] = useNote()
-  const [tabs, setTabs] = useState(() => [...FIXED,
-    ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
-  const [active, setActive] = useState(VIEW.active || 'notes')
-  const panes = useEditorPanes(projectKey('nt', 'panes'))
   // The note a right-click (or 새 노트) just opened: its title takes the caret,
   // so the first thing you can do with a note is name it.
   const [fresh, setFresh] = useState(null)
-  const [query, setQuery] = useState('')
   const [bodyHits, setBodyHits] = useState(null)   // ids whose BODY matched
-  const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS, ...TODO_COLS])
-  const vw = useViewportWidth()
-  const split = usePaneSplit(projectKey('nt', 'split'))
-  const [sort, setSort] = useState(VIEW.sort || null)
-  const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'count', dir: -1 })
-  const [tscope, setTscope] = useState(VIEW.tscope || 'open')
-  const findRef = useRef(null)
-  useFindKey(findRef)
+
+  const notes = index?.notes || []
+  // The list carries a first line, not the body, so a local miss asks the
+  // server to look inside; either way it is one search.
+  const search = useCallback((n, q) => [n.title, n.date, n.excerpt, ...tagsOf(n)]
+    .filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+    || bodyHits?.has(n.id), [bodyHits])
+  const scopeOf = useCallback((t, sort) => {
+    if (t?.kind !== 'notes') return []
+    const list = t.tag ? notes.filter((n) => inTag(n, t.tag)) : notes
+    return [...list].sort(bySome(SORTERS[sort?.k || 'date'], sort?.dir ?? -1))
+  }, [notes])
+
+  // The todo tab's own scope is this service's alone, so it reads its stored
+  // value itself; the hook keeps it with the rest of the view.
+  const [tscope, setTscope] = useState(() => load(VIEW_KEY, {}).tscope || 'open')
+  const L = useRackList({
+    key: 'nt', fixed: FIXED, firstTab: 'notes', sorters: SORTERS, scopeOf, search,
+    cols: { '': COLS, 'c:': CLS_COLS, 't:': TODO_COLS },
+    sort: null, clsSort: { k: 'count', dir: -1 },
+    remember: { tscope },
+  })
+
+  // The same names the render has always used.
+  const { tab, tabs, openTab, closeTab, scope, rows, filter, panes, split, vw, findRef } = L
+  const { sort, setSort, clsSort, setClsSort, query, setQuery, note, setNote, err, setErr } = L
+  const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked } = L
+  const { drag } = L
+  const cols = L.colsOf('')
+  const clsCols = L.colsOf('c:')
+  const todoCols = L.colsOf('t:')
 
   const reload = useCallback(async () => {
     try {
@@ -169,8 +183,6 @@ export default function App() {
     reload()
   }, [reload])
 
-  const notes = index?.notes || []
-  const tab = tabs.find((t) => t.id === active) || tabs[0]
   // The editors are kept across a visit to another service: a note deleted in
   // the meantime must not come back as an editor with nothing behind it.
   useEffect(() => {
@@ -197,36 +209,6 @@ export default function App() {
     return () => clearTimeout(t)
   }, [query])
 
-  const cols = useMemo(() => sized(COLS, vw), [sized, vw])
-  const clsCols = useMemo(() => sized(CLS_COLS, vw, 'c:'), [sized, vw])
-  const todoCols = useMemo(() => sized(TODO_COLS, vw, 't:'), [sized, vw])
-
-  const scopeOf = useCallback((t) => {
-    if (t?.kind !== 'notes') return []
-    const list = t.tag ? notes.filter((n) => inTag(n, t.tag)) : notes
-    return [...list].sort(bySome(SORTERS[sort?.k || 'date'], sort?.dir ?? -1))
-  }, [notes, sort])
-  const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
-  const filter = useFacetFilter(scope, SORTERS, { sel: VIEW.fsel, on: VIEW.fon })
-  // After the filter: a dependency array is evaluated where it is written.
-  useEffect(() => {
-    saveView({ tabs: tabs.filter((t) => !FIXED.some((f) => f.id === t.id)),
-               active, sort, clsSort, tscope, fsel: filter.sel, fon: filter.on, efull: panes.full })
-  }, [tabs, active, sort, clsSort, tscope, filter.sel, filter.on, panes.full])   // eslint-disable-line react-hooks/exhaustive-deps
-
-
-
-  const rows = useMemo(() => {
-    const kept = filter.on ? scope.filter(filter.passes) : scope
-    const q = query.trim().toLowerCase()
-    if (!q) return kept
-    return kept.filter((n) => [n.title, n.date, n.excerpt, ...tagsOf(n)]
-      .filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
-      || bodyHits?.has(n.id))
-  }, [scope, filter.on, filter.passes, query, bodyHits])
-  const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
-    = useSelection(rows)
-
   const todoRows = useMemo(() => {
     const q = query.trim().toLowerCase()
     const keep = (TODO_SCOPES.find((x) => x.k === tscope) || TODO_SCOPES[0]).is
@@ -252,18 +234,9 @@ export default function App() {
   const merge = useMergeMode(onTags)
   const mergeCols = useMemo(() => [{ k: 'chk', w: 26, min: 26, fix: true }, ...clsCols], [clsCols])
 
-  const showEdit = panes.showing && !!index
-  // Two editor columns need the room the list was using; one does not.
-  const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
-
-  function openTab(t) {
-    setTabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
-    setActive(t.id)
-  }
-  function closeTab(id) {
-    setTabs((ts) => ts.filter((t) => t.id !== id))
-    if (active === id) setActive('notes')
-  }
+  // The editor only shows once there is something to edit in it.
+  const showEdit = L.showEdit && !!index
+  const showList = !showEdit || L.showList
   const openEdit = (id, label) => { panes.open({ id, label }); setFresh(id) }
   /** Which notes wear any of these tags — what the tag editor lists. */
   const tagUsers = useCallback((names) => notes
@@ -360,7 +333,7 @@ export default function App() {
     window.open(`${PORTAL_BASE}/?print=${ids.join(',')}`, '_blank', 'noopener')
   }
 
-  const chosen = useMemo(() => rows.filter((n) => picked.has(n.id)), [rows, picked])
+  const { chosen } = L
 
   return (
     <div className="rl" style={brandStyle()}>
@@ -396,7 +369,7 @@ export default function App() {
             onClick={clearPicked}>clear</button>
           {tabs.length > FIXED.length && (
             <button type="button" className="rl-btn" title="열어둔 탭을 모두 닫습니다"
-              onClick={() => { setTabs(FIXED); setActive('notes') }}>
+              onClick={L.closeOpened}>
               탭 닫기 ({tabs.length - FIXED.length})
             </button>
           )}
@@ -425,8 +398,8 @@ export default function App() {
 
         <div className="rl-body">
           {showList && (<div className="rl-pane" style={showEdit ? split.leftStyle : undefined}>
-            <RackTabs tabs={tabs} active={active} fixed={FIXED}
-              onPick={setActive} onClose={closeTab} />
+            <RackTabs tabs={tabs} active={L.active} fixed={FIXED}
+              onPick={L.setActive} onClose={closeTab} />
 
             {err && <p className="rl-msg">{err}</p>}
             {!err && !index && <p className="rl-msg">읽는 중…</p>}
