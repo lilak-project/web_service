@@ -481,7 +481,7 @@ export default function App() {
           )}
           {panes.count > 0 && (
             <button type="button" className="rl-btn" title="편집 패널의 탭을 모두 닫습니다"
-              onClick={() => { setEtabs([]); setEactive(null) }}>
+              onClick={panes.closeAll}>
               편집 닫기 ({panes.count})
             </button>
           )}
