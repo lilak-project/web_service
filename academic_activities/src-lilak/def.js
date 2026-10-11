@@ -8,8 +8,9 @@
  *   - 이름 (Academic_20131207_HIM2013) is a naming rule — `fill` writes it for a
  *     new activity, and one typed by hand is kept as it is.
  *   - 위치 and 도시 went together, so a place is a record with its city.
- *   - 장비 and 책임자 held several names in one cell; they are lists now, and
- *     each has a tab of the names in use.
+ *   - 장비 held several names in one cell; it is a list now, with a tab of the
+ *     names in use. 책임자 links to the people in author_manager (matched by
+ *     name; one 김민주 of two, the CENS one), and its tab lists them.
  *   - The Proposals sheet is a class of its own records, which an activity of
  *     kind 제안서 can point at.
  */
@@ -31,9 +32,12 @@ function nameKey(r) {
 }
 
 const PAPERS = { svc: 'reference_manager', proj: 'papers', item: 'references', label: 'citeKey' }
+const PEOPLE = { svc: 'author_manager', proj: 'authors', item: 'authors',
+  label: (a) => [a.engFirst, a.engMiddle, a.engLast].filter(Boolean).join(' ')
+    || `${a.korFamily || ''}${a.korGiven || ''}` || a.nick || '' }
 
 export default {
-  name: 'academic_activities', title: '학술 활동', unit: '건', key: 'aa',
+  name: 'academic_activities', title: 'A', unit: '건', key: 'aa',
   item: {
     key: 'activities', noun: '활동', allLabel: 'activities', label: 'name',
     order: { k: 'start', dir: -1 },
@@ -53,7 +57,10 @@ export default {
       { k: 'talkDate', label: '발표일자', type: 'date' },
       { k: 'host', label: '주최 이름', type: 'text' },
       { k: 'equipment', label: '장비', type: 'classes', col: { w: 110, drop: 1360 } },
-      { k: 'leads', label: '책임자', type: 'classes', col: { w: 120, drop: 1440 } },
+      // People in author_manager, linked rather than typed: the name shown is
+      // theirs, so it is spelled one way. Someone author_manager does not list
+      // (a collaborator elsewhere) is kept as a name with nobody behind it.
+      { k: 'leads', label: '책임자', type: 'refs', to: PEOPLE, names: true, col: { w: 140, drop: 1440 } },
       { k: 'tripStart', label: '출장 시작', type: 'date' },
       { k: 'tripEnd', label: '출장 끝', type: 'date' },
       { k: 'trip', label: '출장', type: 'number', col: { w: 40, drop: 1200 }, hint: '시트의 출장? 값 그대로 (0 · 1 · 2)' },
