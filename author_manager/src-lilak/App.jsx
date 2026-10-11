@@ -22,16 +22,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs, RackActions,
   RackField as Fld, RackTextRows as TextRows,
-  useColumnWidths, useViewportWidth, useSelection, usePaneSplit, useRackKeys, useFindKey, useToggleKey,
-  useEditorPanes, RackPaneStrip, useNote, useViewState,
+  useRackList, useRackKeys, useToggleKey, RackPaneStrip,
   useMergeMode, RackMergeButtons, RackMerge,
-  bySome, fill as fillTpl, useFacetFilter, FilterBar, FacetRows,
+  bySome, fill as fillTpl, FilterBar, FacetRows,
   PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
 
-const WIDTH_KEY = projectKey('am', 'cols')
-const VIEW_KEY = projectKey('am', 'view')
 const IS_ADMIN = isManager()
 
 // ─── The fields a row shows ─────────────────────────────────────────────────
@@ -241,79 +238,13 @@ const FIXED = [
 ]
 
 export default function App() {
-  const [VIEW, saveView] = useViewState(VIEW_KEY)
   const [doc, setDoc] = useState(null)
-  const [err, setErr] = useState('')
-  const [note, setNote] = useNote()
-  const [tabs, setTabs] = useState(() => [...FIXED,
-    ...(VIEW.tabs || []).filter((t) => t?.id && !FIXED.some((f) => f.id === t.id))])
-  const [active, setActive] = useState(VIEW.active || 'total')
-  // The editor is its OWN pane with its OWN tabs: a record you are fixing is
-  // not one of the lists, and closing one should not send you somewhere else.
-  const panes = useEditorPanes(projectKey('am', 'panes'))
-  const [query, setQuery] = useState('')
-  const { drag, sized } = useColumnWidths(WIDTH_KEY, [...COLS, ...CLS_COLS])
-  const vw = useViewportWidth()
-  const split = usePaneSplit(projectKey('am', 'split'))
   const [groupForm, setGroupForm] = useState(null)   // the new-group form, when open
-  // null = the tab's own order: 한글 이름, or My List's own sequence.
-  const [sort, setSort] = useState(VIEW.sort || null)
-  const [clsSort, setClsSort] = useState(VIEW.clsSort || { k: 'name', dir: 1 })
-  const [outOpen, setOutOpen] = useState(false)   // the listing drawer
-  const findRef = useRef(null)
-  useFindKey(findRef)
-
-  useEffect(() => {
-    if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
-    fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
-  }, [])
-  // The four fixed tabs are not worth storing; picking mode is not a state you
-  // come back to, so only the applied filter is kept.
-  // A tab for a group or an affiliation that is no longer in the document
-  // cannot be shown; it goes, and takes you back to total if you were on it.
-  // Nor can one of a kind that no longer exists (My List was a tab once), so an
-  // opened tab has to name a scope this service still has.
-  useEffect(() => {
-    if (!doc) return
-    const alive = (t) => {
-      if (FIXED.some((f) => f.id === t.id)) return true
-      if (t.grp) return (doc.groups || []).some((r) => r.name === t.grp)
-      if (t.aff) return (doc.affiliations || []).some((r) => r.name === t.aff)
-      return false
-    }
-    setTabs((ts) => (ts.every(alive) ? ts : ts.filter(alive)))
-    // The editors outlive a visit to another service too, so a record that has
-    // gone since must not come back as an editor for nothing.
-    panes.keep((t) => {
-      if (!t.who) return true                   // a draft belongs to nobody
-      if (t.kind === 'editcls') return (doc[t.of === 'group' ? 'groups' : 'affiliations'] || [])
-        .some((r) => r.name === t.who)
-      return (doc.authors || []).some((a) => a.id === t.who)
-    })
-  }, [doc])   // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!tabs.some((t) => t.id === active)) setActive('total')
-  }, [tabs, active])
-
+  const [outOpen, setOutOpen] = useState(false)      // the listing drawer
   const authors = doc?.authors || []
-  const tab = tabs.find((t) => t.id === active) || tabs[0]
 
-  // core belongs to ONE group, so it is only a column inside a group's tab.
-  const cols = useMemo(() => sized(COLS.filter((c) => c.k !== 'core' || !!tab?.grp), vw),
-    [sized, vw, tab])
-  const clsCols = useMemo(
-    () => sized(CLS_COLS.filter((c) => !c.group || tab?.of === 'group'), vw, 'c:'),
-    [sized, vw, tab])
-  // A list of classes is a list of names people point at, and those drift the
-  // way tags do, so it gets the same merge.
-  const onClasses = tab?.kind === 'classes'
-  const merge = useMergeMode(onClasses)
-  const mergeCols = useMemo(() => [{ k: 'chk', w: 26, min: 26, fix: true }, ...clsCols], [clsCols])
-  const clsNoun = tab?.of === 'affiliation' ? '소속' : '그룹'
-
-  // Which authors a tab is about, before the search narrows them. Takes the
-  // tab, because an edit beside its list needs BOTH on screen.
-  const scopeOf = useCallback((tab) => {
+  // Which authors a tab is about, before the search narrows them.
+  const scopeOf = useCallback((tab, sort) => {
     if (tab?.kind !== 'authors') return []
     let list = authors
     if (tab.aff) list = list.filter((a) => inAff(a, tab.aff))
@@ -323,31 +254,54 @@ export default function App() {
     // counts, which is the only core that means anything there.
     if (!sort) return [...list].sort(byPaperOrder(tab.grp ? (a) => coreIn(a, tab.grp) : coreOf))
     return [...list].sort(byColumn(sort.k, sort.dir, tab.grp))
-  }, [authors, sort])
-  const scope = useMemo(() => scopeOf(tab), [scopeOf, tab])
+  }, [authors])
+  // The name with its spaces taken out is searched too: a transliterated name is
+  // written 히로시 와타나베 and typed 히로시와타나베 as often as not.
+  const search = useCallback((a, q) => [korName(a), korName(a).replace(/\s+/g, ''), engName(a),
+    a.nick, repEmail(a), ...(a.affiliations || []).flatMap((x) => [x.tag, x.position, x.dept]),
+    ...(a.groups || []).map((g) => g.group)]
+    .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)), [])
 
-  const filter = useFacetFilter(scope, SORTERS, { sel: VIEW.fsel, on: VIEW.fon })
-  // Declared after the filter, because its deps read from it — a dependency
-  // array is evaluated where it is written.
+  const L = useRackList({
+    key: 'am', fixed: FIXED, firstTab: 'total', sorters: SORTERS, scopeOf, search,
+    cols: { '': COLS, 'c:': CLS_COLS }, clsSort: { k: 'name', dir: 1 },
+  })
+  // The same names the render has always used.
+  const { tab, tabs, openTab, closeTab, scope, rows, filter, panes, split, vw, findRef, drag } = L
+  const { sort, setSort, clsSort, setClsSort, query, setQuery, note, setNote, err, setErr } = L
+  const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked } = L
+
   useEffect(() => {
-    saveView({ tabs: tabs.filter((t) => !FIXED.some((x) => x.id === t.id)),
-               active, sort, clsSort, fsel: filter.sel, fon: filter.on })
-  }, [tabs, active, sort, clsSort, filter.sel, filter.on])   // eslint-disable-line react-hooks/exhaustive-deps
+    if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
+    fetchDoc().then(setDoc).catch((e) => setErr(String(e.message || e)))
+  }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+  // A tab for a group or an affiliation the document no longer has goes; so does
+  // one of a kind this service no longer has (My List was a tab once). The
+  // editors outlive a visit elsewhere too, so a record that has gone since must
+  // not come back as an editor for nothing.
+  useEffect(() => {
+    if (!doc) return
+    L.keepTabs((t) => (t.grp ? (doc.groups || []).some((r) => r.name === t.grp)
+      : t.aff ? (doc.affiliations || []).some((r) => r.name === t.aff) : false))
+    panes.keep((t) => {
+      if (!t.who) return true                   // a draft belongs to nobody
+      if (t.kind === 'editcls') return (doc[t.of === 'group' ? 'groups' : 'affiliations'] || [])
+        .some((r) => r.name === t.who)
+      return (doc.authors || []).some((a) => a.id === t.who)
+    })
+  }, [doc])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  const rowsOf = useCallback((sc) => {
-    const kept = filter.on ? sc.filter(filter.passes) : sc
-    const q = query.trim().toLowerCase()
-    if (!q) return kept
-    // The name with its spaces taken out is searched too: a transliterated
-    // name is written 히로시 와타나베 and typed 히로시와타나베 as often as not.
-    return kept.filter((a) => [korName(a), korName(a).replace(/\s+/g, ''), engName(a), a.nick, repEmail(a),
-      ...(a.affiliations || []).flatMap((x) => [x.tag, x.position, x.dept]),
-      ...(a.groups || []).map((g) => g.group)]
-      .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [query, filter.on, filter.passes])
-  const rows = useMemo(() => rowsOf(scope), [rowsOf, scope])
-  const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked }
-    = useSelection(rows)
+  // core belongs to ONE group, so it is only a column inside a group's tab; a
+  // group-only class column only on the groups list.
+  const cols = useMemo(() => L.colsOf('').filter((c) => c.k !== 'core' || !!tab?.grp), [L.colsOf, tab])   // eslint-disable-line react-hooks/exhaustive-deps
+  const clsCols = useMemo(() => L.colsOf('c:').filter((c) => !c.group || tab?.of === 'group'), [L.colsOf, tab])   // eslint-disable-line react-hooks/exhaustive-deps
+  // A list of classes is a list of names people point at, and those drift the
+  // way tags do, so it gets the same merge.
+  const onClasses = tab?.kind === 'classes'
+  const merge = useMergeMode(onClasses)
+  const mergeCols = useMemo(() => [{ k: 'chk', w: 26, min: 26, fix: true }, ...clsCols], [clsCols])
+  const clsNoun = tab?.of === 'affiliation' ? '소속' : '그룹'
+
   // ⌘Enter: whatever the search has left on screen, take it all — or put it
   // all back. The same thing the head checkbox does, without leaving the keys.
   useToggleKey(() => {
@@ -356,12 +310,8 @@ export default function App() {
     setNote(allPicked ? `${rows.length}명 선택 해제` : `${rows.length}명 선택`)
   })
 
-  // The editor pane takes the right half when there is room for both; below
-  // that it has the width to itself while it is open, and closing its last tab
-  // gives the list back.
-  const showEdit = panes.showing && !!doc
-  // Two editor columns need the room the list was using; one does not.
-  const showList = !showEdit || (vw >= (panes.cols.length > 1 ? 1500 : 1180) && !panes.full)
+  const showEdit = L.showEdit && !!doc
+  const showList = !showEdit || L.showList
 
   // Counted over the tab's own authors, not the filtered ones: a value that
   // would empty the list is still worth seeing.
@@ -381,14 +331,6 @@ export default function App() {
   const classes = useMemo(() => classesOf(tab), [classesOf, tab])
 
   // ── tabs ──
-  function openTab(t) {
-    setTabs((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]))
-    setActive(t.id)
-  }
-  function closeTab(id) {
-    setTabs((ts) => ts.filter((t) => t.id !== id))
-    if (active === id) setActive('total')
-  }
   const openEdit = (t) => panes.open(t)
   // ⌘X closes the record you are in, ⌘N starts whatever this tab makes.
   useRackKeys({
@@ -533,7 +475,7 @@ export default function App() {
           <span className="rl-gap" />
           {tabs.length > FIXED.length && (
             <button type="button" className="rl-btn" title="열어둔 탭을 모두 닫습니다"
-              onClick={() => { setTabs(FIXED); setActive('total') }}>
+              onClick={L.closeOpened}>
               탭 닫기 ({tabs.length - FIXED.length})
             </button>
           )}
@@ -574,8 +516,8 @@ export default function App() {
 
         <div className="rl-body">
         {showList && (<div className="rl-pane" style={showEdit ? split.leftStyle : undefined}>
-        <RackTabs tabs={tabs} active={active} fixed={FIXED}
-            onPick={setActive} onClose={closeTab} />
+        <RackTabs tabs={tabs} active={L.active} fixed={FIXED}
+            onPick={L.setActive} onClose={closeTab} />
 
           {err && <p className="rl-msg">{err}</p>}
           {!err && !doc && <p className="rl-msg">읽는 중…</p>}
