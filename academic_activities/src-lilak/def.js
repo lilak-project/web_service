@@ -79,7 +79,9 @@ export default {
     ] },
     { k: 'equipment', label: '장비', field: 'equipment' },
     { k: 'leads', label: '책임자', field: 'leads' },
-    { k: 'proposals', label: '제안서', fields: [
+    // No tab of its own: a proposal is reached from the activity that points
+    // at it (its name in the 제안서 field opens it).
+    { k: 'proposals', label: '제안서', tab: false, fields: [
       { k: 'name', label: '이름', type: 'text', col: 260, required: true, mono: true },
       { k: 'reaction', label: 'reaction', type: 'text', col: 110 },
       { k: 'facility', label: 'facility', type: 'text', col: 70 },

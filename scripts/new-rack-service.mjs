@@ -148,8 +148,13 @@ put('index.html', `<!doctype html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${TITLE}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
-  <body>
+  <!-- rl-page: the page is the screen's height, so the table and the editor
+       scroll on their own instead of the whole page growing. -->
+  <body class="rl-page">
     <div id="root"></div>
     <script type="module" src="/src-lilak/main.jsx"></script>
   </body>
