@@ -162,47 +162,121 @@ class Document:
             return {**me, "project": project}
 
 
+def _desktop(path: str, how: str) -> list:
+    """The desktop's own way to open a folder or file ('open'), or to show a
+    file where it lives ('reveal'). Linux has no portable 'select this file',
+    so revealing there opens the folder it is in."""
+    if sys.platform == "darwin":
+        return ["open", "-R", path] if how == "reveal" else ["open", path]
+    if os.name == "nt":
+        return ["explorer", f"/select,{path}"] if how == "reveal" else ["explorer", path]
+    target = str(Path(path).parent) if how == "reveal" else path
+    return ["xdg-open", target]
+
+
 def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> None:
-    """A folder per record, found by its name: GET /api/folders lists the
-    folders directly under the roots in settings[setting], and POST
-    /api/folders/open {name} opens one in the file manager.
+    """A folder per record, found by its name, and the files in it.
+
+        GET  /api/folders                     the folders directly under the roots
+        GET  /api/folders/list?name=          the files in one (recursive)
+        GET  /api/folders/file?name=&path=    one file, inline (download=1: as a file)
+        POST /api/folders/open {name, path?, how}  open it / show it on the desktop
+        POST /api/folders/make {name}         make the folder under the first root
 
     The naming convention IS the link — a record named Academic_20131207_HIM2013
-    has the folder of that name — so nothing is stored per record. Names are
-    NFC: macOS hands Korean file names back decomposed. Opening takes a NAME
-    from that listing, never a path, so nothing outside the roots is reachable.
-    It opens the file manager of the machine the backend runs on, which helps
-    only when that is the machine you are looking at."""
+    has the folder of that name under a root in settings[setting] — so nothing
+    is stored per record. Names are NFC: macOS hands Korean names back
+    decomposed. A folder is addressed by a NAME from the listing, never a path,
+    and a file by a path checked (symlinks resolved) to stay inside its folder,
+    so nothing outside the roots is reachable. Opening on the desktop happens on
+    the machine the backend runs on — useful only when that is the one you are
+    looking at."""
+
+    def roots() -> list:
+        with doc.lock:
+            return (doc.read().get("settings") or {}).get(setting) or []
 
     def found() -> dict:
-        with doc.lock:
-            roots = (doc.read().get("settings") or {}).get(setting) or []
         out = {}
-        for r in roots:
+        for r in roots():
             try:
                 for e in os.scandir(Path(r).expanduser()):
                     if e.is_dir() and not e.name.startswith("."):
                         out.setdefault(unicodedata.normalize("NFC", e.name), e.path)
             except OSError:
                 pass
-        return {"roots": roots, "dirs": out}
+        return out
+
+    def folder(name: str) -> Path:
+        p = found().get(unicodedata.normalize("NFC", str(name or "")))
+        if not p:
+            raise HTTPException(404, "그 이름의 폴더가 없습니다.")
+        return Path(p).resolve()
+
+    def inside(name: str, rel: str) -> Path:
+        base = folder(name)
+        real = (base / str(rel or "")).resolve()
+        if real != base and base not in real.parents:
+            raise HTTPException(404, "폴더 밖의 경로입니다.")
+        if not real.exists():
+            raise HTTPException(404, "그 파일이 없습니다.")
+        return real
 
     @app.get("/api/folders")
     def folders(_: dict = Depends(identity)) -> dict:
-        return found()
+        return {"roots": roots(), "dirs": found()}
+
+    @app.get("/api/folders/list")
+    def list_files(name: str, _: dict = Depends(identity)) -> dict:
+        base = folder(name)
+        files = []
+        for dirpath, dirs, names in os.walk(base):
+            dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+            for n in sorted(names):
+                if n.startswith("."):
+                    continue
+                full = Path(dirpath) / n
+                try:
+                    st = full.stat()
+                except OSError:
+                    continue
+                files.append({"path": unicodedata.normalize("NFC", str(full.relative_to(base))),
+                              "size": st.st_size, "mtime": int(st.st_mtime)})
+                if len(files) >= 2000:     # ponytail: a cap, not paging; page if a folder ever holds more
+                    return {"path": str(base), "files": files, "more": True}
+        return {"path": str(base), "files": files}
+
+    @app.get("/api/folders/file")
+    def get_file(name: str, path: str, download: int = 0, _: dict = Depends(identity)):
+        real = inside(name, path)
+        if not real.is_file():
+            raise HTTPException(404, "파일이 아닙니다.")
+        return FileResponse(real, filename=real.name,
+                            content_disposition_type="attachment" if download else "inline")
 
     @app.post("/api/folders/open")
-    def open_folder(body: dict = Body(...), _: dict = Depends(identity)):
-        path = found()["dirs"].get(unicodedata.normalize("NFC", str(body.get("name") or "")))
-        if not path:
-            raise HTTPException(404, "그 이름의 폴더가 없습니다.")
-        cmd = (["open", path] if sys.platform == "darwin"
-               else ["explorer", path] if os.name == "nt" else ["xdg-open", path])
+    def open_on_desktop(body: dict = Body(...), _: dict = Depends(identity)):
+        real = inside(body.get("name"), body.get("path") or "")
+        how = "reveal" if body.get("how") == "reveal" else "open"
         try:
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(_desktop(str(real), how), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception as exc:
             raise HTTPException(501, f"열 수 없습니다: {exc}")
-        return {"ok": True, "path": path}
+        return {"ok": True, "path": str(real)}
+
+    @app.post("/api/folders/make")
+    def make(body: dict = Body(...), _: dict = Depends(identity)):
+        name = unicodedata.normalize("NFC", str(body.get("name") or "").strip())
+        if not name or name.startswith(".") or "/" in name or "\\" in name or len(name) > 200:
+            raise HTTPException(422, "폴더 이름으로 쓸 수 없습니다.")
+        rs = roots()
+        if not rs:
+            raise HTTPException(409, "폴더 루트가 정해지지 않았습니다.")
+        if name in found():
+            raise HTTPException(409, "이미 있습니다.")
+        p = Path(rs[0]).expanduser() / name
+        p.mkdir()
+        return {"ok": True, "path": str(p)}
 
 
 def mount_spa(app: FastAPI, dist: Path, name: str = "service") -> None:
