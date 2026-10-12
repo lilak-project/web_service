@@ -98,9 +98,11 @@ const CLS_COLS = [
 const TODO_COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
-  { k: 'text', w: 420, min: 120, label: '할 일' },
-  { k: 'title', w: 220, min: 80, label: 'note' },
+  { k: 'text', w: 380, min: 120, label: '할 일' },
+  { k: 'tags', w: 150, min: 60, label: 'tags' },
+  { k: 'title', w: 200, min: 80, label: 'note' },
   { k: 'date', w: 100, min: 84, label: 'date' },
+  { k: 'done', w: 100, min: 84, label: '완료' },
 ]
 const TONE = { title: 'ink', text: 'ink', date: 'dim', tags: 'dim', excerpt: 'dim' }
 
@@ -114,6 +116,7 @@ const SORTERS = {
 }
 const TODO_SORTERS = {
   text: (t) => t.text || '', title: (t) => t.title || '', date: (t) => t.date || '',
+  tags: (t) => (t.tags || []).join(' '), done: (t) => t.doneAt || '',
 }
 
 /** Which todos the tab shows. A list of things to do is mostly the ones not
@@ -461,6 +464,8 @@ export default function App() {
                           onClick={(e) => { e.stopPropagation(); openEdit(t.id, t.title) }}>{t.title}</button>
                       ),
                       date: t.date || D,
+                      tags: (t.tags || []).join(' ') || D,
+                      done: t.doneAt || D,
                     }} />
                 ))}
                 {todoRows.length === 0 && <p className="rl-msg">할 일이 없습니다 — 노트에 `- [ ] 할 일`을 적으면 여기 모입니다.</p>}

@@ -52,6 +52,16 @@ TODO_RE = re.compile(r"^(\s*[-*]\s+\[)([ xX])(\]\s*)(.*)$")
 # WITH a space after the hash, so the two cannot be confused — which is why the
 # tag needs no field of its own.
 TAG_RE = re.compile(r"(?:^|[\s(])#([^\s#.,;:!?()\[\]{}'\"]+)")
+# Obsidian Tasks writes the day a box was ticked as `✅ 2026-08-04`, and the
+# vault these notes came from is full of them: the same mark is what this app
+# stamps, so a todo finished here reads as finished there.
+DONE_RE = re.compile(r"\s*✅\s*(\d{4}-\d{2}-\d{2})")
+
+
+def _todo_text(raw: str) -> tuple[str, str]:
+    """The todo as a person wrote it, and the day it was finished."""
+    m = DONE_RE.search(raw)
+    return DONE_RE.sub("", raw).strip(), (m.group(1) if m else "")
 
 
 def _now() -> str:
@@ -270,9 +280,14 @@ def todos(_: dict = Depends(identity)) -> dict:
         for i, ln in enumerate(n["body"].splitlines()):
             m = TODO_RE.match(ln)
             if m:
+                text, at = _todo_text(m.group(4))
+                # The tags of the LINE, not of the note: a todo wears what was
+                # written on it, which is the only way a list of them can be
+                # told apart.
                 out.append({"id": n["id"], "title": n["title"], "date": n["date"],
-                            "tags": n["tags"], "line": i,
-                            "done": m.group(2) != " ", "text": m.group(4).strip()})
+                            "tags": [t.group(1) for t in TAG_RE.finditer(text)],
+                            "line": i, "done": m.group(2) != " ",
+                            "doneAt": at, "text": text})
     return {"todos": out}
 
 
@@ -288,12 +303,17 @@ def set_todo(body: TodoBody, _: dict = Depends(identity)):
     m = TODO_RE.match(lines[body.line])
     # The line must still BE the todo it was: a note edited elsewhere must not
     # have a checkbox stamped onto whatever moved into that position.
-    if not m or (body.text is not None and m.group(4).strip() != body.text.strip()):
+    text, _ = _todo_text(m.group(4)) if m else ("", "")
+    if not m or (body.text is not None and text != body.text.strip()):
         raise HTTPException(409, "그 줄이 바뀌었습니다 — 노트를 다시 읽어주세요.")
-    lines[body.line] = f"{m.group(1)}{'x' if body.done else ' '}{m.group(3)}{m.group(4)}"
+    # Ticked here, dated here; unticked, the date goes with it.
+    done_at = date.today().isoformat() if body.done else ""
+    rest = f"{text} ✅ {done_at}" if body.done else text
+    lines[body.line] = f"{m.group(1)}{'x' if body.done else ' '}{m.group(3)}{rest}"
     _atomic_write(p, _join({"title": n["title"], "date": n["date"], **n["fields"]},
                            "\n".join(lines)))
-    return {"ok": True, "id": body.id, "line": body.line, "done": body.done}
+    return {"ok": True, "id": body.id, "line": body.line, "done": body.done,
+            "doneAt": done_at}
 
 
 @app.get("/api/search")
