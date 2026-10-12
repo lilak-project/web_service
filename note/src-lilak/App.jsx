@@ -102,6 +102,7 @@ const TODO_COLS = [
   { k: 'tags', w: 150, min: 60, label: 'tags' },
   { k: 'title', w: 200, min: 80, label: 'note' },
   { k: 'date', w: 100, min: 84, label: 'date' },
+  { k: 'due', w: 100, min: 84, label: '마감' },
   { k: 'done', w: 100, min: 84, label: '완료' },
 ]
 const TONE = { title: 'ink', text: 'ink', date: 'dim', tags: 'dim', excerpt: 'dim' }
@@ -117,10 +118,15 @@ const SORTERS = {
 const TODO_SORTERS = {
   text: (t) => t.text || '', title: (t) => t.title || '', date: (t) => t.date || '',
   tags: (t) => (t.tags || []).join(' '), done: (t) => t.doneAt || '',
+  // A todo with no date is not due before everything that has one.
+  due: (t) => t.due || '9999',
 }
 
 /** Which todos the tab shows. A list of things to do is mostly the ones not
  *  done; the done ones are a record, and both together are the whole note. */
+/** Due, and not done: the only state a date makes urgent. */
+const late = (t) => !t.done && !!t.due && t.due < new Date().toISOString().slice(0, 10)
+
 const TODO_SCOPES = [
   { k: 'open', label: '남은 일', is: (t) => !t.done },
   { k: 'all', label: '전체', is: () => true },
@@ -450,7 +456,7 @@ export default function App() {
                 onSort={(k) => setSort((s) => (s?.k === k ? { k, dir: -s.dir } : { k, dir: 1 }))}>
                 {todoRows.map((t, i) => (
                   <RackRow key={`${t.id}:${t.line}`} cols={todoCols} tone={TONE}
-                    className={`rl-hit${t.done ? ' rl-done' : ''}`}
+                    className={`rl-hit${t.done ? ' rl-done' : ''}${late(t) ? ' nt-late' : ''}`}
                     title="눌러서 끝냄 · 오른쪽 클릭으로 그 노트"
                     onClick={() => toggleTodo(t)}
                     onContextMenu={(e) => { e.preventDefault(); openEdit(t.id, t.title) }}
@@ -465,6 +471,7 @@ export default function App() {
                       ),
                       date: t.date || D,
                       tags: (t.tags || []).join(' ') || D,
+                      due: t.due || D,
                       done: t.doneAt || D,
                     }} />
                 ))}

@@ -56,12 +56,22 @@ TAG_RE = re.compile(r"(?:^|[\s(])#([^\s#.,;:!?()\[\]{}'\"]+)")
 # vault these notes came from is full of them: the same mark is what this app
 # stamps, so a todo finished here reads as finished there.
 DONE_RE = re.compile(r"\s*✅\s*(\d{4}-\d{2}-\d{2})")
+# The day it is due, the same way. `due:2026-10-20` is the typing-friendly
+# spelling of it — the editor turns one into the other as you write.
+DUE_RE = re.compile(r"\s*(?:📅|[Dd]ue:)\s*(\d{4}-\d{2}-\d{2})")
 
 
-def _todo_text(raw: str) -> tuple[str, str]:
-    """The todo as a person wrote it, and the day it was finished."""
-    m = DONE_RE.search(raw)
-    return DONE_RE.sub("", raw).strip(), (m.group(1) if m else "")
+def _todo_text(raw: str) -> tuple[str, str, str]:
+    """The todo as a person wrote it, the day it is due, the day it was done."""
+    done = DONE_RE.search(raw)
+    due = DUE_RE.search(raw)
+    text = DUE_RE.sub("", DONE_RE.sub("", raw)).strip()
+    return text, (due.group(1) if due else ""), (done.group(1) if done else "")
+
+
+def _todo_line(text: str, due: str, done_at: str) -> str:
+    """…and back again, with the marks in the order Obsidian writes them."""
+    return text + (f" 📅 {due}" if due else "") + (f" ✅ {done_at}" if done_at else "")
 
 
 def _now() -> str:
@@ -206,6 +216,7 @@ class TodoBody(BaseModel):
     line: int
     done: bool
     text: Optional[str] = None     # what the line said when it was read
+    due: Optional[str] = None      # '' clears it, None leaves it alone
 
 
 @app.get("/api/notes")
@@ -280,14 +291,14 @@ def todos(_: dict = Depends(identity)) -> dict:
         for i, ln in enumerate(n["body"].splitlines()):
             m = TODO_RE.match(ln)
             if m:
-                text, at = _todo_text(m.group(4))
+                text, due, at = _todo_text(m.group(4))
                 # The tags of the LINE, not of the note: a todo wears what was
                 # written on it, which is the only way a list of them can be
                 # told apart.
                 out.append({"id": n["id"], "title": n["title"], "date": n["date"],
                             "tags": [t.group(1) for t in TAG_RE.finditer(text)],
                             "line": i, "done": m.group(2) != " ",
-                            "doneAt": at, "text": text})
+                            "due": due, "doneAt": at, "text": text})
     return {"todos": out}
 
 
@@ -303,17 +314,20 @@ def set_todo(body: TodoBody, _: dict = Depends(identity)):
     m = TODO_RE.match(lines[body.line])
     # The line must still BE the todo it was: a note edited elsewhere must not
     # have a checkbox stamped onto whatever moved into that position.
-    text, _ = _todo_text(m.group(4)) if m else ("", "")
+    text, due, _ = _todo_text(m.group(4)) if m else ("", "", "")
     if not m or (body.text is not None and text != body.text.strip()):
         raise HTTPException(409, "그 줄이 바뀌었습니다 — 노트를 다시 읽어주세요.")
-    # Ticked here, dated here; unticked, the date goes with it.
+    # Ticked here, dated here; unticked, the date goes with it. A due date the
+    # line already carried is not ours to drop.
+    if body.due is not None:
+        due = body.due.strip()
     done_at = date.today().isoformat() if body.done else ""
-    rest = f"{text} ✅ {done_at}" if body.done else text
+    rest = _todo_line(text, due, done_at)
     lines[body.line] = f"{m.group(1)}{'x' if body.done else ' '}{m.group(3)}{rest}"
     _atomic_write(p, _join({"title": n["title"], "date": n["date"], **n["fields"]},
                            "\n".join(lines)))
     return {"ok": True, "id": body.id, "line": body.line, "done": body.done,
-            "doneAt": done_at}
+            "due": due, "doneAt": done_at}
 
 
 @app.get("/api/search")

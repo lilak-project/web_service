@@ -1,6 +1,10 @@
 /* note — what RACK's list does not already say.
    Everything else (the table, the tabs, the editor plate) is rack.css. */
 
+/* Past its day and still open: said in the colour the rack keeps for warnings,
+   not in a badge — the row is already the thing you are reading. */
+.rl-hit.nt-late .rl-c { color: var(--rk-danger, #b91c1c); }
+
 /* A todo that is done is still worth seeing — just not first. */
 .rl-hit.rl-done .rl-c { color: var(--rk-mute); text-decoration: line-through; }
 

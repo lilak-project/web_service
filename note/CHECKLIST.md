@@ -24,6 +24,7 @@
 - [ ] 한 화면에 몇 개까지 볼지 정하기 · 페이지 넘기기
 - [ ] 노트 본문에서 다른 노트로 거는 `[[링크]]`와 백링크
 - [x] `![[파일]]` 그림으로 보이기 — 편집기·미리보기 모두, `/api/file/<name>` (data/note/projects/<proj>/files/)
+- [x] 마감일 — 줄에 `due:2026-10-20` 을 쓰면 `📅 2026-10-20` 이 되고, todos 탭의 마감 열에 뜬다 (지난 건 빨간 줄)
 - [x] 할 일의 태그는 그 줄에 쓴 것, 완료 날짜는 `✅ YYYY-MM-DD` (Obsidian Tasks와 같은 표기) — todos 탭에 tags·완료 열
 - [x] daily 노트 — `daily` 버튼이 `Daily YYYY-MM-DD` 를 열거나 만든다 (`#daily`, `templates/daily.md` 가 있으면 그걸로)
 - [x] 수식 — `$x$` · `$$…$$` (KaTeX). 편집기에서는 그 자리에 그려지고, 식을 누르면 LaTeX로 돌아간다

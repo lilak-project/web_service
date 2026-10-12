@@ -133,6 +133,7 @@ const make = (root, value, onMarkdown, fileSrc, onFiles) => Editor.make()
   .use(imageAttrs)   // plain markdown `![alt](url)`, which milkdown drops
   .use(activeLine)
   .use(checkRule)
+  .use(dueRule)
   .use(tagInDoc)
   .use(embedInDoc(fileSrc))
   .create()
@@ -479,6 +480,16 @@ const embedInDoc = (src) => $prose(() => new Plugin({
     },
   },
 }))
+
+/** `due:2026-10-20 ` becomes `📅 2026-10-20 ` as you type it.
+ *
+ *  The due date of a todo is Obsidian Tasks' mark, which the vault these notes
+ *  came from is full of — but nobody types an emoji mid-sentence, so the word
+ *  is what you write and the mark is what lands. */
+const dueRule = $inputRule(() => new InputRule(
+  /(?:^|\s)[Dd]ue:(\d{4}-\d{2}-\d{2})\s$/,
+  (state, match, start, end) => state.tr.insertText(` 📅 ${match[1]} `, start, end),
+))
 
 /** `#태그` — Obsidian's spelling, and markdown keeps it apart from a heading
  *  (`# ` has a space after the hash). */
