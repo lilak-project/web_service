@@ -56,6 +56,19 @@ def main():
         assert c.post("/api/folders/make", json={"name": bad}).status_code in (409, 422), bad
     assert c.post("/api/folders/make", json={"name": "Academic_B"}).status_code == 200
     assert (root / "Academic_B").is_dir()
+
+    # adopting: by listed name, by a path deeper in the root; never from outside
+    (root / "old name").mkdir()
+    (root / "deep" / "talk").mkdir(parents=True)
+    (tmp / "outside").mkdir()
+    assert c.post("/api/folders/adopt", json={"source": "old name", "name": "Academic_C"}).status_code == 200
+    assert (root / "Academic_C").is_dir() and not (root / "old name").exists()
+    assert c.post("/api/folders/adopt", json={"source": str(root / "deep" / "talk"), "name": "Academic_D"}).status_code == 200
+    assert (root / "Academic_D").is_dir()
+    for src, name in [(str(tmp / "outside"), "Academic_E"), (str(root), "Academic_E"),
+                      ("Academic_C", "Academic_A"), ("Academic_C", "../x")]:
+        assert c.post("/api/folders/adopt", json={"source": src, "name": name}).status_code in (404, 409, 422), (src, name)
+    assert (tmp / "outside").is_dir()
     files_check()
     print("ok")
 

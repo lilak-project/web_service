@@ -190,6 +190,7 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         GET  /api/folders/file?name=&path=    one file, inline (download=1: as a file)
         POST /api/folders/open {name, path?, how}  open it / show it on the desktop
         POST /api/folders/make {name}         make the folder under the first root
+        POST /api/folders/adopt {source, name}  rename a folder under a root to be the record's
 
     The naming convention IS the link — a record named Academic_20131207_HIM2013
     has the folder of that name under a root in settings[setting] — so nothing
@@ -272,11 +273,15 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
             raise HTTPException(501, f"열 수 없습니다: {exc}")
         return {"ok": True, "path": str(real)}
 
-    @app.post("/api/folders/make")
-    def make(body: dict = Body(...), _: dict = Depends(identity)):
-        name = unicodedata.normalize("NFC", str(body.get("name") or "").strip())
+    def clean(raw) -> str:
+        name = unicodedata.normalize("NFC", str(raw or "").strip())
         if not name or name.startswith(".") or "/" in name or "\\" in name or len(name) > 200:
             raise HTTPException(422, "폴더 이름으로 쓸 수 없습니다.")
+        return name
+
+    @app.post("/api/folders/make")
+    def make(body: dict = Body(...), _: dict = Depends(identity)):
+        name = clean(body.get("name"))
         rs = roots()
         if not rs:
             raise HTTPException(409, "폴더 루트가 정해지지 않았습니다.")
@@ -285,6 +290,29 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         p = Path(rs[0]).expanduser() / name
         p.mkdir()
         return {"ok": True, "path": str(p)}
+
+    @app.post("/api/folders/adopt")
+    def adopt(body: dict = Body(...), _: dict = Depends(identity)):
+        """Make an existing folder this record's: rename it to the record's name
+        (and lift it to the top of its root when it was deeper). `source` is a
+        folder name from the listing or a path dropped from Finder; either way
+        it must already be under a root — nothing is pulled in from outside."""
+        name = clean(body.get("name"))
+        src = str(body.get("source") or "").strip()
+        listed = found().get(unicodedata.normalize("NFC", src))
+        real = Path(listed or src).expanduser().resolve()
+        root = next((r for r in (Path(x).expanduser().resolve() for x in roots())
+                     if root_has(r, real)), None)
+        if not root or not real.is_dir():
+            raise HTTPException(404, "루트 안의 폴더가 아닙니다 — 루트 안으로 옮기거나 settings에서 루트를 바꾸세요.")
+        if name in found():
+            raise HTTPException(409, "그 이름의 폴더가 이미 있습니다.")
+        dest = root / name
+        real.rename(dest)
+        return {"ok": True, "from": str(real), "path": str(dest)}
+
+    def root_has(root: Path, p: Path) -> bool:
+        return p != root and root in p.parents
 
 
 def mount_files(app: FastAPI, doc: Document, setting: str = "fileRoots", exts: tuple = (".pdf",)) -> None:
