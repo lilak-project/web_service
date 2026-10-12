@@ -41,6 +41,8 @@ export default {
   item: {
     key: 'activities', noun: '활동', allLabel: 'activities', label: 'name',
     order: { k: 'start', dir: -1 },
+    // What is on today is lit, and a line marks today, while sorted by 행사 시작.
+    now: { start: 'start', end: 'end' },
     columns: ['kind', 'name', 'start', 'role', 'title', 'folder', 'link'],
     // A new activity is named by the rule; one already named keeps its name.
     fill: (r) => (r.key ? r : { ...r, key: nameKey(r) }),
