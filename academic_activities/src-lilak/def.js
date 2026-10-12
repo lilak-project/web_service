@@ -41,6 +41,7 @@ export default {
   item: {
     key: 'activities', noun: '활동', allLabel: 'activities', label: 'name',
     order: { k: 'start', dir: -1 },
+    columns: ['kind', 'name', 'start', 'role', 'title', 'folder', 'link'],
     // A new activity is named by the rule; one already named keeps its name.
     fill: (r) => (r.key ? r : { ...r, key: nameKey(r) }),
     fields: [
@@ -65,7 +66,7 @@ export default {
       { k: 'tripEnd', label: '출장 끝', type: 'date' },
       { k: 'proposal', label: '제안서', type: 'class', of: 'proposals' },
       { k: 'papers', label: '논문', type: 'refs', to: PAPERS },
-      { k: 'link', label: 'Link', type: 'url' },
+      { k: 'link', label: 'Link', type: 'url', short: 'link', col: 44 },
       { k: 'key', label: '이름', type: 'text', mono: true, hint: '비워두면 규칙대로 붙습니다 (구분_날짜_행사이름)' },
       // 자료 is the folder of the same name under settings.folderRoots — the
       // name IS the link, so nothing is stored. A new activity shows the name it will get.
