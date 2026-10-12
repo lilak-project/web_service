@@ -56,9 +56,10 @@ TAG_RE = re.compile(r"(?:^|[\s(])#([^\s#.,;:!?()\[\]{}'\"]+)")
 # vault these notes came from is full of them: the same mark is what this app
 # stamps, so a todo finished here reads as finished there.
 DONE_RE = re.compile(r"\s*✅\s*(\d{4}-\d{2}-\d{2})")
-# The day it is due, the same way. `due:2026-10-20` is the typing-friendly
-# spelling of it — the editor turns one into the other as you write.
-DUE_RE = re.compile(r"\s*(?:📅|[Dd]ue:)\s*(\d{4}-\d{2}-\d{2})")
+# The day it is due, the same way. `>>2026-10-20` is the typing-friendly
+# spelling of it — the editor turns one into the other as you write, and a
+# file written elsewhere is read either way.
+DUE_RE = re.compile(r"\s*(?:📅|>>)\s*(\d{4}-\d{2}-\d{2})")
 
 
 def _todo_text(raw: str) -> tuple[str, str, str]:

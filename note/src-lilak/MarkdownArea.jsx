@@ -481,13 +481,14 @@ const embedInDoc = (src) => $prose(() => new Plugin({
   },
 }))
 
-/** `due:2026-10-20 ` becomes `📅 2026-10-20 ` as you type it.
+/** `>>2026-10-20 ` becomes `📅 2026-10-20 ` as you type it.
  *
  *  The due date of a todo is Obsidian Tasks' mark, which the vault these notes
- *  came from is full of — but nobody types an emoji mid-sentence, so the word
- *  is what you write and the mark is what lands. */
+ *  came from is full of — but nobody types an emoji mid-sentence, so `>>` is
+ *  what you write and the mark is what lands. (`>` alone still starts a quote:
+ *  that rule wants a space after it, and this one wants a date.) */
 const dueRule = $inputRule(() => new InputRule(
-  /(?:^|\s)[Dd]ue:(\d{4}-\d{2}-\d{2})\s$/,
+  /(?:^|\s)>>(\d{4}-\d{2}-\d{2})\s$/,
   (state, match, start, end) => state.tr.insertText(` 📅 ${match[1]} `, start, end),
 ))
 
