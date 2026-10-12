@@ -63,14 +63,13 @@ export default {
       { k: 'leads', label: '책임자', type: 'refs', to: PEOPLE, names: true },
       { k: 'tripStart', label: '출장 시작', type: 'date' },
       { k: 'tripEnd', label: '출장 끝', type: 'date' },
-      { k: 'material', label: '자료', type: 'check', col: 40, hint: '자료가 있음' },
       { k: 'proposal', label: '제안서', type: 'class', of: 'proposals' },
       { k: 'papers', label: '논문', type: 'refs', to: PAPERS },
       { k: 'link', label: 'Link', type: 'url' },
       { k: 'key', label: '이름', type: 'text', mono: true, hint: '비워두면 규칙대로 붙습니다 (구분_날짜_행사이름)' },
-      // The folder of the same name under settings.folderRoots — the name IS
-      // the link, so nothing is stored. A new activity shows the name it will get.
-      { k: 'folder', label: '폴더', type: 'folder', col: 40, get: (r) => r.key || (r.name ? nameKey(r) : '') },
+      // 자료 is the folder of the same name under settings.folderRoots — the
+      // name IS the link, so nothing is stored. A new activity shows the name it will get.
+      { k: 'folder', label: '자료', type: 'folder', col: 40, get: (r) => r.key || (r.name ? nameKey(r) : '') },
       { k: 'comment', label: 'Comment', type: 'longtext' },
     ],
   },
