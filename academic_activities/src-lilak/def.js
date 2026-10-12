@@ -20,7 +20,7 @@ const KINDS = [
   ['학회', 'Academic'], ['워크샵', 'Academic'], ['미팅', 'Academic'],
   ['세미나', 'Seminar'], ['강연', 'Lecture'], ['학교', 'School'],
   ['실험', 'Experiment'], ['연구 출장', 'BusinessTrip'],
-  ['보고서', 'Report'], ['제안서', 'Proposal'],
+  ['보고서', 'Report'], ['제안서', 'Proposal'], ['PAC', 'PAC'],
 ]
 const PREFIX = Object.fromEntries(KINDS)
 
@@ -55,15 +55,15 @@ export default {
       { k: 'online', label: '온라인', type: 'check', hint: 'zoom 등으로 참석' },
       { k: 'role', label: '참여 형태', type: 'class', col: 92 },
       { k: 'title', label: '발표 제목', type: 'text', col: 460 },
-      { k: 'talkDate', label: '발표일자', type: 'date' },
+      { k: 'talkDate', label: '발표일자', type: 'date', same: 'start' },
       { k: 'host', label: '주최 이름', type: 'text' },
       { k: 'equipment', label: '장비', type: 'classes' },
       // People in author_manager, linked rather than typed: the name shown is
       // theirs, so it is spelled one way. Someone author_manager does not list
       // (a collaborator elsewhere) is kept as a name with nobody behind it.
       { k: 'leads', label: '책임자', type: 'refs', to: PEOPLE, names: true },
-      { k: 'tripStart', label: '출장 시작', type: 'date' },
-      { k: 'tripEnd', label: '출장 끝', type: 'date' },
+      { k: 'tripStart', label: '출장 시작', type: 'date', same: 'start' },
+      { k: 'tripEnd', label: '출장 끝', type: 'date', same: 'end' },
       { k: 'proposal', label: '제안서', type: 'class', of: 'proposals' },
       { k: 'papers', label: '논문', type: 'refs', to: PAPERS },
       { k: 'link', label: 'Link', type: 'url', short: 'link', col: 44 },
