@@ -69,6 +69,14 @@ def main():
                       ("Academic_C", "Academic_A"), ("Academic_C", "../x")]:
         assert c.post("/api/folders/adopt", json={"source": src, "name": name}).status_code in (404, 409, 422), (src, name)
     assert (tmp / "outside").is_dir()
+    # by a bare name, as a browser reports a folder dropped from Finder
+    (root / "deep" / "slides 2024").mkdir()
+    assert c.post("/api/folders/adopt", json={"source": "slides 2024", "name": "Academic_F"}).status_code == 200
+    assert (root / "Academic_F").is_dir()
+    (root / "a" / "twin").mkdir(parents=True)
+    (root / "b" / "twin").mkdir(parents=True)
+    assert c.post("/api/folders/adopt", json={"source": "twin", "name": "Academic_G"}).status_code == 409
+    assert c.post("/api/folders/adopt", json={"source": "outside", "name": "Academic_G"}).status_code == 404
     files_check()
     print("ok")
 

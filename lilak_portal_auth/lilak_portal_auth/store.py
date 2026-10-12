@@ -300,6 +300,15 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         name = clean(body.get("name"))
         src = str(body.get("source") or "").strip()
         listed = found().get(unicodedata.normalize("NFC", src))
+        if not listed and "/" not in src:
+            # A browser hands a page the NAME of a folder dropped from Finder,
+            # never its path: look for it under the roots.
+            hits = search(src)
+            if len(hits) > 1:
+                raise HTTPException(409, f"'{src}' 폴더가 루트 안에 {len(hits)}개 있습니다 — 목록에서 고르세요.")
+            listed = hits[0] if hits else None
+            if not listed:
+                raise HTTPException(404, f"루트 안에서 '{src}' 폴더를 찾지 못했습니다 — 루트 밖의 폴더는 먼저 루트 안으로 옮기세요.")
         real = Path(listed or src).expanduser().resolve()
         root = next((r for r in (Path(x).expanduser().resolve() for x in roots())
                      if root_has(r, real)), None)
@@ -310,6 +319,18 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         dest = root / name
         real.rename(dest)
         return {"ok": True, "from": str(real), "path": str(dest)}
+
+    def search(name: str, depth: int = 4) -> list:
+        """Folders called `name` anywhere under the roots, a few levels down."""
+        want = unicodedata.normalize("NFC", name)
+        out = []
+        for r in roots():
+            base = Path(r).expanduser()
+            for dirpath, dirs, _ in os.walk(base):
+                level = len(Path(dirpath).relative_to(base).parts)
+                dirs[:] = [d for d in dirs if not d.startswith(".")] if level < depth else []
+                out += [os.path.join(dirpath, d) for d in dirs if unicodedata.normalize("NFC", d) == want]
+        return out
 
     def root_has(root: Path, p: Path) -> bool:
         return p != root and root in p.parents
