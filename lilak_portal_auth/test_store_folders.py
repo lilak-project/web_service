@@ -77,8 +77,30 @@ def main():
     (root / "b" / "twin").mkdir(parents=True)
     assert c.post("/api/folders/adopt", json={"source": "twin", "name": "Academic_G"}).status_code == 409
     assert c.post("/api/folders/adopt", json={"source": "outside", "name": "Academic_G"}).status_code == 404
+    kinds_check()
     files_check()
     print("ok")
+
+
+def kinds_check():
+    """Several roots, one per kind: a new folder goes where its kind already is."""
+    tmp = Path(tempfile.mkdtemp())
+    acad, prop = tmp / "01 Academic", tmp / "07 Proposal"
+    (acad / "Academic_20240101_X").mkdir(parents=True)
+    (prop / "Proposal_20240101_Y").mkdir(parents=True)
+    doc = Document(tmp / "d.json", keys=("items", "settings"))
+    d = doc.read()
+    d["settings"] = {"folderRoots": [str(acad), str(prop)]}
+    doc.write(d)
+    app = FastAPI()
+    app.dependency_overrides[identity] = lambda: {}
+    mount_folders(app, doc)
+    c = TestClient(app)
+    assert set(c.get("/api/folders").json()["dirs"]) == {"Academic_20240101_X", "Proposal_20240101_Y"}
+    assert c.post("/api/folders/make", json={"name": "Proposal_20261007_Z"}).status_code == 200
+    assert (prop / "Proposal_20261007_Z").is_dir()
+    assert c.post("/api/folders/make", json={"name": "PAC_20261208_W"}).status_code == 200
+    assert (acad / "PAC_20261208_W").is_dir()        # no PAC_ yet: the first root
 
 
 def files_check():

@@ -189,7 +189,7 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         GET  /api/folders/list?name=          the files in one (recursive)
         GET  /api/folders/file?name=&path=    one file, inline (download=1: as a file)
         POST /api/folders/open {name, path?, how}  open it / show it on the desktop
-        POST /api/folders/make {name}         make the folder under the first root
+        POST /api/folders/make {name}         make the folder where its kind lives
         POST /api/folders/adopt {source, name}  rename a folder under a root to be the record's
 
     The naming convention IS the link — a record named Academic_20131207_HIM2013
@@ -285,11 +285,24 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         rs = roots()
         if not rs:
             raise HTTPException(409, "폴더 루트가 정해지지 않았습니다.")
-        if name in found():
+        dirs = found()
+        if name in dirs:
             raise HTTPException(409, "이미 있습니다.")
-        p = Path(rs[0]).expanduser() / name
+        p = Path(home_for(name, rs, dirs)) / name
         p.mkdir()
         return {"ok": True, "path": str(p)}
+
+    def home_for(name: str, rs: list, dirs: dict) -> str:
+        """Where a new folder goes: the root that already holds the most folders
+        of its kind — the part of the name before the first '_' (Proposal_…
+        beside the other proposals) — or the first root."""
+        kind = name.split("_", 1)[0] + "_"
+        count: dict = {}
+        for n, path in dirs.items():
+            if n.startswith(kind):
+                parent = str(Path(path).parent)
+                count[parent] = count.get(parent, 0) + 1
+        return max(count, key=count.get) if count else str(Path(rs[0]).expanduser())
 
     @app.post("/api/folders/adopt")
     def adopt(body: dict = Body(...), _: dict = Depends(identity)):
