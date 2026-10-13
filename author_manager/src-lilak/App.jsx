@@ -707,6 +707,9 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
   // Printed with the citation name (S. Ahn) or the whole one (Sunghoon Ahn) —
   // an abstract wants one, a programme or a poster credit the other.
   const [nameAs, setNameAs] = useState('abv')
+  // And how the affiliations come out: just their names, their names with the
+  // address a journal wants, or not at all when the poster says it elsewhere.
+  const [affAs, setAffAs] = useState('addr')
 
   /** The LaTeX author block: core order, then a superscript per affiliation. */
   /** The author block both printed forms are: core order, then the
@@ -721,9 +724,13 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
     }
     const line = (tag) => {
       const rec = (doc.affiliations || []).find((x) => x.name === tag)
-      return rec ? [rec.fullName || rec.name, rec.address].filter(Boolean).join(', ') : tag
+      if (!rec) return tag
+      return affAs === 'name' ? (rec.fullName || rec.name)
+        : [rec.fullName || rec.name, rec.address].filter(Boolean).join(', ')
     }
-    const nums = (a) => currentAffs(a).map((x) => idx.get(x.tag)).filter(Boolean)
+    // Without the affiliations there are no numbers to carry either.
+    const nums = (a) => (affAs === 'none' ? []
+      : currentAffs(a).map((x) => idx.get(x.tag)).filter(Boolean))
     const name = (a) => (nameAs === 'full'
       ? engName(a) || citeShort(a) : citeShort(a) || engName(a)) || anyName(a)
     return { ordered, idx, line, nums, name }
@@ -734,6 +741,7 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
       const n = nums(a)
       return `  ${name(a)}${n.length ? `$^{${n.join(',')}}$` : ''}`
     })
+    if (affAs === 'none') return `\\author{%\n${names.join(',\n')}\n}`
     const affs = [...idx.entries()].map(([tag, i]) => `$^{${i}}$ ${line(tag)}\\\\`)
     return `\\author{%\n${names.join(',\n')}\n}\n\n% affiliations\n${affs.join('\n')}`
   }
@@ -745,18 +753,18 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
     const { ordered, idx, line, nums, name } = block()
     // The only difference between the two is how a number is raised: a word
     // processor does it to a plain digit, LaTeX does it to $^{…}$.
-    const mark = (n) => (tex ? `$^{${n.join(',')}}$` : `,${n.join(',')}`)
+    const mark = (n) => (tex ? `$^{${n.join(',')}}$` : n.join(','))
     const one = (a) => {
       const n = nums(a)
       return `${name(a)}${n.length ? mark(n) : ''}`
     }
-    // Plain: the comma is already in front of the numbers, so a space divides
-    // people. LaTeX: the number is raised, so the comma has to divide them.
+    // The number belongs to the NAME — J. W. Lee1 — so the comma is free to do
+    // the only job a comma has in a list: divide the people.
     const people = ordered.map(one)
-    const sep2 = tex ? ', ' : ' '
     const joined = people.length > 1
-      ? `${people.slice(0, -1).join(sep2)}${sep2}and ${people.at(-1)}`
+      ? `${people.slice(0, -1).join(', ')}, and ${people.at(-1)}`
       : people.join('')
+    if (affAs === 'none') return joined
     const affs = [...idx.entries()].map(([tag, i]) =>
       (tex ? `$^{${i}}$ ${line(tag)} \\\\` : `${i} ${line(tag)}`))
     return `${joined}\n\n${affs.join('\n')}`
@@ -804,6 +812,11 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
           {[['abv', '{abv-name}'], ['full', '{name}']].map(([v, label]) => (
             <button key={v} type="button" className={`rl-btn${nameAs === v ? ' on' : ''}`}
               onClick={() => setNameAs(v)}>{label}</button>
+          ))}
+          <span className="rl-gap" />
+          {[['addr', '소속+주소'], ['name', '소속만'], ['none', '소속 없이']].map(([v, label]) => (
+            <button key={v} type="button" className={`rl-btn${affAs === v ? ' on' : ''}`}
+              onClick={() => setAffAs(v)}>{label}</button>
           ))}
         </>)}
         <span className="rl-sp" />
