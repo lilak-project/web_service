@@ -580,8 +580,9 @@ export default function App() {
                   the tab itself is the set. */}
               {/* On a group's tab the printed block is ordered by THAT group's
                   core — the number was assigned for this author list. */}
+              {/* `scope` is the rows in the order the table has them, and
+                  `chosen` keeps that order — so the block prints what you see. */}
               <ListOut list={chosen.length ? chosen : scope} picked={chosen.length > 0}
-                core={tab.grp ? (a) => coreIn(a, tab.grp) : coreOf}
                 doc={doc} say={setNote} open={outOpen} setOpen={setOutOpen} />
             </>
           )}
@@ -698,7 +699,7 @@ const byPaperOrder = (core = coreOf) => (a, b) => {
 }
 
 // ─── My List's output: the reason the list exists ───────────────────────────
-function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
+function ListOut({ list, picked, doc, say, open, setOpen }) {
   const [sep, setSep] = useState(', ')
   const [tpl, setTpl] = useState(PRESETS[0][1])
   // Two printed forms are not templates: they number the affiliations, which a
@@ -717,7 +718,10 @@ function ListOut({ list, picked, core = coreOf, doc, say, open, setOpen }) {
    *  affiliations count — somebody at two places carries two numbers, which is
    *  what the abstract prints. */
   const block = () => {
-    const ordered = [...list].sort(byPaperOrder(core))
+    // The order on screen IS the order: the table is already sorted the way
+    // you asked — core and family name unless you clicked a column — and a
+    // block that re-sorted it printed something you were not looking at.
+    const ordered = list
     const idx = new Map()
     for (const a of ordered) {
       for (const x of currentAffs(a)) if (!idx.has(x.tag)) idx.set(x.tag, idx.size + 1)
