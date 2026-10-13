@@ -63,7 +63,7 @@ export default {
     fields: [
       { k: 'paste', label: '붙여넣기', type: 'paste', store: false, search: false,
         when: (r, { draft }) => draft },
-      { k: 'type', label: '종류', type: 'select', options: TYPES, default: 'paper', required: true,
+      { k: 'type', label: '종류', type: 'select', options: TYPES, default: 'paper', required: true, bulk: true,
         col: { w: 56, min: 40, drop: 1180, label: 'type' }, tone: 'dim' },
       { k: 'citeKey', label: 'cite key', type: 'citekey', col: { w: 150, min: 80, label: 'key' } },
       { k: 'title', label: '제목', type: 'longtext', rows: 2, col: { w: 260, min: 120, label: 'title' }, tone: 'ink' },
@@ -84,7 +84,8 @@ export default {
         col: { w: 46, min: 38, num: true, label: 'year' }, sort: (v) => Number(v) || null },
       { k: 'doi', label: 'doi', type: 'text', mono: true, href: (v) => `https://doi.org/${v}` },
       { k: 'url', label: 'url', type: 'url' },
-      { k: 'tags', label: '태그', type: 'maintags', col: { w: 180, min: 60, drop: 1320, label: 'tags' },
+      // Tags are what one most often sets on many papers at once (선택 편집).
+      { k: 'tags', label: '태그', type: 'maintags', bulk: true, col: { w: 180, min: 60, drop: 1320, label: 'tags' },
         tone: 'dim', fold: foldTag,
         hint: '태그를 누르면 메인 태그 — cite key의 {tag} 자리입니다.',
         // Merging tags moves a key when it was filed under one of them.
