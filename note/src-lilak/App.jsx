@@ -21,7 +21,7 @@ import {
   useRackList, useRackKeys,
   RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
   RackEditClass,
-  bySome, FilterBar, FacetRows,
+  bySome, asSorts, bumpSort, byKeys, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
@@ -157,7 +157,7 @@ export default function App() {
   const scopeOf = useCallback((t, sort) => {
     if (t?.kind !== 'notes') return []
     const list = t.tag ? notes.filter((n) => inTag(n, t.tag)) : notes
-    return [...list].sort(bySome(SORTERS[sort?.k || 'date'], sort?.dir ?? -1))
+    return [...list].sort(byKeys(asSorts(sort).length ? sort : { k: 'date', dir: -1 }, SORTERS))
   }, [notes])
 
   // The todo tab's own scope is this service's alone, so it reads its stored
@@ -218,6 +218,13 @@ export default function App() {
     return () => clearTimeout(t)
   }, [query])
 
+  // The todo table shares the view's sort stack, which may hold note columns
+  // this table has never heard of; it reads the ones it knows.
+  const todoSort = useMemo(() => {
+    const keys = asSorts(sort).filter((x) => TODO_SORTERS[x.k])
+    return keys.length ? keys : [{ k: 'date', dir: -1 }]
+  }, [sort])
+
   const todoRows = useMemo(() => {
     const q = query.trim().toLowerCase()
     const keep = (TODO_SCOPES.find((x) => x.k === tscope) || TODO_SCOPES[0]).is
@@ -225,9 +232,8 @@ export default function App() {
       ? todos.filter(keep).filter((t) => !q || [t.text, t.title, ...(t.tags || [])]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
       : []
-    const s = sort && TODO_SORTERS[sort.k] ? sort : { k: 'date', dir: -1 }
-    return [...list].sort(bySome(TODO_SORTERS[s.k], s.dir))
-  }, [todos, tab, query, sort, tscope])
+    return [...list].sort(byKeys(todoSort, TODO_SORTERS))
+  }, [todos, tab, query, todoSort, tscope])
 
 
   const classes = useMemo(() => {
@@ -416,11 +422,8 @@ export default function App() {
             {index && tab?.kind === 'notes' && (
               <RackTable cols={cols} onDrag={drag('')}
                 facet={filter.tableFacet}
-                sort={sort || { k: 'date', dir: -1 }}
-                onSort={(k) => setSort((s) => {
-                  const now = s || { k: 'date', dir: -1 }
-                  return now.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
-                })}
+                sort={asSorts(sort).length ? sort : [{ k: 'date', dir: -1 }]}
+                onSort={(k) => setSort((s) => bumpSort(asSorts(s).length ? s : { k: 'date', dir: -1 }, k))}
                 head={filter.mode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
                 <FacetRows f={filter} />
                 {!filter.mode && rows.map((n, i) => {
@@ -452,8 +455,8 @@ export default function App() {
 
             {index && tab?.kind === 'todos' && (
               <RackTable cols={todoCols} onDrag={drag('t:')}
-                sort={sort && TODO_SORTERS[sort.k] ? sort : { k: 'date', dir: -1 }}
-                onSort={(k) => setSort((s) => (s?.k === k ? { k, dir: -s.dir } : { k, dir: 1 }))}>
+                sort={todoSort}
+                onSort={(k) => setSort((s) => bumpSort(todoSort, k))}>
                 {todoRows.map((t, i) => (
                   <RackRow key={`${t.id}:${t.line}`} cols={todoCols} tone={TONE}
                     className={`rl-hit${t.done ? ' rl-done' : ''}${late(t) ? ' nt-late' : ''}`}

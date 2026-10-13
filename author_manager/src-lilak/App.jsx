@@ -24,7 +24,7 @@ import {
   RackField as Fld, RackTextRows as TextRows,
   useRackList, useRackKeys, useToggleKey, RackPaneStrip,
   useMergeMode, RackMergeButtons, RackMerge,
-  bySome, fill as fillTpl, FilterBar, FacetRows,
+  bySome, asSorts, bumpSort, byKeys, fill as fillTpl, FilterBar, FacetRows,
   PORTAL_PROJECT, brandStyle, projectKey, load, save, isManager, newId, fetchDoc, putDoc,
 } from 'lilak-ui/racklist'
 import 'lilak-ui/racklist/rack.css'
@@ -107,6 +107,7 @@ const COLS = [
   { k: 'kor', w: 86, min: 50, label: '이름' },
   { k: 'name', w: 196, min: 90, label: 'name' },
   { k: 'nm', w: 112, min: 60, label: 'abv-name', drop: 1040 },
+  { k: 'last', w: 92, min: 50, label: 'last name', drop: 1100 },
   { k: 'email', w: 214, min: 90, label: 'email' },
   { k: 'pos', w: 176, min: 70, label: 'position', drop: 860 },
   // When the record was made, and when it last changed. The only two things
@@ -163,8 +164,10 @@ const SORTERS = {
   first: (a) => citeFirst(a),
   init: (a) => citeInit(a),
 }
-const byColumn = (k, dir, group) =>
-  bySome(k === 'core' && group ? (a) => coreIn(a, group) : SORTERS[k], dir)
+// On a group's tab that group's core is the one that counts — it is the only
+// core that means anything there.
+const sortersIn = (group) => (k) =>
+  (k === 'core' && group ? (a) => coreIn(a, group) : SORTERS[k])
 // The classes' own columns. Same machinery, three keys.
 const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count, full: (r) => r.full,
   // The first day is what a list of groups is ordered by; the end is a detail.
@@ -178,7 +181,7 @@ const spanOf = (from, to) => {
   return `${a} ~ ${b.slice(0, 4) === a.slice(0, 4) ? b.slice(5) : b}`
 }
 /** Which columns are the record's own words (ink) and which are about it (dim). */
-const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim', reg: 'dim', upd: 'dim', when: 'dim', type: 'dim' }
+const TONE = { name: 'ink', affil: 'dim', pos: 'dim', nm: 'dim', last: 'dim', reg: 'dim', upd: 'dim', when: 'dim', type: 'dim' }
 /** What a group IS. A paper's author list is assembled for different reasons,
  *  and a list of fifteen groups is unreadable without saying which is which. */
 const GROUP_TYPES = [
@@ -252,8 +255,12 @@ export default function App() {
     // No column clicked: the order an author list is written in — core first,
     // then by family name. On a group's tab that group's core is the one that
     // counts, which is the only core that means anything there.
-    if (!sort) return [...list].sort(byPaperOrder(tab.grp ? (a) => coreIn(a, tab.grp) : coreOf))
-    return [...list].sort(byColumn(sort.k, sort.dir, tab.grp))
+    // Clicking a column sorts by it and keeps the columns pressed before it as
+    // the tiebreakers; underneath them all is the order an author list is
+    // written in.
+    const written = byPaperOrder(tab.grp ? (a) => coreIn(a, tab.grp) : coreOf)
+    if (!asSorts(sort).length) return [...list].sort(written)
+    return [...list].sort(byKeys(sort, sortersIn(tab.grp), written))
   }, [authors])
   // The name with its spaces taken out is searched too: a transliterated name is
   // written 히로시 와타나베 and typed 히로시와타나베 as often as not.
@@ -526,14 +533,8 @@ export default function App() {
             <>
               <RackTable cols={cols} onDrag={drag('')}
                 facet={filter.tableFacet}
-                sort={sort || { k: 'core', dir: 1 }}
-                onSort={(k) => setSort((s2) => {
-                  // The implicit order counts as the current one, so the first
-                  // press on the column already sorted turns it over instead of
-                  // doing nothing you can see.
-                  const now = s2 || { k: 'core', dir: 1 }
-                  return now?.k === k ? { k, dir: -now.dir } : { k, dir: 1 }
-                })}
+                sort={asSorts(sort).length ? sort : [{ k: 'core', dir: 1 }]}
+                onSort={(k) => setSort((s2) => bumpSort(asSorts(s2).length ? s2 : { k: 'core', dir: 1 }, k))}
                 head={filter.mode ? null : { all: allPicked, some: somePicked, onAll: toggleAll }}>
                 <FacetRows f={filter} labels={{ empty: '이 열에는 값이 없습니다.' }} />
                 {!filter.mode && rows.map((a, i) => {
@@ -566,6 +567,7 @@ export default function App() {
                         kor: korName(a) || D,
                         name: engName(a) || a.nick || D,
                         nm: citeShort(a) || D,
+                        last: citeLast(a) || D,
                         email: repEmail(a) || D,
                         pos: currentAffs(a).map((x) => x.position).filter(Boolean).join(', ') || D,
                         reg: (a.createdAt || '').slice(0, 10) || D,
