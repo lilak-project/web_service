@@ -37,7 +37,7 @@ const PEOPLE = { svc: 'author_manager', proj: 'authors', item: 'authors',
     || `${a.korFamily || ''}${a.korGiven || ''}` || a.nick || '' }
 
 export default {
-  name: 'academic_activities', title: 'A', unit: '건', key: 'aa',
+  name: 'academic_activities', title: 'Activities', unit: '건', key: 'aa',
   item: {
     key: 'activities', noun: '활동', allLabel: 'activities', label: 'name',
     order: { k: 'start', dir: -1 },
