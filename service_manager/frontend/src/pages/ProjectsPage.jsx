@@ -1,159 +1,52 @@
-import { useEffect, useRef, useState } from 'react'
-import { Icon, Button, CoverPage, PROJECT_ICONS, Avatar, MANAGER_COLOR, Modal } from 'lilak-ui'
-import ExpandBox from './portal/ExpandBox'
-import { launcher, setExperiment, errText } from '../api'
+import { useEffect, useState } from 'react'
+import { Button, PROJECT_ICONS } from 'lilak-ui'
+import { launcher, errText } from '../api'
 import { useLang } from '../context/LangContext'
-import AccountView, { settingsMenu } from './portal/AccountView'
-import ArchivePanel from './portal/ArchivePanel'
-import ServiceManagePanel from './portal/ServiceManagePanel'
-import IconLabView from './portal/IconLabView'
-import RackView from './portal/RackView'
-import LinksView from './portal/LinksView'
-import NewServiceView from './portal/NewServiceView'
-import StoreView from './portal/StoreView'
-import ServiceProjects from './portal/ServiceProjects'
-import ServiceSingle from './portal/ServiceSingle'
-import AccountMenu from './portal/AccountMenu'
-import { MasonryGrid } from './portal/MasonryGrid'
-import HomeModeMenu, { HOME_MODES } from './portal/HomeModeMenu'
 import SidebarPortal from './portal/SidebarPortal'
-import { usePortalLayout, setPortalLayout } from '../portalLayout'
-import ServiceGroupBand from './portal/ServiceGroupBand'
-import LiveWall from './portal/LiveWall'
-import useFlip from './portal/useFlip'
-import usePointerDrag from './portal/usePointerDrag'
-import { usePortalScale } from '../portalScale'
 import { Panel, Field, FieldActions, fieldInput, fieldMuted } from './portal/Field'
 
-// True when the viewport is phone-narrow — drives the compact stacked header and
-// the settings dropdown (the desktop settings sidebar is unusable at this width).
-function useIsNarrow(bp = 640) {
-  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < bp)
-  useEffect(() => {
-    const onResize = () => setNarrow(window.innerWidth < bp)
-    onResize()
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [bp])
-  return narrow
-}
-
-// Header "settings menu" control (narrow only): a button showing the current
-// settings section; opening it drops the full menu, and picking one navigates there.
-function SettingsMenuButton({ items, current, onPick, style }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-  useEffect(() => {
-    if (!open) return
-    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    const esc = (e) => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', away)
-    document.addEventListener('keydown', esc)
-    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc) }
-  }, [open])
-  const cur = items.find(([k]) => k === current) || items[0]
-  return (
-    <div ref={ref} style={{ position: 'relative', ...style }}>
-      {/* Icon-only (the section NAME is written above the content box, in AccountView).
-          'warning' = the same amber the Home tab turns when it enters manage mode. */}
-      <Button variant="warning" onClick={() => setOpen((o) => !o)} title={cur[2]}
-        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%',
-          height: CTRL_H, borderRadius: CTRL_R, padding: '0 14px', fontSize: 'var(--fs-medium, 14px)' }}>
-        <Icon name={cur[1]} size={18} />
-        <Icon name={open ? 'caret-up' : 'caret-down'} size={14} />
-      </Button>
-      {open && (
-        <div style={{ position: 'absolute', left: 0, right: 0, top: 'calc(100% + 6px)', zIndex: 1000,
-          background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 10,
-          boxShadow: '0 6px 22px rgba(0,0,0,.16)', padding: 6 }}>
-          {items.map(([key, icon, label]) => (
-            <button key={key} type="button" onClick={() => { onPick(key); setOpen(false) }}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
-                background: key === current ? 'var(--surface-2)' : 'transparent', border: 'none', borderRadius: 8,
-                padding: '9px 12px', cursor: 'pointer', font: 'inherit', fontSize: 'var(--fs-medium, 14px)',
-                color: 'var(--text-primary)', fontWeight: key === current ? 600 : 400 }}
-              onMouseEnter={(e) => { if (key !== current) e.currentTarget.style.background = 'var(--surface-2)' }}
-              onMouseLeave={(e) => { if (key !== current) e.currentTarget.style.background = 'transparent' }}>
-              <Icon name={icon} size={16} /> {label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 /**
- * ProjectsPage — the LILAK portal cover page.
+ * ProjectsPage — the portal's cover: who you are, what you may open, and the
+ * sidebar cover that shows it.
  *
- * Lists the services (elog projects today; other apps later) and gates them
- * behind a PORTAL account. Portal accounts are central, living at the launcher
- * (separate from each service's own users), so this page is login-first: you
- * sign in / sign up here, then see the list.
+ * It used to carry two covers — the classic card grid and the sidebar — and a
+ * layout switch between them, plus a roomy/compact size switch the sidebar never
+ * read. The sidebar has everything the grid had (access requests, the archive,
+ * logs, versions — brought across before the grid was removed), so this page is
+ * now the data and the sign-in, and SidebarPortal is the screen.
  *
- * Auth always targets the portal through the `launcher` axios
- * (`/launcher/api/auth/*` → the launcher's own `/api/auth/*`), independent of any
- * selected experiment — so it works whether the app is served by the launcher
- * or by the Vite dev proxy.
+ * What lives here: the session (restore, sign in, sign out, the ?next= return),
+ * the card list (services + builtins, in the saved order, with their groups),
+ * and the writes that reorder and regroup it.
  */
 
 const PORTAL_TOKEN_KEY = 'lilak_portal_token'
 
-// A built-in, admin-only "service": not a web app but listed like one. Opening
-// its card expands the icon editor inline (no proxy, no backend service entry).
+// Builtins: portal tools listed like services. Only the links card is for
+// everyone (and only once it has something in it); the rest are a manager's.
 const ICON_SERVICE = { name: 'lilak icon', kind: 'tool', builtin: 'iconlab', icon: 'images', can_enter: true }
-// Admin-only builtin: opening it expands a form that scaffolds + builds + registers
-// a new lilak_ui-based service (see NewServiceView).
 const CREATE_SERVICE = { name: 'new-service', kind: 'tool', builtin: 'newservice', icon: 'plus', can_enter: true }
-// Admin-only builtin: install catalog services from git + rebuild the portal
-// (see StoreView). This is what makes a portal-only install self-sufficient.
 const STORE_SERVICE = { name: 'service manager', kind: 'tool', builtin: 'store', icon: 'download', can_enter: true }
-// The only builtin everyone sees: a bookmark list for things the portal does NOT
-// run (an instrument's own page, a wiki, a PDF elsewhere). Admins edit it in
-// manage mode; the list itself lives in data/_portal/links.json.
 const LINKS_SERVICE = { name: 'links', kind: 'tool', builtin: 'links', icon: 'link', can_enter: true }
-// Manager-only builtin: the RACK rules — how every screen in this portal is
-// built — read inside the portal itself, with the screen list that scripts/
-// rack.py keeps current.
 const RACK_SERVICE = { name: 'rack', kind: 'tool', builtin: 'rack', icon: 'wall', can_enter: true }
 
-// The mark next to the title. Uses the editable /lilak-header.svg (set from the
-// icon editor); falls back to the kit logo when that file isn't there yet.
-function HeaderMark({ size = 42 }) {
-  const [failed, setFailed] = useState(false)
-  if (failed) return <Icon name="lilak" size={size} style={{ height: size, width: 'auto' }} />
-  return <img src="/lilak-header.svg" alt="" height={size} style={{ height: size, width: 'auto' }} onError={() => setFailed(true)} />
-}
-
-// Stable per-name fallback icon so services without a stored icon still look
-// distinct (e.g. ones created before icons existed).
+// Stable per-name fallback icon so a service without a stored icon still looks
+// distinct.
 function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h) }
 const iconFor = (name, stored) => stored || PROJECT_ICONS[hashStr(name) % PROJECT_ICONS.length]
 
-// A card's stable key (builtins use "@iconlab"/"@newservice"; services use the name).
+// A card's stable key (builtins use "@iconlab"…; services use the name).
 const cardKey = (p) => (p.builtin ? '@' + p.builtin : p.name)
-// Sort the combined card list by the admin-saved order; anything not listed keeps
-// its default position (after the ordered ones).
+// Sort by the admin-saved order; anything not listed keeps its default place.
 function sortByHome(cards, order) {
   const def = new Map(cards.map((c, i) => [cardKey(c), i]))
   const pos = (c) => { const o = order.indexOf(cardKey(c)); return o >= 0 ? o : 1000 + def.get(cardKey(c)) }
   return [...cards].sort((a, b) => pos(a) - pos(b))
 }
 
-// Every control on the auth card — inputs, the mode tabs, the submit — is one
-// height, so the card reads as a single stack of equal rows (and stays a
-// comfortable tap target on a phone).
-const CTRL_H = 46
-const CTRL_R = 10
-// The in-card primary action (Enter / Open a tool). Sized to match the enlarged
-// service-card Enter/Start/Stop buttons (see ServiceSingle) so every card's main
-// action looks the same.
-const ENTER_BTN = { height: 40, borderRadius: 10, padding: '0 18px', minWidth: 88, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
+// The auth card's inputs and its width — it is written in the same panels as
+// the rest of the portal; this is only how wide it sits and where.
 const inputStyle = { ...fieldInput, width: '100%', fontFamily: 'var(--font-mono)' }
-// The card's own side padding, on top of the page Container's 16px — on a phone
-// the column is the full width, and the controls shouldn't run up to the glass.
-// The auth card is written in the same panels as the rest of the portal; this
-// is only how wide it sits and where.
 const cardStyle = { width: '100%', maxWidth: 420, margin: '28px auto 0' }
 
 // Attach / clear the portal bearer token on the shared launcher axios.
@@ -163,8 +56,8 @@ function setPortalToken(token) {
     launcher.defaults.headers.common['Authorization'] = `Bearer ${token}`
     // Also a cookie so the reverse proxies (/p, /pp) can authorize a top-level
     // navigation (which carries no Authorization header) for per-project gating.
-    // Add Secure when served over HTTPS so the token cookie never rides plain HTTP
-    // (omitted on http://localhost, where Secure cookies are rejected in dev).
+    // Secure over HTTPS so the token never rides plain HTTP (omitted on
+    // http://localhost, where Secure cookies are rejected in dev).
     const secure = location.protocol === 'https:' ? ' Secure;' : ''
     document.cookie = `${PORTAL_TOKEN_KEY}=${token}; path=/; SameSite=Lax;${secure} max-age=86400`
   } else {
@@ -174,14 +67,6 @@ function setPortalToken(token) {
   }
 }
 
-// ── Login / Sign-up card (shown when logged out) ──────────────────────────────
-/**
- * AuthCard — one panel that GROWS. Sign-up is not another screen: choosing it
- * appends the rows it needs below the two that were already there, and the
- * verification code appends below those, so the thing you were typing in never
- * moves under your hands. Only the first run differs — there is no account to
- * sign in to yet, so there is nothing to choose between.
- */
 export function AuthCard({ t, onAuthed, needsSetup, info }) {
   const [mode, setMode] = useState('login')   // 'login' | 'signup'
   const [f, setF] = useState({ username: '', password: '', email: '', invite_code: '' })
@@ -366,24 +251,19 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
   )
 }
 
-
 export default function ProjectsPage() {
   const { t, lang } = useLang()
-  const { big } = usePortalScale()   // roomy UI toggle (default compact)
-  const { sidebar } = usePortalLayout()   // 'sidebar' cover (redesign) vs the classic card grid
 
-  // ── Portal auth (central accounts at the launcher) ──
-  const [user, setUser] = useState(null)        // null = logged out
+  // ── the session ──
+  const [user, setUser] = useState(null)        // null = signed out
   const [authReady, setAuthReady] = useState(false)
   const isManager = user?.role === 'manager'
-  const narrow = useIsNarrow()                          // phone-width → compact header + settings dropdown
-  const [settingsTab, setSettingsTab] = useState('me')  // active Settings sub-page (driven from the header on narrow)
+  const [settingsTab, setSettingsTab] = useState('me')
 
   // PWA / deep-link return: the proxies bounce an unauthenticated page navigation
-  // here as /projects?next=<original-url> (e.g. a home-screen app whose isolated
-  // webview has no cookie yet). Once a session exists — fresh login or restored
-  // token, both of which re-set the proxy cookie — go back where the user came
-  // from. Same-origin paths only (no '//'): never an open redirect.
+  // here as /projects?next=<original-url>. Once a session exists — fresh sign-in
+  // or restored token, both of which re-set the proxy cookie — go back. Same-origin
+  // paths only (no '//'): never an open redirect.
   const nextParam = (() => {
     const v = new URLSearchParams(window.location.search).get('next') || ''
     return v.startsWith('/') && !v.startsWith('//') ? v : ''
@@ -392,59 +272,24 @@ export default function ProjectsPage() {
     if (user && nextParam) window.location.replace(nextParam)
   }, [user])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // No popups: the app is a single page with logged-in screens, switched here.
-  const [view, setView] = useState('home')          // 'home' | 'settings'
-  const [expanded, setExpanded] = useState(null)         // multi-project svc expanded inline
-  // Home cover MODE: null (normal) | 'manage' | 'groups' | 'live' — picked from the
-  // menu that drops when Home is pressed while already on Home.
-  const [mode, setMode] = useState(null)
-  const manage = mode === 'manage'
-  const groupsMode = false                                // folded into manage mode
-  const liveMode = mode === 'live'
-  const setManage = (v) => setMode((m) => ((typeof v === 'function' ? v(m === 'manage') : v) ? 'manage' : null))
-  const [modeMenu, setModeMenu] = useState(false)
-  const [groups, setGroups] = useState([])                 // service groups (bands on the cover)
-  const [previewOrder, setPreviewOrder] = useState(null)  // the order the drag would produce, shown live while dragging
-  const [previewGroup, setPreviewGroup] = useState(null)  // { key, gid|null }: the group the dragged card would land in
-  const flipRef = useRef(null)
-  const latest = useRef({})                                // latest derived values for the drag callbacks
-  const [links, setLinks] = useState(null)               // home bookmark card contents
-  // Animate the brand mark rising into place ONLY on an actual login (not on a
-  // restored session / reload), so the header doesn't slide on every page load.
-  const [animateHeader, setAnimateHeader] = useState(false)
-
+  // ── what the cover shows ──
   const [projects, setProjects] = useState(null)   // null = loading
-  const [homeCfg, setHomeCfg] = useState(null)     // admin: builtin overrides + card order
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState('')             // name currently acting on
-  const [reloadTick, setReloadTick] = useState(0)  // bumped on refresh → re-loads the archive
-  const [portalInfo, setPortalInfo] = useState(null)  // { host, version } — tells servers apart
-  const [logFor, setLogFor] = useState(null)          // service whose service.log modal is open
-  const [logData, setLogData] = useState(null)        // { text, path }
-  const [logBusy, setLogBusy] = useState(false)
+  const [homeCfg, setHomeCfg] = useState(null)     // manager: builtin overrides + card order
+  const [groups, setGroups] = useState([])
+  const [links, setLinks] = useState(null)
+  const [portalInfo, setPortalInfo] = useState(null)   // { host, version } — which server this is
+  const [publicCards, setPublicCards] = useState([])   // the signed-out bar
 
-  // Public host + portal git-version for the header (identifies the deployment).
   useEffect(() => {
     launcher.get('/health').then((r) => setPortalInfo(r.data)).catch(() => {})
   }, [])
-
-  // Tail a managed service's captured stdout/stderr (data/<name>/service.log).
-  async function openLog(name) {
-    setLogFor(name); setLogBusy(true)
-    try { setLogData((await launcher.get(`/admin/services/${name}/log`)).data) }
-    catch (e) { setLogData({ text: `로그를 불러오지 못했습니다: ${errText(e, e.message)}`, path: '' }) }
-    finally { setLogBusy(false) }
-  }
-
-  // The signed-OUT bar's contents. Its own call, because /services is
+  // The signed-OUT bar's contents: its own call, because /services is
   // auth-aware and there is no session yet; an untouched portal answers [].
-  const [publicCards, setPublicCards] = useState([])
   useEffect(() => {
     if (user) return
     launcher.get('/public-services').then((r) => setPublicCards(r.data || [])).catch(() => setPublicCards([]))
   }, [user])
-
-  // Restore a saved portal session.
+  // Restore a saved session.
   useEffect(() => {
     const tok = localStorage.getItem(PORTAL_TOKEN_KEY)
     if (!tok) { setAuthReady(true); return }
@@ -457,137 +302,29 @@ export default function ProjectsPage() {
 
   async function refresh() {
     try {
-      const r = await launcher.get('/services')   // auth-aware filtered + flagged list
-      setProjects(r.data); setError('')
+      setProjects((await launcher.get('/services')).data)   // auth-aware, flagged list
       // Every role: the links card and its appearance come from one call, because
       // /admin/home (which holds the appearance) is admin-only.
       try { setLinks((await launcher.get('/links')).data) } catch { /* optional */ }
       try { setGroups((await launcher.get('/service-groups')).data || []) } catch { /* optional */ }
       if (isManager) { try { setHomeCfg((await launcher.get('/admin/home')).data) } catch { /* optional */ } }
     } catch {
-      setProjects([]); setError(t('projects_unreachable'))
-    } finally {
-      setReloadTick((n) => n + 1)   // let the archive panel re-fetch after any change
+      setProjects([])
     }
   }
-  useEffect(() => { refresh() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
-  // Load builtin overrides + saved card order once we know the user is an admin.
+  useEffect(() => { if (user) refresh() }, [user])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isManager) return
     launcher.get('/admin/home').then((r) => setHomeCfg(r.data)).catch(() => {})
   }, [isManager])
 
-  async function requestAccess(name) {
-    setBusy(name)
-    try { await launcher.post('/access-requests', { service: name }); await refresh() }
-    catch (err) { setError(err?.response?.data?.detail || t('projects_request_fail')) }
-    finally { setBusy('') }
-  }
-
-
-  // Single (non-multi) service: enter directly via /p/<name>/, handing over the token.
-  function enter(name) {
-    const tok = localStorage.getItem(PORTAL_TOKEN_KEY)
-    if (tok) localStorage.setItem('elog_token', tok)
-    localStorage.removeItem('elog_user')
-    setExperiment(name)
-    window.location.assign('/p/' + name + '/')
-  }
-
   function logout() {
     launcher.post('/auth/logout').catch(() => {})   // best-effort
-    setPortalToken(null); setUser(null); setView('home')
+    setPortalToken(null); setUser(null)
   }
 
-  async function stop(name) {
-    if (!isManager) return
-    setBusy(name)
-    try { await launcher.post(`/projects/${name}/stop`); await refresh() }
-    catch { /* surfaced on refresh */ } finally { setBusy('') }
-  }
-  async function remove(name) {
-    if (!isManager) return
-    if (!window.confirm(t('projects_delete_confirm', name))) return
-    setBusy(name)
-    try { await launcher.delete(`/projects/${name}`); await refresh() }
-    catch { /* surfaced on refresh */ } finally { setBusy('') }
-  }
-  function exportProject(name) {
-    const a = document.createElement('a')
-    a.href = `${launcher.defaults.baseURL}/projects/${name}/export`
-    a.download = `${name}.zip`; document.body.appendChild(a); a.click(); a.remove()
-  }
-
-  // The icon editor wants a wide two-column layout. When its card is open, widen
-  // the whole cover column so it has room; everything ELSE (nav, other cards, empty
-  // state) is capped back to NARROW, so only that one card uses the extra width.
-  // The whole cover stays at 760 (the original width); inside it the card grid still
-  // gains a column each ~340px, so 760 gives up to two columns.
-  // 1.5× the original 760: three card columns fit, the nav bar stretches with it.
-  const NARROW = 1140
-  const capNarrow = { maxWidth: NARROW, marginLeft: 'auto', marginRight: 'auto', width: '100%' }
-
-  // Open/close a card. When another card is already open, close it FIRST — the
-  // cards settle back to their places — and only then open the new one, instead of
-  // the new card expanding while the old is still collapsing. Matches the card
-  // open/close animation length.
-  const REFLOW_MS = 300
-  function toggleCard(key) {
-    if (expanded === key) { setExpanded(null); return }
-    if (expanded == null) { setExpanded(key); return }
-    setExpanded(null)
-    setTimeout(() => setExpanded(key), REFLOW_MS)
-  }
-
-  // Header nav button — the active tab gets a filled box with a visible border so
-  // you can always tell which screen you're on.
-  // Roomy: re-pressing Home while already on it flips manage mode (managers only) —
-  // so there's no separate Manage toggle. The Home tab then shows an amber
-  // "managing" state with a wrench.
-  // Re-pressing Home while on it opens the mode menu (manage / groups / live).
-  const homeTogglesManage = true
-  const modeDef = HOME_MODES.find((m) => m.id === mode)
-  const navBtn = (id, icon, label) => {
-    const active = view === id
-    const managing = id === 'home' && !!mode
-    const onClick = () => {
-      if (id === 'home' && view === 'home') { setModeMenu((o) => !o); return }
-      if (id === 'settings' && view !== 'settings') setSettingsTab('me')   // open on My account first
-      setView(id)
-    }
-    const wrap = (btn) => id === 'home'
-      ? <div style={{ position: 'relative' }}>{btn}<HomeModeMenu open={modeMenu} onClose={() => setModeMenu(false)} mode={mode} onPick={setMode} isManager={isManager} lang={lang} /></div>
-      : btn
-    // Roomy: render exactly like the login card's Sign in / Sign up tabs — active is
-    // a filled primary with a transparent border; inactive is a ghost with a faint
-    // outline. Same height / radius / font as those buttons (CTRL_H / CTRL_R / medium).
-    const modeIcon = managing ? (modeDef?.icon || 'wrench') : icon
-    const title = id === 'home' ? (mode ? `${lang === 'ko' ? modeDef?.ko : modeDef?.en} — ${lang === 'ko' ? '다시 누르면 모드 메뉴' : 'press again for the mode menu'}` : (lang === 'ko' ? '홈 (다시 누르면 모드 메뉴)' : 'Home (press again for modes)')) : undefined
-    if (big) {
-      return wrap(
-        <Button variant={active ? (managing ? 'warning' : 'primary') : 'ghost'} onClick={onClick} title={title}
-          style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%',
-            height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)',
-            border: active ? '1px solid transparent' : '1px solid var(--border-default)',
-          }}>
-          <Icon name={modeIcon} size={17} /> {label}
-        </Button>
-      )
-    }
-    return wrap(
-      <Button variant={active ? 'secondary' : 'ghost'} onClick={onClick} title={title}
-        style={{
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%',
-          border: active ? `1.5px solid ${managing ? 'var(--warning-text, #e67700)' : 'var(--btn-primary-bg, #4c6ef5)'}` : '1.5px solid transparent',
-          backgroundColor: active ? 'var(--surface-2)' : undefined,
-        }}>
-        <Icon name={modeIcon} size={14} /> {label}
-      </Button>
-    )
-  }
-
-  // Built-in cards, with the admin's saved label/icon/colour overrides applied.
+  // ── the cards ──
+  // Builtins with the manager's saved label / icon / colour overrides applied.
   const bi = homeCfg?.builtins || {}
   const iconCard = { ...ICON_SERVICE, label: bi.iconlab?.label || ICON_SERVICE.name, icon: bi.iconlab?.icon || ICON_SERVICE.icon, color: bi.iconlab?.color, hidden: !!bi.iconlab?.hidden }
   const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label || t('newsvc_title'), icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color, hidden: !!bi.newservice?.hidden }
@@ -595,34 +332,20 @@ export default function ProjectsPage() {
   const rackCard = { ...RACK_SERVICE, label: bi.rack?.label || t('rack_title'), icon: bi.rack?.icon || RACK_SERVICE.icon, color: bi.rack?.color, hidden: !!bi.rack?.hidden }
   const linkCfg = links?.card || {}
   const linksCard = { ...LINKS_SERVICE, label: linkCfg.label || t('links_title'), icon: linkCfg.icon || LINKS_SERVICE.icon, color: linkCfg.color, hidden: !!linkCfg.hidden, count: (links?.links || []).length }
-  // The full home card list (builtins + services), ordered by the admin's saved order.
-  // A card marked `hidden` (a builtin, or a service hidden in manage mode) is dropped
-  // from the normal cover AND from live mode, but KEPT in the management views
-  // (dimmed) — hiding it there too would leave no way to bring it back.
-  // Non-admins get the links card too — but only once it has something in it.
-  const mgmt = manage || groupsMode
-  // Unfiltered: the sidebar cover has its OWN manage mode and does its own
-  // hiding. Filtering here too meant a card hidden from the sidebar vanished
-  // from the sidebar's manage mode as well, with no way left to bring it back.
+  // Every card, hidden ones included: the sidebar has its own manage mode and
+  // does its own hiding — filtering here meant a card hidden from the bar
+  // vanished from manage mode too, with no way left to bring it back.
   const cardsAll = isManager
-    // Service Manager leads: it is where a portal gets its services, so it is the
-    // first thing a new portal needs and the first card of the System band.
+    // Service Manager leads: it is where a portal gets its services.
     ? sortByHome([storeCard, iconCard, linksCard, ...(projects || []), createCard, rackCard], homeCfg?.order || [])
     : sortByHome([...(linksCard.hidden || !linksCard.count ? [] : [linksCard]), ...(projects || [])], homeCfg?.order || [])
-  const cards = isManager ? cardsAll.filter((c) => !c.hidden || mgmt) : cardsAll
+  const cards = isManager ? cardsAll.filter((c) => !c.hidden) : cardsAll
 
-  // Service groups: bands on the cover holding member cards. A hidden group takes
-  // its cards off the cover with it (managers still see it dimmed in mgmt views).
-  const visibleGroups = groups.filter((g) => !g.hidden || (isManager && mgmt))
   const groupKey = (g) => `#g:${g.id}`
   const memberOf = {}
   for (const g of groups) for (const m of g.members || []) memberOf[m] = g
-  if (previewGroup) {                                     // the drag's membership preview
-    if (previewGroup.gid == null) delete memberOf[previewGroup.key]
-    else { const g = groups.find((x) => x.id === previewGroup.gid); if (g) memberOf[previewGroup.key] = g }
-  }
-  // Where a key sits on the cover: managers by the saved order; everyone else by the
-  // order mirrored into manifests (services) / the group record (groups).
+  // Where a key sits: a manager by the saved order; everyone else by the order
+  // mirrored into manifests (services) and group records (groups).
   const savedOrder = homeCfg?.order || []
   const defaultPos = new Map(cards.map((c, i) => [cardKey(c), i]))
   const orderOf = (key) => {
@@ -632,41 +355,9 @@ export default function ProjectsPage() {
     if (!c) return 9999
     return isManager ? 1000 + (defaultPos.get(key) ?? 0) : (c.builtin ? -1 : 1000 + (c.order ?? 1000))
   }
-  // The full key list the saved order persists: every card + every group. While a
-  // drag is in progress `previewOrder` (what the drop would produce) replaces it,
-  // so the cover rearranges under the mouse before anything is saved.
-  const baseOrder = [...cards.map(cardKey), ...groups.map(groupKey)].sort((a, b) => orderOf(a) - orderOf(b))
-  const order = previewOrder || baseOrder
-  const pos = (key) => { const i = order.indexOf(key); return i < 0 ? 9999 : i }
-  const topLevel = [
-    // A grouped card is drawn inside its band (or not at all while the band is hidden).
-    ...cards.filter((c) => !memberOf[cardKey(c)]).map((c) => ({ type: 'card', key: cardKey(c), card: c })),
-    ...visibleGroups.map((g) => ({ type: 'group', key: groupKey(g), group: g })),
-  ].sort((a, b) => pos(a.key) - pos(b.key))
-  // Cards inside a visible group, in the same global order.
-  const membersOf = (g) => cards.filter((c) => memberOf[cardKey(c)] === g).sort((a, b) => pos(cardKey(a)) - pos(cardKey(b)))
-  // Consecutive top-level cards share one column grid; a group is its own band.
-  const segments = []
-  for (const e of topLevel) {
-    if (e.type === 'group') segments.push(e)
-    else if (segments.length && segments[segments.length - 1].type === 'cards') segments[segments.length - 1].items.push(e.card)
-    else segments.push({ type: 'cards', key: `seg-${segments.length}`, items: [e.card] })
-  }
-  const fullOrder = order
-  useFlip(flipRef, order.join('|') + '#' + (previewGroup ? `${previewGroup.key}>${previewGroup.gid}` : ''))
-  latest.current = { baseOrder, order, memberOf, groups, previewOrder, previewGroup }
+  const fullOrder = [...cards.map(cardKey), ...groups.map(groupKey)].sort((a, b) => orderOf(a) - orderOf(b))
 
-  // Drag (manage mode). `movedOrder` is the current list with `key` placed at
-  // `target` (after it when the pointer is past its middle). The pointer drag
-  // previews it live — the other cards slide out of the way — and commits on
-  // release: membership first (into / out of a group), then the order.
-  function movedOrder(base, key, target, after) {
-    const keys = base.filter((k) => k !== key)
-    let at = keys.indexOf(target)
-    if (at < 0) at = keys.length; else if (after) at += 1
-    keys.splice(at, 0, key)
-    return keys
-  }
+  // ── the writes the sidebar's manage mode makes ──
   async function regroup(key, gid) {
     if (!key || key.startsWith('#g:')) return
     const from = groups.find((g) => (g.members || []).includes(key))
@@ -674,66 +365,10 @@ export default function ProjectsPage() {
     if (from) await launcher.put(`/admin/service-groups/${from.id}`, { members: (from.members || []).filter((m) => m !== key) })
     if (gid) { const g = groups.find((x) => x.id === gid); await launcher.put(`/admin/service-groups/${gid}`, { members: [...(g?.members || []), key] }) }
   }
-  const { drag, startDrag, ghostRef } = usePointerDrag({
-    containerRef: flipRef,
-    isTarget: (key, kind, target) => {
-      const L = latest.current
-      if (kind === 'group') {
-        // A group moves among top-level things: ungrouped cards and other bands.
-        if (target.startsWith('#g:')) return true
-        return !L.memberOf[target]
-      }
-      return true
-    },
-    onPreview: (key, kind, target, after, targetKind) => {
-      const L = latest.current
-      if (kind === 'group') {
-        const next = movedOrder(L.baseOrder, key, target, after)
-        if (next.join('|') !== (L.previewOrder || []).join('|')) setPreviewOrder(next)
-        return
-      }
-      if (targetKind === 'group') {
-        // Over a band but not over one of its cards: join that group, at its end.
-        const g = L.groups.find((x) => `#g:${x.id}` === target)
-        const members = g ? L.order.filter((k) => (g.members || []).includes(k) && k !== key) : []
-        const anchor = members.length ? members[members.length - 1] : target
-        const next = movedOrder(L.baseOrder, key, anchor, true)
-        if (next.join('|') !== (L.previewOrder || []).join('|')) setPreviewOrder(next)
-        if ((L.previewGroup?.gid ?? undefined) !== (g?.id ?? null) || L.previewGroup?.key !== key) setPreviewGroup({ key, gid: g?.id ?? null })
-        return
-      }
-      // Over a card: take its slot (and its group, or none).
-      const gid = L.groups.find((g) => (g.members || []).includes(target))?.id ?? null
-      const next = movedOrder(L.baseOrder, key, target, after)
-      if (next.join('|') !== (L.previewOrder || []).join('|')) setPreviewOrder(next)
-      if (!L.previewGroup || L.previewGroup.key !== key || L.previewGroup.gid !== gid) setPreviewGroup({ key, gid })
-    },
-    onCommit: async (key, kind) => {
-      const L = latest.current
-      const keys = L.previewOrder
-      const pg = L.previewGroup
-      setPreviewOrder(null); setPreviewGroup(null)
-      try {
-        if (kind === 'card' && pg && pg.key === key) await regroup(key, pg.gid)
-        if (keys) { setHomeCfg((c) => ({ ...(c || { builtins: {} }), order: keys })); await launcher.put('/admin/home-order', { keys }) }
-      } catch (e) { setError(errText(e, 'failed')) }
-      await refresh()
-    },
-    onCancel: () => { setPreviewOrder(null); setPreviewGroup(null) },
-  })
-  const dragKey = drag?.key || null
   async function saveOrder(keys) {
     setHomeCfg((c) => ({ ...(c || { builtins: {} }), order: keys }))   // optimistic
     try { await launcher.put('/admin/home-order', { keys }); await refresh() }
     catch { await refresh() }
-  }
-  // Manage panel ↑↓ buttons.
-  async function move(key, dir) {
-    const keys = [...fullOrder]
-    const i = keys.indexOf(key), j = i + dir
-    if (i < 0 || j < 0 || j >= keys.length) return
-    ;[keys[i], keys[j]] = [keys[j], keys[i]]
-    await saveOrder(keys)
   }
   async function createGroup(name, members) {
     try {
@@ -743,382 +378,42 @@ export default function ProjectsPage() {
       // second call: create takes the name, membership is a patch.
       if (members?.length && data?.id) await launcher.put(`/admin/service-groups/${data.id}`, { members })
       await refresh()
-    } catch (e) { setError(errText(e, 'failed')) }
+    } catch (e) { console.warn(errText(e, 'failed')) }
   }
 
-  // Live mode shows ONLY live-capable service cards (no builtins, nothing hidden,
-  // nothing inside a hidden group), in the cover's order, on a full-screen wall.
+  // Live mode: only live-capable services (no builtins, nothing hidden, nothing
+  // inside a hidden group), in the cover's order, on a full-screen wall.
   const liveCards = fullOrder
     .map((k) => cards.find((c) => cardKey(c) === k))
     .filter((c) => c && c.live && !c.builtin && !c.hidden && !c.live_hidden && !memberOf[cardKey(c)]?.hidden)
 
+  if (!authReady) return null
 
-
-  // The nav/tab bar lives in CoverPage's FIXED subheader (outside the scroll), with
-  // a divider under it; only the tab CONTENT below scrolls. Roomy: Home/Settings on
-  // the left, and the account name on the right as a dropdown whose menu holds Log
-  // out (compact keeps the always-visible name + logout link).
-  // nowrap keeps the account on the SAME row as the tabs always; the account is the
-  // only shrinkable item, so on a narrow screen its username truncates (down to just
-  // the avatar) instead of wrapping below. Home/Settings share one equal-width grid.
-  const navBar = user ? (
-    narrow ? (
-      // Narrow: Home/Settings stacked on the left, the brand mark centred between
-      // them and the profile on the right. In Settings, the Settings button becomes
-      // a dropdown of the settings menu (the sidebar is hidden — see AccountView).
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0,
-        padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)', ...capNarrow }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 118, flexShrink: 0 }}>
-          {navBtn('home', 'home', t('portal_nav_home'))}
-          {view === 'settings'
-            ? <SettingsMenuButton items={settingsMenu(isManager, lang)} current={settingsTab} onPick={setSettingsTab} />
-            : navBtn('settings', 'settings', t('portal_nav_settings'))}
-        </div>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
-          <HeaderMark size={60} />
-        </div>
-        <AccountMenu user={user} isManager={isManager} onLogout={logout} width={118} />
-      </div>
-    ) : (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', minWidth: 0,
-        padding: '2px 0 12px', borderBottom: '1px solid var(--border-default)', ...capNarrow }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '118px 118px', gap: 8, flexShrink: 0 }}>
-          {navBtn('home', 'home', t('portal_nav_home'))}
-          {navBtn('settings', 'settings', t('portal_nav_settings'))}
-        </div>
-        <div style={{ flex: 1, minWidth: 8 }} />
-        {big ? (
-          // Same 118px hit-box as Home/Settings (and as the narrow header's account).
-          <AccountMenu user={user} isManager={isManager} onLogout={logout} width={118} />
-        ) : (
-          <>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-              <span style={{ flexShrink: 0, display: 'inline-flex' }}>
-                <Avatar icon={user.profile_shape} color={isManager ? MANAGER_COLOR : user.profile_color} seed={user.username} size={22} />
-              </span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{user.username}{isManager ? ' · admin' : ''}</span>
-            </span>
-            <Button variant="ghost" onClick={logout} style={{ flexShrink: 0 }}>{t('projects_logout')}</Button>
-          </>
-        )}
-      </div>
-    )
-  ) : null
-
-  // The Home "manage mode" toggle. Lives in the FIXED subheader (outside the
-  // scroll) so it stays reachable no matter how far the service list is scrolled.
-  const manageBar = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0 2px', ...capNarrow }}>
-      {/* Roomy drops the explanatory hint and just parks the toggle on the right;
-          compact keeps the hint text. */}
-      {big
-        ? <span style={{ flex: 1 }} />
-        : <span style={{ flex: 1, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>
-            {manage ? t('manage_hint') : t('projects_register_hint')}
-          </span>}
-      {/* Keep any open box open — its content switches between the normal panel
-          and the manage panel with `manage` (no close on toggle). Roomy sizes it
-          like the nav tabs above. */}
-      <div style={{ position: 'relative' }}>
-        <Button variant="ghost" onClick={() => setModeMenu((o) => !o)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: mode ? 'var(--warning-text, #e67700)' : undefined,
-            ...(big
-              ? { height: CTRL_H, borderRadius: CTRL_R, padding: '0 18px', fontSize: 'var(--fs-medium, 14px)' }
-              : { fontSize: 'var(--fs-body, 13px)', padding: '8px 15px' }) }}>
-          <Icon name={modeDef?.icon || 'toggle-left'} size={big ? 24 : 22} weight={mode ? 'fill' : 'regular'}
-            color={mode ? 'var(--warning-text, #e67700)' : 'var(--text-muted)'} /> {mode ? (lang === 'ko' ? modeDef?.ko : modeDef?.en) : t('portal_manage')}
-        </Button>
-        {!big && <HomeModeMenu open={modeMenu} onClose={() => setModeMenu(false)} mode={mode} onPick={setMode} isManager={isManager} lang={lang} anchor="right" />}
-      </div>
-    </div>
-  )
-  // The active mode's hint + exit, shown above the cards in every size.
-  const modeBar = (mode && !liveMode) ? (
-    <div style={{ ...capNarrow, display: 'flex', alignItems: 'center', gap: 10, padding: '4px 2px 10px', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-      <Icon name={modeDef?.icon || 'wrench'} size={15} color="var(--warning-text, #e67700)" />
-      <span style={{ flex: 1 }}>{manage ? t('manage_hint') : t('live_hint')}</span>
-      {manage && isManager && <Button variant="primary" size="sm" onClick={createGroup}><Icon name="folder-plus" size={14} /> {t('groups_new')}</Button>}
-      <Button variant="secondary" size="sm" onClick={() => setMode(null)}>{t('manage_done')}</Button>
-    </div>
-  ) : null
-
-  // The sidebar cover owns the whole window (no CoverPage header), so it replaces
-  // this render entirely rather than living inside it. Logged out we still fall
-  // through to the classic screen, which carries the login/sign-up card.
-  // Signed out, on the sidebar cover: the bar lists the services an admin marked
-  // PUBLIC (an untouched portal has none, so the bar is simply empty) and the
-  // panel is the login card. Nothing here is enterable until you are in.
-  if (sidebar && authReady && !user) {
+  // Signed out: the bar lists the services a manager marked PUBLIC (an untouched
+  // portal has none, so the bar is simply empty) and the panel is the sign-in.
+  if (!user) {
     return (
       <SidebarPortal
         user={null} isManager={false} cards={publicCards} iconFor={iconFor}
-        groups={[]} liveCards={[]} links={[]} fullOrder={publicCards.map(cardKey)}
+        groups={[]} liveCards={[]} links={[]} fullOrder={publicCards.map(cardKey)} info={portalInfo}
         authCard={<AuthCard t={t} info={portalInfo} needsSetup={!!portalInfo?.needs_setup}
-          onAuthed={(u) => { setUser(u); refresh() }} />}
+          onAuthed={(u) => setUser(u)} />}
       />
     )
   }
 
-  if (sidebar && authReady && user) {
-    // The sidebar gets the SAME cards the cover does — builtins included, in the
-    // saved order — so nothing is reachable on one cover and invisible on the other.
-    const at = (c) => { const i = fullOrder.indexOf(cardKey(c)); return i < 0 ? 9999 : i }
-    const sideCards = [...cardsAll].sort((a, b) => at(a) - at(b))
-    return (
-      <SidebarPortal
-        user={user} isManager={isManager} cards={sideCards} iconFor={iconFor}
-        groups={groups} liveCards={liveCards} links={links?.links || []}
-        fullOrder={fullOrder}
-        onLogout={logout} onRefresh={refresh}
-        onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup}
-        settingsTab={settingsTab} onSettingsTab={setSettingsTab}
-      />
-    )
-  }
-
+  // The bar gets every card — builtins included, in the saved order — so nothing
+  // is reachable through one route and invisible on the cover.
+  const at = (c) => { const i = fullOrder.indexOf(cardKey(c)); return i < 0 ? 9999 : i }
+  const sideCards = [...cardsAll].sort((a, b) => at(a) - at(b))
   return (
-    <CoverPage
-      fill
-      max={NARROW}
-      // Centred brand (mark alone, title under) on the login screen — and, in the
-      // roomy theme, on the logged-in home too, so it reads like the login page.
-      center={!user || big}
-      // Narrow logged-in moves the mark INTO the nav row (centred), so the cover
-      // header carries no mark/title here. Otherwise: big mark logged out / roomy,
-      // small leading mark only in the compact logged-in header.
-      icon={(narrow && user) ? null : <HeaderMark size={(user && !big) ? 42 : 64} />}
-      // Roomy (or narrow) logged-in: the mark stands alone — no title/subtitle text.
-      title={(user && (big || narrow)) ? null : t('projects_title')}
-      subtitle={(user && (big || narrow)) ? null : (portalInfo
-        ? `${portalInfo.host || '?'}${portalInfo.version ? ` · ${portalInfo.version}` : ''}`
-        : t('projects_subtitle'))}
-      headerPad={(narrow && user) ? '4px 0 0' : (user && big) ? '16px 0 6px' : undefined}
-      headerTransition={(!narrow && animateHeader) ? 'padding 0.6s cubic-bezier(0.22, 1, 0.36, 1)' : undefined}
-      // Roomy folds manage into the Home tab (re-press), so no separate manage bar.
-      subheader={user ? <>{navBar}{view === 'home' && !big && manageBar}</> : null}
-    >
-      {/* Login-first; then one of three logged-in screens — no popups. */}
-      {!authReady ? null : !user ? (
-        <AuthCard t={t} needsSetup={!!portalInfo?.needs_setup}
-          onAuthed={(u) => { setAnimateHeader(true); setUser(u); setView('home'); refresh() }} />
-      ) : view === 'settings' ? (
-        <AccountView isManager={isManager} onChanged={refresh} onAccountGone={logout}
-          tab={settingsTab} onTab={setSettingsTab} hideMenu={narrow} />
-      ) : view === 'iconlab' ? (
-        <div style={capNarrow}>
-          <button type="button" onClick={() => setView('home')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 0, padding: '2px 0 12px', cursor: 'pointer', font: 'inherit', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-            <Icon name="caret-left" size={14} /> {t('portal_nav_home')}
-          </button>
-          <IconLabView />
-        </div>
-      ) : (
-        <>
-          {modeBar}
-          {error && (
-            <div style={{ ...capNarrow, margin: '8px auto', padding: '10px 12px', borderRadius: 8, fontSize: 'var(--fs-small, 12px)',
-              backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', border: '1px solid var(--danger-border, transparent)' }}>
-              {error}
-            </div>
-          )}
-
-          {projects === null && (
-            <div style={{ ...capNarrow, textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>{t('home_loading')}</div>
-          )}
-          {projects && projects.length === 0 && !error && (
-            <div style={{ ...capNarrow, textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
-              {t('projects_empty')}
-            </div>
-          )}
-
-          {(() => {
-            const renderCardStatic = (p) => (
-              <ExpandBox open={false} toggleable={false} manage divider={false} caret={false} radius={16}
-                padding={big ? '14px 18px' : '8px 14px'} titleSize={big ? 'var(--fs-large, 16px)' : 'var(--fs-medium, 14px)'} titleWeight={big ? 400 : 600}
-                style={{ marginBottom: 0 }}
-                icon={<Icon name={iconFor(p.name, p.icon)} size={big ? 34 : 26} weight="fill" color={p.color || 'var(--text-primary)'} />}
-                title={p.label || p.name} />
-            )
-            const renderCard = (p, i) => {
-              if (drag?.active !== false && drag && drag.key === cardKey(p)) {
-                // The dragged card's slot: an empty outline the others slide around.
-                return <div key={cardKey(p)} data-flip-key={cardKey(p)} style={{ height: drag.h, borderRadius: 16, border: '2px dashed var(--btn-primary-bg, #2563eb)', background: 'var(--selection-bg, transparent)', opacity: 0.7 }} />
-              }
-              const key = cardKey(p)
-              const isOpen = expanded === key
-              const isBuiltin = !!p.builtin
-              // In manage mode admins can open every card (to manage it); otherwise
-              // only enterable services toggle — request-only cards stay inert.
-              // Single (non-project) services also open when the user only has a
-              // request option, so "Request access" happens inside the card body.
-              const canToggle = !groupsMode && ((manage && isManager) || !!p.can_enter || (!p.multi_project && !isBuiltin && !!p.can_request))
-              const grip = (manage || groupsMode) && isManager
-              const statusText = isBuiltin
-                ? (p.builtin === 'newservice' ? t('newsvc_card_hint')
-                  : p.builtin === 'store' ? t('store_card_hint')
-                  : p.builtin === 'links' ? t('links_card_hint', p.count || 0)
-                    : p.builtin === 'rack' ? t('rack_card_hint') : t('iconlab_card_hint'))
-                : p.multi_project ? t('portal_proj_open_svc')
-                : (p.running ? t('projects_running', p.port) : t('projects_stopped'))
-              return (
-                <ExpandBox key={key} open={isOpen} manage={mgmt && isManager}
-                  handle={grip ? (
-                    <span onPointerDown={(e) => startDrag(e, key, 'card')}
-                      title={lang === 'ko' ? '끌어서 옮기기 (그룹 안팎으로도)' : 'drag to move (into or out of a group too)'}
-                      style={{ display: 'inline-flex', cursor: 'grab', touchAction: 'none', color: 'var(--text-muted)', padding: '6px 4px', borderRadius: 6 }}>
-                      <Icon name="drag-handle" size={16} />
-                    </span>) : null}
-                  outerProps={{ 'data-flip-key': key }}
-                  borderColor={dragKey === key ? 'var(--warning-text, #e67700)' : null}
-                  toggleable={canToggle} divider={false}
-                  // The grid's column gap spaces the cards; drop the card's own margin.
-                  // A hidden builtin only reaches here in manage mode — dim it so it
-                  // reads as "not on the cover" rather than as a normal card.
-                  style={{ marginBottom: 0, opacity: p.hidden ? 0.45 : undefined }}
-                  // Roomy: bigger cards (more padding, larger leading mark + title),
-                  // description line dropped; the leading caret stays.
-                  padding={big ? '14px 18px' : '8px 14px'}
-                  titleSize={big ? 'var(--fs-large, 16px)' : 'var(--fs-medium, 14px)'}
-                  titleWeight={big ? 400 : 600}
-                  radius={16}
-                  onToggle={() => toggleCard(key)}
-                  icon={<Icon name={iconFor(p.name, p.icon)} size={big ? 34 : 26} weight="fill"
-                    color={p.color || 'var(--text-primary)'} />}
-                  title={p.builtin === 'newservice' ? (p.label || t('newsvc_title')) : (p.label || p.name)}
-                  badges={(isManager && p.version?.sha) ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-micro, 11px)', padding: '2px 8px', borderRadius: 999, backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)' }}>{p.version.sha}</span> : null}
-                  subtitle={big ? undefined : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    {(!isBuiltin && !p.multi_project) && <span style={{ width: 8, height: 8, borderRadius: 999, background: p.running ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)' }} />}
-                    {statusText}
-                  </span>}
-                  right={
-                    // Roomy drops the Open/Close button — the whole row already
-                    // toggles the card. Request-only cards (no row toggle) keep theirs.
-                    (p.can_enter && big) ? null :
-                    p.can_enter ? (
-                      <Button variant={isOpen ? 'secondary' : 'primary'} onClick={() => toggleCard(key)}
-                        style={{ minWidth: 76, justifyContent: 'center' }}>
-                        {isOpen ? t('portal_proj_close') : t('projects_open')}
-                      </Button>
-                    ) : (p.can_request && p.multi_project) ? (
-                      <Button variant="secondary" disabled={p.requested || busy === p.name} onClick={() => requestAccess(p.name)}
-                        style={big
-                          ? { minWidth: 120, height: 44, borderRadius: CTRL_R, fontSize: 'var(--fs-medium, 14px)', justifyContent: 'center' }
-                          : { minWidth: 112, justifyContent: 'center' }}>
-                        {p.requested ? t('projects_requested') : t('projects_request')}
-                      </Button>
-                    ) : null
-                  }
-                >
-                  {/* Top strip (managers only): repo + exact-commit links + a log viewer. */}
-                  {isManager && (p.version?.url || (p.mode === 'managed' && !isBuiltin)) && (
-                    <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: '8px 14px 8px 46px', borderTop: '1px solid var(--border-subtle)', fontSize: 'var(--fs-small, 12px)' }}>
-                      {p.version?.url && (
-                        <a href={p.version.url} target="_blank" rel="noreferrer"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--info-text)', textDecoration: 'none' }}>
-                          <Icon name="folder" size={14} /> {p.version.url.replace(/^https?:\/\//, '')} ↗
-                        </a>
-                      )}
-                      {p.version?.url && (p.version.pushed ? (
-                        <a href={`${p.version.url}/commit/${p.version.sha}`} target="_blank" rel="noreferrer"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', color: 'var(--info-text)', textDecoration: 'none' }}>
-                          <Icon name="tag" size={14} /> {p.version.sha} ↗
-                        </a>
-                      ) : (
-                        <span title="아직 원격에 푸시되지 않은 로컬 커밋"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                          <Icon name="tag" size={14} /> {p.version.sha} · 로컬
-                        </span>
-                      ))}
-                      {isManager && p.mode === 'managed' && !isBuiltin && (
-                        <button type="button" onClick={() => openLog(p.name)}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 0, padding: 0, cursor: 'pointer', font: 'inherit', fontSize: 'var(--fs-small, 12px)', color: 'var(--info-text)' }}>
-                          <Icon name="file" size={14} /> 로그
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {/* Inline expansion: manage mode → management panel (builtins too);
-                      otherwise the builtin tool / the service's own panel. */}
-                  {manage && isManager ? (
-                    <>
-                      <ServiceManagePanel service={p} builtinKey={isBuiltin ? p.builtin : null}
-                        initialIcon={iconFor(p.name, p.icon)}
-                        first={fullOrder.indexOf(key) <= 0} last={fullOrder.indexOf(key) >= fullOrder.length - 1}
-                        onMove={(dir) => move(key, dir)} onChanged={refresh} />
-                      {isBuiltin && p.builtin === 'links' && <LinksView links={links?.links || []} manage onChanged={refresh} />}
-                      {isBuiltin && p.builtin === 'rack' && <RackView />}
-                      {/* manage mode: per-project management incl. delete */}
-                      {p.multi_project && !isBuiltin && <ServiceProjects service={p} canManage={isManager} manage onChanged={refresh} />}
-                      {/* single service: keep the Enter/Stop row (Stop lives here, in manage mode only) */}
-                      {!p.multi_project && !isBuiltin && <ServiceSingle service={p} canManage={isManager} manage onChanged={refresh} />}
-                    </>
-                  ) : isBuiltin && p.builtin === 'iconlab' ? (
-                    <div style={{ padding: '12px 14px 14px 46px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)', flex: 1, minWidth: 160 }}>{t('iconlab_card_hint')}</span>
-                      <Button variant="primary" onClick={() => setView('iconlab')} style={ENTER_BTN}>{t('portal_proj_open')}</Button>
-                    </div>
-                  ) : isBuiltin && p.builtin === 'links' ? (
-                    <LinksView links={links?.links || []} onChanged={refresh} />
-                  ) : isBuiltin && p.builtin === 'store' ? (
-                    <StoreView onChanged={refresh} />
-                  ) : isBuiltin && p.builtin === 'newservice' ? (
-                    <NewServiceView onCreated={refresh} />
-                  ) : p.multi_project ? (
-                    <ServiceProjects service={p} canManage={isManager} />
-                  ) : (
-                    <ServiceSingle service={p} canManage={isManager} onRequest={() => requestAccess(p.name)} onChanged={refresh} />
-                  )}
-                </ExpandBox>
-              )
-            }
-            const dragged = drag && !drag.key.startsWith('#g:') ? cards.find((c) => cardKey(c) === drag.key) : null
-            const draggedGroup = drag && drag.key.startsWith('#g:') ? groups.find((g) => groupKey(g) === drag.key) : null
-            return (
-              <div ref={flipRef} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {/* the floating copy that follows the pointer */}
-                {drag && (
-                  <div ref={ghostRef} style={{ position: 'fixed', left: -9999, top: -9999, width: drag.w, zIndex: 2000, pointerEvents: 'none',
-                    transform: 'scale(1.03)', boxShadow: '0 14px 40px rgba(0,0,0,.28)', borderRadius: 16, opacity: 0.95 }}>
-                    {dragged && <div style={{ pointerEvents: 'none' }}>{renderCardStatic(dragged)}</div>}
-                    {draggedGroup && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 14, background: 'var(--surface)', border: '1.5px solid var(--btn-primary-bg)', fontWeight: 600 }}>
-                        <Icon name={draggedGroup.icon || 'stack'} size={20} weight="fill" color={draggedGroup.color || 'var(--text-secondary)'} /> {draggedGroup.name} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{(draggedGroup.members || []).length}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {segments.map((seg) => seg.type === 'group' ? (
-                  <ServiceGroupBand key={seg.key} group={seg.group} isManager={isManager} big={big}
-                    manageGroups={manage && isManager} onChanged={refresh} dragKey={dragKey}
-                    grip={manage && isManager} onGripPointerDown={(e) => startDrag(e, seg.key, 'group')}
-                    dim={seg.group.hidden}
-                    cards={membersOf(seg.group).map((p, i) => renderCard(p, i))} />
-                ) : (
-                  <MasonryGrid key={seg.key}>{seg.items.map((p, i) => renderCard(p, i))}</MasonryGrid>
-                ))}
-              </div>
-            )
-          })()}
-          {isManager && <div style={capNarrow}><ArchivePanel signal={reloadTick} onChanged={refresh} /></div>}
-        </>
-      )}
-
-      {liveMode && view === 'home' && user && (
-        <LiveWall cards={liveCards} big={big} iconFor={iconFor} onDone={() => setMode(null)} />
-      )}
-
-      {logFor && (
-        <Modal title={`${logFor} · service.log`} width={880}
-          onClose={() => { setLogFor(null); setLogData(null) }}
-          footer={<Button size="sm" variant="secondary" onClick={() => openLog(logFor)} disabled={logBusy}>{logBusy ? '불러오는 중…' : '새로고침'}</Button>}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {logData?.path && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-micro, 10px)', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{logData.path}</div>}
-            <pre style={{ margin: 0, maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)', lineHeight: 1.5, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12, color: 'var(--text-primary)' }}>
-              {logBusy ? '불러오는 중…' : (logData?.text || '(로그 없음 — 아직 시작되지 않았거나 멀티프로젝트 서비스라 프로젝트별 로그를 씁니다)')}
-            </pre>
-          </div>
-        </Modal>
-      )}
-    </CoverPage>
+    <SidebarPortal
+      user={user} isManager={isManager} cards={sideCards} iconFor={iconFor}
+      groups={groups} liveCards={liveCards} links={links?.links || []}
+      fullOrder={fullOrder}
+      onLogout={logout} onRefresh={refresh}
+      onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup}
+      settingsTab={settingsTab} onSettingsTab={setSettingsTab} info={portalInfo}
+    />
   )
 }

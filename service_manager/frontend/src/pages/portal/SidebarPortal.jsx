@@ -96,8 +96,8 @@ function movedOrder(base, key, target, after) {
  * manage mode) rather than a per-manifest field, so a band can hold builtins too
  * and keeps carrying the visibility and grants the admin screens apply.
  *
- * `portal_layout` keeps the classic card grid one click away (AccountMenu).
- * Still to come: keyboard navigation and the redesigned login card.
+ * It is the only cover: the classic card grid and the switch between the two
+ * were removed once everything the grid did had a place here.
  */
 const MINI_KEY = 'portal-mini'
 const ARCHIVE_KEY = '#archive'
@@ -260,7 +260,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
 export default function SidebarPortal({
   user, isManager, cards, groups, liveCards, links, iconFor, fullOrder,
   onLogout, onRefresh, onSaveOrder, onRegroup, onCreateGroup,
-  settingsTab, onSettingsTab, authCard,
+  settingsTab, onSettingsTab, authCard, info,
 }) {
   // Signed out: the bar is a list of names and the panel is the login card.
   // Nothing opens, nothing is managed, and the foot has no account to show.
@@ -938,7 +938,13 @@ export default function SidebarPortal({
               ? L('관리 모드에서는 접을 수 없습니다', 'not while managing')
               : L('사이드바 접기/펼치기', 'collapse / expand')}>
             <span className="pl-mark"><Icon name="lilak" size={26} /></span>
-            <b>lilak</b><span className="sub">portal</span>
+            {/* Where "portal" used to be: WHICH portal. With a main and its
+                mirrors (sync), the brand alone does not say which server this
+                window is on; the host and the build do. */}
+            <b>lilak</b>
+            <span className="sub" title={info ? `${info.host || '?'}${info.version ? ` · ${info.version}` : ''}` : ''}>
+              {info ? <>{info.host || '?'}{info.version && <i>{info.version}</i>}</> : 'portal'}
+            </span>
           </button>
           <span style={{ flex: 1 }} />
           <button type="button" className="pl-fold"

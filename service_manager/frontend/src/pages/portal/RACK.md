@@ -74,6 +74,7 @@
 |---|---|---|
 | `ProjectsPage.jsx` | 설정 | 모듈·표 |
 | `portal/AccountView.jsx` | 설정 | 모듈·표·채널·표시등 |
+| `portal/ArchivePanel.jsx` | 관리 | 모듈·채널 |
 | `portal/FeedbackView.jsx` | 설정 | 모듈·채널·표시등 |
 | `portal/GroupManagePanel.jsx` | 관리 | 모듈·표·채널·표시등 |
 | `portal/GroupsAdmin.jsx` | 설정 | 모듈·표·채널 |

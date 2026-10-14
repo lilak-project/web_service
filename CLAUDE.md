@@ -92,10 +92,11 @@ re-verify. Because a top-level navigation carries no `Authorization` header, the
 proxies read the JWT from the **`lilak_portal_token` cookie** set by the frontend.
 
 **The cover UI is the portal's OWN frontend** (`service_manager/frontend/`),
-depending on `lilak_ui` only — not on elog. `ProjectsPage.jsx` is a single page with
-a `view` switcher (home / account / services / guide) and inline expanding service
-boxes (no modals). The portal also serves this build; the elog/asset frontends are
-served by their own backends through the proxy.
+depending on `lilak_ui` only — not on elog. `ProjectsPage.jsx` holds the session
+and the card list; `portal/SidebarPortal.jsx` is the one cover (a sidebar of
+service cards beside a panel that frames the chosen service). The classic card
+grid and its layout/size switches were removed. The portal also serves this
+build; the elog/asset frontends are served by their own backends through the proxy.
 
 ## Conventions & gotchas
 

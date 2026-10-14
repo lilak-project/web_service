@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Button } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
-import ScaleToggle from './ScaleToggle'
 import { Panel, Field, FieldActions, Pill, fieldInput, fieldMuted } from './Field'
 import { notify } from './settingsMsg'
 
@@ -39,17 +38,6 @@ export default function SystemAdmin() {
 
   return (
     <>
-      {/* UI size — the same toggle that's in the top bar, kept here so it has a
-          settled home once it's removed from the top bar. */}
-      <Panel title={L('화면', 'Display')}>
-        <Field label={L('화면 크기', 'UI size')}>
-          {L('기본(작게) ↔ 크게', 'default (compact) ↔ large')}
-        </Field>
-        <FieldActions>
-          <ScaleToggle variant="secondary" />
-        </FieldActions>
-      </Panel>
-
       <Panel title={L('서비스 포트 배정', 'Service port pool')} hint={msg}
         right={<Button variant="secondary" onClick={load}>{L('새로고침', 'Refresh')}</Button>}>
         <Field label={L('사용 현황', 'In use')}>

@@ -73,7 +73,15 @@
 .pl-root.mini .pl-logo { width: 44px; padding: 7px; margin-left: 0; border-radius: var(--radius-lg, 5px); }
 .pl-mark { width: 30px; height: 23px; color: var(--text-emphasis); flex-shrink: 0; }
 .pl-brand b { font-size: 15px; font-weight: var(--rack-weight, 500); color: var(--text-emphasis); }
-.pl-brand .sub { font-size: 15px; color: var(--text-secondary); }
+/* The second word of the brand is the host this window is on, and the
+   portal's build after it — small, because it is an address rather than a
+   name, and cut short rather than pushing the fold button out of the bar. */
+.pl-brand .sub {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; color: var(--text-secondary);
+}
+.pl-brand .sub i { font-style: normal; font-family: var(--font-mono); color: var(--text-muted); margin-left: 6px; }
+.pl-logo { min-width: 0; }
 
 /* Collapsed is the SAME layout clipped to 64px — nothing is re-centred, the
    labels just fade. Re-arranging on collapse made the icons jump. */

@@ -20,6 +20,15 @@
   "handrolled": false
  },
  {
+  "path": "portal/ArchivePanel.jsx",
+  "plate": "관리",
+  "parts": [
+   "모듈",
+   "채널"
+  ],
+  "handrolled": false
+ },
+ {
   "path": "portal/FeedbackView.jsx",
   "plate": "설정",
   "parts": [

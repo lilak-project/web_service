@@ -7,10 +7,8 @@ import { notify } from './settingsMsg'
 
 /**
  * GroupManagePanel — a service group's settings, in the same panels the account
- * screens are built from. It replaces ServiceGroupBand's header tools for the
- * sidebar cover: the band there IS the group, so its tools do not have to live
- * in its header, and a modal for access was one layer too many.
- * (ServiceGroupBand still carries the classic cover's band, untouched.)
+ * screens are built from. The sidebar's band IS the group, so its tools do not
+ * have to live in its header, and a modal for access was one layer too many.
  */
 const VIS = [[0, 'portal_vis_public'], [1, 'portal_vis_private'], [2, 'portal_vis_protected'], [3, 'portal_vis_admin']]
 
