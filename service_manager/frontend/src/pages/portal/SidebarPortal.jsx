@@ -737,7 +737,14 @@ export default function SidebarPortal({
   // A multi-project service has nothing to show on its own — the panel asks for a
   // project instead of framing the service root.
   const needProject = !!selSvc?.multi_project && !sel?.proj
-  const base = sel?.svc && !needProject && !selSvc?.builtin && !manage
+  // A single service this user may see but not enter — no grant yet, or an
+  // email verification that has lapsed. Framing it would only show the proxy's
+  // refusal; the panel instead says which of the two it is and, when it can,
+  // offers to ask for access. (A multi-project service does this per project,
+  // in its own project panel.)
+  const locked = !!selSvc && !signedOut && !selSvc.builtin && !selSvc.multi_project
+    && (selSvc.can_enter === false || !!selSvc.view_only)
+  const base = sel?.svc && !needProject && !locked && !selSvc?.builtin && !manage
     ? (sel.proj ? `/pp/${sel.svc}/${sel.proj}/` : `/p/${sel.svc}/`)
     : null
   // The record asked for rides along as #open=…, which the service reads.
@@ -1150,6 +1157,30 @@ export default function SidebarPortal({
                 <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
                 <ServiceProjects service={selSvc} canManage={isManager} manage={isManager}
                   onChanged={onRefresh} />
+              </div>
+              <SettingsStatus />
+            </>
+          ) : view === 'service' && locked ? (
+            <>
+              <div key={sel.svc} className="pl-scroll pl-mgpage">
+                <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
+                <ServiceSingle service={selSvc} canManage={false}
+                  onRequest={async () => {
+                    await launcher.post('/access-requests', { service: selSvc.name })
+                    onRefresh?.()
+                  }}
+                  onChanged={onRefresh} />
+                {selSvc.view_only && (
+                  // The grant is there; what is missing is this year's email
+                  // check. Say so, and point at where it is done.
+                  <div className="pl-lockhint">
+                    <span>{L('이메일 인증이 1년이 지나 보기 전용이 됐습니다. 재인증하면 다시 들어갈 수 있습니다.',
+                      'Your email verification is over a year old, so this is view-only. Re-verify to enter again.')}</span>
+                    <button type="button" className="pl-lockbtn" onClick={() => openSettings('me')}>
+                      {L('내 계정에서 재인증', 'Re-verify in My account')}
+                    </button>
+                  </div>
+                )}
               </div>
               <SettingsStatus />
             </>

@@ -17,7 +17,10 @@ export default function ServiceSingle({ service, canManage, manage = false, onRe
   const svc = service.name
   const [busy, setBusy] = useState(false)
   const setErr = (m) => m && notify(m, 'bad')
-  const viewOnly = service.view_only && !service.can_enter
+  // The service list flags a lapsed verification as view_only WITH can_enter
+  // still true (the grant exists), but the proxy refuses entry until the
+  // account re-verifies — so view_only alone is what blocks the door.
+  const viewOnly = !!service.view_only
   // No access yet, but the user may ask for it — handled inside the card body.
   const canRequest = !service.can_enter && !viewOnly && service.can_request
 

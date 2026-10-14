@@ -614,3 +614,17 @@
   font-size: 9px;
   line-height: 11px;
 }
+
+/* A single service you may see but not enter: the line that says why, and the
+   way to fix it, under the service's own panel. */
+.pl-lockhint {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 10px; padding: 10px 12px;
+  border: 1px solid var(--border-default); background: var(--surface);
+  font-size: 13px; color: var(--text-secondary);
+}
+.pl-lockbtn {
+  height: 28px; padding: 0 12px; border: 1px solid var(--border-strong);
+  background: var(--surface-2); font: inherit; font-size: 13px; cursor: pointer;
+}
+.pl-lockbtn:hover { border-color: var(--border-focus); }
