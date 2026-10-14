@@ -101,6 +101,10 @@ export default {
         col: { w: 38, min: 30, num: true } },
       { k: 'links', label: '링크', type: 'list', link: true, placeholder: 'https://…' },
       { k: 'note', label: '메모', type: 'longtext', rows: 2 },
+      // Where a paper was presented: the activities (in Activities) that list
+      // it. Theirs is the only copy of the link; each opens there.
+      { k: 'talks', label: '활동', type: 'backlinks', search: false,
+        from: { svc: 'academic_activities', proj: 'activities', item: 'activities', field: 'papers', label: 'name' } },
     ],
   },
   classSort: { k: 'name', dir: 1 },

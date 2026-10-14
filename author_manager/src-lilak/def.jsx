@@ -89,6 +89,10 @@ export default {
       { k: 'phone', label: '전화', type: 'text', width: 190 },
       { k: 'links', label: '링크', type: 'list', link: true, placeholder: 'https://…' },
       { k: 'attachments', label: '첨부파일', type: 'files' },
+      // The activities (in Activities) this person leads. Theirs is the only
+      // copy of the link; each opens there.
+      { k: 'leads', label: '책임 활동', type: 'backlinks', search: false,
+        from: { svc: 'academic_activities', proj: 'activities', item: 'activities', field: 'leads', label: 'name' } },
 
       // The table.
       { k: 'affil', label: 'affiliation', get: affilText, col: { w: 96, min: 40 }, tone: 'dim' },

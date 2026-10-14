@@ -292,6 +292,22 @@ export default function SidebarPortal({
   const fold = useCallback(() => { if (!pinnedRef.current) setMini(true) }, [])
   const [sel, setSel] = useState(readSel)        // { svc, proj } — mirrored in the URL
   const [view, setView] = useState(() => (readSel() ? 'service' : 'empty'))  // service|settings|live|empty
+  // A record another service asked to open here ({ svc, proj, id }): a link in
+  // one service's panel (a paper on an activity) lands on that record in its
+  // own. Only the services the portal itself frames may ask.
+  const [deep, setDeep] = useState(null)
+  useEffect(() => {
+    const on = (e) => {
+      if (e.origin !== window.location.origin) return
+      const m = e.data
+      if (!m || m.type !== 'lilak:open' || !m.svc) return
+      setSel({ svc: String(m.svc), proj: String(m.proj || '') })
+      setView('service')
+      setDeep({ svc: String(m.svc), proj: String(m.proj || ''), id: String(m.id || '') })
+    }
+    window.addEventListener('message', on)
+    return () => window.removeEventListener('message', on)
+  }, [])
   // A Set, not one name: opening a service must not close another. Several
   // project lists can stand open at once.
   const [openSvcs, setOpenSvcs] = useState(() => {
@@ -721,9 +737,12 @@ export default function SidebarPortal({
   // A multi-project service has nothing to show on its own — the panel asks for a
   // project instead of framing the service root.
   const needProject = !!selSvc?.multi_project && !sel?.proj
-  const src = sel?.svc && !needProject && !selSvc?.builtin && !manage
+  const base = sel?.svc && !needProject && !selSvc?.builtin && !manage
     ? (sel.proj ? `/pp/${sel.svc}/${sel.proj}/` : `/p/${sel.svc}/`)
     : null
+  // The record asked for rides along as #open=…, which the service reads.
+  const src = base && deep?.id && deep.svc === sel.svc && deep.proj === (sel.proj || '')
+    ? `${base}#open=${encodeURIComponent(deep.id)}` : base
 
   const serviceCard = (s) => {
     const key = cardKey(s)
