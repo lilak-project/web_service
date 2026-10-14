@@ -249,30 +249,47 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   border-radius: 1px;
   background: var(--rk-line);
 }
-/* Inside a list the bar has the list's padding to climb back out of — one step
-   per level, so a bar stands in the gutter however deep its line is. (A custom
-   property cannot add to itself, so the levels are written out; four is deeper
-   than a note goes.) */
-.nt-prose li > p::before { left: calc(-18px - 1.5em); }
-.nt-prose li li > p::before { left: calc(-18px - 3em); }
-.nt-prose li li li > p::before { left: calc(-18px - 4.5em); }
-.nt-prose li li li li > p::before { left: calc(-18px - 6em); }
-/* The item itself draws nothing — except a task item, whose paragraph is busy
-   holding the checkbox; there the bar is the item's, one line tall. */
+/* A LIST gets one bar for the whole of it, not one per line: where the bar
+   starts is where the list starts, where it stops is where the list stops, and
+   two lists running into each other are two bars with a gap — which is the
+   thing markdown gives you no other sign of. Nested lists need no arithmetic:
+   the bar stands 18px left of the list's own box, and a nested list's box is
+   already a step further in. */
+.nt-prose :where(ul, ol) { position: relative; }
+.nt-prose :where(ul, ol)::before {
+  content: '';
+  position: absolute;
+  left: -18px; top: .18em; bottom: .18em;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--rk-line);
+}
+/* So the lines inside it draw nothing of their own — until the caret is on
+   one, which paints its own segment over the list's bar. */
+.nt-prose li > p::before { content: none; }
 .nt-prose li::before { content: none; }
-.nt-prose li[data-item-type="task"]::before {
+.nt-prose li > p.nt-at::before {
+  content: '';
+  left: calc(-18px - 1.5em);
+  background: var(--rk-cite-t);
+}
+.nt-prose li li > p.nt-at::before { left: calc(-18px - 3em); }
+.nt-prose li li li > p.nt-at::before { left: calc(-18px - 4.5em); }
+.nt-prose li li li li > p.nt-at::before { left: calc(-18px - 6em); }
+/* A task item's paragraph is busy holding the checkbox, so its lit segment is
+   the item's own, one line tall. */
+.nt-prose li[data-item-type="task"]:has(> .nt-at)::before {
   content: '';
   position: absolute;
   left: calc(-18px - 1.5em); top: .18em; height: 1.1em;
   width: 3px; border-radius: 1px;
-  background: var(--rk-line);
+  background: var(--rk-cite-t);
 }
-.nt-prose li li[data-item-type="task"]::before { left: calc(-18px - 3em); }
-.nt-prose li li li[data-item-type="task"]::before { left: calc(-18px - 4.5em); }
+.nt-prose li li[data-item-type="task"]:has(> .nt-at)::before { left: calc(-18px - 3em); }
+.nt-prose li li li[data-item-type="task"]:has(> .nt-at)::before { left: calc(-18px - 4.5em); }
 .nt-prose blockquote > p::before { content: none; }
-/* The lit one. A task item is lit by the paragraph inside it. */
+/* The lit one, everywhere else. */
 .nt-prose .nt-at::before { background: var(--rk-cite-t); }
-.nt-prose li[data-item-type="task"]:has(> .nt-at)::before { background: var(--rk-cite-t); }
 .nt-prose :where(h1, h2, h3, h4, h5, h6) {
   margin: 1.1em 0 .35em; font-weight: 600; color: var(--rk-ink); line-height: 1.35;
 }
