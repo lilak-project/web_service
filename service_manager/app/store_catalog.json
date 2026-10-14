@@ -164,7 +164,7 @@
       "name": "author_manager",
       "dir": "author_manager",
       "repo": "",
-      "label": "Authors",
+      "label": "author manager",
       "icon": "users",
       "color": "#3d5a80",
       "needs_kit": true,
@@ -175,12 +175,45 @@
       "name": "reference_manager",
       "dir": "reference_manager",
       "repo": "",
-      "label": "References",
+      "label": "reference manager",
       "icon": "books",
       "color": "#7c5295",
       "needs_kit": true,
       "ko": "레퍼런스 목록 — 저널·태그·저자·인용 연결 (멀티프로젝트)",
       "en": "Reference list — journals, tags, authors, linked citations (multi-project)"
+    },
+    {
+      "name": "academic_activities",
+      "dir": "academic_activities",
+      "repo": "",
+      "label": "activity manager",
+      "icon": "calendar",
+      "color": "#b45309",
+      "needs_kit": true,
+      "ko": "학술 활동 목록 — 행사·발표·역할, 레퍼런스·저자와 연결 (멀티프로젝트)",
+      "en": "Academic activities — events, talks, roles, linked to references and authors (multi-project)"
+    },
+    {
+      "name": "asset_manager2",
+      "dir": "asset_manager2",
+      "repo": "",
+      "label": "asset manager",
+      "icon": "scroll",
+      "color": "#8a5cf6",
+      "needs_kit": true,
+      "ko": "장비·자산 목록 — 랙 표 화면 (멀티프로젝트)",
+      "en": "Lab asset list on the rack table (multi-project)"
+    },
+    {
+      "name": "note",
+      "dir": "note",
+      "repo": "",
+      "label": "note",
+      "icon": "pencil-line",
+      "color": "#2f6f4f",
+      "needs_kit": true,
+      "ko": "노트 — 노트 하나가 마크다운 파일 하나, Obsidian으로 열림 (멀티프로젝트)",
+      "en": "Notes — one markdown file each, opens in Obsidian (multi-project)"
     }
   ]
 }

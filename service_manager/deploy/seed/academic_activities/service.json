@@ -1,0 +1,25 @@
+{
+  "kind": "rack",
+  "mode": "managed",
+  "start": {
+    "cmd": "sh /app/academic_activities/portal-serve.sh {port}",
+    "cwd": "/app/academic_activities",
+    "env": {}
+  },
+  "health": "/",
+  "entry": "/",
+  "url": null,
+  "token": null,
+  "identity": {
+    "accepts_portal_token": true,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": true,
+    "import_export": true
+  },
+  "icon": "calendar",
+  "color": "#b45309",
+  "label": "activity manager",
+  "open": "panel"
+}

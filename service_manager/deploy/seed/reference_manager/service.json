@@ -8,6 +8,8 @@
   },
   "health": "/",
   "entry": "/",
+  "url": null,
+  "token": null,
   "identity": {
     "accepts_portal_token": true,
     "link_by": "email"
@@ -16,8 +18,8 @@
     "multi_project": true,
     "import_export": true
   },
-  "label": "References",
   "icon": "books",
   "color": "#7c5295",
-  "open": "panel"
+  "open": "panel",
+  "label": "reference manager"
 }

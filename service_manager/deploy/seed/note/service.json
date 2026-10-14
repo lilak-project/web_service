@@ -1,0 +1,25 @@
+{
+  "kind": "note",
+  "mode": "managed",
+  "start": {
+    "cmd": "sh /app/note/portal-serve.sh {port}",
+    "cwd": "/app/note",
+    "env": {}
+  },
+  "health": "/",
+  "entry": "/",
+  "url": null,
+  "token": null,
+  "identity": {
+    "accepts_portal_token": true,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": true,
+    "import_export": true
+  },
+  "icon": "pencil-line",
+  "color": "#2f6f4f",
+  "label": "note",
+  "open": "panel"
+}
