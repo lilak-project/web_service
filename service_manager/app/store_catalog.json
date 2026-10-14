@@ -159,6 +159,28 @@
       "needs_kit": false,
       "ko": "가짜 DAQ 시험대 — 빔 없이 elog 로깅 체인 점검",
       "en": "Stand-in DAQ rig — exercise the elog chain without a beam"
+    },
+    {
+      "name": "author_manager",
+      "dir": "author_manager",
+      "repo": "",
+      "label": "Authors",
+      "icon": "users",
+      "color": "#3d5a80",
+      "needs_kit": true,
+      "ko": "저자 목록 — 소속·그룹·논문 저자 블록 (멀티프로젝트)",
+      "en": "Author list — affiliations, groups, paper author blocks (multi-project)"
+    },
+    {
+      "name": "reference_manager",
+      "dir": "reference_manager",
+      "repo": "",
+      "label": "References",
+      "icon": "books",
+      "color": "#7c5295",
+      "needs_kit": true,
+      "ko": "레퍼런스 목록 — 저널·태그·저자·인용 연결 (멀티프로젝트)",
+      "en": "Reference list — journals, tags, authors, linked citations (multi-project)"
     }
   ]
 }
