@@ -1,5 +1,7 @@
 import { createRoot } from 'react-dom/client'
-import App from './App.jsx'
-import './app.css'
+import { RackService } from 'lilak-ui/racklist'
+import 'lilak-ui/racklist/rack.css'
+import def from './def.jsx'
 
-createRoot(document.getElementById('root')).render(<App />)
+// The whole service is its declaration (def.jsx).
+createRoot(document.getElementById('root')).render(<RackService def={def} />)
