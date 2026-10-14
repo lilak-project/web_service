@@ -139,6 +139,33 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
 
   return (
     <div className="svc-mg">
+      {/* Which code is running: the repository and the commit. Only for a
+          service that is its own git repo — one that lives inside the stack's
+          repo would just report the stack's commit, so it reports nothing. A
+          commit not yet pushed has no page to link to, and says so. */}
+      {!isBuiltin && service.version?.sha && (
+        <Panel title={L('코드', 'Code')} hint={service.version.date || ''}>
+          <Field label={L('저장소', 'Repository')}>
+            {service.version.url ? (
+              <a href={service.version.url} target="_blank" rel="noreferrer" className="set-ext">
+                {service.version.url.replace(/^https?:\/\//, '')} ↗
+              </a>
+            ) : <span style={fieldMuted}>{L('원격 저장소 없음', 'no remote')}</span>}
+          </Field>
+          <Field label={L('커밋', 'Commit')}>
+            {service.version.url && service.version.pushed ? (
+              <a href={`${service.version.url}/commit/${service.version.sha}`} target="_blank" rel="noreferrer"
+                className="set-ext mono">{service.version.sha} ↗</a>
+            ) : (
+              <span className="mono" style={fieldMuted}
+                title={L('아직 원격에 푸시되지 않은 커밋', 'not pushed to the remote yet')}>
+                {service.version.sha} · {L('로컬', 'local')}
+              </span>
+            )}
+          </Field>
+        </Panel>
+      )}
+
       <Panel title={L('모양', 'Appearance')} hint={isBuiltin ? L('내장 카드', 'builtin card') : svc.name}>
         {/* One control per row with a word beside it: four squares in a line
             said nothing about which one did what. */}

@@ -393,3 +393,8 @@
   white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary);
 }
 .pl-logempty { padding: 10px 12px; font-size: 13px; color: var(--text-muted); border-top: 1px solid var(--border-default); }
+
+/* A link that leaves the portal (a repository, a commit): the info colour, so it
+   reads as somewhere else, and an arrow in the text that says so too. */
+.set-ext { color: var(--info-text); text-decoration: none; overflow-wrap: anywhere; }
+.set-ext:hover { text-decoration: underline; text-underline-offset: 2px; }
