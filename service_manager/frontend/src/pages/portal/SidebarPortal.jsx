@@ -15,6 +15,7 @@ import StoreView from './StoreView'
 import NewServiceView from './NewServiceView'
 import IconLabView from './IconLabView'
 import RackView from './RackView'
+import ArchivePanel from './ArchivePanel'
 import './sidebar.css'
 
 /** A card's stable key — the same one the cover and the saved order use, so a
@@ -43,8 +44,18 @@ function StepOut({ open, kind, children }) {
   const last = useRef(children)
   if (open && live === kind) last.current = children
   useEffect(() => { if (open && live === null) setLive(kind) }, [open, kind, live])
+  const folding = live !== null && (!open || live !== kind)
+  // The swap waits on animationend, which never fires if the browser is not
+  // painting — a tab put in the background mid-fold left the OLD bar standing
+  // (settings showing while manage mode was on). The same backstop the project
+  // list has. The fold is --b2t (.38s); 600ms leaves room for a late frame, so
+  // the timer only ever finishes a fold the browser abandoned.
+  useEffect(() => {
+    if (!folding) return
+    const t = setTimeout(() => setLive(open ? kind : null), 600)
+    return () => clearTimeout(t)
+  }, [folding, open, kind])
   if (live === null) return null
-  const folding = !open || live !== kind
   return (
     // Keyed on what it holds, so swapping remounts it and the step-out plays
     // again instead of the browser reusing a finished animation.
@@ -89,6 +100,7 @@ function movedOrder(base, key, target, after) {
  * Still to come: keyboard navigation and the redesigned login card.
  */
 const MINI_KEY = 'portal-mini'
+const ARCHIVE_KEY = '#archive'
 const PIN_KEY = 'portal-pin'
 const FLAT_KEY = 'portal-flat'
 const SHUT_KEY = 'portal-groups-shut'
@@ -324,6 +336,15 @@ export default function SidebarPortal({
   // Manage mode: the bar becomes editable (drag to arrange, a button to make a
   // group) and picking a card shows its settings in the panel instead of running it.
   const [manage, setManage] = useState(false)
+  // The archive: services whose data was deleted. Archiving happens from a
+  // service's own manage panel, so restoring has to be reachable from manage
+  // mode too — otherwise an archived service never comes back on this cover.
+  const [archivedN, setArchivedN] = useState(0)
+  const [archiveTick, setArchiveTick] = useState(0)
+  const loadArchived = useCallback(() => {
+    launcher.get('/admin/archived').then((r) => setArchivedN((r.data || []).length)).catch(() => setArchivedN(0))
+    setArchiveTick((n) => n + 1)
+  }, [])
   const [drag, setDrag] = useState(null)        // key being dragged
   const [dropAt, setDropAt] = useState(null)    // { key, after } | { gid } | { end: true }
   // Opening settings leaves the service bar as it is — the menu steps out beside
@@ -369,6 +390,7 @@ export default function SidebarPortal({
   useEffect(() => { writeSel(view === 'service' ? sel : null) }, [sel, view])
 
   // What `fit` needs to know without becoming a reason for it to re-run.
+  useEffect(() => { if (manage && isManager) loadArchived() }, [manage, isManager, loadArchived])
   const manageRef = useRef(false)
   manageRef.current = manage && isManager
 
@@ -837,6 +859,10 @@ export default function SidebarPortal({
   const selGroup = selBand && !selBand.g.fixed && !selBand.g.loose ? selBand.g : null
   const managePanel = (() => {
     if (!isManager) return null
+    if (sel?.svc === ARCHIVE_KEY) {
+      return <ArchivePanel always signal={archiveTick}
+        onChanged={() => { loadArchived(); onRefresh?.() }} />
+    }
     if (selGroup) {
       const mem = (selGroup.members || [])
         .map((k) => (cards || []).find((c) => cardKey(c) === k)).filter(Boolean)
@@ -1022,6 +1048,15 @@ export default function SidebarPortal({
               <Icon name="folder-plus" size={15} />
               <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
             </button>
+            {/* Only when there is something in it: an empty archive is not a
+                place anyone needs to go. */}
+            {archivedN > 0 && (
+              <button type="button" className={`pl-c2${sel?.svc === ARCHIVE_KEY ? ' on' : ''}`}
+                onClick={() => { setSel({ svc: ARCHIVE_KEY, proj: '' }); setView('manage') }}>
+                <Icon name="archive" size={15} />
+                <span className="pl-txt">{L(`보관함 (${archivedN})`, `Archive (${archivedN})`)}</span>
+              </button>
+            )}
             {/* The room the bar has left over IS the target, and it is here
                 before you pick a card up — a place you have to discover while
                 already holding something is a place you drop things wrong.
