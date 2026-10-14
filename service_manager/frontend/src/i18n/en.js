@@ -713,6 +713,8 @@ export default {
   portal_entry_on:         'opens directly',
   portal_entry_clear:      'clear',
   portal_entry_fail:       'Could not set the entrance.',
+  portal_proj_log:         'Log',
+  portal_proj_log_hint:    'What this project printed on its last start (service.log)',
   portal_proj_title:       'Projects',
   portal_proj_open_svc:    'Projects',
   portal_proj_new_ph:      'New project name (letters, digits, _, -)',

@@ -129,6 +129,26 @@ def rename_project(svc: str, proj: str, body: RenameProject,
     return {"name": proj, "label": label or None}
 
 
+@router.get("/api/services/{svc}/projects/{proj}/log")
+def project_log(svc: str, proj: str, lines: int = 400,
+                _: models.User = Depends(require_portal_admin)):
+    """Tail one project's captured stdout/stderr (data/<svc>/projects/<proj>/
+    service.log, truncated each start). For a multi-project service this is the
+    log that matters: each project is its own process, and the service-level
+    file says nothing about any of them. Manager-only — it shows server paths
+    and the service's own errors as they are."""
+    _require_multi(svc)
+    # Only a project that exists: the name is a path segment.
+    if proj not in {p["name"] for p in pr.list_projects(svc)}:
+        raise HTTPException(404, f"'{proj}' 없음")
+    logp = pr.project_dir(svc, proj) / "service.log"
+    try:
+        text = pr.tail_text(logp, lines)
+    except OSError as e:
+        raise HTTPException(500, f"로그를 읽을 수 없습니다: {e}")
+    return {"service": svc, "project": proj, "path": str(logp), "text": text}
+
+
 class EntryProject(BaseModel):
     project: str = ""        # "" clears it
 

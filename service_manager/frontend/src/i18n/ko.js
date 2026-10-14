@@ -713,6 +713,8 @@ export default {
   portal_entry_on:         '바로 열기 중',
   portal_entry_clear:      '해제',
   portal_entry_fail:       '바로 열기 설정에 실패했습니다.',
+  portal_proj_log:         '로그',
+  portal_proj_log_hint:    '이 프로젝트가 마지막으로 시작했을 때 출력한 내용 (service.log)',
   portal_proj_title:       '프로젝트',
   portal_proj_open_svc:    '프로젝트',
   portal_proj_new_ph:      '새 프로젝트 이름 (영문·숫자·_·-)',

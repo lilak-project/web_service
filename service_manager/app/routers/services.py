@@ -666,20 +666,16 @@ def admin_service_log(
 ):
     """Tail a managed service's captured stdout/stderr (data/<name>/service.log,
     truncated each start). Manager-only. Returns the last `lines` lines."""
-    import collections
+    from .. import project_runtime as pr
     sdir = registry.service_dir(name)
     if not sdir.exists():
         raise HTTPException(404, f"'{name}' 없음")
     logp = sdir / "service.log"
-    if not logp.is_file():
-        return {"name": name, "path": str(logp), "text": ""}
-    n = max(1, min(int(lines or 400), 5000))
     try:
-        with open(logp, "r", errors="replace") as f:
-            tail = collections.deque(f, maxlen=n)
+        text = pr.tail_text(logp, lines)
     except OSError as e:
         raise HTTPException(500, f"로그를 읽을 수 없습니다: {e}")
-    return {"name": name, "path": str(logp), "text": "".join(tail)}
+    return {"name": name, "path": str(logp), "text": text}
 
 
 def _drop_service_rows(db: Session, name: str) -> None:

@@ -4,6 +4,7 @@ import { launcher, serviceApi, errText } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_WEIGHT, ICON_CHOICES } from './IconPick'
 import SyncPanel from './SyncPanel'
+import LogBox from './LogBox'
 import { Panel, Field, FieldActions, Pill, fieldInput, fieldMuted, fieldChip } from './Field'
 import { notify } from './settingsMsg'
 
@@ -261,6 +262,16 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
       {!isBuiltin && (
         <Panel bare title={L('다른 서버와 동기화', 'Mirror another server')}>
           <div style={{ padding: 14 }}><SyncPanel service={svc} /></div>
+        </Panel>
+      )}
+
+      {/* What a single managed service printed on its last start. A
+          multi-project service runs per project, so its logs are on the
+          project rows instead; an external service runs elsewhere and has
+          no file here. */}
+      {!isBuiltin && !service.multi_project && service.mode === 'managed' && (
+        <Panel bare fold open={false} title={L('실행 로그', 'Run log')} hint="service.log">
+          <LogBox url={`/admin/services/${service.name}/log`} />
         </Panel>
       )}
 

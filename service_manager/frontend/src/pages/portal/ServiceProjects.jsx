@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { Panel, Field, FieldActions, Row, Pill, fieldInput, fieldMuted } from './Field'
 import { notify } from './settingsMsg'
+import LogBox from './LogBox'
 
 /**
  * ServiceProjects — INLINE project panel for a multi-project service, expanded
@@ -24,6 +25,9 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   const setErr = (m) => m && notify(m, 'bad')
   const [drag, setDrag] = useState(false)
   const fileRef = useRef(null)
+  // The project whose log is open under its row, "" = none. One at a time:
+  // two logs open at once is two screens of text nobody reads together.
+  const [logOf, setLogOf] = useState('')
   // Which project the service's own card opens, "" = none (the list is shown).
   const [entry, setEntry] = useState(service.entry_project || '')
 
@@ -140,7 +144,8 @@ export default function ServiceProjects({ service, canManage, manage = false, on
         {(projects || []).map((p) => {
           const viewOnly = p.view_only && !p.can_enter
           return (
-            <Row key={p.name}>
+            <Fragment key={p.name}>
+            <Row>
               <span className="mono">{p.label || p.name}</span>
               {viewOnly ? <Pill>{t('portal_proj_view_only')}</Pill>
                 : p.can_enter ? (p.running
@@ -171,10 +176,19 @@ export default function ServiceProjects({ service, canManage, manage = false, on
                 </Button>
               )}
               {canManage && manage && (
+                <Button variant={logOf === p.name ? 'primary' : 'secondary'}
+                  title={t('portal_proj_log_hint')}
+                  onClick={() => setLogOf((x) => (x === p.name ? '' : p.name))}>
+                  {t('portal_proj_log')}
+                </Button>
+              )}
+              {canManage && manage && (
                 <Button variant="dangerSoft" disabled={busy === p.name} title={t('portal_proj_delete')}
                   onClick={() => remove(p.name)}><Icon name="trash" size={15} /></Button>
               )}
             </Row>
+            {logOf === p.name && <LogBox url={`/services/${svc}/projects/${p.name}/log`} />}
+            </Fragment>
           )
         })}
       </Panel>

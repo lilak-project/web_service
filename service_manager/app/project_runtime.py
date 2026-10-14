@@ -40,6 +40,18 @@ def project_dir(svc: str, proj: str) -> Path:
     return projects_root(svc) / proj
 
 
+def tail_text(path: Path, lines: int = 400) -> str:
+    """The last `lines` lines of a captured log, or "" when there is none yet.
+    Shared by the service log and the project log, which are the same file in
+    two places: data/<svc>/service.log and data/<svc>/projects/<p>/service.log."""
+    import collections
+    if not path.is_file():
+        return ""
+    n = max(1, min(int(lines or 400), 5000))
+    with open(path, "r", errors="replace") as f:
+        return "".join(collections.deque(f, maxlen=n))
+
+
 def _port_file(svc: str, proj: str) -> Path:
     return project_dir(svc, proj) / ".port"
 
