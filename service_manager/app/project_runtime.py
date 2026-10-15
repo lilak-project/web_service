@@ -305,15 +305,18 @@ def file_bytes(f: Path) -> bytes:
     return f.read_bytes()
 
 
-def project_manifest(svc: str, proj: str) -> dict:
+def project_manifest(svc: str, proj: str, skip=None) -> dict:
     """{relpath: {size, sha256}} over the syncable files — lets a mirror fetch only
-    what actually differs instead of the whole project."""
+    what actually differs instead of the whole project. `skip(rel)` leaves files
+    out unread (a two-way sync never moves a server's own bookkeeping)."""
     import hashlib
     d = project_dir(svc, proj)
     if not d.exists():
         raise FileNotFoundError(proj)
     files = {}
     for f in _syncable_files(d):
+        if skip and skip(f.relative_to(d).as_posix()):
+            continue
         b = file_bytes(f)
         files[str(f.relative_to(d))] = {"size": len(b), "sha256": hashlib.sha256(b).hexdigest()}
     return {"project": proj, "files": files}

@@ -80,7 +80,11 @@ user by email on entry.
 same service on another server: the source is `main` (issues a URL + token), the copy
 is `sub` (pulls, on demand or on a timer). Only files whose SHA-256 differs move, and
 SQLite travels as a backup-API snapshot. A sub is served read-only (the proxy refuses
-non-GET), because the next pull overwrites local edits. Accounts never sync — main's
+non-GET), because the next pull overwrites local edits — unless it is two-way (rack
+services and note only, main must `accept_push`): then the sub also pushes, and
+`app/sync_merge.py` merges a file changed on both sides against the last agreed copy.
+The rack store (`lilak_portal_auth/store.py`) keeps one file per record and adopts
+records a sync changed underneath it. Accounts never sync — main's
 grants are copied onto matching local accounts only when an admin asks. See
 `DEPLOYMENT.md` §9.
 

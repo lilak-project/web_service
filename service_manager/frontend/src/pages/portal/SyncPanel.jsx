@@ -9,6 +9,8 @@ import { useLang } from '../../context/LangContext'
  * main: this server owns the data; it shows the URL + token to paste into the sub.
  * sub:  this server mirrors another portal — it pulls on demand and (by default)
  *       serves the copy read-only, because the next pull overwrites local edits.
+ *       Or, two-way: edits here go to main too (main has to accept them), and a
+ *       file changed on both sides is merged rather than overwritten.
  *
  * Only project data syncs; accounts and permissions stay per-server.
  */
@@ -24,7 +26,7 @@ export default function SyncPanel({ service }) {
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const svc = service.name
   const [cfg, setCfg] = useState(null)
-  const [form, setForm] = useState({ main_url: '', token: '', read_only: true, interval_min: 0, live: false })
+  const [form, setForm] = useState({ main_url: '', token: '', read_only: true, interval_min: 0, live: false, two_way: false })
   const [msg, setMsg] = useState('')
   const [job, setJob] = useState(null)
   const [grants, setGrants] = useState(null)   // permission-transfer preview
@@ -35,20 +37,22 @@ export default function SyncPanel({ service }) {
       const { data } = await launcher.get(`/admin/services/${svc}/sync`)
       setCfg(data)
       setForm((f) => ({ main_url: data.main_url || f.main_url, token: data.token || f.token,
-        read_only: data.read_only !== false, interval_min: data.interval_min ?? 0, live: !!data.live }))
+        read_only: data.read_only !== false, interval_min: data.interval_min ?? 0, live: !!data.live,
+        two_way: !!data.two_way }))
     } catch { /* not configured yet */ }
   }
   useEffect(() => { load(); return () => clearInterval(poll.current) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const running = job && (job.status === 'queued' || job.status === 'running')
 
-  async function save(role) {
+  async function save(role, extra = {}) {
     setMsg('')
     try {
       const body = role === 'sub'
         ? { role, main_url: form.main_url.trim(), token: form.token.trim(),
-            read_only: form.read_only, interval_min: Number(form.interval_min) || 0, live: !!form.live }
-        : { role }
+            read_only: form.read_only, interval_min: Number(form.interval_min) || 0, live: !!form.live,
+            two_way: !!form.two_way }
+        : role === 'main' ? { role, accept_push: !!cfg?.accept_push, ...extra } : { role }
       const { data } = await launcher.put(`/admin/services/${svc}/sync`, body)
       setCfg(data)
       setMsg(L('저장됨', 'saved'))
@@ -119,6 +123,14 @@ export default function SyncPanel({ service }) {
             <Button variant="secondary" style={btn} onClick={() => copy(cfg.token || '')}>{L('복사', 'Copy')}</Button>
             <Button variant="dangerSoft" style={btn} onClick={rotate}>{L('재발급', 'Rotate')}</Button>
           </div>
+          <div style={row}>
+            <span style={lbl}>{L('양방향', 'Two-way')}</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!cfg.accept_push}
+                onChange={(e) => save('main', { accept_push: e.target.checked })} />
+              {L('sub 에서 고친 것도 받기', 'accept edits made on the sub')}
+            </label>
+          </div>
         </>
       )}
 
@@ -136,12 +148,19 @@ export default function SyncPanel({ service }) {
               style={{ ...input, fontFamily: 'var(--font-mono)' }} />
           </div>
           <div style={row}>
-            <span style={lbl} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.read_only}
-                onChange={(e) => setForm((f) => ({ ...f, read_only: e.target.checked }))} />
-              {L('읽기 전용으로 잠그기 (권장)', 'lock read-only (recommended)')}
-            </label>
+            <span style={lbl}>{L('방향', 'Direction')}</span>
+            <select value={form.two_way ? 'two' : 'one'} style={sel}
+              onChange={(e) => setForm((f) => ({ ...f, two_way: e.target.value === 'two' }))}>
+              <option value="one">{L('main → 여기 (미러)', 'main → here (mirror)')}</option>
+              <option value="two">{L('양방향', 'two-way')}</option>
+            </select>
+            {!form.two_way && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={form.read_only}
+                  onChange={(e) => setForm((f) => ({ ...f, read_only: e.target.checked }))} />
+                {L('읽기 전용으로 잠그기 (권장)', 'lock read-only (recommended)')}
+              </label>
+            )}
           </div>
           <div style={row}>
             <span style={lbl}>{L('자동', 'Auto')}</span>
@@ -167,8 +186,11 @@ export default function SyncPanel({ service }) {
             </span>
           </div>
           <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
-            {L('동기화하면 main 에 있는 프로젝트가 이 서버 것을 덮어씁니다. main 에 없는 프로젝트는 그대로 둡니다.',
-              'A sync overwrites this server\'s copy with main\'s projects. Projects absent on main are left alone.')}
+            {form.two_way
+              ? L('양쪽에서 고친 것이 서로에게 갑니다. 같은 항목을 양쪽에서 고치면 필드별로 합치고, 노트·파일은 사본을 남깁니다. main 에서 "sub 에서 고친 것도 받기"를 켜야 합니다. 데이터베이스를 쓰는 서비스(elog)는 양방향이 안 됩니다.',
+                'Edits on either side reach the other. The same record edited on both is merged field by field; notes and files keep a copy. Main must tick "accept edits made on the sub". Services on a database (elog) cannot go two-way.')
+              : L('동기화하면 main 에 있는 프로젝트가 이 서버 것을 덮어씁니다. main 에 없는 프로젝트는 그대로 둡니다.',
+                'A sync overwrites this server\'s copy with main\'s projects. Projects absent on main are left alone.')}
           </div>
           <div style={row}>
             <span style={lbl} />

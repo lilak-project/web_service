@@ -288,7 +288,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
 
       {/* cross-portal mirroring (services only) */}
       {!isBuiltin && (
-        <Panel bare title={L('다른 서버와 동기화', 'Mirror another server')}>
+        <Panel bare title={L('다른 서버와 동기화', 'Sync with another server')}>
           <div style={{ padding: 14 }}><SyncPanel service={svc} /></div>
         </Panel>
       )}

@@ -20,6 +20,14 @@ effect of a data sync.
 
 A sub with interval_min > 0 is also pulled automatically by a background poller.
 
+Two-way (a sub with two_way, a main with accept_push): the sub still drives —
+main never has to reach it — but it also PUSHES. It remembers what the two
+copies held when they last agreed (data/<svc>/.sync-base/<project>/), so a file
+changed on one side only goes to the other, and a file changed on both is merged
+(app/sync_merge.py). For file-per-record services only: a project holding a
+database is skipped, since two SQLite files cannot be merged.
+  PUT/DELETE /api/sync/{svc}/projects/{p}/file?path=&if_sha=   (main, token + accept_push)
+
 The sub PULLS: main never needs to reach the sub, so only the sub has to know a
 URL + token and only main has to be reachable. Projects that exist on the sub but
 not on main are LEFT ALONE — a mirror adds and replaces, it does not delete.
@@ -38,7 +46,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from .. import config, models, project_runtime as pr, registry, security, sync
+from .. import config, models, project_runtime as pr, registry, security, sync, sync_merge
 from ..db import get_db
 from ..deps import require_portal_admin
 
@@ -89,12 +97,67 @@ def sync_stamps(svc: str, authorization: Optional[str] = Header(default=None)):
 
 
 @router.get("/api/sync/{svc}/projects/{proj}/manifest")
-def sync_manifest(svc: str, proj: str, authorization: Optional[str] = Header(default=None)):
+def sync_manifest(svc: str, proj: str, shared: int = 0,
+                  authorization: Optional[str] = Header(default=None)):
+    """`shared=1`: only what two-way sync moves — a server's bookkeeping is
+    not even hashed."""
     _require_sync_token(svc, authorization)
     try:
-        return pr.project_manifest(svc, proj)
+        return pr.project_manifest(svc, proj, skip=sync_merge.local_only if shared else None)
     except FileNotFoundError:
         raise HTTPException(404, f"'{proj}' 없음")
+
+
+# ── main side: writes from a two-way sub ─────────────────────────────────────
+_write_lock = threading.Lock()
+
+
+def _sha(p) -> str:
+    import hashlib
+    return hashlib.sha256(pr.file_bytes(p)).hexdigest() if p.is_file() else ""
+
+
+def _writable(svc: str, proj: str, rel: str, authorization: Optional[str]):
+    """The file a sub may write: inside the project, not this server's own
+    bookkeeping, not a database."""
+    _require_sync_token(svc, authorization)
+    if not sync.accepts_push(svc):
+        raise HTTPException(403, "이 main 은 다른 서버의 쓰기를 받지 않습니다 (양방향 꺼짐).")
+    if not registry.valid_name(proj) or not rel or sync_merge.local_only(rel) or rel.endswith(_DB_EXT):
+        raise HTTPException(400, "이 파일은 동기화로 쓸 수 없습니다.")
+    d = pr.project_dir(svc, proj).resolve()
+    p = (d / rel).resolve()
+    if not str(p).startswith(str(d) + os.sep):
+        raise HTTPException(400, "프로젝트 밖의 경로입니다.")
+    return p
+
+
+@router.put("/api/sync/{svc}/projects/{proj}/file")
+async def sync_put_file(svc: str, proj: str, path: str, request: Request, if_sha: str = "",
+                        authorization: Optional[str] = Header(default=None)):
+    """Write one file — only if it is still what the sub last saw here
+    (`if_sha`, '' = absent). Otherwise 409, and the sub merges again next round."""
+    p = _writable(svc, proj, path, authorization)
+    raw = await request.body()
+    with _write_lock:
+        if _sha(p) != if_sha:
+            raise HTTPException(409, "그 사이 바뀌었습니다.")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(p.name + ".sync-tmp")
+        tmp.write_bytes(raw)
+        os.replace(tmp, p)
+    return {"ok": True}
+
+
+@router.delete("/api/sync/{svc}/projects/{proj}/file")
+def sync_delete_file(svc: str, proj: str, path: str, if_sha: str = "",
+                     authorization: Optional[str] = Header(default=None)):
+    p = _writable(svc, proj, path, authorization)
+    with _write_lock:
+        if _sha(p) != if_sha:
+            raise HTTPException(409, "그 사이 바뀌었습니다.")
+        p.unlink(missing_ok=True)
+    return {"ok": True}
 
 
 @router.get("/api/sync/{svc}/projects/{proj}/file")
@@ -141,6 +204,8 @@ class SyncCfg(BaseModel):
     read_only: bool = True          # sub: refuse writes through the proxy
     interval_min: int = 0           # sub: auto-pull every N minutes (0 = manual only)
     live: bool = False              # sub: follow main within seconds (overrides interval)
+    two_way: bool = False           # sub: send local edits to main too (main must accept_push)
+    accept_push: bool = False       # main: let paired subs write back
 
 
 def _public(svc: str) -> dict:
@@ -150,6 +215,8 @@ def _public(svc: str) -> dict:
             "last_sync": cfg.get("last_sync"), "last_error": cfg.get("last_error"),
             "interval_min": int(cfg.get("interval_min") or 0),
             "live": bool(cfg.get("live")),
+            "two_way": bool(cfg.get("two_way")),
+            "accept_push": bool(cfg.get("accept_push")),
             # what a sub operator must paste into their portal
             "pair_url": config.BASE_URL if cfg.get("role") == "main" else None}
 
@@ -168,6 +235,7 @@ def put_sync(svc: str, body: SyncCfg, _: models.User = Depends(require_portal_ad
     if body.role == "main":
         # Keep an existing token so paired subs don't break on an unrelated edit.
         cfg["token"] = cfg.get("token") or sync.new_token()
+        cfg["accept_push"] = bool(body.accept_push)
         cfg.pop("main_url", None)
     elif body.role == "sub":
         url = (body.main_url or "").strip().rstrip("/")
@@ -178,6 +246,7 @@ def put_sync(svc: str, body: SyncCfg, _: models.User = Depends(require_portal_ad
         cfg["read_only"] = bool(body.read_only)
         cfg["interval_min"] = max(0, min(1440, int(body.interval_min or 0)))
         cfg["live"] = bool(body.live)
+        cfg["two_way"] = bool(body.two_way)
         if not cfg["token"]:
             raise HTTPException(400, "main 에서 발급한 토큰을 붙여넣으세요.")
     else:
@@ -201,6 +270,136 @@ def _get(url: str, token: str, timeout: int = 60) -> bytes:
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
+
+
+def _send(method: str, url: str, token: str, data: bytes = None, timeout: int = 120) -> bytes:
+    req = urllib.request.Request(url, data=data, method=method, headers={
+        "Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+class _Moved(Exception):
+    """The file changed while we were deciding — the next round sees it."""
+
+
+def _two_way_project(job_id: str, base: str, token: str, svc: str, proj: str) -> int:
+    """Bring this server's copy of ONE project and main's to the same files:
+    what changed on one side goes to the other, what changed on both is merged.
+    Returns the number of files that moved.
+
+    ponytail: a local file is checked just before it is replaced, not locked —
+    a save landing in that instant is caught by the next round's compare, not
+    lost, because the base is only advanced for what actually went through."""
+    import hashlib
+    import json as _json
+    q = urllib.parse.quote
+    url = f"{base}/api/sync/{svc}/projects/{proj}"
+    try:
+        theirs = {r: m["sha256"] for r, m in
+                  _json.loads(_get(f"{url}/manifest?shared=1", token))["files"].items()}
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+        theirs = {}                              # not on main yet: it is ours to send
+    try:
+        mine = {r: m["sha256"] for r, m in
+                pr.project_manifest(svc, proj, skip=sync_merge.local_only)["files"].items()}
+    except FileNotFoundError:
+        mine = {}
+    if any(r.endswith(_DB_EXT) for r in list(mine) + list(theirs)):
+        _log(job_id, f"  ! {proj}: 데이터베이스 파일이 있어 양방향으로 합칠 수 없습니다 — 건너뜀")
+        return 0
+
+    d = pr.project_dir(svc, proj)
+    d.mkdir(parents=True, exist_ok=True)
+    bdir = registry.service_dir(svc) / ".sync-base" / proj
+    try:
+        agreed = _json.loads((bdir / "manifest.json").read_text(encoding="utf-8"))
+    except Exception:                            # noqa: BLE001 — first round
+        agreed = {}
+    sha = lambda b: hashlib.sha256(b).hexdigest()
+    local = lambda rel: (d / rel)
+
+    def put_local(rel, raw, expect):
+        p = local(rel)
+        if (_sha(p) or None) != expect:
+            raise _Moved(rel)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(p.name + ".sync-tmp")
+        tmp.write_bytes(raw)
+        os.replace(tmp, p)
+
+    def read_local(rel, expect):
+        raw = pr.file_bytes(local(rel))
+        if sha(raw) != expect:
+            raise _Moved(rel)
+        return raw
+
+    def push(rel, raw, expect):
+        _send("PUT", f"{url}/file?path={q(rel)}&if_sha={expect or ''}", token, raw)
+
+    def base_bytes(rel):
+        f = bdir / "files" / rel
+        return f.read_bytes() if f.is_file() else None
+
+    now = {r: s for r, s in mine.items() if theirs.get(r) == s}     # already the same
+    moved = 0
+    for rel, act in sync_merge.plan(agreed, mine, theirs):
+        try:
+            if act == "pull":
+                raw = _get(f"{url}/file?path={q(rel)}", token, timeout=600)
+                put_local(rel, raw, mine.get(rel))
+                now[rel] = sha(raw)
+            elif act == "push":
+                push(rel, read_local(rel, mine[rel]), theirs.get(rel))
+                now[rel] = mine[rel]
+            elif act == "del_mine":
+                if _sha(local(rel)) != mine[rel]:
+                    raise _Moved(rel)
+                local(rel).unlink(missing_ok=True)
+            elif act == "del_theirs":
+                _send("DELETE", f"{url}/file?path={q(rel)}&if_sha={theirs[rel]}", token)
+            else:                                # changed on both sides
+                m = read_local(rel, mine[rel])
+                t = _get(f"{url}/file?path={q(rel)}", token, timeout=600)
+                merged = sync_merge.merge_json(rel, base_bytes(rel), m, t) \
+                    if sync_merge.keeps_base(rel) else None
+                if merged is not None:
+                    put_local(rel, merged, mine[rel])
+                    push(rel, merged, theirs[rel])
+                    now[rel] = sha(merged)
+                    _log(job_id, f"    ⇄ {rel} 양쪽 수정 → 합침")
+                else:
+                    # Both kept: main's at the name, ours beside it.
+                    copy = sync_merge.conflict_name(rel, set(mine) | set(theirs))
+                    put_local(copy, m, None)
+                    push(copy, m, None)
+                    put_local(rel, t, mine[rel])
+                    now[rel], now[copy] = theirs[rel], mine[rel]
+                    _log(job_id, f"    ⇄ {rel} 양쪽 수정 → 사본 {copy}")
+            moved += 1
+        except (_Moved, urllib.error.HTTPError) as e:
+            if isinstance(e, urllib.error.HTTPError) and e.code != 409:
+                raise
+            if rel in agreed:
+                now[rel] = agreed[rel]           # not settled: compare again next round
+            _log(job_id, f"    · {rel} 그 사이 바뀜 — 다음 차례에")
+
+    # The agreed copies a later merge starts from.
+    for rel, s_ in now.items():
+        if sync_merge.keeps_base(rel) and agreed.get(rel) != s_ and local(rel).is_file():
+            raw = pr.file_bytes(local(rel))
+            if sha(raw) == s_:
+                f = bdir / "files" / rel
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_bytes(raw)
+    for rel in set(agreed) - set(now):
+        (bdir / "files" / rel).unlink(missing_ok=True)
+    bdir.mkdir(parents=True, exist_ok=True)
+    (bdir / "manifest.json").write_text(_json.dumps(now, ensure_ascii=False), encoding="utf-8")
+    _log(job_id, f"  ✓ {proj} — " + (f"{moved}개 파일 주고받음" if moved else "변경 없음"))
+    return moved
 
 
 def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> int:
@@ -258,6 +457,8 @@ def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> in
 # Memory, not disk: after a restart the first live tick compares manifests once
 # (cheaply — identical files move nothing) and fills it again.
 _seen: dict = {}
+# …and, for a two-way sub, the stamp of each LOCAL project after it was synced.
+_seen_local: dict = {}
 
 
 def _run_pull(job_id: str, svc: str, only: Optional[dict] = None) -> None:
@@ -281,16 +482,24 @@ def _run_pull(job_id: str, svc: str, only: Optional[dict] = None) -> None:
 
     _log(job_id, f"· main 프로젝트 {len(names)}개: {', '.join(names) or '(없음)'}")
     local = {p["name"] for p in pr.list_projects(svc)}
+    two_way = bool(cfg.get("two_way"))
+    if two_way and only is None:
+        names = sorted(set(names) | local)     # a project made here goes to main too
     ok, moved = 0, 0
     for n in names:
         try:
-            moved += _pull_project(job_id, base, token, svc, n)
+            if two_way:
+                moved += _two_way_project(job_id, base, token, svc, n)
+            else:
+                moved += _pull_project(job_id, base, token, svc, n)
             ok += 1
             if only is not None:
                 _seen.setdefault(svc, {})[n] = only[n]
+            if two_way:
+                _seen_local.setdefault(svc, {})[n] = pr.project_stamp(svc, n)
         except Exception as e:                   # noqa: BLE001
             _log(job_id, f"  ! {n} 실패: {e}")
-    extra = sorted(local - set(names)) if only is None else []
+    extra = sorted(local - set(names)) if only is None and not two_way else []
     if extra:
         _log(job_id, f"· main 에 없는 로컬 프로젝트는 그대로 둡니다: {', '.join(extra)}")
 
@@ -299,7 +508,8 @@ def _run_pull(job_id: str, svc: str, only: Optional[dict] = None) -> None:
     cfg["last_sync"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     cfg["last_error"] = None if ok == len(names) else f"{len(names) - ok}개 실패"
     sync.write(svc, cfg)
-    _log(job_id, f"✓ 동기화 완료 — {ok}/{len(names)} 프로젝트, 전송 {moved // 1024} KB")
+    _log(job_id, f"✓ 동기화 완료 — {ok}/{len(names)} 프로젝트, "
+                 + (f"파일 {moved}개" if two_way else f"전송 {moved // 1024} KB"))
     _set(job_id, status="done" if ok == len(names) else "error",
          error=None if ok == len(names) else f"{len(names) - ok}개 프로젝트 실패")
 
@@ -432,6 +642,16 @@ def _live_tick(svc: str) -> None:
         return
     seen = _seen.get(svc, {})
     moved = {p: st for p, st in stamps.items() if seen.get(p) != st}
+    if cfg.get("two_way"):
+        # An edit here is a reason to sync as much as one there.
+        mine = _seen_local.get(svc, {})
+        for p in pr.list_projects(svc):
+            n = p["name"]
+            try:
+                if mine.get(n) != pr.project_stamp(svc, n):
+                    moved.setdefault(n, stamps.get(n))
+            except FileNotFoundError:
+                pass
     if moved:
         _start_pull(svc, moved)                   # None while a pull is in flight
 

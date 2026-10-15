@@ -51,9 +51,17 @@ def role(svc: str) -> str:
 
 
 def is_read_only(svc: str) -> bool:
-    """A mirrored copy is read-only unless the operator explicitly unlocks it."""
+    """A mirrored copy is read-only unless the operator explicitly unlocks it.
+    A two-way sub is not a mirror: what is written here travels to main."""
     cfg = read(svc)
-    return cfg.get("role") == "sub" and cfg.get("read_only", True)
+    return cfg.get("role") == "sub" and not cfg.get("two_way") and cfg.get("read_only", True)
+
+
+def accepts_push(svc: str) -> bool:
+    """Main lets its paired subs write back (two-way) only when its own admin
+    said so — handing out a token alone does not."""
+    cfg = read(svc)
+    return cfg.get("role") == "main" and bool(cfg.get("accept_push"))
 
 
 def new_token() -> str:

@@ -207,8 +207,59 @@ class Document:
             self._names_to_ids()
         stamp = self._stamp_now()
         if self._cache is None or stamp != self._stamp:
-            self._cache, self._stamp = self._assemble(), stamp
+            doc = self._assemble()
+            if not self._upgrading and self._adopt(doc):
+                stamp = self._stamp_now()
+            self._cache, self._stamp = doc, stamp
         return json.loads(json.dumps(self._cache))   # a copy the caller may change
+
+    def _adopt(self, doc: dict) -> bool:
+        """Records that changed on disk without a save here — a sync brought
+        them from another server — get this server's bookkeeping: a new
+        version, so a client holding the old copy is behind, and a trail entry,
+        so a later save can tell an edit from a stale copy. True if any did.
+
+        ponytail: hashes every record whenever the folder changes; cache
+        hashes by file mtime if a project grows past ~10k records."""
+        local = self._load(self.dir / "_local.json", {})
+        rv, rh, gone = local.get("rv") or {}, local.get("rh") or {}, local.get("gone") or {}
+        version = int(local.get("version") or doc.get("version") or 1)
+        moved = []
+        for k in self.keys:
+            if k == "settings":
+                h = self._hash(doc.get(k) or {})
+                t = (rh.get("settings") or {}).get("settings")
+                if t and t[-1][1] != h:
+                    moved.append(("settings", "settings", h))
+                continue
+            seen = set()
+            for r in doc.get(k) or []:
+                rid = str(r["id"]); seen.add(rid)
+                h = self._hash(r)
+                t = (rh.get(k) or {}).get(rid)
+                if not t or t[-1][1] != h:
+                    moved.append((k, rid, h))
+            for rid in list((rh.get(k) or {})):
+                if rid not in seen:
+                    moved.append((k, rid, None))
+        if not moved:
+            return False
+        version += 1
+        for k, rid, h in moved:
+            if h is None:
+                gone.setdefault(k, {})[rid] = [version, rh[k][rid][-1][1]]
+                rh[k].pop(rid, None)
+                (rv.get(k) or {}).pop(rid, None)
+            else:
+                rv.setdefault(k, {})[rid] = version
+                t = rh.setdefault(k, {}).setdefault(rid, [])
+                t.append([version, h]); del t[:-32]
+                (gone.get(k) or {}).pop(rid, None)
+        atomic_write(self.dir / "_local.json", self._dump(
+            {**local, "version": version, "updatedAt": _now(), "updatedBy": "sync",
+             "rv": rv, "rh": rh, "gone": gone}))
+        doc.update(version=version, updatedBy="sync")
+        return True
 
     # ── names → ids, once ─────────────────────────────────────────────────
     def to_ids(self, doc: dict) -> bool:

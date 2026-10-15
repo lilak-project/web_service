@@ -273,9 +273,17 @@ public repo, so no GitHub credentials are needed.
 권한 이전은 **관리자가 직접 누를 때만** 일어납니다 — 데이터 동기화가 권한을 옮기는 일은
 없습니다.
 
-**한계** — 지금은 단방향(main → sub)입니다. 양쪽에서 수정한 내용을 합치는 머지는 각
-서비스의 스키마에 전역 고유 ID가 필요해 아직 없습니다. 양쪽에서 쓰고 싶다면 서비스(또는
-프로젝트)마다 주인을 나누고 서로 반대 방향으로 미러링하세요.
+**양방향** — 레코드마다 파일 하나로 저장하는 서비스(note, author/reference/activity/asset
+manager)는 양쪽에서 고쳐도 됩니다.
+
+- main: `양방향 — sub 에서 고친 것도 받기`를 켭니다. 꺼져 있으면 토큰이 있어도 쓰기는 거부합니다.
+- sub: `방향`을 `양방향`으로 두고 저장합니다(읽기 전용 잠금은 쓰이지 않습니다). `실시간`이면 몇 초 안에 양쪽이 맞춰집니다.
+- 여전히 **sub가 주도**합니다: main의 변경을 가져오고, 자기 변경을 main에 보냅니다. sub는 양쪽이
+  마지막으로 같았던 상태를 `data/<svc>/.sync-base/` 에 기억해, 한쪽만 바뀐 파일은 그쪽을 따르고
+  양쪽이 다 바꾼 파일만 합칩니다 — 레코드(JSON)는 필드별로(같은 필드면 나중에 저장한 쪽),
+  노트·첨부는 main 것을 그 이름에 두고 sub 것을 `이름 (충돌 날짜)` 사본으로 남깁니다.
+- 각 서버의 장부(`data/_local.json`, `.history/`, `backups/`, 옛 `data.json*`)는 오가지 않습니다.
+- **데이터베이스를 쓰는 서비스(elog)는 양방향이 안 됩니다** — 그 프로젝트는 건너뜁니다.
 
 **English** — portals on different servers can mirror a service's project data:
 `s2`'s elog as the source with `s1` keeping a copy, while `s1` also mirrors
@@ -302,7 +310,15 @@ flagged), and `Apply here` grants them. People without a local account are skipp
 this never creates accounts — and re-applying is a no-op. It runs only when an admin
 asks; a data sync never moves permissions.
 
-**Limitation** — one-way (main → sub) only. Merging edits made on both sides needs a
-globally unique id in each service's schema and does not exist yet; to write on both
-servers, split ownership per service (or per project) and mirror in opposite
-directions.
+**Two-way** — services that keep one file per record (note; author, reference,
+activity and asset manager) can be edited on both servers. On main tick `Two-way —
+accept edits made on the sub` (without it a token cannot write); on the sub set
+`Direction` to `two-way` (the read-only lock no longer applies), `live` to converge
+within seconds. The sub still drives: it pulls main's changes and pushes its own,
+remembering what the two last agreed on (`data/<svc>/.sync-base/`), so a file changed
+on one side follows that side and only a file changed on both is merged — records
+(JSON) field by field (the later save wins a field changed on both), notes and
+attachments by keeping main's at the name and the sub's as a `name (충돌 date)` copy.
+Each server's bookkeeping (`data/_local.json`, `.history/`, `backups/`, old
+`data.json*`) never moves. **Services on a database (elog) cannot go two-way** — their
+projects are skipped.
