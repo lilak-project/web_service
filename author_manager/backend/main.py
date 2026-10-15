@@ -24,7 +24,8 @@ PROJECT = os.environ.get("PORTAL_PROJECT", "")
 DIST = Path(os.environ.get("AUTHOR_DIST_DIR", "/app/author_manager/dist"))
 
 DOC = Document(DATA / "data.json", keys=("authors", "affiliations", "groups", "settings"),
-               what="저자 데이터")
+               what="저자 데이터",
+               links=(("authors", "affiliations.tag", "affiliations"), ("authors", "groups.group", "groups")))
 
 app = FastAPI(title="author_manager")
 DOC.mount(app, project=PROJECT)

@@ -410,7 +410,7 @@ registerType('citedby', {
 
 registerType('paste', {
   Edit: ({ ctx, patch, rec }) => {
-    const jrnNames = (ctx.doc?.journals || []).map((j) => j.name)
+    const jrns = ctx.doc?.journals || []
     return (
       <PasteBox say={ctx.say} onTake={(got) => {
         const { author, ...rest } = got
@@ -418,8 +418,8 @@ registerType('paste', {
           ...rest,
           // The parser reads ONE string; this form keeps rows.
           authors: splitAuthors(author).map((n) => ({ name: n, ref: '', corr: false })),
-          // A journal we already know keeps its record's spelling.
-          journal: jrnNames.find((n) => n.toLowerCase() === (got.journal || '').toLowerCase())
+          // A journal we already know is linked to its record.
+          journal: jrns.find((j) => String(j.name || '').toLowerCase() === (got.journal || '').toLowerCase())?.id
             || got.journal || rec.journal,
         })
       }} />

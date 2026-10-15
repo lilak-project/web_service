@@ -80,11 +80,18 @@ class Document:
     file is kept as data.json.pre-split.
     """
 
-    def __init__(self, path: Path, keys: tuple, what: str = "데이터", keep_days: int = 0):
+    def __init__(self, path: Path, keys: tuple, what: str = "데이터", keep_days: int = 0,
+                 links: tuple = ()):
         self.path = Path(path)                   # where the single file lived
         self.dir = self.path.with_suffix("")     # data.json → data/
         self.keys = tuple(keys)
         self.what = what
+        # (items, "field" or "rows.field", class): where items point at a class
+        # record. They used to point by NAME; read() turns those into ids once,
+        # so renaming a journal changes one record, not every paper in it.
+        self.links = tuple(links)
+        self._upgrading = False
+        self._ids_done = False
         # With keep_days, what a save replaces is kept: each changed or deleted
         # record under .history/, and the whole document once a day under
         # backups/ (the copy for the mistake nobody noticed for a week).
@@ -196,10 +203,69 @@ class Document:
             else:
                 self.dir.mkdir(parents=True, exist_ok=True)
                 atomic_write(self.dir / "_local.json", self._dump({"version": 1, "rv": {}}))
+        if self.links and not self._upgrading:
+            self._names_to_ids()
         stamp = self._stamp_now()
         if self._cache is None or stamp != self._stamp:
             self._cache, self._stamp = self._assemble(), stamp
         return json.loads(json.dumps(self._cache))   # a copy the caller may change
+
+    # ── names → ids, once ─────────────────────────────────────────────────
+    def to_ids(self, doc: dict) -> bool:
+        """Point by id wherever a value names a class record. A name nobody's
+        record has stays text (a journal not in the list yet). True if any
+        value changed."""
+        hit = False
+        for item_k, path, cls_k in self.links:
+            recs = [r for r in doc.get(cls_k) or [] if isinstance(r, dict) and r.get("id")]
+            ids = {str(r["id"]) for r in recs}
+            by_name = {}
+            for r in recs:
+                by_name.setdefault(str(r.get("name") or "").strip(), str(r["id"]))
+            by_name.pop("", None)
+
+            def conv(v):
+                nonlocal hit
+                if isinstance(v, str) and v not in ids and v.strip() in by_name:
+                    hit = True
+                    return by_name[v.strip()]
+                return v
+            field, _, sub = path.partition(".")
+
+            def item(it):
+                if not isinstance(it, dict) or field not in it:
+                    return it
+                v = it[field]
+                if sub:
+                    v = [{**x, sub: conv(x.get(sub))} if isinstance(x, dict) and sub in x else x
+                         for x in v] if isinstance(v, list) else v
+                else:
+                    v = [conv(x) for x in v] if isinstance(v, list) else conv(v)
+                # A new dict, never the one passed in: `doc` may share records
+                # with the copy a save is compared against.
+                return {**it, field: v} if v != it[field] else it
+            if isinstance(doc.get(item_k), list):
+                doc[item_k] = [item(it) for it in doc[item_k]]
+        return hit
+
+    def _names_to_ids(self) -> None:
+        if self._ids_done:
+            return
+        local = self._load(self.dir / "_local.json", {})
+        if "ids" in (local.get("upgrades") or []):
+            self._ids_done = True
+            return
+        self._upgrading = True
+        try:
+            doc = self._assemble()
+            if self.to_ids(doc):
+                self.write(doc, "id-upgrade")
+            local = self._load(self.dir / "_local.json", {})
+            local["upgrades"] = sorted(set(local.get("upgrades") or []) | {"ids"})
+            atomic_write(self.dir / "_local.json", self._dump(local))
+            self._cache = None
+        finally:
+            self._upgrading = False
 
     # ── data.json → files, once ───────────────────────────────────────────
     def _split(self) -> None:
@@ -360,7 +426,7 @@ class Document:
         # Last: the version. A crash before this leaves the records written and
         # the version unbumped, which the next save simply moves past.
         atomic_write(self.dir / "_local.json", self._dump(
-            {"version": version, "updatedAt": _now(), "updatedBy": who,
+            {**local, "version": version, "updatedAt": _now(), "updatedBy": who,
              "rv": rv, "rh": rh, "gone": gone}))
         self._cache = None
         return self.read()
@@ -440,6 +506,9 @@ class Document:
             with doc_.lock:
                 cur = doc_.read()
                 new, clash = doc_.merge(body, cur)
+                # A name typed that is a record's (or a client from before
+                # ids) is stored as that record's id.
+                doc_.to_ids(new)
                 if clash:
                     # The same record changed here since this client loaded it.
                     # Hand back the current document so it reloads rather than

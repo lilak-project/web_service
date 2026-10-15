@@ -18,7 +18,8 @@ DATA = Path(os.environ.get("ACADEMIC_ACTIVITIES_DATA_DIR", "./data"))
 PROJECT = os.environ.get("PORTAL_PROJECT", "")
 DIST = Path(os.environ.get("ACADEMIC_ACTIVITIES_DIST_DIR", "./dist"))
 
-DOC = Document(DATA / "data.json", keys=("activities", "places", "proposals", "settings",), keep_days=30)
+DOC = Document(DATA / "data.json", keys=("activities", "places", "proposals", "settings",), keep_days=30,
+               links=(("activities", "place", "places"), ("activities", "proposal", "proposals")))
 
 app = FastAPI(title="academic_activities")
 DOC.mount(app, project=PROJECT)

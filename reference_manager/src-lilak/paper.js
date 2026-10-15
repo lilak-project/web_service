@@ -100,10 +100,11 @@ export const handleFor = (name) => {
   return `${given.map((w) => w.replace(/[^A-Za-z]/g, '')[0] || '').join('')}${family}`
     .replace(/[^\w-]/g, '') || 'author'
 }
-/** A journal is referenced by its record `name`; the table shows the short one. */
-export const journalRec = (doc, r) => (doc?.journals || []).find((j) => j.name === r.journal) || null
+/** A journal is referenced by its record's id (a name typed before it had a
+ *  record stays text); the table shows the short one. */
+export const journalRec = (doc, r) => (r.journal && (doc?.journals || []).find((j) => j.id === r.journal || j.name === r.journal)) || null
 /** Where it went: the journal for a paper, the institution for a proposal. */
-export const jShort = (doc, r) => journalRec(doc, r)?.shortName || r.journal || r.inst || ''
+export const jShort = (doc, r) => journalRec(doc, r)?.shortName || journalRec(doc, r)?.name || r.journal || r.inst || ''
 // A journal carries three names: what it is called, the short one a table can
 // hold (ApJ) and the one a citation uses (Astrophys. J.).
 export const jAbbrev = (doc, r) => journalRec(doc, r)?.abbrev || journalRec(doc, r)?.name || r.journal || ''
@@ -122,7 +123,6 @@ export const shortRef = (doc, r) => [
 // fields of their own, nothing to edit. They are tags.
 export const tagsOf = (r) => (r.tags || []).filter(Boolean)
 export const inTag = (r, t) => tagsOf(r).includes(t)
-export const inJrn = (r, name) => r.journal === name
 
 /** Papers this one lists, and papers that list it — one is stored, the other
  *  is counted, because storing both is two places to disagree. */

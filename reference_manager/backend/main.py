@@ -26,7 +26,7 @@ PROJECT = os.environ.get("PORTAL_PROJECT", "")
 DIST = Path(os.environ.get("REFERENCE_DIST_DIR", "/app/reference_manager/dist"))
 
 DOC = Document(DATA / "data.json", keys=("references", "journals", "authors", "settings"),
-               what="레퍼런스 데이터")
+               what="레퍼런스 데이터", links=(("references", "journal", "journals"),))
 
 app = FastAPI(title="reference_manager")
 DOC.mount(app, project=PROJECT)

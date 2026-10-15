@@ -35,13 +35,22 @@ export const currentAffs = (a) => (a.affiliations || []).filter((x) => x.tag && 
 export function currentAff(a) {
   return currentAffs(a)[0] || null
 }
+/** An entry points at its affiliation (`tag`) or group (`group`) by the
+ *  record's id. What it is called is the record's name — or, for an entry
+ *  whose record is gone, whatever the entry holds. */
+export const recOf = (doc, list, v) => (v ? (doc?.[list] || []).find((r) => r.id === v || r.name === v) || null : null)
+export const nameIn = (doc, list, v) => recOf(doc, list, v)?.name || v || ''
+/** The records of a class as [id, name], in name order — for a picker. */
+export const choices = (doc, list) => (doc?.[list] || []).filter((r) => r.id)
+  .map((r) => [r.id, r.name || '']).sort((x, y) => x[1].localeCompare(y[1], 'ko'))
+
 /** What the affiliation cell says. Two current places read as both; a person
  *  with a history but nothing current reads 모름, which is not the same as the
  *  blank of someone who never had one. */
 export const AFF_UNKNOWN = '모름'
-export function affilText(a) {
+export function affilText(a, doc) {
   const now = currentAffs(a)
-  if (now.length) return now.map((x) => x.tag).join(', ')
+  if (now.length) return now.map((x) => nameIn(doc, 'affiliations', x.tag)).join(', ')
   return (a.affiliations || []).some((x) => x.tag) ? AFF_UNKNOWN : ''
 }
 /** The email a row shows: the one typed as the representative, and nothing
@@ -62,20 +71,17 @@ export function coreIn(a, group) {
   return Number.isFinite(n) && n >= 1 ? n : null
 }
 // An author's affiliation entry keys its affiliation as `tag`; its group entry
-// keys the group as `group`. The class records carry `name` (and `shortName`).
-export const inAff = (a, tag) => (a.affiliations || []).some((x) => x.tag === tag)
+// keys the group as `group` — both the record's id.
 export const inGrp = (a, name) => (a.groups || []).some((g) => g.group === name)
 
-/** Names in name order, Korean collation — the lists are in both scripts. */
-export const byName = (list) => [...list].sort((a, b) => String(a).localeCompare(String(b), 'ko'))
 // ─── The listing rule ───────────────────────────────────────────────────────
 // A "나열" button does not produce text: it fills in a TEMPLATE, and the
 // template is what produces the text. So a preset is a starting point you can
 // then edit — `"{이름}" <{email}>` is a rule, not a button somebody has to
 // come and add. The tokens are the column names, which is what the reader
 // already has in front of them.
-export const TOKENS = {
-  affiliation: (a) => affilText(a),
+export const TOKENS = (doc) => ({
+  affiliation: (a) => affilText(a, doc),
   이름: (a) => korName(a),
   name: (a) => engName(a),
   'abv-name': (a) => citeShort(a),
@@ -86,7 +92,7 @@ export const TOKENS = {
   first: (a) => citeFirst(a),
   init: (a) => citeInit(a),
   nick: (a) => a.nick || '',
-}
+})
 /** '2026-11-16 ~ 11-18' — the year is said once when both days share it. */
 export const spanOf = (from, to) => {
   const a = String(from || '').trim(), b = String(to || '').trim()
@@ -112,35 +118,38 @@ export const PRESETS = [
   ['email list', '"{name}" <{email}>'],
 ]
 
-/** Several groups (or affiliations) into one.
+/** Several groups (or affiliations) into one, given by NAME (what the merge
+ *  screen shows).
  *
- *  A person points at one by NAME, so the fold is two things: every row that
- *  names one of the old ones names the new one instead — once, a person is not
- *  in a group twice — and the class records themselves go, all but the one
- *  that survives. Merging into a name nobody has yet renames the first of them
- *  rather than inventing an empty record. */
+ *  A person points at one by id, so the fold is two things: every row that
+ *  points at one of the old ones points at the survivor instead — once, a
+ *  person is not in a group twice — and the class records themselves go, all
+ *  but the survivor. Merging into a name nobody has yet renames the first of
+ *  them (keeping its id) rather than inventing an empty record. */
 export function foldClass(doc, of, gone, to) {
   const aff = of === 'affiliation'
   const key = aff ? 'tag' : 'group'
   const list = aff ? 'affiliations' : 'groups'
-  const drop = new Set(gone)
+  const recs = doc[list] || []
+  const goneRecs = recs.filter((r) => gone.includes(r.name))
+  let kept = recs.filter((r) => !gone.includes(r.name))
+  let into = kept.find((r) => r.name === to)
+  if (!into) {
+    into = { ...(goneRecs[0] || {}), name: to }
+    kept = [...kept, into]
+  }
+  const drop = new Set(goneRecs.flatMap((r) => [r.id, r.name]).filter((v) => v && v !== into.id))
   const authors = (doc.authors || []).map((a) => {
     const rows = a[list] || []
     if (!rows.some((x) => drop.has(x[key]))) return a
     const next = []
     for (const x of rows) {
-      const v = drop.has(x[key]) ? to : x[key]
+      const v = drop.has(x[key]) ? into.id : x[key]
       if (next.some((y) => y[key] === v)) continue
       next.push({ ...x, [key]: v })
     }
     return { ...a, [list]: next }
   })
-  const recs = doc[list] || []
-  let kept = recs.filter((r) => !drop.has(r.name))
-  if (!kept.some((r) => r.name === to)) {
-    const src = recs.find((r) => drop.has(r.name))
-    kept = [...kept, { ...(src || {}), name: to }]
-  }
   return { authors, [list]: kept }
 }
 /** Core first, then by FAMILY name — which is how an author list is ordered.

@@ -12,13 +12,12 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  registerType, RackActions, RackField as Fld, fill as fillTpl,
+  registerType, RackActions, RackField as Fld, fill as fillTpl, newId,
 } from 'lilak-ui/racklist'
 import {
-  anyName, engName, citeShort, currentAffs, isCurrent, byName, inGrp, TOKENS, PRESETS,
+  anyName, engName, citeShort, currentAffs, isCurrent, inGrp, TOKENS, PRESETS, nameIn, recOf, choices,
 } from './people.js'
 
-const fill = (tpl, a) => fillTpl(tpl, a, TOKENS)
 const list = (v) => (Array.isArray(v) ? v : [])
 
 // ─── My List's output: the reason the list exists ───────────────────────────
@@ -34,6 +33,8 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
   // And how the affiliations come out: just their names, their names with the
   // address a journal wants, or not at all when the poster says it elsewhere.
   const [affAs, setAffAs] = useState('addr')
+  const tokens = useMemo(() => TOKENS(doc), [doc])
+  const fill = (tpl, a) => fillTpl(tpl, a, tokens)
 
   /** The LaTeX author block: core order, then a superscript per affiliation. */
   /** The author block both printed forms are: core order, then the
@@ -50,7 +51,7 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
       for (const x of currentAffs(a)) if (!idx.has(x.tag)) idx.set(x.tag, idx.size + 1)
     }
     const line = (tag) => {
-      const rec = (doc.affiliations || []).find((x) => x.name === tag)
+      const rec = recOf(doc, 'affiliations', tag)
       if (!rec) return tag
       return affAs === 'name' ? (rec.fullName || rec.name)
         : [rec.fullName || rec.name, rec.address].filter(Boolean).join(', ')
@@ -162,7 +163,7 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
           onClick={() => setSep((v) => `${v}⏎`)}>+⏎</button>
       </div>
       <div className="rl-tokens">
-        {Object.keys(TOKENS).map((k) => (
+        {Object.keys(tokens).map((k) => (
           <button key={k} type="button" className="rl-tok" disabled={!!mode}
             onClick={() => { setMode(''); setTpl((v) => `${v}{${k}}`) }}>{`{${k}}`}</button>
         ))}
@@ -192,8 +193,9 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
   const common = useCallback((key, id) => {
     if (!people.length) return []
     const sets = people.map((a) => new Set((a[key] || []).map((x) => x[id]).filter(Boolean)))
-    return byName([...sets[0]].filter((v) => sets.every((s) => s.has(v))))
-  }, [people])
+    return [...sets[0]].filter((v) => sets.every((s) => s.has(v)))
+      .sort((x, y) => nameIn(doc, key, x).localeCompare(nameIn(doc, key, y), 'ko'))
+  }, [people, doc])
   const affTags = useMemo(() => common('affiliations', 'tag'), [common])
   const grpNames2 = useMemo(() => common('groups', 'group'), [common])
 
@@ -237,10 +239,11 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
   const toggleDrop = (kind, name) => setDrop((s) => ({ ...s,
     [kind]: s[kind].includes(name) ? s[kind].filter((x) => x !== name) : [...s[kind], name] }))
 
-  const affLeft = byName((doc.affiliations || []).map((r) => r.name)
-    .filter((n) => !affTags.includes(n) && !add2.aff.includes(n)))
-  const grpLeft = byName((doc.groups || []).map((r) => r.name)
-    .filter((n) => !grpNames2.includes(n) && !add2.grp.includes(n)))
+  // [id, name] — what is offered to add, by what it is called.
+  const affLeft = choices(doc, 'affiliations').filter(([id]) => !affTags.includes(id) && !add2.aff.includes(id))
+  const grpLeft = choices(doc, 'groups').filter(([id]) => !grpNames2.includes(id) && !add2.grp.includes(id))
+  const affN = (v) => nameIn(doc, 'affiliations', v)
+  const grpN = (v) => nameIn(doc, 'groups', v)
 
   async function save() {
     const now = new Date().toISOString()
@@ -309,7 +312,7 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
               const off = drop.aff.includes(t)
               return (
                 <div key={t} className="rl-rrow" style={off ? { opacity: 0.45 } : null}>
-                  <span className="rl-tag">{t}</span>
+                  <span className="rl-tag">{affN(t)}</span>
                   <input className="rl-in" style={{ width: 150 }} disabled={off}
                     placeholder={mixed('affiliations', 'tag', t, 'dept') ? '(여러 값)' : '부서'}
                     value={f.aff[t]?.dept ?? ''} onChange={(e) => put('aff', t, 'dept', e.target.value)} />
@@ -326,7 +329,7 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
             })}
             {add2.aff.map((t) => (
               <div key={t} className="rl-rrow rl-full">
-                <span className="rl-tag">{t}</span>
+                <span className="rl-tag">{affN(t)}</span>
                 <span className="rl-hint">모두에게 추가됩니다.</span>
                 <button type="button" className="rl-x" title="취소"
                   onClick={() => setAdd2((s) => ({ ...s, aff: s.aff.filter((x) => x !== t) }))}>×</button>
@@ -336,7 +339,7 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
               <select className="rl-btn rl-pick" value="" disabled={!affLeft.length}
                 onChange={(e) => setAdd2((s) => ({ ...s, aff: [...s.aff, e.target.value] }))}>
                 <option value="">+ 소속 추가</option>
-                {affLeft.map((n) => <option key={n} value={n}>{n}</option>)}
+                {affLeft.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
               </select>
             </div>
           </div>
@@ -349,7 +352,7 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
               const off = drop.grp.includes(g)
               return (
                 <div key={g} className="rl-rrow" style={off ? { opacity: 0.45 } : null}>
-                  <span className="rl-tag">{g}</span>
+                  <span className="rl-tag">{grpN(g)}</span>
                   <input className="rl-in" style={{ width: 200 }} disabled={off}
                     placeholder={mixed('groups', 'group', g, 'role') ? '(여러 값)' : 'role'}
                     value={f.grp[g]?.role ?? ''} onChange={(e) => put('grp', g, 'role', e.target.value)} />
@@ -364,7 +367,7 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
             })}
             {add2.grp.map((g) => (
               <div key={g} className="rl-rrow rl-full">
-                <span className="rl-tag">{g}</span>
+                <span className="rl-tag">{grpN(g)}</span>
                 <span className="rl-hint">모두에게 추가됩니다 (core 10).</span>
                 <button type="button" className="rl-x" title="취소"
                   onClick={() => setAdd2((s) => ({ ...s, grp: s.grp.filter((x) => x !== g) }))}>×</button>
@@ -374,7 +377,7 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
               <select className="rl-btn rl-pick" value="" disabled={!grpLeft.length}
                 onChange={(e) => setAdd2((s) => ({ ...s, grp: [...s.grp, e.target.value] }))}>
                 <option value="">+ 그룹 추가</option>
-                {grpLeft.map((n) => <option key={n} value={n}>{n}</option>)}
+                {grpLeft.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
               </select>
             </div>
           </div>
@@ -448,8 +451,8 @@ function AffRows({ value = [], options, onChange }) {
             <option value="">(소속)</option>
             {/* An entry pointing at a class that is gone stays selectable, so
                 saving does not quietly change who someone was. */}
-            {[...new Set([...options, x.tag].filter(Boolean))].map((o) => (
-              <option key={o} value={o}>{o}</option>
+            {withOwn(options, x.tag).map(([id, n]) => (
+              <option key={id} value={id}>{n}</option>
             ))}
           </select>
           <input className="rl-in" style={{ width: 150 }} placeholder="부서"
@@ -498,6 +501,9 @@ function AffRows({ value = [], options, onChange }) {
   )
 }
 
+/** The [id, name] choices, plus the entry's own value when no record has it. */
+const withOwn = (options, v) => (v && !options.some(([id]) => id === v) ? [...options, [v, v]] : options)
+
 /** Group membership. `core` is this author's place in THAT group's author list. */
 function GrpRows({ value = [], options, onChange }) {
   const put = (i, k, v) => onChange(value.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
@@ -509,8 +515,8 @@ function GrpRows({ value = [], options, onChange }) {
           <select className="rl-in" style={{ width: 190 }} value={x.group || ''}
             onChange={(e) => put(i, 'group', e.target.value)}>
             <option value="">(그룹)</option>
-            {[...new Set([...options, x.group].filter(Boolean))].map((o) => (
-              <option key={o} value={o}>{o}</option>
+            {withOwn(options, x.group).map(([id, n]) => (
+              <option key={id} value={id}>{n}</option>
             ))}
           </select>
           <input className="rl-in" style={{ width: 150 }} placeholder="role"
@@ -540,14 +546,14 @@ registerType('emails', {
   tidy: (v) => list(v).map((x) => String(x).trim()).filter(Boolean),
 })
 
-const names = (doc, key) => byName((doc?.[key] || []).map((r) => r.name))
 registerType('affs', {
   empty: () => [],
   // What an author wears in the affiliations class: every place in the history.
   keys: (v) => list(v).map((x) => x?.tag).filter(Boolean),
-  text: (v) => list(v).flatMap((x) => [x.tag, x.position, x.dept]).filter(Boolean).join(' '),
+  text: (v, ctx) => list(v).flatMap((x) => [nameIn(ctx?.doc, 'affiliations', x.tag), x.position, x.dept])
+    .filter(Boolean).join(' '),
   Edit: ({ value, onChange, ctx }) => (
-    <AffRows value={list(value)} options={names(ctx.doc, 'affiliations')} onChange={onChange} />
+    <AffRows value={list(value)} options={choices(ctx.doc, 'affiliations')} onChange={onChange} />
   ),
   // An entry that points at no affiliation was added and thought better of.
   tidy: (v) => list(v).filter((x) => String(x?.tag || '').trim()),
@@ -555,9 +561,9 @@ registerType('affs', {
 registerType('grps', {
   empty: () => [],
   keys: (v) => list(v).map((x) => x?.group).filter(Boolean),
-  text: (v) => list(v).map((x) => x.group).filter(Boolean).join(' '),
+  text: (v, ctx) => list(v).map((x) => nameIn(ctx?.doc, 'groups', x.group)).filter(Boolean).join(' '),
   Edit: ({ value, onChange, ctx }) => (
-    <GrpRows value={list(value)} options={names(ctx.doc, 'groups')} onChange={onChange} />
+    <GrpRows value={list(value)} options={choices(ctx.doc, 'groups')} onChange={onChange} />
   ),
   tidy: (v) => list(v).filter((x) => String(x?.group || '').trim()),
 })
@@ -569,32 +575,33 @@ registerType('grps', {
 export function AuthorCommands({ api }) {
   const { doc, picked, chosen, tab, commit, setNote, setPicked } = api
   const [form, setForm] = useState(null)       // the new-group form, when open
-  const groupNames = useMemo(() => byName((doc?.groups || []).map((g) => g.name)), [doc])
+  const groupChoices = useMemo(() => choices(doc, 'groups'), [doc])
   const onGroup = tab?.of === 'groups' ? tab.key : ''
+  const gName = (id) => nameIn(doc, 'groups', id)
 
   // Adding people to a group that already exists is the same edit make group
   // makes, minus inventing the group: pick it and the members go in.
-  function addToGroup(name) {
-    if (!name) return
-    const fresh = chosen.filter((a) => !inGrp(a, name))
+  function addToGroup(gid) {
+    if (!gid) return
+    const fresh = chosen.filter((a) => !inGrp(a, gid))
     if (!chosen.length) { setNote('선택된 저자가 없습니다.'); return }
-    if (!fresh.length) { setNote(`이미 모두 '${name}'에 있습니다.`); return }
+    if (!fresh.length) { setNote(`이미 모두 '${gName(gid)}'에 있습니다.`); return }
     const ids = new Set(fresh.map((a) => a.id))
     commit({
       authors: doc.authors.map((a) => (ids.has(a.id)
-        ? { ...a, groups: [...(a.groups || []), { group: name, role: '', core: 10 }] } : a)),
-    }, `'${name}'에 ${fresh.length}명 추가`)
+        ? { ...a, groups: [...(a.groups || []), { group: gid, role: '', core: 10 }] } : a)),
+    }, `'${gName(gid)}'에 ${fresh.length}명 추가`)
   }
   /** Out of the group whose tab you are on. Only this group's entry goes — the
    *  people and their other groups stay. */
-  function removeFromGroup(name) {
-    const out = chosen.filter((a) => inGrp(a, name))
+  function removeFromGroup(gid) {
+    const out = chosen.filter((a) => inGrp(a, gid))
     if (!out.length) { setNote('선택된 저자가 없습니다.'); return }
     const ids = new Set(out.map((a) => a.id))
     commit({
       authors: doc.authors.map((a) => (ids.has(a.id)
-        ? { ...a, groups: (a.groups || []).filter((g) => g.group !== name) } : a)),
-    }, `'${name}'에서 ${out.length}명 뺐습니다.`)
+        ? { ...a, groups: (a.groups || []).filter((g) => g.group !== gid) } : a)),
+    }, `'${gName(gid)}'에서 ${out.length}명 뺐습니다.`)
     setPicked((s2) => { const n = new Set(s2); ids.forEach((id) => n.delete(id)); return n })
   }
   /** A new group out of the ticked people. */
@@ -604,10 +611,12 @@ export function AuthorCommands({ api }) {
     if ((doc.groups || []).some((g) => g.name === name)) { setNote('같은 이름의 그룹이 있습니다.'); return false }
     if (!chosen.length) { setNote('선택된 저자가 없습니다.'); return false }
     const ids = new Set(chosen.map((a) => a.id))
+    const now = new Date().toISOString()
+    const gid = newId()
     commit({
-      groups: [...(doc.groups || []), { ...f, name, shortName: name }],
-      authors: doc.authors.map((a) => (ids.has(a.id) && !inGrp(a, name)
-        ? { ...a, groups: [...(a.groups || []), { group: name, role: '', core: 10 }] } : a)),
+      groups: [...(doc.groups || []), { ...f, id: gid, name, shortName: name, createdAt: now, updatedAt: now }],
+      authors: doc.authors.map((a) => (ids.has(a.id)
+        ? { ...a, groups: [...(a.groups || []), { group: gid, role: '', core: 10 }] } : a)),
     }, `'${name}' 그룹 생성 · ${ids.size}명 추가`)
     return true
   }
@@ -619,7 +628,7 @@ export function AuthorCommands({ api }) {
         disabled={!picked.size || !(doc?.groups || []).length}
         onChange={(e) => addToGroup(e.target.value)}>
         <option value="">add to group</option>
-        {groupNames.map((n) => <option key={n} value={n}>{n}</option>)}
+        {groupChoices.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
       </select>
       <button type="button" className="rl-btn rl-go" disabled={!picked.size}
         onClick={() => setForm((g) => (g ? null : {}))}>make group</button>
