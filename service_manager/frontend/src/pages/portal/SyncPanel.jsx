@@ -24,7 +24,7 @@ export default function SyncPanel({ service }) {
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const svc = service.name
   const [cfg, setCfg] = useState(null)
-  const [form, setForm] = useState({ main_url: '', token: '', read_only: true, interval_min: 0 })
+  const [form, setForm] = useState({ main_url: '', token: '', read_only: true, interval_min: 0, live: false })
   const [msg, setMsg] = useState('')
   const [job, setJob] = useState(null)
   const [grants, setGrants] = useState(null)   // permission-transfer preview
@@ -35,7 +35,7 @@ export default function SyncPanel({ service }) {
       const { data } = await launcher.get(`/admin/services/${svc}/sync`)
       setCfg(data)
       setForm((f) => ({ main_url: data.main_url || f.main_url, token: data.token || f.token,
-        read_only: data.read_only !== false, interval_min: data.interval_min ?? 0 }))
+        read_only: data.read_only !== false, interval_min: data.interval_min ?? 0, live: !!data.live }))
     } catch { /* not configured yet */ }
   }
   useEffect(() => { load(); return () => clearInterval(poll.current) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -47,7 +47,7 @@ export default function SyncPanel({ service }) {
     try {
       const body = role === 'sub'
         ? { role, main_url: form.main_url.trim(), token: form.token.trim(),
-            read_only: form.read_only, interval_min: Number(form.interval_min) || 0 }
+            read_only: form.read_only, interval_min: Number(form.interval_min) || 0, live: !!form.live }
         : { role }
       const { data } = await launcher.put(`/admin/services/${svc}/sync`, body)
       setCfg(data)
@@ -145,8 +145,17 @@ export default function SyncPanel({ service }) {
           </div>
           <div style={row}>
             <span style={lbl}>{L('자동', 'Auto')}</span>
-            <select value={form.interval_min}
-              onChange={(e) => setForm((f) => ({ ...f, interval_min: Number(e.target.value) }))} style={sel}>
+            {/* Live is not "a shorter interval": it asks main every few seconds
+                which projects changed — a stat on main's side — and pulls only
+                those, so a mirror trails main by seconds without re-reading the
+                whole project each time. */}
+            <select value={form.live ? 'live' : form.interval_min}
+              onChange={(e) => {
+                const v = e.target.value
+                setForm((f) => (v === 'live' ? { ...f, live: true, interval_min: 0 }
+                  : { ...f, live: false, interval_min: Number(v) }))
+              }} style={sel}>
+              <option value="live">{L('실시간 (몇 초 안에)', 'live (within seconds)')}</option>
               <option value={0}>{L('수동만', 'manual only')}</option>
               <option value={1}>{L('1분마다', 'every 1 min')}</option>
               <option value={5}>{L('5분마다', 'every 5 min')}</option>

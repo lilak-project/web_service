@@ -284,7 +284,9 @@ def _syncable_files(d: Path) -> list[Path]:
     WAL siblings are excluded — the latter are folded into the .db snapshot."""
     out = []
     for f in sorted(d.rglob("*")):
-        if not f.is_file() or f.name in (".port", ".pid"):
+        # service.log is what THIS host's run printed: carried to another server
+        # (sync, export) it would overwrite the log of the run that is there.
+        if not f.is_file() or f.name in (".port", ".pid", "service.log"):
             continue
         if f.name.endswith(("-wal", "-shm")):
             continue
@@ -315,6 +317,22 @@ def project_manifest(svc: str, proj: str) -> dict:
         b = file_bytes(f)
         files[str(f.relative_to(d))] = {"size": len(b), "sha256": hashlib.sha256(b).hexdigest()}
     return {"project": proj, "files": files}
+
+
+def project_stamp(svc: str, proj: str) -> str:
+    """A fingerprint that changes when any syncable file does — built from
+    names, sizes and modification times only, so it costs a directory walk and
+    never a file read. A mirror polls this every few seconds and asks for the
+    full manifest only when it moved."""
+    import hashlib
+    d = project_dir(svc, proj)
+    if not d.exists():
+        raise FileNotFoundError(proj)
+    h = hashlib.sha1()
+    for f in _syncable_files(d):
+        st = f.stat()
+        h.update(f"{f.relative_to(d)}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
+    return h.hexdigest()
 
 
 def project_file(svc: str, proj: str, rel: str) -> bytes:

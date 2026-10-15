@@ -26,6 +26,7 @@ not on main are LEFT ALONE — a mirror adds and replaces, it does not delete.
 """
 from __future__ import annotations
 
+import os
 import threading
 import urllib.error
 import urllib.parse
@@ -71,6 +72,20 @@ def _require_sync_token(svc: str, authorization: Optional[str]) -> None:
 def sync_projects(svc: str, authorization: Optional[str] = Header(default=None)):
     _require_sync_token(svc, authorization)
     return {"service": svc, "projects": [p["name"] for p in pr.list_projects(svc)]}
+
+
+@router.get("/api/sync/{svc}/stamps")
+def sync_stamps(svc: str, authorization: Optional[str] = Header(default=None)):
+    """{project: stamp} — what a live mirror polls every few seconds. Stat-only
+    on this side, so polling it is cheap however large the projects are."""
+    _require_sync_token(svc, authorization)
+    out = {}
+    for p in pr.list_projects(svc):
+        try:
+            out[p["name"]] = pr.project_stamp(svc, p["name"])
+        except FileNotFoundError:
+            pass
+    return {"service": svc, "stamps": out}
 
 
 @router.get("/api/sync/{svc}/projects/{proj}/manifest")
@@ -125,6 +140,7 @@ class SyncCfg(BaseModel):
     token: Optional[str] = None     # main: issued here; sub: pasted from main
     read_only: bool = True          # sub: refuse writes through the proxy
     interval_min: int = 0           # sub: auto-pull every N minutes (0 = manual only)
+    live: bool = False              # sub: follow main within seconds (overrides interval)
 
 
 def _public(svc: str) -> dict:
@@ -133,6 +149,7 @@ def _public(svc: str) -> dict:
             "token": cfg.get("token"), "read_only": cfg.get("read_only", True),
             "last_sync": cfg.get("last_sync"), "last_error": cfg.get("last_error"),
             "interval_min": int(cfg.get("interval_min") or 0),
+            "live": bool(cfg.get("live")),
             # what a sub operator must paste into their portal
             "pair_url": config.BASE_URL if cfg.get("role") == "main" else None}
 
@@ -160,6 +177,7 @@ def put_sync(svc: str, body: SyncCfg, _: models.User = Depends(require_portal_ad
         cfg["token"] = (body.token or "").strip()
         cfg["read_only"] = bool(body.read_only)
         cfg["interval_min"] = max(0, min(1440, int(body.interval_min or 0)))
+        cfg["live"] = bool(body.live)
         if not cfg["token"]:
             raise HTTPException(400, "main 에서 발급한 토큰을 붙여넣으세요.")
     else:
@@ -204,7 +222,13 @@ def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> in
         return 0
 
     d = pr.project_dir(svc, proj)
-    pr.stop_project(svc, proj)                   # release the DB before writing it
+    # A database has to be released before it is replaced. A service that keeps
+    # its state in plain files (the rack services: JSON, markdown) does not:
+    # each file is swapped in whole (below), so a reader sees the old file or
+    # the new one, never half of one — and a live mirror does not restart the
+    # project on every change.
+    if any(rel.endswith(_DB_EXT) for rel in changed + stale):
+        pr.stop_project(svc, proj)
     d.mkdir(parents=True, exist_ok=True)
     moved = 0
     for rel in changed:
@@ -214,7 +238,9 @@ def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> in
         if not str(dest).startswith(str(d.resolve())):
             continue                             # path-traversal guard
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(raw)
+        tmp = dest.with_name(dest.name + ".sync-tmp")
+        tmp.write_bytes(raw)
+        os.replace(tmp, dest)
         moved += len(raw)
     for rel in stale:                            # file removed on main → remove here
         p = (d / rel).resolve()
@@ -228,14 +254,25 @@ def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> in
     return moved
 
 
-def _run_pull(job_id: str, svc: str) -> None:
+# The last stamp of each main project this mirror has brought in, per service.
+# Memory, not disk: after a restart the first live tick compares manifests once
+# (cheaply — identical files move nothing) and fills it again.
+_seen: dict = {}
+
+
+def _run_pull(job_id: str, svc: str, only: Optional[dict] = None) -> None:
+    """Pull every project — or, from a live tick, just the ones in `only`
+    ({project: the stamp main reported}), recording each stamp once it lands."""
     import json as _json
     cfg = sync.read(svc)
     base, token = (cfg.get("main_url") or "").rstrip("/"), cfg.get("token") or ""
     _set(job_id, status="running")
     try:
-        listing = _json.loads(_get(f"{base}/api/sync/{svc}/projects", token))
-        names = listing.get("projects") or []
+        if only is not None:
+            names = sorted(only)
+        else:
+            listing = _json.loads(_get(f"{base}/api/sync/{svc}/projects", token))
+            names = listing.get("projects") or []
     except urllib.error.HTTPError as e:
         return _set(job_id, status="error",
                     error=f"main 연결 실패 (HTTP {e.code}) — 주소/토큰을 확인하세요.")
@@ -249,9 +286,11 @@ def _run_pull(job_id: str, svc: str) -> None:
         try:
             moved += _pull_project(job_id, base, token, svc, n)
             ok += 1
+            if only is not None:
+                _seen.setdefault(svc, {})[n] = only[n]
         except Exception as e:                   # noqa: BLE001
             _log(job_id, f"  ! {n} 실패: {e}")
-    extra = sorted(local - set(names))
+    extra = sorted(local - set(names)) if only is None else []
     if extra:
         _log(job_id, f"· main 에 없는 로컬 프로젝트는 그대로 둡니다: {', '.join(extra)}")
 
@@ -265,7 +304,7 @@ def _run_pull(job_id: str, svc: str) -> None:
          error=None if ok == len(names) else f"{len(names) - ok}개 프로젝트 실패")
 
 
-def _start_pull(svc: str) -> Optional[str]:
+def _start_pull(svc: str, only: Optional[dict] = None) -> Optional[str]:
     """Kick off a pull unless one is already running for this service. Returns the
     job id, or None when a sync is in flight (a slow pull must never stack up
     behind the scheduler's ticks)."""
@@ -278,7 +317,7 @@ def _start_pull(svc: str) -> Optional[str]:
 
     def run():
         try:
-            _run_pull(job_id, svc)
+            _run_pull(job_id, svc, only)
         finally:
             with _lock:
                 _busy.discard(svc)
@@ -359,6 +398,8 @@ def import_grants(svc: str, apply: bool = False,
 
 # ── periodic auto-pull ────────────────────────────────────────────────────────
 TICK_S = 20                      # how often the scheduler re-checks what is due
+LIVE_S = 3                       # how often a live mirror asks main what changed
+_DB_EXT = (".db", ".sqlite", ".sqlite3")
 
 
 def _due(svc: str) -> bool:
@@ -379,14 +420,44 @@ def _due(svc: str) -> bool:
     return datetime.utcnow() - prev >= timedelta(minutes=iv)
 
 
+def _live_tick(svc: str) -> None:
+    """A live mirror: ask main for its stamps (stat-only on main's side) and
+    pull exactly the projects whose stamp moved since the last one brought in."""
+    import json as _json
+    cfg = sync.read(svc)
+    base, token = (cfg.get("main_url") or "").rstrip("/"), cfg.get("token") or ""
+    try:
+        stamps = _json.loads(_get(f"{base}/api/sync/{svc}/stamps", token, timeout=10))["stamps"]
+    except Exception:                             # noqa: BLE001 — main away: try next tick
+        return
+    seen = _seen.get(svc, {})
+    moved = {p: st for p, st in stamps.items() if seen.get(p) != st}
+    if moved:
+        _start_pull(svc, moved)                   # None while a pull is in flight
+
+
+def _is_live(svc: str) -> bool:
+    cfg = sync.read(svc)
+    return bool(cfg.get("role") == "sub" and cfg.get("live")
+                and cfg.get("main_url") and cfg.get("token"))
+
+
 def _scheduler() -> None:
     import time
+    waited = 0
     while True:
-        time.sleep(TICK_S)
+        time.sleep(LIVE_S)
+        waited += LIVE_S
         try:
-            for svc in registry.list_service_names():
-                if _due(svc):
-                    _start_pull(svc)              # None if one is still running
+            names = registry.list_service_names()
+            for svc in names:
+                if _is_live(svc):
+                    _live_tick(svc)
+            if waited >= TICK_S:                  # minute-scale mirrors, as before
+                waited = 0
+                for svc in names:
+                    if not _is_live(svc) and _due(svc):
+                        _start_pull(svc)          # None if one is still running
         except Exception as e:                    # noqa: BLE001 — a bad service must not kill the loop
             print(f"[sync] scheduler tick failed: {e}", flush=True)
 
