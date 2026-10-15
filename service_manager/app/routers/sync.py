@@ -69,28 +69,39 @@ def _log(job_id: str, msg: str) -> None:
 
 
 # ── main side: serve snapshots to a paired sub ────────────────────────────────
-def _require_sync_token(svc: str, authorization: Optional[str]) -> None:
+def _scope(svc: str, authorization: Optional[str]) -> tuple:
     if not registry.service_dir(svc).exists():
         raise HTTPException(404, "서비스를 찾을 수 없습니다.")
-    if not sync.check_token(svc, security.bearer(authorization)):
+    sc = sync.scope(svc, security.bearer(authorization))
+    if sc is None:
         raise HTTPException(401, "동기화 토큰이 올바르지 않습니다.")
+    return sc
+
+
+def _require_sync_token(svc: str, authorization: Optional[str], proj: str) -> None:
+    """The token must open this project. One it does not open is answered as
+    absent, so a project's token cannot probe for the others."""
+    if not sync.allows(_scope(svc, authorization), proj):
+        raise HTTPException(404, f"'{proj}' 없음")
+
+
+def _listed(svc: str, sc: tuple) -> list[str]:
+    return [p["name"] for p in pr.list_projects(svc) if sync.allows(sc, p["name"])]
 
 
 @router.get("/api/sync/{svc}/projects")
 def sync_projects(svc: str, authorization: Optional[str] = Header(default=None)):
-    _require_sync_token(svc, authorization)
-    return {"service": svc, "projects": [p["name"] for p in pr.list_projects(svc)]}
+    return {"service": svc, "projects": _listed(svc, _scope(svc, authorization))}
 
 
 @router.get("/api/sync/{svc}/stamps")
 def sync_stamps(svc: str, authorization: Optional[str] = Header(default=None)):
     """{project: stamp} — what a live mirror polls every few seconds. Stat-only
     on this side, so polling it is cheap however large the projects are."""
-    _require_sync_token(svc, authorization)
     out = {}
-    for p in pr.list_projects(svc):
+    for n in _listed(svc, _scope(svc, authorization)):
         try:
-            out[p["name"]] = pr.project_stamp(svc, p["name"])
+            out[n] = pr.project_stamp(svc, n)
         except FileNotFoundError:
             pass
     return {"service": svc, "stamps": out}
@@ -101,7 +112,7 @@ def sync_manifest(svc: str, proj: str, shared: int = 0,
                   authorization: Optional[str] = Header(default=None)):
     """`shared=1`: only what two-way sync moves — a server's bookkeeping is
     not even hashed."""
-    _require_sync_token(svc, authorization)
+    _require_sync_token(svc, authorization, proj)
     try:
         return pr.project_manifest(svc, proj, skip=sync_merge.local_only if shared else None)
     except FileNotFoundError:
@@ -120,8 +131,8 @@ def _sha(p) -> str:
 def _writable(svc: str, proj: str, rel: str, authorization: Optional[str]):
     """The file a sub may write: inside the project, not this server's own
     bookkeeping, not a database."""
-    _require_sync_token(svc, authorization)
-    if not sync.accepts_push(svc):
+    _require_sync_token(svc, authorization, proj)
+    if not sync.accepts_push(svc, proj):
         raise HTTPException(403, "이 main 은 다른 서버의 쓰기를 받지 않습니다 (양방향 꺼짐).")
     if not registry.valid_name(proj) or not rel or sync_merge.local_only(rel) or rel.endswith(_DB_EXT):
         raise HTTPException(400, "이 파일은 동기화로 쓸 수 없습니다.")
@@ -162,7 +173,7 @@ def sync_delete_file(svc: str, proj: str, path: str, if_sha: str = "",
 
 @router.get("/api/sync/{svc}/projects/{proj}/file")
 def sync_file(svc: str, proj: str, path: str, authorization: Optional[str] = Header(default=None)):
-    _require_sync_token(svc, authorization)
+    _require_sync_token(svc, authorization, proj)
     try:
         return Response(content=pr.project_file(svc, proj, path),
                         media_type="application/octet-stream")
@@ -175,20 +186,34 @@ def sync_grants(svc: str, authorization: Optional[str] = Header(default=None),
                 db=Depends(get_db)):
     """Who may use this service on MAIN, described by account identity rather than
     row ids — the sub has its own users table, so grants only travel as
-    (username, email) pairs it can match locally."""
-    _require_sync_token(svc, authorization)
+    (username, email) pairs it can match locally.
+
+    A project's token sees who may use THAT project — a whole-service grant
+    included, but handed over as a grant on the project alone: the partner
+    holds one project, so nobody arrives there with rights to the rest."""
+    kind, names = _scope(svc, authorization)
     rows = (db.query(models.ServicePermission, models.User)
             .filter(models.ServicePermission.service_name == svc,
                     models.User.id == models.ServicePermission.user_id)
             .all())
-    return {"service": svc, "grants": [
-        {"username": u.username, "email": u.email, "project": p.project or "",
-         "is_admin": bool(p.is_admin)} for p, u in rows]}
+    one = next(iter(names)) if kind == "project" else None
+    out = []
+    for p, u in rows:
+        proj = p.project or ""
+        if one is not None:
+            if proj not in ("", one):
+                continue
+            proj = one
+        elif proj and proj in names:              # linked on its own: not this token's
+            continue
+        out.append({"username": u.username, "email": u.email, "project": proj,
+                    "is_admin": bool(p.is_admin)})
+    return {"service": svc, "grants": out}
 
 
 @router.get("/api/sync/{svc}/projects/{proj}/export")
 def sync_export(svc: str, proj: str, authorization: Optional[str] = Header(default=None)):
-    _require_sync_token(svc, authorization)
+    _require_sync_token(svc, authorization, proj)
     try:
         data = pr.export_project(svc, proj)
     except FileNotFoundError:
@@ -209,8 +234,8 @@ class SyncCfg(BaseModel):
     accept_push: bool = False       # main: let paired subs write back
 
 
-def _public(svc: str) -> dict:
-    cfg = sync.read(svc)
+def _public(svc: str, proj: str = "") -> dict:
+    cfg = sync.read(svc, proj)
     return {"role": cfg.get("role", ""), "main_url": cfg.get("main_url"),
             "token": cfg.get("token"), "read_only": cfg.get("read_only", True),
             "last_sync": cfg.get("last_sync"), "last_error": cfg.get("last_error"),
@@ -219,20 +244,22 @@ def _public(svc: str) -> dict:
             "two_way": bool(cfg.get("two_way")),
             "projects": list(cfg.get("projects") or []),
             "accept_push": bool(cfg.get("accept_push")),
+            "project": proj or None,
+            # Service level: the projects that travel by a link of their own.
+            "own_links": [] if proj else sync.own_links(svc),
             # what a sub operator must paste into their portal
             "pair_url": config.BASE_URL if cfg.get("role") == "main" else None}
 
 
-@router.get("/api/admin/services/{svc}/sync")
-def get_sync(svc: str, _: models.User = Depends(require_portal_admin)):
-    return _public(svc)
+def _check_project(svc: str, proj: str) -> None:
+    if not registry.valid_name(proj) or not pr.project_dir(svc, proj).is_dir():
+        raise HTTPException(404, f"'{proj}' 없음")
 
 
-@router.put("/api/admin/services/{svc}/sync")
-def put_sync(svc: str, body: SyncCfg, _: models.User = Depends(require_portal_admin)):
+def _put(svc: str, body: SyncCfg, proj: str = "") -> dict:
     if body.role not in ("", "main", "sub"):
         raise HTTPException(400, "role 은 '', 'main', 'sub' 중 하나여야 합니다.")
-    cfg = sync.read(svc)
+    cfg = sync.read(svc, proj)
     cfg["role"] = body.role
     if body.role == "main":
         # Keep an existing token so paired subs don't break on an unrelated edit.
@@ -249,21 +276,67 @@ def put_sync(svc: str, body: SyncCfg, _: models.User = Depends(require_portal_ad
         cfg["interval_min"] = max(0, min(1440, int(body.interval_min or 0)))
         cfg["live"] = bool(body.live)
         cfg["two_way"] = bool(body.two_way)
-        cfg["projects"] = sorted({p for p in body.projects if registry.valid_name(p)})
+        cfg["projects"] = [] if proj else sorted({p for p in body.projects if registry.valid_name(p)})
         if not cfg["token"]:
             raise HTTPException(400, "main 에서 발급한 토큰을 붙여넣으세요.")
     else:
         cfg = {"role": ""}
-    sync.write(svc, cfg)
+    sync.write(svc, cfg, proj)
+    return _public(svc, proj)
+
+
+def _rotate(svc: str, proj: str = "") -> dict:
+    """New token on the main — every paired sub must be re-paired."""
+    cfg = sync.read(svc, proj)
+    if cfg.get("role") != "main":
+        raise HTTPException(409, "main 으로 설정된 것만 토큰을 발급합니다.")
+    cfg["token"] = sync.new_token()
+    sync.write(svc, cfg, proj)
+    return _public(svc, proj)
+
+
+@router.get("/api/admin/services/{svc}/sync")
+def get_sync(svc: str, _: models.User = Depends(require_portal_admin)):
     return _public(svc)
+
+
+@router.put("/api/admin/services/{svc}/sync")
+def put_sync(svc: str, body: SyncCfg, _: models.User = Depends(require_portal_admin)):
+    return _put(svc, body)
+
+
+@router.post("/api/admin/services/{svc}/sync/rotate")
+def rotate_token(svc: str, _: models.User = Depends(require_portal_admin)):
+    return _rotate(svc)
+
+
+# One project, linked on its own: the same settings, its own partner and token.
+@router.get("/api/admin/services/{svc}/projects/{proj}/sync")
+def get_project_sync(svc: str, proj: str, _: models.User = Depends(require_portal_admin)):
+    _check_project(svc, proj)
+    return _public(svc, proj)
+
+
+@router.put("/api/admin/services/{svc}/projects/{proj}/sync")
+def put_project_sync(svc: str, proj: str, body: SyncCfg, _: models.User = Depends(require_portal_admin)):
+    _check_project(svc, proj)
+    return _put(svc, body, proj)
+
+
+@router.post("/api/admin/services/{svc}/projects/{proj}/sync/rotate")
+def rotate_project_token(svc: str, proj: str, _: models.User = Depends(require_portal_admin)):
+    _check_project(svc, proj)
+    return _rotate(svc, proj)
 
 
 @router.get("/api/admin/services/{svc}/sync/projects")
 def sync_project_choices(svc: str, _: models.User = Depends(require_portal_admin)):
-    """What a sub can choose from: main's projects and this server's own."""
+    """What the service's sub link can choose from: main's projects and this
+    server's own — minus those linked on their own."""
     import json as _json
     cfg = sync.read(svc)
-    local = [p["name"] for p in pr.list_projects(svc)]
+    own = set(sync.own_links(svc))
+    local = [p["name"] for p in pr.list_projects(svc) if p["name"] not in own]
     main, err = [], None
     if cfg.get("role") == "sub" and cfg.get("main_url") and cfg.get("token"):
         try:
@@ -271,18 +344,7 @@ def sync_project_choices(svc: str, _: models.User = Depends(require_portal_admin
                                     cfg["token"], timeout=10)).get("projects") or []
         except Exception as e:                   # noqa: BLE001
             err = f"main 연결 실패: {e}"
-    return {"main": main, "local": local, "error": err}
-
-
-@router.post("/api/admin/services/{svc}/sync/rotate")
-def rotate_token(svc: str, _: models.User = Depends(require_portal_admin)):
-    """New token on the main — every paired sub must be re-paired."""
-    cfg = sync.read(svc)
-    if cfg.get("role") != "main":
-        raise HTTPException(409, "main 으로 설정된 서비스만 토큰을 발급합니다.")
-    cfg["token"] = sync.new_token()
-    sync.write(svc, cfg)
-    return _public(svc)
+    return {"main": [p for p in main if p not in own], "local": local, "error": err}
 
 
 def _get(url: str, token: str, timeout: int = 60) -> bytes:
@@ -480,19 +542,23 @@ _seen: dict = {}
 _seen_local: dict = {}
 
 
-def _run_pull(job_id: str, svc: str, only: Optional[dict] = None) -> None:
-    """Pull every project — or, from a live tick, just the ones in `only`
+def _run_pull(job_id: str, svc: str, only: Optional[dict] = None, key: str = "") -> None:
+    """Sync every project of one link — the service's (key '') or one project's
+    own (key = that project) — or, from a live tick, just the ones in `only`
     ({project: the stamp main reported}), recording each stamp once it lands."""
     import json as _json
-    cfg = sync.read(svc)
+    cfg = sync.read(svc, key)
     base, token = (cfg.get("main_url") or "").rstrip("/"), cfg.get("token") or ""
+    own = set(sync.own_links(svc))
     _set(job_id, status="running")
     try:
         if only is not None:
             names = sorted(only)
+        elif key:
+            names = [key]                       # a project's link is that project
         else:
             listing = _json.loads(_get(f"{base}/api/sync/{svc}/projects", token))
-            names = listing.get("projects") or []
+            names = [n for n in listing.get("projects") or [] if n not in own]
     except urllib.error.HTTPError as e:
         return _set(job_id, status="error",
                     error=f"main 연결 실패 (HTTP {e.code}) — 주소/토큰을 확인하세요.")
@@ -500,9 +566,9 @@ def _run_pull(job_id: str, svc: str, only: Optional[dict] = None) -> None:
         return _set(job_id, status="error", error=f"main 연결 실패: {e}")
 
     _log(job_id, f"· main 프로젝트 {len(names)}개: {', '.join(names) or '(없음)'}")
-    local = {p["name"] for p in pr.list_projects(svc)}
+    local = {p["name"] for p in pr.list_projects(svc)} - (set() if key else own)
     two_way = bool(cfg.get("two_way"))
-    if two_way and only is None:
+    if two_way and only is None and not key:
         names = sorted(set(names) | local)     # a project made here goes to main too
     picked = set(cfg.get("projects") or [])
     if picked:                                 # the operator chose which ones travel
@@ -515,65 +581,77 @@ def _run_pull(job_id: str, svc: str, only: Optional[dict] = None) -> None:
             else:
                 moved += _pull_project(job_id, base, token, svc, n)
             ok += 1
-            if only is not None:
+            if only is not None and only[n] is not None:
                 _seen.setdefault(svc, {})[n] = only[n]
             if two_way:
                 _seen_local.setdefault(svc, {})[n] = pr.project_stamp(svc, n)
         except Exception as e:                   # noqa: BLE001
             _log(job_id, f"  ! {n} 실패: {e}")
-    extra = sorted(local - set(names)) if only is None and not two_way else []
+    extra = sorted(local - set(names)) if only is None and not two_way and not key else []
     if extra:
         _log(job_id, f"· main 에 없는 로컬 프로젝트는 그대로 둡니다: {', '.join(extra)}")
 
     from datetime import datetime
-    cfg = sync.read(svc)
-    cfg["last_sync"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    cfg["last_error"] = None if ok == len(names) else f"{len(names) - ok}개 실패"
-    sync.write(svc, cfg)
+    cfg = sync.read(svc, key)
+    if cfg.get("role"):                         # not turned off meanwhile
+        cfg["last_sync"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        cfg["last_error"] = None if ok == len(names) else f"{len(names) - ok}개 실패"
+        sync.write(svc, cfg, key)
     _log(job_id, f"✓ 동기화 완료 — {ok}/{len(names)} 프로젝트, "
                  + (f"파일 {moved}개" if two_way else f"전송 {moved // 1024} KB"))
     _set(job_id, status="done" if ok == len(names) else "error",
          error=None if ok == len(names) else f"{len(names) - ok}개 프로젝트 실패")
 
 
-def _start_pull(svc: str, only: Optional[dict] = None) -> Optional[str]:
-    """Kick off a pull unless one is already running for this service. Returns the
-    job id, or None when a sync is in flight (a slow pull must never stack up
-    behind the scheduler's ticks)."""
+def _start_pull(svc: str, only: Optional[dict] = None, key: str = "") -> Optional[str]:
+    """Kick off a sync of one link unless one is already running for it. Returns
+    the job id, or None when a sync is in flight (a slow pull must never stack
+    up behind the scheduler's ticks)."""
+    busy = f"{svc}/{key}"
     with _lock:
-        if svc in _busy:
+        if busy in _busy:
             return None
-        _busy.add(svc)
+        _busy.add(busy)
         job_id = uuid.uuid4().hex[:12]
         _jobs[job_id] = {"status": "queued", "log": [], "error": None, "name": svc}
 
     def run():
         try:
-            _run_pull(job_id, svc, only)
+            _run_pull(job_id, svc, only, key)
         finally:
             with _lock:
-                _busy.discard(svc)
+                _busy.discard(busy)
 
     threading.Thread(target=run, daemon=True).start()
     return job_id
 
 
-@router.post("/api/admin/services/{svc}/sync/run", status_code=202)
-def run_sync(svc: str, _: models.User = Depends(require_portal_admin)):
-    cfg = sync.read(svc)
+def _run(svc: str, key: str = "") -> dict:
+    cfg = sync.read(svc, key)
     if cfg.get("role") != "sub":
-        raise HTTPException(409, "sub 로 설정된 서비스만 동기화를 받습니다.")
+        raise HTTPException(409, "sub 로 설정된 것만 동기화를 받습니다.")
     if not cfg.get("main_url") or not cfg.get("token"):
         raise HTTPException(400, "main 주소와 토큰을 먼저 설정하세요.")
-    job_id = _start_pull(svc)
+    job_id = _start_pull(svc, key=key)
     if not job_id:
         raise HTTPException(409, "이미 동기화가 진행 중입니다.")
     return {"job_id": job_id, "name": svc}
 
 
+@router.post("/api/admin/services/{svc}/sync/run", status_code=202)
+def run_sync(svc: str, _: models.User = Depends(require_portal_admin)):
+    return _run(svc)
+
+
+@router.post("/api/admin/services/{svc}/projects/{proj}/sync/run", status_code=202)
+def run_project_sync(svc: str, proj: str, _: models.User = Depends(require_portal_admin)):
+    _check_project(svc, proj)
+    return _run(svc, proj)
+
+
 # ── permission transfer (explicit, never part of a data sync) ─────────────────
 @router.post("/api/admin/services/{svc}/sync/grants")
-def import_grants(svc: str, apply: bool = False,
+def import_grants(svc: str, apply: bool = False, project: str = "",
                   _: models.User = Depends(require_portal_admin), db=Depends(get_db)):
     """Copy MAIN's grants for this service onto LOCAL accounts of the same person.
 
@@ -586,7 +664,9 @@ def import_grants(svc: str, apply: bool = False,
     spread across servers as a side effect of a data sync.
     """
     import json as _json
-    cfg = sync.read(svc)
+    if project:
+        _check_project(svc, project)
+    cfg = sync.read(svc, project)
     if cfg.get("role") != "sub" or not (cfg.get("main_url") and cfg.get("token")):
         raise HTTPException(409, "sub 로 연결된 서비스에서만 권한을 가져올 수 있습니다.")
     try:
@@ -634,8 +714,8 @@ LIVE_S = 3                       # how often a live mirror asks main what change
 _DB_EXT = (".db", ".sqlite", ".sqlite3")
 
 
-def _due(svc: str) -> bool:
-    cfg = sync.read(svc)
+def _due(svc: str, key: str = "") -> bool:
+    cfg = sync.read(svc, key)
     if cfg.get("role") != "sub" or not (cfg.get("main_url") and cfg.get("token")):
         return False
     iv = int(cfg.get("interval_min") or 0)
@@ -652,11 +732,11 @@ def _due(svc: str) -> bool:
     return datetime.utcnow() - prev >= timedelta(minutes=iv)
 
 
-def _live_tick(svc: str) -> None:
+def _live_tick(svc: str, key: str = "") -> None:
     """A live mirror: ask main for its stamps (stat-only on main's side) and
     pull exactly the projects whose stamp moved since the last one brought in."""
     import json as _json
-    cfg = sync.read(svc)
+    cfg = sync.read(svc, key)
     base, token = (cfg.get("main_url") or "").rstrip("/"), cfg.get("token") or ""
     try:
         stamps = _json.loads(_get(f"{base}/api/sync/{svc}/stamps", token, timeout=10))["stamps"]
@@ -667,8 +747,9 @@ def _live_tick(svc: str) -> None:
     if cfg.get("two_way"):
         # An edit here is a reason to sync as much as one there.
         mine = _seen_local.get(svc, {})
-        for p in pr.list_projects(svc):
-            n = p["name"]
+        own = set(sync.own_links(svc))
+        ours = [key] if key else [p["name"] for p in pr.list_projects(svc) if p["name"] not in own]
+        for n in ours:
             try:
                 if mine.get(n) != pr.project_stamp(svc, n):
                     moved.setdefault(n, stamps.get(n))
@@ -678,11 +759,11 @@ def _live_tick(svc: str) -> None:
     if picked:
         moved = {p: st for p, st in moved.items() if p in picked}
     if moved:
-        _start_pull(svc, moved)                   # None while a pull is in flight
+        _start_pull(svc, moved, key)              # None while a pull is in flight
 
 
-def _is_live(svc: str) -> bool:
-    cfg = sync.read(svc)
+def _is_live(svc: str, key: str = "") -> bool:
+    cfg = sync.read(svc, key)
     return bool(cfg.get("role") == "sub" and cfg.get("live")
                 and cfg.get("main_url") and cfg.get("token"))
 
@@ -694,15 +775,17 @@ def _scheduler() -> None:
         time.sleep(LIVE_S)
         waited += LIVE_S
         try:
-            names = registry.list_service_names()
-            for svc in names:
-                if _is_live(svc):
-                    _live_tick(svc)
+            # Every link: the service's, and each project linked on its own.
+            links = [(svc, key) for svc in registry.list_service_names()
+                     for key in [""] + sync.own_links(svc)]
+            for svc, key in links:
+                if _is_live(svc, key):
+                    _live_tick(svc, key)
             if waited >= TICK_S:                  # minute-scale mirrors, as before
                 waited = 0
-                for svc in names:
-                    if not _is_live(svc) and _due(svc):
-                        _start_pull(svc)          # None if one is still running
+                for svc, key in links:
+                    if not _is_live(svc, key) and _due(svc, key):
+                        _start_pull(svc, key=key)  # None if one is still running
         except Exception as e:                    # noqa: BLE001 — a bad service must not kill the loop
             print(f"[sync] scheduler tick failed: {e}", flush=True)
 

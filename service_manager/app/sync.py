@@ -11,7 +11,10 @@ Only project data moves. Accounts, permissions and manager rights stay per-serve
 by design: each portal decides who may see its copy, and a compromised sub can
 never touch main's users.
 
-Config lives next to the service's manifest: data/<svc>/sync.json.
+Config lives next to the service's manifest: data/<svc>/sync.json for the
+service as a whole, and data/<svc>/sync/<project>.json for a project that is
+linked on its own (its own role, partner and token). A project with its own
+link is left out of the service's: each project travels by exactly one link.
 """
 from __future__ import annotations
 
@@ -25,23 +28,41 @@ from . import registry
 FILE = "sync.json"
 
 
-def path(svc: str) -> Path:
-    return registry.service_dir(svc) / FILE
+def path(svc: str, proj: str = "") -> Path:
+    return registry.service_dir(svc) / ("sync" / Path(f"{proj}.json") if proj else Path(FILE))
 
 
-def read(svc: str) -> dict:
+def read(svc: str, proj: str = "") -> dict:
     try:
-        d = json.loads(path(svc).read_text(encoding="utf-8"))
+        d = json.loads(path(svc, proj).read_text(encoding="utf-8"))
         return d if isinstance(d, dict) else {}
     except Exception:                            # noqa: BLE001 — absent/corrupt = off
         return {}
 
 
-def write(svc: str, cfg: dict) -> dict:
-    p = path(svc)
+def write(svc: str, cfg: dict, proj: str = "") -> dict:
+    p = path(svc, proj)
+    if proj and not cfg.get("role"):
+        p.unlink(missing_ok=True)                # off: the service's link applies again
+        return cfg
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
     return cfg
+
+
+def own_links(svc: str) -> list[str]:
+    """Projects linked on their own."""
+    d = registry.service_dir(svc) / "sync"
+    return sorted(f.stem for f in d.glob("*.json") if read(svc, f.stem).get("role")) if d.is_dir() else []
+
+
+def effective(svc: str, proj: str = "") -> dict:
+    """The link a project travels by: its own, else the service's."""
+    if proj:
+        own = read(svc, proj)
+        if own.get("role"):
+            return own
+    return read(svc)
 
 
 def role(svc: str) -> str:
@@ -50,17 +71,17 @@ def role(svc: str) -> str:
     return r if r in ("main", "sub") else ""
 
 
-def is_read_only(svc: str) -> bool:
+def is_read_only(svc: str, proj: str = "") -> bool:
     """A mirrored copy is read-only unless the operator explicitly unlocks it.
     A two-way sub is not a mirror: what is written here travels to main."""
-    cfg = read(svc)
+    cfg = effective(svc, proj)
     return cfg.get("role") == "sub" and not cfg.get("two_way") and cfg.get("read_only", True)
 
 
-def accepts_push(svc: str) -> bool:
+def accepts_push(svc: str, proj: str) -> bool:
     """Main lets its paired subs write back (two-way) only when its own admin
     said so — handing out a token alone does not."""
-    cfg = read(svc)
+    cfg = effective(svc, proj)
     return cfg.get("role") == "main" and bool(cfg.get("accept_push"))
 
 
@@ -68,8 +89,31 @@ def new_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def check_token(svc: str, presented: Optional[str]) -> bool:
-    """Constant-time-ish check that a caller may pull this service's snapshots."""
-    cfg = read(svc)
+def _match(cfg: dict, presented: str) -> bool:
     tok = cfg.get("token") or ""
-    return bool(tok) and cfg.get("role") == "main" and secrets.compare_digest(tok, presented or "")
+    return bool(tok) and cfg.get("role") == "main" and secrets.compare_digest(tok, presented)
+
+
+def scope(svc: str, presented: Optional[str]) -> Optional[tuple]:
+    """What a sync token opens: ("service", projects linked on their own — which
+    it does NOT open), ("project", {that project}), or None.
+
+    The service's token opens every project without a link of its own (one
+    pushed by a two-way sub that main has not seen yet included). A project's
+    token opens that project alone — a partner given one project cannot even
+    list the others."""
+    presented = presented or ""
+    if not presented:
+        return None
+    own = set(own_links(svc))
+    for p in own:
+        if _match(read(svc, p), presented):
+            return ("project", {p})
+    if _match(read(svc), presented):
+        return ("service", own)
+    return None
+
+
+def allows(sc: tuple, proj: str) -> bool:
+    kind, names = sc
+    return proj in names if kind == "project" else proj not in names

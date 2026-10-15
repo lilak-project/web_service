@@ -284,6 +284,15 @@ manager)는 양쪽에서 고쳐도 됩니다.
   노트·첨부는 main 것을 그 이름에 두고 sub 것을 `이름 (충돌 날짜)` 사본으로 남깁니다.
 - 각 서버의 장부(`data/_local.json`, `.history/`, `backups/`, 옛 `data.json*`)는 오가지 않습니다.
 - sub의 `프로젝트` 체크로 **일부 프로젝트만** 동기화할 수 있습니다(아무것도 고르지 않으면 전부). 미러·양방향 모두 같습니다.
+
+**프로젝트별 연결** — 관리 모드의 프로젝트 줄마다 `Sync` 버튼이 있습니다. 거기서 켜면 그 프로젝트는
+서비스 설정 대신 **자기 연결**(역할·상대 서버·토큰·방향)을 씁니다(`data/<svc>/sync/<프로젝트>.json`).
+
+- main에서 프로젝트 하나에 내준 토큰은 **그 프로젝트만** 엽니다 — 목록에도 다른 프로젝트가 안 보입니다.
+  서비스 토큰도 따로 연결된 프로젝트는 열지 못합니다.
+- 그래서 프로젝트마다 원본이 다른 서버여도 되고(`notes`는 여기가 main, `lab`은 저쪽이 main), 상대 서버가 달라도 됩니다.
+- sub에서 받으려면 그 서버에 **같은 이름의 빈 프로젝트를 먼저 만든 뒤** 그 줄의 `Sync`에서 연결합니다.
+- 읽기 전용 잠금도 프로젝트별입니다. 끄면(`off`) 그 프로젝트는 다시 서비스 연결을 따릅니다.
 - **데이터베이스를 쓰는 서비스(elog)는 양방향이 안 됩니다** — 그 프로젝트는 건너뜁니다.
 
 **English** — portals on different servers can mirror a service's project data:
@@ -322,5 +331,14 @@ on one side follows that side and only a file changed on both is merged — reco
 attachments by keeping main's at the name and the sub's as a `name (충돌 date)` copy.
 Each server's bookkeeping (`data/_local.json`, `.history/`, `backups/`, old
 `data.json*`) never moves. Ticking `Projects` on the sub syncs only those (none ticked = every
-project), one-way or two-way. **Services on a database (elog) cannot go two-way** — their
+project), one-way or two-way.
+
+**Per-project links** — each project row in manage mode has a `Sync` button: turned
+on, that project uses its own link (role, partner, token, direction) instead of the
+service's (`data/<svc>/sync/<project>.json`). A project's token opens that project
+alone — the others are not even listed — and the service's token no longer opens
+it, so projects can have different sources and different partners. To receive one
+on a sub, create an empty project of the same name there first, then link it from
+its row. The read-only lock is per project too; `off` hands it back to the
+service's link. **Services on a database (elog) cannot go two-way** — their
 projects are skipped.

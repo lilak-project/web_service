@@ -22,7 +22,7 @@ from ..proxy_util import login_redirect_or_401, service_facts, stream_proxy
 router = APIRouter()
 
 
-def _block_if_mirror(request: Request, svc: str) -> None:
+def _block_if_mirror(request: Request, svc: str, proj: str = "") -> None:
     """A synced sub holds a MIRROR: anything written here is silently discarded by
     the next pull, so refuse writes outright rather than lose the user's work.
     Method-based because the portal proxies opaque services — GET/HEAD/OPTIONS read,
@@ -37,7 +37,7 @@ def _block_if_mirror(request: Request, svc: str) -> None:
     if getattr(request, "method", None) in ("GET", "HEAD", "OPTIONS"):
         return
     from .. import sync
-    if sync.is_read_only(svc):
+    if sync.is_read_only(svc, proj):            # a project may be linked on its own
         raise HTTPException(403, "이 서비스는 다른 서버(main)를 미러링 중이라 읽기 전용입니다.")
 
 

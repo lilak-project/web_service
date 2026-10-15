@@ -5,6 +5,7 @@ import { useLang } from '../../context/LangContext'
 import { Panel, Field, FieldActions, Row, Pill, fieldInput, fieldMuted } from './Field'
 import { notify } from './settingsMsg'
 import LogBox from './LogBox'
+import SyncPanel from './SyncPanel'
 import { downloadFrom } from './download'
 
 /**
@@ -29,6 +30,13 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   // The project whose log is open under its row, "" = none. One at a time:
   // two logs open at once is two screens of text nobody reads together.
   const [logOf, setLogOf] = useState('')
+  // The project whose own sync link is open under its row, and the projects
+  // that have one (each travels by its own partner and token, not the service's).
+  const [syncOf, setSyncOf] = useState('')
+  const [linked, setLinked] = useState([])
+  const loadLinked = () => launcher.get(`/admin/services/${svc}/sync`)
+    .then((r) => setLinked(r.data.own_links || [])).catch(() => {})
+  useEffect(() => { if (canManage && manage) loadLinked() }, [canManage, manage])  // eslint-disable-line react-hooks/exhaustive-deps
   // Which project the service's own card opens, "" = none (the list is shown).
   const [entry, setEntry] = useState(service.entry_project || '')
 
@@ -188,6 +196,13 @@ export default function ServiceProjects({ service, canManage, manage = false, on
                   onClick={() => exportProject(p.name)}>{t('portal_proj_export')}</Button>
               )}
               {canManage && manage && (
+                <Button variant={syncOf === p.name ? 'primary' : 'secondary'}
+                  title="이 프로젝트만 따로 다른 서버와 동기화"
+                  onClick={() => { setSyncOf((x) => (x === p.name ? '' : p.name)); loadLinked() }}>
+                  Sync{linked.includes(p.name) ? ' ●' : ''}
+                </Button>
+              )}
+              {canManage && manage && (
                 <Button variant={logOf === p.name ? 'primary' : 'secondary'}
                   title={t('portal_proj_log_hint')}
                   onClick={() => setLogOf((x) => (x === p.name ? '' : p.name))}>
@@ -200,6 +215,11 @@ export default function ServiceProjects({ service, canManage, manage = false, on
               )}
             </Row>
             {logOf === p.name && <LogBox url={`/services/${svc}/projects/${p.name}/log`} />}
+            {syncOf === p.name && (
+              <div style={{ padding: '0 14px 12px' }}>
+                <SyncPanel service={service} project={p.name} onChanged={loadLinked} />
+              </div>
+            )}
             </Fragment>
           )
         })}

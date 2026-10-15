@@ -21,10 +21,12 @@ const lbl = { fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)',
 const row = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
 const btn = { height: 32, borderRadius: 8, padding: '0 14px', fontSize: 'var(--fs-small, 12px)', justifyContent: 'center', flexShrink: 0 }
 
-export default function SyncPanel({ service }) {
+export default function SyncPanel({ service, project = '', onChanged }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const svc = service.name
+  // One project linked on its own, or the service as a whole.
+  const base = project ? `/admin/services/${svc}/projects/${project}/sync` : `/admin/services/${svc}/sync`
   const [cfg, setCfg] = useState(null)
   const [form, setForm] = useState({ main_url: '', token: '', read_only: true, interval_min: 0, live: false, two_way: false, projects: [] })
   const [msg, setMsg] = useState('')
@@ -34,12 +36,12 @@ export default function SyncPanel({ service }) {
 
   async function load() {
     try {
-      const { data } = await launcher.get(`/admin/services/${svc}/sync`)
+      const { data } = await launcher.get(base)
       setCfg(data)
       setForm((f) => ({ main_url: data.main_url || f.main_url, token: data.token || f.token,
         read_only: data.read_only !== false, interval_min: data.interval_min ?? 0, live: !!data.live,
         two_way: !!data.two_way, projects: data.projects || [] }))
-      if (data.role === 'sub') loadChoices()
+      if (data.role === 'sub' && !project) loadChoices()
     } catch { /* not configured yet */ }
   }
   // Which projects there are to choose from: main's and this server's.
@@ -59,22 +61,23 @@ export default function SyncPanel({ service }) {
             read_only: form.read_only, interval_min: Number(form.interval_min) || 0, live: !!form.live,
             two_way: !!form.two_way, projects: form.projects }
         : role === 'main' ? { role, accept_push: !!cfg?.accept_push, ...extra } : { role }
-      const { data } = await launcher.put(`/admin/services/${svc}/sync`, body)
+      const { data } = await launcher.put(base, body)
       setCfg(data)
       setMsg(L('저장됨', 'saved'))
-      if (data.role === 'sub') loadChoices()
+      if (data.role === 'sub' && !project) loadChoices()
+      onChanged?.()
     } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
 
   async function rotate() {
-    try { setCfg((await launcher.post(`/admin/services/${svc}/sync/rotate`)).data); setMsg(L('토큰 재발급됨 — sub 를 다시 연결하세요', 'token rotated — re-pair the sub')) }
+    try { setCfg((await launcher.post(`${base}/rotate`)).data); setMsg(L('토큰 재발급됨 — sub 를 다시 연결하세요', 'token rotated — re-pair the sub')) }
     catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
 
   async function runNow() {
     setMsg('')
     try {
-      const { data } = await launcher.post(`/admin/services/${svc}/sync/run`)
+      const { data } = await launcher.post(`${base}/run`)
       setJob({ status: 'queued', log: [] })
       clearInterval(poll.current)
       poll.current = setInterval(async () => {
@@ -90,7 +93,7 @@ export default function SyncPanel({ service }) {
   async function loadGrants(apply) {
     setMsg('')
     try {
-      const { data } = await launcher.post(`/admin/services/${svc}/sync/grants?apply=${apply ? 'true' : 'false'}`)
+      const { data } = await launcher.post(`/admin/services/${svc}/sync/grants?apply=${apply ? 'true' : 'false'}${project ? `&project=${project}` : ''}`)
       setGrants(data)
       if (apply) setMsg(L(`권한 ${data.applied}건 적용됨`, `${data.applied} grant(s) applied`))
     } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
@@ -111,6 +114,16 @@ export default function SyncPanel({ service }) {
         {cfg?.last_sync && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
           {L('마지막', 'last')}: {cfg.last_sync}
         </span>}
+      </div>
+      <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
+        {project
+          ? L(`프로젝트 ${project} 만의 연결입니다. 켜면 서비스 전체 설정 대신 이것을 씁니다 — 상대 서버·토큰·방향이 따로입니다.`,
+            `A link for project ${project} alone. When on, it replaces the service's — its own partner, token and direction.`)
+          : (cfg?.own_links?.length
+            ? L(`따로 연결된 프로젝트(${cfg.own_links.join(', ')})는 이 설정에서 빠집니다.`,
+              `Projects linked on their own (${cfg.own_links.join(', ')}) are left out of this one.`)
+            : L('서비스의 모든 프로젝트에 적용됩니다. 프로젝트마다 따로 하려면 아래 프로젝트 줄의 Sync 를 누르세요.',
+              'Applies to every project. To link one project on its own, press Sync on its row below.'))}
       </div>
 
       {role === 'main' && (
@@ -171,7 +184,7 @@ export default function SyncPanel({ service }) {
           </div>
           {/* None ticked = every project, as before. Main's and this server's
               are both offered: two-way sends a project made here too. */}
-          {choices && (
+          {choices && !project && (
             <div style={{ ...row, alignItems: 'flex-start' }}>
               <span style={lbl}>{L('프로젝트', 'Projects')}</span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', flex: 1 }}>
