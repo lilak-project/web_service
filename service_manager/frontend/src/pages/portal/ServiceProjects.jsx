@@ -5,6 +5,7 @@ import { useLang } from '../../context/LangContext'
 import { Panel, Field, FieldActions, Row, Pill, fieldInput, fieldMuted } from './Field'
 import { notify } from './settingsMsg'
 import LogBox from './LogBox'
+import { downloadFrom } from './download'
 
 /**
  * ServiceProjects — INLINE project panel for a multi-project service, expanded
@@ -73,6 +74,13 @@ export default function ServiceProjects({ service, canManage, manage = false, on
       setEntry(want)
       onChanged?.()
     } catch (e) { setErr(e?.response?.data?.detail || t('portal_entry_fail')) }
+    finally { setBusy('') }
+  }
+  /** The whole project as a .zip — what Import on another portal takes back. */
+  async function exportProject(proj) {
+    setBusy(proj); setErr('')
+    try { await downloadFrom(`/services/${svc}/projects/${proj}/export`, `${svc}-${proj}.zip`) }
+    catch (e) { setErr(e?.response?.data?.detail || t('portal_proj_export_fail')) }
     finally { setBusy('') }
   }
   async function requestAccess(proj) {
@@ -174,6 +182,10 @@ export default function ServiceProjects({ service, canManage, manage = false, on
                   title={t('portal_entry_hint')} onClick={() => setEntryProject(p.name)}>
                   {entry === p.name ? `${t('portal_entry_on')} · ${t('portal_entry_clear')}` : t('portal_entry_set')}
                 </Button>
+              )}
+              {canManage && manage && canIE && (
+                <Button variant="secondary" disabled={busy === p.name} title={t('portal_proj_export_hint')}
+                  onClick={() => exportProject(p.name)}>{t('portal_proj_export')}</Button>
               )}
               {canManage && manage && (
                 <Button variant={logOf === p.name ? 'primary' : 'secondary'}

@@ -5,6 +5,7 @@ import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_WEIGHT, ICON_CHOICES } from './IconPick'
 import SyncPanel from './SyncPanel'
 import LogBox from './LogBox'
+import { downloadFrom } from './download'
 import { Panel, Field, FieldActions, Pill, fieldInput, fieldMuted, fieldChip } from './Field'
 import { notify } from './settingsMsg'
 
@@ -296,6 +297,24 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
           multi-project service runs per project, so its logs are on the
           project rows instead; an external service runs elsewhere and has
           no file here. */}
+      {/* A single managed service's whole data folder, as the .zip that
+          "import" on another portal turns back into this service. A
+          multi-project service exports per project, on its project rows. */}
+      {!isBuiltin && !service.multi_project && service.mode === 'managed' && (
+        <Panel title={L('데이터 옮기기', 'Move the data')}>
+          <Field label={L('내보내기', 'Export')}>
+            {L('이 서비스의 데이터 폴더 전체를 .zip 으로 받습니다. 다른 포털에서 가져오면 그대로 옮겨집니다.',
+              'The service\'s whole data folder as a .zip; importing it on another portal brings it across as is.')}
+          </Field>
+          <FieldActions>
+            <Button variant="secondary" onClick={() => downloadFrom(`/projects/${service.name}/export`, `${service.name}.zip`)
+              .catch((e) => notify(e?.response?.data?.detail || L('내보내지 못했습니다.', 'Export failed.'), 'bad'))}>
+              {L('.zip 받기', 'Download .zip')}
+            </Button>
+          </FieldActions>
+        </Panel>
+      )}
+
       {!isBuiltin && !service.multi_project && service.mode === 'managed' && (
         <Panel bare fold open={false} title={L('실행 로그', 'Run log')} hint="service.log">
           <LogBox url={`/admin/services/${service.name}/log`} />
