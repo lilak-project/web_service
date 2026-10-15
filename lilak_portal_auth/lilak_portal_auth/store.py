@@ -53,23 +53,77 @@ def atomic_write(path: Path, text: str) -> None:
 
 
 class Document:
-    """The project's document: whole, versioned, one writer at a time.
+    """The project's document — one FILE PER RECORD on disk, one document over the wire.
 
-    `keys` are the lists the server owns; a key named "settings" is a dict.
-    Anything else a client sends is ignored — per-user state stays in the
+    `keys` are the collections the server owns; a key named "settings" is a
+    dict. Anything else a client sends is ignored — per-user state stays in the
     browser and must not be clobbered by someone else's save.
+
+    On disk, next to where data.json used to be:
+
+        data/
+          _local.json            version, who saved last, per-record versions
+                                 — this server's bookkeeping, never synced
+          settings.json
+          <key>/<id>.json        one record (pretty, keys sorted: same content,
+                                 same bytes — so a sync sees no false change)
+          <key>/_order.json      the collection's order, by id
+
+    Why: the unit of storage is now the unit of editing. A save writes only the
+    records it changed, so two people editing different records — on this
+    server, or later on two servers being synced — do not collide; only two
+    edits of the SAME record are a conflict, and only those are refused.
+
+    Over the wire nothing changed: GET /api/data still answers one document,
+    PUT /api/data still takes one (with baseVersion). A data.json from before is
+    split on first read, the split is checked by re-assembling it, and the old
+    file is kept as data.json.pre-split.
     """
 
     def __init__(self, path: Path, keys: tuple, what: str = "데이터", keep_days: int = 0):
-        self.path = Path(path)
+        self.path = Path(path)                   # where the single file lived
+        self.dir = self.path.with_suffix("")     # data.json → data/
         self.keys = tuple(keys)
         self.what = what
-        # Every save replaces the whole document, so one wrong press can be the
-        # end of a list. With keep_days set, what a save replaces is kept:
-        # <name>.prev.json every time (the step back) and backups/<name>-<date>.json
-        # on the first save of each day (the copy for the mistake nobody noticed).
+        # With keep_days, what a save replaces is kept: each changed or deleted
+        # record under .history/, and the whole document once a day under
+        # backups/ (the copy for the mistake nobody noticed for a week).
         self.keep_days = keep_days
         self.lock = threading.Lock()
+        self._cache = None
+        self._stamp = None
+
+    # ── layout ────────────────────────────────────────────────────────────
+    @staticmethod
+    def _dump(obj) -> str:
+        return json.dumps(obj, ensure_ascii=False, sort_keys=True, indent=1) + "\n"
+
+    @classmethod
+    def _hash(cls, obj) -> str:
+        import hashlib
+        return hashlib.sha1(cls._dump(obj).encode()).hexdigest()
+
+    @staticmethod
+    def _at(trail: list, version: int):
+        """The hash a record had at `version`: the last entry at or before it."""
+        h = None
+        for v, hh in trail or []:
+            if int(v) <= version:
+                h = hh
+        return h
+
+    @staticmethod
+    def _fname(rid: str) -> str:
+        """A record id as a file name: kept when it is already safe (uuids
+        are), hashed otherwise — the id itself always lives inside the file."""
+        import hashlib
+        import re
+        rid = str(rid)
+        return rid if re.fullmatch(r"[A-Za-z0-9_.-]{1,120}", rid) and not rid.startswith(("_", ".")) \
+            else hashlib.sha1(rid.encode()).hexdigest()
+
+    def _rec(self, k: str, rid: str) -> Path:
+        return self.dir / k / f"{self._fname(rid)}.json"
 
     def _empty(self, k: str):
         return {} if k == "settings" else []
@@ -78,50 +132,299 @@ class Document:
         return {"version": 1, **{k: self._empty(k) for k in self.keys},
                 "updatedAt": _now(), "updatedBy": ""}
 
-    def read(self) -> dict:
-        """Current document, creating it on first use. Call under `lock`."""
-        if not self.path.exists():
-            doc = self.blank()
-            atomic_write(self.path, json.dumps(doc, ensure_ascii=False))
-            return doc
+    def _stamp_now(self):
+        """Names, sizes and mtimes — a stat walk, never a read. Changes when
+        anything does, including a file a sync brought in from elsewhere."""
+        import hashlib
+        h = hashlib.sha1()
+        for root, dirs, files in os.walk(self.dir):
+            dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+            for n in sorted(files):
+                st = os.stat(os.path.join(root, n))
+                h.update(f"{root}/{n}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
+        return h.hexdigest()
+
+    def _load(self, p: Path, default):
+        if not p.exists():
+            return default
         try:
-            doc = json.loads(self.path.read_text(encoding="utf-8"))
+            return json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             # Never hand back a broken file as "empty" — that would invite a PUT
-            # that wipes the list. Fail loudly instead.
-            raise HTTPException(500, f"{self.what} 파일을 읽을 수 없습니다.")
+            # that wipes it. Fail loudly instead.
+            raise HTTPException(500, f"{self.what} 파일을 읽을 수 없습니다: {p.name}")
+
+    # ── one document from many files ──────────────────────────────────────
+    def _assemble(self) -> dict:
+        local = self._load(self.dir / "_local.json", {})
+        doc = {"version": int(local.get("version") or 1),
+               "updatedAt": local.get("updatedAt") or _now(),
+               "updatedBy": local.get("updatedBy") or ""}
+        doc.update(self._load(self.dir / "_extra.json", {}))
         for k in self.keys:
-            doc.setdefault(k, self._empty(k))
-        doc.setdefault("version", 1)
+            if k == "settings":
+                doc[k] = self._load(self.dir / "settings.json", {})
+                continue
+            col = self.dir / k
+            recs = {}
+            if col.is_dir():
+                for f in col.glob("*.json"):
+                    if f.name == "_order.json":
+                        continue
+                    r = self._load(f, None)
+                    if isinstance(r, dict) and r.get("id") is not None:
+                        recs[str(r["id"])] = r
+            order = [str(x) for x in self._load(col / "_order.json", [])]
+            seen = set()
+            out = []
+            for rid in order:
+                if rid in recs and rid not in seen:
+                    out.append(recs[rid]); seen.add(rid)
+            # A record that arrived without a place in the order (a sync, a
+            # hand-copied file) goes at the end, in a stable order.
+            rest = sorted((r for rid, r in recs.items() if rid not in seen),
+                          key=lambda r: (str(r.get("createdAt") or ""), str(r["id"])))
+            doc[k] = out + rest
         return doc
 
-    def keep(self, old: dict) -> None:
-        """Keep the document a save is about to replace. Plain documents: to
-        restore one, stop the service and move it over the live file."""
+    def read(self) -> dict:
+        """Current document, creating (or splitting) it on first use. Call under
+        `lock`. Cached until anything in the folder changes."""
+        if not (self.dir / "_local.json").exists():
+            if self.path.exists():
+                self._split()
+            else:
+                self.dir.mkdir(parents=True, exist_ok=True)
+                atomic_write(self.dir / "_local.json", self._dump({"version": 1, "rv": {}}))
+        stamp = self._stamp_now()
+        if self._cache is None or stamp != self._stamp:
+            self._cache, self._stamp = self._assemble(), stamp
+        return json.loads(json.dumps(self._cache))   # a copy the caller may change
+
+    # ── data.json → files, once ───────────────────────────────────────────
+    def _split(self) -> None:
+        import uuid
+        try:
+            old = json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            raise HTTPException(500, f"{self.what} 파일을 읽을 수 없습니다.")
+        want = json.loads(json.dumps(old))
+        # Every record needs a name of its own on disk. Most have an id; a class
+        # keyed by its name (a journal, an affiliation) or a list that never had
+        # one (assets) gets one now — an extra field nothing reads yet.
+        for k in self.keys:
+            if k != "settings":
+                for r in want.get(k) or []:
+                    if isinstance(r, dict) and not r.get("id"):
+                        r["id"] = uuid.uuid4().hex
+        tmp = self.dir.with_name(self.dir.name + ".splitting")
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        tmp.mkdir(parents=True)
+        version = int(want.get("version") or 1)
+        rv, rh = {}, {}
+        extra = {key: v for key, v in want.items()
+                 if key not in self.keys and key not in ("version", "updatedAt", "updatedBy")}
+        if extra:
+            (tmp / "_extra.json").write_text(self._dump(extra), encoding="utf-8")
+        for k in self.keys:
+            if k == "settings":
+                (tmp / "settings.json").write_text(self._dump(want.get(k) or {}), encoding="utf-8")
+                rh["settings"] = {"settings": [[version, self._hash(want.get(k) or {})]]}
+                continue
+            col = tmp / k
+            col.mkdir()
+            ids = []
+            for r in want.get(k) or []:
+                if not isinstance(r, dict):
+                    continue
+                rid = str(r["id"])
+                if rid in rv.setdefault(k, {}):
+                    # Two records with one id: keep both, the second renamed.
+                    r = {**r, "id": uuid.uuid4().hex}
+                    rid = r["id"]
+                (col / f"{self._fname(rid)}.json").write_text(self._dump(r), encoding="utf-8")
+                rv[k][rid] = version
+                rh.setdefault(k, {})[rid] = [[version, self._hash(r)]]
+                ids.append(rid)
+            (col / "_order.json").write_text(self._dump(ids), encoding="utf-8")
+        (tmp / "_local.json").write_text(self._dump({
+            "version": version, "updatedAt": want.get("updatedAt") or _now(),
+            "updatedBy": want.get("updatedBy") or "", "rv": rv, "rh": rh, "gone": {}}), encoding="utf-8")
+        # The check: put it back together and compare with what we meant to
+        # store. Any difference and data.json stays the truth, untouched.
+        self.dir, real = tmp, self.dir
+        try:
+            back = self._assemble()
+        finally:
+            self.dir = real
+        norm = lambda d: json.dumps({key: d.get(key) for key in self.keys}, sort_keys=True, ensure_ascii=False)
+        if norm(back) != norm(want):
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise HTTPException(500, f"{self.what}: 파일로 나누는 중 검사 실패 — data.json 을 그대로 둡니다.")
+        os.replace(tmp, self.dir)
+        os.replace(self.path, self.path.with_name(self.path.name + ".pre-split"))
+
+    # ── writing only what changed ─────────────────────────────────────────
+    def _keep_record(self, k: str, rid: str, version: int) -> None:
+        if not self.keep_days:
+            return
+        src = self._rec(k, rid)
+        if not src.exists():
+            return
+        try:
+            dst = self.dir / ".history" / k / self._fname(rid) / f"{version}.json"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+        except Exception:
+            pass    # a full disk must not cost the user the save they just made
+
+    def _daily(self, doc: dict) -> None:
         if not self.keep_days:
             return
         try:
-            text = json.dumps(old, ensure_ascii=False)
             stem = self.path.stem
-            atomic_write(self.path.with_name(f"{stem}.prev.json"), text)
             day = self.path.parent / "backups" / f"{stem}-{datetime.now().date().isoformat()}.json"
             if not day.exists():
-                atomic_write(day, text)
+                atomic_write(day, json.dumps(doc, ensure_ascii=False))
                 for gone in sorted(day.parent.glob(f"{stem}-*.json"))[:-self.keep_days]:
                     gone.unlink(missing_ok=True)
+            cut = datetime.now().timestamp() - self.keep_days * 86400
+            for f in (self.dir / ".history").rglob("*.json") if (self.dir / ".history").exists() else []:
+                if f.stat().st_mtime < cut:
+                    f.unlink(missing_ok=True)
         except Exception:
-            # A full disk must not cost the user the save they just made.
             pass
 
     def write(self, doc: dict, who: str = "", replaces: dict = None) -> dict:
-        """Bump the version and store. Call under `lock`, after `read`."""
+        """Store `doc`, touching only the records that differ from what is on
+        disk. Call under `lock`, after `read`."""
+        import uuid
+        cur = replaces if replaces is not None else self.read()
+        local = self._load(self.dir / "_local.json", {})
+        rv = local.get("rv") or {}
+        rh = local.get("rh") or {}
+        gone = local.get("gone") or {}
+        version = int(cur.get("version", local.get("version") or 0)) + 1
+
+        def trail(k, rid, obj):
+            # What each record looked like at each version, as hashes: how a
+            # later save from a client that was behind can tell a record it
+            # CHANGED from one it merely still holds an old copy of.
+            t = rh.setdefault(k, {}).setdefault(rid, [])
+            t.append([version, self._hash(obj)])
+            del t[:-32]
         if replaces is not None:
-            self.keep(replaces)
-        doc["version"] = int(doc.get("version", 0)) + 1
-        doc["updatedAt"] = _now()
-        doc["updatedBy"] = who
-        atomic_write(self.path, json.dumps(doc, ensure_ascii=False))
-        return doc
+            self._daily(replaces)
+        for k in self.keys:
+            if k not in doc:
+                continue
+            if k == "settings":
+                if doc[k] != cur.get(k):
+                    atomic_write(self.dir / "settings.json", self._dump(doc[k] or {}))
+                    rv.setdefault("settings", {})["settings"] = version
+                    trail("settings", "settings", doc[k] or {})
+                continue
+            old = {str(r["id"]): r for r in cur.get(k) or [] if isinstance(r, dict) and r.get("id") is not None}
+            ids = []
+            for r in doc[k]:
+                if not isinstance(r, dict):
+                    continue
+                if not r.get("id"):
+                    r["id"] = uuid.uuid4().hex          # a record made since the last read
+                rid = str(r["id"])
+                if rid in ids:
+                    continue
+                ids.append(rid)
+                if old.get(rid) != r:
+                    self._keep_record(k, rid, version)
+                    atomic_write(self._rec(k, rid), self._dump(r))
+                    rv.setdefault(k, {})[rid] = version
+                    trail(k, rid, r)
+                    (gone.get(k) or {}).pop(rid, None)
+            for rid in old:
+                if rid not in ids:
+                    self._keep_record(k, rid, version)
+                    self._rec(k, rid).unlink(missing_ok=True)
+                    rv.setdefault(k, {}).pop(rid, None)
+                    # A tombstone: when it went, and what it was — so a client
+                    # still holding the old copy does not bring it back.
+                    gone.setdefault(k, {})[rid] = [version, self._hash(old[rid])]
+                    (rh.get(k) or {}).pop(rid, None)
+            if len(gone.get(k) or {}) > 5000:          # bounded: oldest first
+                g = gone[k]
+                for rid in sorted(g, key=lambda x: g[x][0])[:len(g) - 5000]:
+                    g.pop(rid)
+            if ids != [str(r["id"]) for r in cur.get(k) or [] if isinstance(r, dict) and r.get("id") is not None]:
+                atomic_write(self.dir / k / "_order.json", self._dump(ids))
+        # Last: the version. A crash before this leaves the records written and
+        # the version unbumped, which the next save simply moves past.
+        atomic_write(self.dir / "_local.json", self._dump(
+            {"version": version, "updatedAt": _now(), "updatedBy": who,
+             "rv": rv, "rh": rh, "gone": gone}))
+        self._cache = None
+        return self.read()
+
+    # ── a save from a client that may be behind ───────────────────────────
+    def merge(self, body: dict, cur: dict) -> tuple:
+        """What a PUT should store, given the version the client edited from.
+
+        A record the client changed is taken if nobody else changed it since
+        that version; a record the client did not touch keeps whatever it is
+        now; a record someone else made or changed meanwhile is never deleted
+        by a client that had not seen it. Only the same record changed on both
+        sides is a conflict. Returns (document to store, [conflicts])."""
+        base = int(body.get("baseVersion") or 0)
+        local = self._load(self.dir / "_local.json", {})
+        rv, rh, gone = local.get("rv") or {}, local.get("rh") or {}, local.get("gone") or {}
+        out = dict(cur)
+        clash = []
+
+        def untouched(k, rid, r):
+            # The client's copy is what this record was when the client
+            # loaded it: it was not edited there, only left behind.
+            return self._hash(r) == self._at((rh.get(k) or {}).get(rid), base)
+        for k in self.keys:
+            val = body.get(k)
+            if val is None:
+                continue
+            if not isinstance(val, dict if k == "settings" else list):
+                raise HTTPException(422, f"'{k}' 형식이 맞지 않습니다.")
+            if k == "settings":
+                if val != cur.get(k):
+                    if int((rv.get("settings") or {}).get("settings") or 0) <= base:
+                        out[k] = val
+                    elif not untouched("settings", "settings", val):
+                        clash.append({"key": k})
+                continue
+            now = {str(r["id"]): r for r in cur.get(k) or [] if isinstance(r, dict) and r.get("id") is not None}
+            krv = rv.get(k) or {}
+            merged, sent = [], set()
+            for r in val:
+                if not isinstance(r, dict):
+                    continue
+                rid = str(r.get("id") or "")
+                if not rid or rid not in now:
+                    tomb = (gone.get(k) or {}).get(rid)
+                    if tomb and int(tomb[0]) > base and self._hash(r) == tomb[1]:
+                        continue                          # deleted meanwhile; this is the old copy
+                    merged.append(r)                      # new on the client (or edited back to life)
+                    continue
+                sent.add(rid)
+                if r == now[rid]:
+                    merged.append(now[rid])               # the same
+                elif int(krv.get(rid) or 0) <= base:
+                    merged.append(r)                      # changed by this client only
+                elif untouched(k, rid, r):
+                    merged.append(now[rid])               # changed meanwhile; client just behind
+                else:
+                    clash.append({"key": k, "id": rid})   # changed on both sides
+                    merged.append(now[rid])
+            for rid, r in now.items():
+                if rid not in sent and int(krv.get(rid) or 0) > base:
+                    merged.append(r)                      # made/changed meanwhile: keep
+            out[k] = merged
+        return out, clash
 
     def mount(self, app: FastAPI, project: str = "") -> None:
         """GET/PUT /api/data, GET /api/data/version, GET /api/whoami."""
@@ -136,20 +439,16 @@ class Document:
         def put_data(body: dict = Body(...), me: dict = Depends(identity)):
             with doc_.lock:
                 cur = doc_.read()
-                if body.get("baseVersion") != cur["version"]:
-                    # Someone else saved since this client loaded. Hand back the
-                    # current document so it reloads rather than overwrites them.
+                new, clash = doc_.merge(body, cur)
+                if clash:
+                    # The same record changed here since this client loaded it.
+                    # Hand back the current document so it reloads rather than
+                    # overwrites — but only for a real clash now, not for any
+                    # save that happened to land in between.
                     return JSONResponse(status_code=409, content={
-                        "detail": "다른 사용자가 먼저 저장했습니다. 최신 데이터를 불러옵니다.",
-                        "current": cur,
+                        "detail": "다른 사용자가 같은 항목을 먼저 고쳤습니다. 최신 데이터를 불러옵니다.",
+                        "current": cur, "conflicts": clash,
                     })
-                new = dict(cur)
-                for k in doc_.keys:
-                    val = body.get(k)
-                    if val is not None:
-                        if not isinstance(val, dict if k == "settings" else list):
-                            raise HTTPException(422, f"'{k}' 형식이 맞지 않습니다.")
-                        new[k] = val
                 return doc_.write(new, me.get("email") or me.get("username") or "", replaces=cur)
 
         @app.get("/api/data/version")
