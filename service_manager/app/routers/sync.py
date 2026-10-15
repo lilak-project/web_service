@@ -203,6 +203,7 @@ class SyncCfg(BaseModel):
     token: Optional[str] = None     # main: issued here; sub: pasted from main
     read_only: bool = True          # sub: refuse writes through the proxy
     interval_min: int = 0           # sub: auto-pull every N minutes (0 = manual only)
+    projects: list[str] = []        # sub: only these projects ([] = every one)
     live: bool = False              # sub: follow main within seconds (overrides interval)
     two_way: bool = False           # sub: send local edits to main too (main must accept_push)
     accept_push: bool = False       # main: let paired subs write back
@@ -216,6 +217,7 @@ def _public(svc: str) -> dict:
             "interval_min": int(cfg.get("interval_min") or 0),
             "live": bool(cfg.get("live")),
             "two_way": bool(cfg.get("two_way")),
+            "projects": list(cfg.get("projects") or []),
             "accept_push": bool(cfg.get("accept_push")),
             # what a sub operator must paste into their portal
             "pair_url": config.BASE_URL if cfg.get("role") == "main" else None}
@@ -247,12 +249,29 @@ def put_sync(svc: str, body: SyncCfg, _: models.User = Depends(require_portal_ad
         cfg["interval_min"] = max(0, min(1440, int(body.interval_min or 0)))
         cfg["live"] = bool(body.live)
         cfg["two_way"] = bool(body.two_way)
+        cfg["projects"] = sorted({p for p in body.projects if registry.valid_name(p)})
         if not cfg["token"]:
             raise HTTPException(400, "main 에서 발급한 토큰을 붙여넣으세요.")
     else:
         cfg = {"role": ""}
     sync.write(svc, cfg)
     return _public(svc)
+
+
+@router.get("/api/admin/services/{svc}/sync/projects")
+def sync_project_choices(svc: str, _: models.User = Depends(require_portal_admin)):
+    """What a sub can choose from: main's projects and this server's own."""
+    import json as _json
+    cfg = sync.read(svc)
+    local = [p["name"] for p in pr.list_projects(svc)]
+    main, err = [], None
+    if cfg.get("role") == "sub" and cfg.get("main_url") and cfg.get("token"):
+        try:
+            main = _json.loads(_get(f"{cfg['main_url'].rstrip('/')}/api/sync/{svc}/projects",
+                                    cfg["token"], timeout=10)).get("projects") or []
+        except Exception as e:                   # noqa: BLE001
+            err = f"main 연결 실패: {e}"
+    return {"main": main, "local": local, "error": err}
 
 
 @router.post("/api/admin/services/{svc}/sync/rotate")
@@ -485,6 +504,9 @@ def _run_pull(job_id: str, svc: str, only: Optional[dict] = None) -> None:
     two_way = bool(cfg.get("two_way"))
     if two_way and only is None:
         names = sorted(set(names) | local)     # a project made here goes to main too
+    picked = set(cfg.get("projects") or [])
+    if picked:                                 # the operator chose which ones travel
+        names = [n for n in names if n in picked]
     ok, moved = 0, 0
     for n in names:
         try:
@@ -652,6 +674,9 @@ def _live_tick(svc: str) -> None:
                     moved.setdefault(n, stamps.get(n))
             except FileNotFoundError:
                 pass
+    picked = set(cfg.get("projects") or [])
+    if picked:
+        moved = {p: st for p, st in moved.items() if p in picked}
     if moved:
         _start_pull(svc, moved)                   # None while a pull is in flight
 

@@ -283,6 +283,7 @@ manager)는 양쪽에서 고쳐도 됩니다.
   양쪽이 다 바꾼 파일만 합칩니다 — 레코드(JSON)는 필드별로(같은 필드면 나중에 저장한 쪽),
   노트·첨부는 main 것을 그 이름에 두고 sub 것을 `이름 (충돌 날짜)` 사본으로 남깁니다.
 - 각 서버의 장부(`data/_local.json`, `.history/`, `backups/`, 옛 `data.json*`)는 오가지 않습니다.
+- sub의 `프로젝트` 체크로 **일부 프로젝트만** 동기화할 수 있습니다(아무것도 고르지 않으면 전부). 미러·양방향 모두 같습니다.
 - **데이터베이스를 쓰는 서비스(elog)는 양방향이 안 됩니다** — 그 프로젝트는 건너뜁니다.
 
 **English** — portals on different servers can mirror a service's project data:
@@ -320,5 +321,6 @@ on one side follows that side and only a file changed on both is merged — reco
 (JSON) field by field (the later save wins a field changed on both), notes and
 attachments by keeping main's at the name and the sub's as a `name (충돌 date)` copy.
 Each server's bookkeeping (`data/_local.json`, `.history/`, `backups/`, old
-`data.json*`) never moves. **Services on a database (elog) cannot go two-way** — their
+`data.json*`) never moves. Ticking `Projects` on the sub syncs only those (none ticked = every
+project), one-way or two-way. **Services on a database (elog) cannot go two-way** — their
 projects are skipped.

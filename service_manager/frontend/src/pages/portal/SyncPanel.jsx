@@ -26,7 +26,7 @@ export default function SyncPanel({ service }) {
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const svc = service.name
   const [cfg, setCfg] = useState(null)
-  const [form, setForm] = useState({ main_url: '', token: '', read_only: true, interval_min: 0, live: false, two_way: false })
+  const [form, setForm] = useState({ main_url: '', token: '', read_only: true, interval_min: 0, live: false, two_way: false, projects: [] })
   const [msg, setMsg] = useState('')
   const [job, setJob] = useState(null)
   const [grants, setGrants] = useState(null)   // permission-transfer preview
@@ -38,8 +38,14 @@ export default function SyncPanel({ service }) {
       setCfg(data)
       setForm((f) => ({ main_url: data.main_url || f.main_url, token: data.token || f.token,
         read_only: data.read_only !== false, interval_min: data.interval_min ?? 0, live: !!data.live,
-        two_way: !!data.two_way }))
+        two_way: !!data.two_way, projects: data.projects || [] }))
+      if (data.role === 'sub') loadChoices()
     } catch { /* not configured yet */ }
+  }
+  // Which projects there are to choose from: main's and this server's.
+  const [choices, setChoices] = useState(null)
+  async function loadChoices() {
+    try { setChoices((await launcher.get(`/admin/services/${svc}/sync/projects`)).data) } catch { /* not paired yet */ }
   }
   useEffect(() => { load(); return () => clearInterval(poll.current) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -51,11 +57,12 @@ export default function SyncPanel({ service }) {
       const body = role === 'sub'
         ? { role, main_url: form.main_url.trim(), token: form.token.trim(),
             read_only: form.read_only, interval_min: Number(form.interval_min) || 0, live: !!form.live,
-            two_way: !!form.two_way }
+            two_way: !!form.two_way, projects: form.projects }
         : role === 'main' ? { role, accept_push: !!cfg?.accept_push, ...extra } : { role }
       const { data } = await launcher.put(`/admin/services/${svc}/sync`, body)
       setCfg(data)
       setMsg(L('저장됨', 'saved'))
+      if (data.role === 'sub') loadChoices()
     } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
 
@@ -162,6 +169,29 @@ export default function SyncPanel({ service }) {
               </label>
             )}
           </div>
+          {/* None ticked = every project, as before. Main's and this server's
+              are both offered: two-way sends a project made here too. */}
+          {choices && (
+            <div style={{ ...row, alignItems: 'flex-start' }}>
+              <span style={lbl}>{L('프로젝트', 'Projects')}</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', flex: 1 }}>
+                {[...new Set([...(choices.main || []), ...(form.two_way ? choices.local || [] : [])])].sort().map((p) => (
+                  <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form.projects.includes(p)}
+                      onChange={(e) => setForm((f) => ({ ...f, projects: e.target.checked
+                        ? [...f.projects, p] : f.projects.filter((x) => x !== p) }))} />
+                    <span style={{ fontFamily: 'var(--font-mono)' }}>{p}</span>
+                    {!(choices.main || []).includes(p) && <span style={{ color: 'var(--text-muted)' }}>{L('(이 서버만)', '(here only)')}</span>}
+                  </label>
+                ))}
+                <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', flexBasis: '100%' }}>
+                  {choices.error || (form.projects.length
+                    ? L(`${form.projects.length}개만 동기화합니다`, `only these ${form.projects.length}`)
+                    : L('아무것도 고르지 않으면 전부 동기화합니다', 'none ticked = every project'))}
+                </span>
+              </div>
+            </div>
+          )}
           <div style={row}>
             <span style={lbl}>{L('자동', 'Auto')}</span>
             {/* Live is not "a shorter interval": it asks main every few seconds
