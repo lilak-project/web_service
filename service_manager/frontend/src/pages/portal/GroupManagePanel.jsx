@@ -92,7 +92,7 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
       <Panel title={L('그룹', 'Group')}>
         <Field label={L('이름', 'Name')}>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={L('그룹 이름', 'group name')}
-            style={{ ...fieldInput, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && dirty && save()} />
+            style={{ ...fieldInput, flex: 1 }} onKeyUp={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && dirty && save()} />
         </Field>
         <FieldActions>
           <Button variant="primary" disabled={!dirty} onClick={save}>{L('저장', 'Save')}</Button>
