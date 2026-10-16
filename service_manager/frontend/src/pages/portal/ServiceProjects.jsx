@@ -124,7 +124,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
     onDrop: (e) => {
       e.preventDefault(); setDrag(false)
       const f = [...(e.dataTransfer?.files || [])].find((x) => x.name.endsWith('.zip'))
-      if (f) importFile(f, f.name.replace(/\.zip$/i, ''))
+      if (f) importFile(f)   // the server names it (strips export's `<svc>-` prefix)
     },
   } : {}
 

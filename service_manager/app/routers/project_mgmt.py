@@ -238,7 +238,13 @@ async def import_project(svc: str, file: UploadFile = File(...), name: str | Non
     _require_multi(svc)
     _require_import_export(svc)
     raw = await file.read()
-    proj_name = (name or Path(file.filename or "imported").stem).strip()
+    proj_name = (name or "").strip()
+    if not proj_name:
+        # Export names the file `<svc>-<proj>.zip`; take the project back out of it
+        # so a round trip keeps the name (else `note` comes back as `note-note`).
+        proj_name = Path(file.filename or "imported").stem.strip()
+        if proj_name.startswith(f"{svc}-") and len(proj_name) > len(svc) + 1:
+            proj_name = proj_name[len(svc) + 1:]
     try:
         return pr.import_project(svc, raw, proj_name)
     except ValueError as e:
@@ -277,7 +283,10 @@ async def project_proxy(svc: str, proj: str, path: str, request: Request):
     _require_multi(svc)
     # Guard hits SQLite synchronously — run it off the event loop (see proxy.py).
     await run_in_threadpool(_proxy_guard, request, svc, proj)
-    base = await run_in_threadpool(pr.target_base, svc, proj)
+    try:
+        base = await run_in_threadpool(pr.target_base, svc, proj)
+    except FileNotFoundError:
+        raise HTTPException(404, f"'{svc}/{proj}' 프로젝트가 없습니다")
     if not base:
         raise HTTPException(502, f"'{svc}/{proj}' is not reachable")
     qs = request.url.query
