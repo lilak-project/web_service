@@ -1050,7 +1050,7 @@ export default function SidebarPortal({
             </button>
 
             <div className="pl-sep" />
-            <button type="button" className="pl-c2" onClick={onCreateGroup}>
+            <button type="button" className="pl-c2" onClick={() => onCreateGroup?.()}>
               <Icon name="folder-plus" size={15} />
               <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
             </button>
