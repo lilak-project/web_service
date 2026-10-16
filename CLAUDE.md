@@ -86,7 +86,10 @@ services and note only, main must `accept_push`): then the sub also pushes, and
 The rack store (`lilak_portal_auth/store.py`) keeps one file per record and adopts
 records a sync changed underneath it. Accounts never sync — main's
 grants are copied onto matching local accounts only when an admin asks. See
-`DEPLOYMENT.md` §9.
+`DEPLOYMENT.md` §9. Pairing is a handshake: a sub asks by address, main's admin
+approves (matching a pin) and the token is collected once — see
+`service_manager/HANDSHAKE.md`, the one convention for every first contact
+(elog ↔ device services, service → portal registration, portal ↔ portal).
 
 **Permissions are per-project.** `ServicePermission.project` (`""` = whole-service
 grant covering all projects). Helpers in `app/permissions.py`. Invite codes

@@ -117,3 +117,39 @@ def scope(svc: str, presented: Optional[str]) -> Optional[tuple]:
 def allows(sc: tuple, proj: str) -> bool:
     kind, names = sc
     return proj in names if kind == "project" else proj not in names
+
+
+# ── pairing by request: an address in, an approval, the token handed over ────
+# main keeps the requests it was sent (data/<svc>/sync-requests.json); a sub
+# keeps the ones it is waiting on (data/<svc>/sync-pending.json). A request
+# carries a `claim` only its sender ever saw, and both sides show the same
+# short pin made from it, so whoever approves can tell it is the right one.
+REQ_KEEP_S = 7 * 86400
+REQ_MAX = 20
+
+
+def _jpath(svc: str, name: str) -> Path:
+    return registry.service_dir(svc) / name
+
+
+def read_list(svc: str, name: str) -> list:
+    try:
+        d = json.loads(_jpath(svc, name).read_text(encoding="utf-8"))
+        return d if isinstance(d, list) else []
+    except Exception:                            # noqa: BLE001
+        return []
+
+
+def write_list(svc: str, name: str, rows: list) -> None:
+    p = _jpath(svc, name)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(p)
+
+
+def pin(claim: str) -> str:
+    """Six digits both sides can read out to each other."""
+    import hashlib
+    n = int(hashlib.sha256(claim.encode()).hexdigest(), 16) % 1_000_000
+    return f"{n // 1000:03d}-{n % 1000:03d}"

@@ -136,6 +136,61 @@ export default function SyncPanel({ service, project = '', onChanged }) {
     } catch (e) { setMsg(e?.response?.data?.detail || L('연결하지 못했습니다', 'could not join')) }
   }
 
+  // ── by request (handshake): an address, an approval on main, nothing pasted ──
+  const isCode = joinCode.trim().startsWith('lilak-sync:')
+  const [askProj, setAskProj] = useState(project)
+  const [askTwo, setAskTwo] = useState(true)
+  const [pending, setPending] = useState([])     // what this server asked for
+  const [asked, setAsked] = useState([])         // what other servers asked of this one
+  const mine = (r) => !project || r.project === project
+  const loadPending = () => launcher.get(`/admin/services/${svc}/sync/pending`).then((r) => {
+    setPending((was) => {
+      // One that just got through: say so, and show what it brought.
+      for (const p of r.data) {
+        const before = was.find((x) => x.id === p.id)
+        if (before?.status === 'pending' && p.status === 'joined') {
+          setMsg(L(`승인되어 연결했습니다${p.project ? ` — '${p.project}'` : ''}. 첫 동기화 중`,
+            `approved and linked${p.project ? ` — '${p.project}'` : ''}; first sync running`))
+          load(); onChanged?.(); window.dispatchEvent(new Event('portal:projects'))
+          if (p.job_id) watch(p.job_id)
+        }
+      }
+      return r.data
+    })
+  }).catch(() => {})
+  const loadAsked = () => launcher.get(`/admin/services/${svc}/sync/requests`).then((r) => setAsked(r.data)).catch(() => {})
+  useEffect(() => { loadPending(); loadAsked() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  // Waiting on main: ask every few seconds. Requests here: every ten.
+  const waiting = pending.some((p) => p.status === 'pending' && mine(p))
+  useEffect(() => {
+    const a = waiting ? setInterval(loadPending, 4000) : null
+    const b = setInterval(loadAsked, 10000)
+    return () => { clearInterval(a); clearInterval(b) }
+  }, [waiting])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function ask() {
+    setMsg('')
+    try {
+      const { data } = await launcher.post(`/admin/services/${svc}/sync/request`,
+        { url: joinCode.trim(), project: askProj.trim(), two_way: askTwo, live: joinLive })
+      setJoinCode('')
+      setMsg(L(`요청을 보냈습니다. main 관리자에게 확인 번호 ${data.pin} 를 알려 주세요 — 승인되면 저절로 연결됩니다.`,
+        `request sent. Tell main's admin the pin ${data.pin} — it links itself once approved.`))
+      loadPending()
+    } catch (e) { setMsg(e?.response?.data?.detail || L('요청하지 못했습니다', 'could not send the request')) }
+  }
+  async function decide(r, action, acceptPush) {
+    try {
+      await launcher.post(`/admin/services/${svc}/sync/requests/${r.id}`, { action, accept_push: acceptPush })
+      setMsg(action === 'approve' ? L('승인했습니다 — 상대 서버가 곧 연결합니다', 'approved — the other server links in a moment')
+        : L('거절했습니다', 'rejected'))
+      loadAsked(); load(); onChanged?.()
+    } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+  }
+  const forget = (r) => launcher.delete(`/admin/services/${svc}/sync/pending/${r.id}`).then(loadPending)
+  const STATUS = { pending: L('승인 대기', 'waiting'), joined: L('연결됨', 'linked'), rejected: L('거절됨', 'rejected'),
+    expired: L('만료됨', 'expired'), failed: L('실패', 'failed') }
+
   async function loadGrants(apply) {
     setMsg('')
     try {
@@ -218,21 +273,67 @@ export default function SyncPanel({ service, project = '', onChanged }) {
         </>
       )}
 
-      {/* The short way in: main's code makes the project, links it and syncs.
-          Offered at the service level — a project's code names its project. */}
-      {role !== 'main' && (
-        <div style={{ ...row, paddingBottom: 6, borderBottom: '1px dashed var(--border-subtle)' }}>
-          <span style={lbl}>{L('연결 코드', 'Code')}</span>
-          <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)}
-            placeholder={L('main 에서 복사한 lilak-sync:… 코드', 'lilak-sync:… code copied from main')}
-            style={{ ...input, fontFamily: 'var(--font-mono)' }} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={joinLive} onChange={(e) => setJoinLive(e.target.checked)} />
-            {L('실시간', 'live')}
+      {/* Other servers asking to follow this one: approve (it becomes main
+          for that link) or reject. The pin is the one the asker sees. */}
+      {asked.filter((r) => r.status === 'pending' && mine(r)).map((r) => (
+        <div key={r.id} style={{ ...row, padding: 8, borderRadius: 8, background: 'var(--surface-2)' }}>
+          <span style={{ fontSize: 'var(--fs-small, 12px)', flex: 1, minWidth: 220 }}>
+            <b>{L('연결 요청', 'Link request')}</b> · {r.from_name || '?'} <span style={{ color: 'var(--text-muted)' }}>({r.from_url || '?'})</span>
+            {' · '}{r.by || '?'} · {r.project ? L(`프로젝트 ${r.project}`, `project ${r.project}`) : L('서비스 전체', 'whole service')}
+            {' · '}{L('확인 번호', 'pin')} <b style={{ fontFamily: 'var(--font-mono)' }}>{r.pin}</b>
+          </span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+            <input type="checkbox" defaultChecked={!!r.two_way} id={`ap-${r.id}`} /> {L('양방향 허용', 'allow two-way')}
           </label>
-          <Button variant="primary" style={btn} disabled={!joinCode.trim() || running} onClick={join}>
-            {L('받기', 'Join')}
-          </Button>
+          <Button variant="primary" style={btn}
+            onClick={() => decide(r, 'approve', document.getElementById(`ap-${r.id}`)?.checked)}>{L('승인', 'Approve')}</Button>
+          <Button variant="dangerSoft" style={btn} onClick={() => decide(r, 'reject')}>{L('거절', 'Reject')}</Button>
+        </div>
+      ))}
+
+      {/* The way in: main's address (it asks; main approves) or main's code. */}
+      {role !== 'main' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 6, borderBottom: '1px dashed var(--border-subtle)' }}>
+          <div style={row}>
+            <span style={lbl}>{L('main 연결', 'Link to')}</span>
+            <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)}
+              placeholder={L('main 주소 (http://…:8025) 또는 연결 코드', 'main address (http://…:8025) or a code')}
+              style={{ ...input, fontFamily: 'var(--font-mono)' }} />
+          </div>
+          {joinCode.trim() && (
+            <div style={row}>
+              <span style={lbl} />
+              {!isCode && (<>
+                <input value={askProj} onChange={(e) => setAskProj(e.target.value)} disabled={!!project}
+                  placeholder={L('프로젝트 (비우면 서비스 전체)', 'project (empty = whole service)')}
+                  style={{ ...input, flex: 'none', width: 220, fontFamily: 'var(--font-mono)' }} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={askTwo} onChange={(e) => setAskTwo(e.target.checked)} />
+                  {L('양방향', 'two-way')}
+                </label>
+              </>)}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={joinLive} onChange={(e) => setJoinLive(e.target.checked)} />
+                {L('실시간', 'live')}
+              </label>
+              <Button variant="primary" style={btn} disabled={running} onClick={isCode ? join : ask}>
+                {isCode ? L('받기', 'Join') : L('연결 요청', 'Ask')}
+              </Button>
+            </div>
+          )}
+          {pending.filter(mine).map((p) => (
+            <div key={p.id} style={{ ...row, fontSize: 'var(--fs-small, 12px)' }}>
+              <span style={lbl} />
+              <span style={{ flex: 1 }}>
+                {p.url} · {p.project || L('서비스 전체', 'whole service')} · <b>{STATUS[p.status] || p.status}</b>
+                {p.status === 'pending' && <> · {L('확인 번호', 'pin')} <b style={{ fontFamily: 'var(--font-mono)' }}>{p.pin}</b></>}
+                {p.error ? ` — ${p.error}` : ''}
+              </span>
+              <Button variant="secondary" style={btn} onClick={() => forget(p)}>
+                {p.status === 'pending' ? L('취소', 'Cancel') : L('지우기', 'Dismiss')}
+              </Button>
+            </div>
+          ))}
         </div>
       )}
 

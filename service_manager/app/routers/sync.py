@@ -360,18 +360,24 @@ def _decode(code: str) -> dict:
 
 @router.post("/api/admin/services/{svc}/sync/join", status_code=202)
 def join_sync(svc: str, body: JoinBody, _: models.User = Depends(require_portal_admin)):
-    """Become a sub from main's connection code alone: check that main answers
-    to the token, make the project here if there is none, link it (the
-    project's own link for a project code, the service's otherwise) and start
-    the first sync."""
-    import json as _json
+    """Become a sub from main's connection code alone."""
     d = _decode(body.code)
     if d["svc"] != svc:
         raise HTTPException(400, f"이 코드는 '{d['svc']}' 서비스용입니다.")
-    url = str(d["url"]).strip().rstrip("/")
-    proj = str(d.get("proj") or "")
+    return _join(svc, str(d["url"]), d["token"], str(d.get("proj") or ""),
+                 bool(d.get("two_way")), bool(body.live))
+
+
+def _join(svc: str, url: str, token: str, proj: str, two_way: bool, live: bool) -> dict:
+    """Check that main answers to the token, make the project here if there is
+    none, link it (the project's own link for a project, the service's
+    otherwise) and start the first sync. What a code and an approved request
+    both end in."""
+    import json as _json
+    url = url.strip().rstrip("/")
     if proj and not registry.valid_name(proj):
-        raise HTTPException(400, "코드의 프로젝트 이름이 올바르지 않습니다.")
+        raise HTTPException(400, "프로젝트 이름이 올바르지 않습니다.")
+    d = {"token": token}
     try:
         listed = _json.loads(_get(f"{url}/api/sync/{svc}/projects", d["token"], timeout=10)).get("projects") or []
     except urllib.error.HTTPError as e:
@@ -384,11 +390,190 @@ def join_sync(svc: str, body: JoinBody, _: models.User = Depends(require_portal_
     if proj and not pr.project_dir(svc, proj).is_dir():
         pr.create_project(svc, proj)
         made = True
-    cfg = _put(svc, SyncCfg(role="sub", main_url=url, token=d["token"],
-                            two_way=bool(d.get("two_way")), live=bool(body.live)), proj)
+    cfg = _put(svc, SyncCfg(role="sub", main_url=url, token=token,
+                            two_way=two_way, live=live), proj)
     job_id = _start_pull(svc, key=proj)
     return {"job_id": job_id, "project": proj or None, "made": made,
             "two_way": cfg["two_way"], "projects": listed}
+
+
+# ── pairing by request (handshake): sub asks with an address, main approves ───
+class PairAsk(BaseModel):             # sub → main, no credentials
+    project: str = ""
+    two_way: bool = False
+    from_url: str = ""
+    from_name: str = ""
+    by: str = ""
+
+
+@router.post("/api/sync/{svc}/requests", status_code=201)
+def pair_ask(svc: str, body: PairAsk):
+    """Another portal asks to follow this service (or one project of it). Open
+    to anyone — it grants nothing until an admin here approves — so it is kept
+    small: a capped, expiring list, every text field clipped."""
+    import secrets as _secrets
+    import time as _time
+    if not registry.service_dir(svc).exists():
+        raise HTTPException(404, "서비스를 찾을 수 없습니다.")
+    proj = (body.project or "").strip()
+    if proj and (not registry.valid_name(proj) or not pr.project_dir(svc, proj).is_dir()):
+        raise HTTPException(404, f"이 서버에 '{proj}' 프로젝트가 없습니다.")
+    if sync.effective(svc, proj).get("role") == "sub":
+        raise HTTPException(409, "이쪽도 다른 서버를 따르는 사본이라 원본이 될 수 없습니다.")
+    now = _time.time()
+    rows = [r for r in sync.read_list(svc, "sync-requests.json") if now - r.get("at", 0) < sync.REQ_KEEP_S]
+    if sum(1 for r in rows if r.get("status") == "pending") >= sync.REQ_MAX:
+        raise HTTPException(429, "대기 중인 연결 요청이 너무 많습니다. 관리자에게 정리를 부탁하세요.")
+    claim = _secrets.token_urlsafe(24)
+    clip = lambda v, n=200: str(v or "")[:n]
+    row = {"id": uuid.uuid4().hex[:12], "claim": claim, "status": "pending", "at": now,
+           "project": proj, "two_way": bool(body.two_way), "from_url": clip(body.from_url),
+           "from_name": clip(body.from_name, 80), "by": clip(body.by, 80)}
+    sync.write_list(svc, "sync-requests.json", rows + [row])
+    return {"id": row["id"], "claim": claim, "pin": sync.pin(claim)}
+
+
+@router.get("/api/sync/{svc}/requests/{rid}")
+def pair_status(svc: str, rid: str, claim: str = ""):
+    """The sender (and only the sender — the claim) asks how its request went.
+    An approved request hands over the token once, then forgets it."""
+    import secrets as _secrets
+    rows = sync.read_list(svc, "sync-requests.json")
+    r = next((x for x in rows if x.get("id") == rid), None)
+    if not r or not _secrets.compare_digest(r.get("claim", ""), claim or ""):
+        raise HTTPException(404, "요청을 찾을 수 없습니다 (만료되었을 수 있습니다).")
+    out = {"status": r["status"], "project": r.get("project") or "", "two_way": bool(r.get("accept_push"))}
+    if r["status"] == "approved" and r.get("token"):
+        out["token"] = r.pop("token")
+        r["status"] = "delivered"
+        sync.write_list(svc, "sync-requests.json", rows)
+    return out
+
+
+class PairDecide(BaseModel):
+    action: str                     # approve | reject
+    accept_push: bool = False       # approve: let that sub write back
+
+
+@router.get("/api/admin/services/{svc}/sync/requests")
+def pair_list(svc: str, _: models.User = Depends(require_portal_admin)):
+    """What other servers asked for, newest first — never the claim or token."""
+    rows = sync.read_list(svc, "sync-requests.json")
+    return [{k: r.get(k) for k in ("id", "status", "at", "project", "two_way", "from_url", "from_name", "by")}
+            | {"pin": sync.pin(r.get("claim", ""))} for r in reversed(rows)]
+
+
+@router.post("/api/admin/services/{svc}/sync/requests/{rid}")
+def pair_decide(svc: str, rid: str, body: PairDecide, _: models.User = Depends(require_portal_admin)):
+    """Approve: this side becomes main for that link (the project's own, or the
+    service's) if it was not already, and the token waits for the sender to
+    collect it. Reject: the sender is told so."""
+    rows = sync.read_list(svc, "sync-requests.json")
+    r = next((x for x in rows if x.get("id") == rid), None)
+    if not r or r.get("status") != "pending":
+        raise HTTPException(404, "대기 중인 요청이 아닙니다.")
+    if body.action == "reject":
+        r["status"] = "rejected"
+    elif body.action == "approve":
+        key = r.get("project") or ""
+        cfg = sync.read(svc, key)
+        if cfg.get("role") == "sub":
+            raise HTTPException(409, "이 서버가 다른 서버를 따르고 있어 원본이 될 수 없습니다.")
+        if cfg.get("role") != "main" or (body.accept_push and not cfg.get("accept_push")):
+            _put(svc, SyncCfg(role="main", accept_push=bool(body.accept_push or cfg.get("accept_push"))), key)
+        r.update(status="approved", token=sync.read(svc, key)["token"],
+                 accept_push=bool(sync.read(svc, key).get("accept_push")))
+    else:
+        raise HTTPException(400, "action 은 approve 또는 reject 입니다.")
+    sync.write_list(svc, "sync-requests.json", rows)
+    return {"ok": True, "status": r["status"]}
+
+
+class PairRequest(BaseModel):         # admin on the sub
+    url: str
+    project: str = ""
+    two_way: bool = False
+    live: bool = True
+
+
+@router.post("/api/admin/services/{svc}/sync/request")
+def pair_request(svc: str, body: PairRequest, user: models.User = Depends(require_portal_admin)):
+    """Ask main, at an address, to let this server follow it. Waits for the
+    approval in the background (see _check_pending)."""
+    import json as _json
+    import socket
+    url = body.url.strip().rstrip("/")
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(400, "main 주소는 http(s):// 로 시작해야 합니다.")
+    proj = body.project.strip()
+    if proj and not registry.valid_name(proj):
+        raise HTTPException(400, "프로젝트 이름이 올바르지 않습니다.")
+    ask = _json.dumps({"project": proj, "two_way": body.two_way, "from_url": config.BASE_URL,
+                       "from_name": socket.gethostname(), "by": user.username}).encode()
+    try:
+        req = urllib.request.Request(f"{url}/api/sync/{svc}/requests", data=ask, method="POST",
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            got = _json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            why = _json.loads(e.read()).get("detail")
+        except Exception:                        # noqa: BLE001
+            why = None
+        raise HTTPException(502, why or f"main 이 요청을 받지 않았습니다 (HTTP {e.code}) — 같은 서비스가 있는 포털 주소인지 확인하세요.")
+    except Exception as e:                       # noqa: BLE001
+        raise HTTPException(502, f"main 에 닿지 않습니다: {e} — 주소({url})가 이 서버에서 열리는지 확인하세요.")
+    rows = [p for p in sync.read_list(svc, "sync-pending.json")
+            if not (p["url"] == url and p["project"] == proj)]
+    row = {"id": got["id"], "claim": got["claim"], "pin": got["pin"], "url": url, "project": proj,
+           "two_way": body.two_way, "live": body.live, "status": "pending"}
+    sync.write_list(svc, "sync-pending.json", rows + [row])
+    return {k: row[k] for k in ("id", "pin", "url", "project", "status")}
+
+
+def _check_pending(svc: str) -> list:
+    """Ask main how each waiting request went; an approved one is joined on
+    the spot. Returns the list as it now stands (claims left out)."""
+    import json as _json
+    rows = sync.read_list(svc, "sync-pending.json")
+    changed = False
+    for p in rows:
+        if p["status"] != "pending":
+            continue
+        try:
+            st = _json.loads(_get(f"{p['url']}/api/sync/{svc}/requests/{p['id']}?claim="
+                                  f"{urllib.parse.quote(p['claim'])}", "", timeout=5))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                p["status"], changed = "expired", True
+            continue
+        except Exception:                        # noqa: BLE001 — main away: next time
+            continue
+        if st["status"] == "rejected":
+            p["status"], changed = "rejected", True
+        elif st.get("token"):
+            try:
+                res = _join(svc, p["url"], st["token"], p["project"],
+                            bool(p["two_way"] and st.get("two_way")), bool(p["live"]))
+                p.update(status="joined", job_id=res.get("job_id"), two_way=res["two_way"])
+            except HTTPException as e:
+                p.update(status="failed", error=str(e.detail))
+            changed = True
+    if changed:
+        sync.write_list(svc, "sync-pending.json", rows)
+    return [{k: v for k, v in p.items() if k != "claim"} for p in rows]
+
+
+@router.get("/api/admin/services/{svc}/sync/pending")
+def pair_pending(svc: str, _: models.User = Depends(require_portal_admin)):
+    return _check_pending(svc)
+
+
+@router.delete("/api/admin/services/{svc}/sync/pending/{rid}")
+def pair_forget(svc: str, rid: str, _: models.User = Depends(require_portal_admin)):
+    sync.write_list(svc, "sync-pending.json",
+                    [p for p in sync.read_list(svc, "sync-pending.json") if p["id"] != rid])
+    return {"ok": True}
 
 
 @router.get("/api/admin/services/{svc}/sync/projects")
@@ -845,6 +1030,9 @@ def _scheduler() -> None:
                     _live_tick(svc, key)
             if waited >= TICK_S:                  # minute-scale mirrors, as before
                 waited = 0
+                for svc in registry.list_service_names():
+                    if any(p.get("status") == "pending" for p in sync.read_list(svc, "sync-pending.json")):
+                        _check_pending(svc)       # an approval lands without anyone watching
                 for svc, key in links:
                     if not _is_live(svc, key) and _due(svc, key):
                         _start_pull(svc, key=key)  # None if one is still running

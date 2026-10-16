@@ -239,7 +239,12 @@ public repo, so no GitHub credentials are needed.
 예: `s2`의 elog를 원본으로 두고 `s1`이 사본을 유지, 동시에 `s3`의 asset_manager를
 `s1`이 미러링. 설정은 **관리 모드 → 서비스 카드 → 동기화** 에 있습니다.
 
-**가장 쉬운 방법 — 연결 코드**: main에서 역할을 `main (원본)`으로 두면 **연결 코드**(`lilak-sync:…`) 한
+**가장 쉬운 방법 — 주소로 요청**: sub 서버에서 같은 서비스 → 동기화 → `main 연결`에 main 주소를 넣고
+(프로젝트 하나만이면 그 이름도) `연결 요청`. main 화면에 요청이 확인 번호와 함께 뜨고, 관리자가 번호를 확인해
+`승인`하면 sub가 알아서 토큰을 받아 프로젝트를 만들고 동기화를 시작합니다. 토큰은 아무도 볼 필요가 없습니다.
+자세한 규약은 `HANDSHAKE.md`.
+
+**또는 연결 코드**: main에서 역할을 `main (원본)`으로 두면 **연결 코드**(`lilak-sync:…`) 한
 줄이 나옵니다. 주소 칸이 `localhost`면 다른 서버가 닿는 이름(`kiki.local`)이나 IP로 고친 뒤 코드를
 복사하세요. sub 서버에서 같은 서비스 → 동기화 → `연결 코드`에 붙여넣고 `받기`를 누르면, 프로젝트가 없으면
 만들고 연결(양방향 여부는 main 설정을 따름)한 뒤 바로 첫 동기화를 합니다. 프로젝트 줄의 `Sync`에서 만든
@@ -305,7 +310,13 @@ manager)는 양쪽에서 고쳐도 됩니다.
 `s2`'s elog as the source with `s1` keeping a copy, while `s1` also mirrors
 `s3`'s asset_manager. Configure it under **manage mode → service card → Sync**.
 
-**Quickest — the connection code**: with the role at `main`, the panel shows one
+**Quickest — ask by address**: on the sub, same service → Sync → `Link to`, type
+main's address (and a project name for one project) and press `Ask`. The request shows
+on main with a six-digit pin; once main's admin checks the pin and approves, the sub
+collects the token itself, makes the project and starts syncing — nobody sees a token.
+See `HANDSHAKE.md`.
+
+**Or the connection code**: with the role at `main`, the panel shows one
 `lilak-sync:…` code (fix the address first if it says localhost — use a name or IP the
 other server can reach). On the other server, paste it under the same service → Sync →
 `Code` and press `Join`: it makes the project if missing, links it (two-way if main
