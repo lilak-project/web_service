@@ -473,6 +473,20 @@ export default function SidebarPortal({
       if (key) press(`.pl-card[data-key="${CSS.escape(key)}"] .pl-row`)
     }
   }
+  // ⌘R / Ctrl+R with the portal focused reloads the service in the panel,
+  // not the portal. (Inside the panel the service does the same itself.)
+  // ⇧⌘R is left to the browser.
+  const frameRef = useRef(null)
+  useEffect(() => {
+    const on = (e) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'r' && frameRef.current) {
+        e.preventDefault()
+        try { frameRef.current.contentWindow.location.reload() } catch { frameRef.current.src = frameRef.current.src }
+      }
+    }
+    window.addEventListener('keydown', on)
+    return () => window.removeEventListener('keydown', on)
+  }, [])
   useEffect(() => {
     const on = (e) => foldKey.current(e)
     window.addEventListener('keydown', on)
@@ -1226,7 +1240,7 @@ export default function SidebarPortal({
               <SettingsStatus />
             </>
           ) : view === 'service' && src ? (
-            <iframe key={src} src={src} title={sel.svc}
+            <iframe key={src} ref={frameRef} src={src} title={sel.svc}
               allow="clipboard-read; clipboard-write; fullscreen"
               onLoad={(e) => {
                 // Same origin for a proxied service; an external one throws and
