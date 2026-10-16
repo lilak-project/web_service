@@ -214,8 +214,8 @@ export default function SyncPanel({ service, project = '', onChanged }) {
             const v = e.target.value
             if (v === 'sub' && cfg?.role !== 'sub') {
               setPick('sub')
-              setMsg(L('main 에서 복사한 연결 코드를 붙여넣고 받기를 누르세요.',
-                'paste the connection code from main and press Join'))
+              setMsg(L('main 주소를 넣고 연결 요청을 누르세요 (연결 코드가 있으면 그것을 붙여넣고 받기).',
+                'type main\'s address and press Ask (or paste a connection code and press Join)'))
             } else { setPick(null); save(v) }
           }}>
           <option value="">{L('사용 안 함', 'off')}</option>
