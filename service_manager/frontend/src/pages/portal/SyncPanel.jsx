@@ -6,7 +6,8 @@ import { useLang } from '../../context/LangContext'
 /**
  * SyncPanel — cross-portal mirroring for ONE service, inside manage mode.
  *
- * main: this server owns the data; it shows the URL + token to paste into the sub.
+ * main: this server owns the data; it shows ONE connection code (address +
+ *       token + project) to paste into the sub. Nobody has to see the token.
  * sub:  this server mirrors another portal — it pulls on demand and (by default)
  *       serves the copy read-only, because the next pull overwrites local edits.
  *       Or, two-way: edits here go to main too (main has to accept them), and a
@@ -32,9 +33,8 @@ export default function SyncPanel({ service, project = '', onChanged }) {
   const [msg, setMsg] = useState('')
   const [job, setJob] = useState(null)
   const [grants, setGrants] = useState(null)   // permission-transfer preview
-  // A role CHOSEN but not yet saved. `sub` cannot be saved until its partner
-  // and token are filled in, and those fields only exist once the role is sub
-  // — so picking it has to show the form first and save afterwards.
+  // A role CHOSEN but not yet saved: sub has nothing to save until main's
+  // code is pasted, so picking it only points at the code box.
   const [pick, setPick] = useState(null)
   const poll = useRef(null)
 
@@ -42,7 +42,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
     try {
       const { data } = await launcher.get(base)
       setCfg(data)
-      setForm((f) => ({ main_url: data.main_url || f.main_url, token: data.token || f.token,
+      setForm((f) => ({ main_url: data.main_url || f.main_url, token: '',
         read_only: data.read_only !== false, interval_min: data.interval_min ?? 0, live: !!data.live,
         two_way: !!data.two_way, projects: data.projects || [] }))
       if (data.role === 'sub' && !project) loadChoices()
@@ -75,7 +75,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
   }
 
   async function rotate() {
-    try { setCfg((await launcher.post(`${base}/rotate`)).data); setMsg(L('토큰 재발급됨 — sub 를 다시 연결하세요', 'token rotated — re-pair the sub')) }
+    try { setCfg((await launcher.post(`${base}/rotate`)).data); setMsg(L('새 코드 발급됨 — 이전 코드는 막혔습니다. sub 에 새 코드를 붙여넣으세요', 'new code — earlier ones stop working; paste it on the sub')) }
     catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
 
@@ -159,8 +159,8 @@ export default function SyncPanel({ service, project = '', onChanged }) {
             const v = e.target.value
             if (v === 'sub' && cfg?.role !== 'sub') {
               setPick('sub')
-              setMsg(L('main 주소와 토큰을 넣고 연결 저장을 누르세요.',
-                'paste the main URL and token, then press Save link'))
+              setMsg(L('main 에서 복사한 연결 코드를 붙여넣고 받기를 누르세요.',
+                'paste the connection code from main and press Join'))
             } else { setPick(null); save(v) }
           }}>
           <option value="">{L('사용 안 함', 'off')}</option>
@@ -203,12 +203,9 @@ export default function SyncPanel({ service, project = '', onChanged }) {
             <span style={lbl}>{L('연결 코드', 'Code')}</span>
             <input readOnly value={code} style={{ ...input, fontFamily: 'var(--font-mono)' }} onFocus={(e) => e.target.select()} />
             <Button variant="primary" style={btn} disabled={!code} onClick={() => copy(code)}>{L('복사', 'Copy')}</Button>
-          </div>
-          <div style={row}>
-            <span style={lbl}>{L('토큰', 'Token')}</span>
-            <input readOnly value={cfg.token || ''} style={{ ...input, fontFamily: 'var(--font-mono)' }} />
-            <Button variant="secondary" style={btn} onClick={() => copy(cfg.token || '')}>{L('복사', 'Copy')}</Button>
-            <Button variant="dangerSoft" style={btn} onClick={rotate}>{L('재발급', 'Rotate')}</Button>
+            {/* A code that leaked: a new token, and every earlier code stops working. */}
+            <Button variant="dangerSoft" style={btn} title={L('새 코드를 만들고 이전 코드는 막습니다', 'new code; earlier ones stop working')}
+              onClick={rotate}>{L('재발급', 'Rotate')}</Button>
           </div>
           <div style={row}>
             <span style={lbl}>{L('양방향', 'Two-way')}</span>
@@ -223,7 +220,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
 
       {/* The short way in: main's code makes the project, links it and syncs.
           Offered at the service level — a project's code names its project. */}
-      {!project && role !== 'main' && (
+      {role !== 'main' && (
         <div style={{ ...row, paddingBottom: 6, borderBottom: '1px dashed var(--border-subtle)' }}>
           <span style={lbl}>{L('연결 코드', 'Code')}</span>
           <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)}
@@ -239,18 +236,13 @@ export default function SyncPanel({ service, project = '', onChanged }) {
         </div>
       )}
 
-      {role === 'sub' && (
+      {role === 'sub' && cfg?.role === 'sub' && (
         <>
+          {/* Who this copy follows. The token stays on the server; another
+              partner is a new code pasted above. */}
           <div style={row}>
-            <span style={lbl}>{L('main 주소', 'main URL')}</span>
-            <input value={form.main_url} placeholder="https://s2.example.org"
-              onChange={(e) => setForm((f) => ({ ...f, main_url: e.target.value }))} style={input} />
-          </div>
-          <div style={row}>
-            <span style={lbl}>{L('토큰', 'Token')}</span>
-            <input value={form.token} placeholder={L('main 에서 복사', 'copy from main')}
-              onChange={(e) => setForm((f) => ({ ...f, token: e.target.value }))}
-              style={{ ...input, fontFamily: 'var(--font-mono)' }} />
+            <span style={lbl}>main</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)' }}>{cfg?.main_url}</span>
           </div>
           <div style={row}>
             <span style={lbl}>{L('방향', 'Direction')}</span>
@@ -322,7 +314,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
           </div>
           <div style={row}>
             <span style={lbl} />
-            <Button variant="secondary" style={btn} onClick={() => save('sub')}>{L('연결 저장', 'Save link')}</Button>
+            <Button variant="secondary" style={btn} onClick={() => save('sub')}>{L('설정 저장', 'Save settings')}</Button>
             <Button variant="primary" style={btn} disabled={running} onClick={runNow}>
               {running ? L('동기화 중…', 'syncing…') : L('지금 동기화', 'Sync now')}
             </Button>

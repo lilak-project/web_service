@@ -237,7 +237,10 @@ class SyncCfg(BaseModel):
 def _public(svc: str, proj: str = "") -> dict:
     cfg = sync.read(svc, proj)
     return {"role": cfg.get("role", ""), "main_url": cfg.get("main_url"),
-            "token": cfg.get("token"), "read_only": cfg.get("read_only", True),
+            # main needs its token to build the connection code; a sub's never
+            # has to leave the server again (a save without one keeps it).
+            "token": cfg.get("token") if cfg.get("role") == "main" else None,
+            "read_only": cfg.get("read_only", True),
             "last_sync": cfg.get("last_sync"), "last_error": cfg.get("last_error"),
             "interval_min": int(cfg.get("interval_min") or 0),
             "live": bool(cfg.get("live")),
@@ -267,18 +270,19 @@ def _put(svc: str, body: SyncCfg, proj: str = "") -> dict:
         cfg["accept_push"] = bool(body.accept_push)
         cfg.pop("main_url", None)
     elif body.role == "sub":
-        url = (body.main_url or "").strip().rstrip("/")
+        was = cfg if cfg.get("role") == "sub" else {}
+        url = ((body.main_url or "").strip() or was.get("main_url") or "").rstrip("/")
         if not url.startswith(("http://", "https://")):
             raise HTTPException(400, "main 주소는 http(s):// 로 시작해야 합니다.")
         cfg["main_url"] = url
-        cfg["token"] = (body.token or "").strip()
+        cfg["token"] = (body.token or "").strip() or was.get("token") or ""
         cfg["read_only"] = bool(body.read_only)
         cfg["interval_min"] = max(0, min(1440, int(body.interval_min or 0)))
         cfg["live"] = bool(body.live)
         cfg["two_way"] = bool(body.two_way)
         cfg["projects"] = [] if proj else sorted({p for p in body.projects if registry.valid_name(p)})
         if not cfg["token"]:
-            raise HTTPException(400, "main 에서 발급한 토큰을 붙여넣으세요.")
+            raise HTTPException(400, "main 의 연결 코드를 붙여넣으세요.")
     else:
         cfg = {"role": ""}
     sync.write(svc, cfg, proj)
