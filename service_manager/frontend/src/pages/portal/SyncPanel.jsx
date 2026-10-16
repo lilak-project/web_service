@@ -32,6 +32,10 @@ export default function SyncPanel({ service, project = '', onChanged }) {
   const [msg, setMsg] = useState('')
   const [job, setJob] = useState(null)
   const [grants, setGrants] = useState(null)   // permission-transfer preview
+  // A role CHOSEN but not yet saved. `sub` cannot be saved until its partner
+  // and token are filled in, and those fields only exist once the role is sub
+  // — so picking it has to show the form first and save afterwards.
+  const [pick, setPick] = useState(null)
   const poll = useRef(null)
 
   async function load() {
@@ -63,6 +67,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
         : role === 'main' ? { role, accept_push: !!cfg?.accept_push, ...extra } : { role }
       const { data } = await launcher.put(base, body)
       setCfg(data)
+      setPick(null)
       setMsg(L('저장됨', 'saved'))
       if (data.role === 'sub' && !project) loadChoices()
       onChanged?.()
@@ -100,13 +105,23 @@ export default function SyncPanel({ service, project = '', onChanged }) {
   }
 
   const copy = (v) => { try { navigator.clipboard.writeText(v) } catch { /* ignore */ } setMsg(L('복사됨', 'copied')) }
-  const role = cfg?.role || ''
+  const role = pick ?? (cfg?.role || '')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
       <div style={row}>
         <span style={lbl}>{L('동기화', 'Sync')}</span>
-        <select value={role} onChange={(e) => save(e.target.value)} style={sel}>
+        {/* off and main need nothing typed, so they save on the spot; sub
+            opens its form and waits for 연결 저장. */}
+        <select value={role} style={sel}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v === 'sub' && cfg?.role !== 'sub') {
+              setPick('sub')
+              setMsg(L('main 주소와 토큰을 넣고 연결 저장을 누르세요.',
+                'paste the main URL and token, then press Save link'))
+            } else { setPick(null); save(v) }
+          }}>
           <option value="">{L('사용 안 함', 'off')}</option>
           <option value="main">{L('main (원본)', 'main (source)')}</option>
           <option value="sub">{L('sub (미러)', 'sub (mirror)')}</option>
