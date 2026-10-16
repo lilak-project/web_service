@@ -37,6 +37,8 @@ RUN set -e; mkdir -p /out; \
       echo "→ scaffolded service: $name"; \
       if [ -f "$name/frontend/package.json" ]; then \
         (cd "$name/frontend" && LILAK_UI_PATH=/src/lilak_ui npm install --no-audit --no-fund && npm run build); \
+      elif [ -f "$name/package.json" ]; then \
+        (cd "$name" && LILAK_UI_PATH=/src/lilak_ui npm install --no-audit --no-fund && npm run build); \
       fi; \
       cp -a "$name" "/out/$name"; \
       find "/out/$name" -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true; \
@@ -78,6 +80,11 @@ COPY --from=frontend /src/asset_manager/dist            /app/asset_manager/dist
 # Scaffolded services (uniform layout): backend + built dist, assembled in stage 1.
 # cwd in each seed manifest points at /app/<name>/backend.
 COPY --from=frontend /out /app
+# The rack services' portal-serve.sh run their backend on the host install's
+# shared venv (service_manager/.venv). The image's one env IS that venv, so
+# point the path at it — otherwise they fall back to a bare static server.
+RUN mkdir -p /app/service_manager/.venv/bin \
+ && ln -sf /usr/local/bin/python3 /app/service_manager/.venv/bin/python
 
 # Live service scaffolding (admin "create empty service"): Node runtime + the
 # generator + the kit source + a shared prebuilt node_modules. New services are
