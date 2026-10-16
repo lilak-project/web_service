@@ -38,7 +38,11 @@ export default function ServiceProjects({ service, canManage, manage = false, on
     .then((r) => setLinked(r.data.own_links || [])).catch(() => {})
   useEffect(() => { if (canManage && manage) loadLinked() }, [canManage, manage])  // eslint-disable-line react-hooks/exhaustive-deps
   // Which project the service's own card opens, "" = none (the list is shown).
+  // ONE per service — the server keeps a single `entry_project`, so this
+  // follows the service rather than remembering a press: a row that was the
+  // entrance before someone else (or another tab) moved it must stop saying so.
   const [entry, setEntry] = useState(service.entry_project || '')
+  useEffect(() => { setEntry(service.entry_project || '') }, [service.entry_project])
 
   async function load() {
     try { setProjects((await launcher.get(`/services/${svc}/projects`)).data) }
