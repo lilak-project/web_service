@@ -79,20 +79,61 @@ export default function SyncPanel({ service, project = '', onChanged }) {
     catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
   }
 
+  function watch(jobId) {
+    setJob({ status: 'queued', log: [] })
+    clearInterval(poll.current)
+    poll.current = setInterval(async () => {
+      try {
+        const r = await launcher.get(`/admin/services/${svc}/sync/jobs/${jobId}`)
+        setJob(r.data)
+        if (r.data.status === 'done' || r.data.status === 'error') {
+          clearInterval(poll.current); load()
+          // A sync can bring projects: the list beside this panel reads again.
+          window.dispatchEvent(new Event('portal:projects'))
+        }
+      } catch { /* keep polling */ }
+    }, 1200)
+  }
+
   async function runNow() {
     setMsg('')
+    try { watch((await launcher.post(`${base}/run`)).data.job_id) }
+    catch (e) { setMsg(e?.response?.data?.detail || L('동기화를 시작하지 못했습니다', 'failed to start sync')) }
+  }
+
+  // ── the connection code: main hands out one line, a sub pastes it ──
+  // Main's own idea of its address is often localhost, which another server
+  // cannot reach — so the address is editable before the code is copied.
+  const [addr, setAddr] = useState('')
+  useEffect(() => {
+    if (cfg?.role !== 'main') return
+    const local = (u) => /\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(u || '')
+    setAddr((a) => a || (local(cfg.pair_url) && !local(window.location.origin) ? window.location.origin : (cfg.pair_url || '')))
+  }, [cfg?.role, cfg?.pair_url])
+  const b64url = (str) => btoa(String.fromCharCode(...new TextEncoder().encode(str)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  const code = cfg?.role === 'main' && cfg.token
+    ? 'lilak-sync:' + b64url(JSON.stringify({ v: 1, url: addr.trim().replace(/\/+$/, ''), svc,
+      ...(project ? { proj: project } : {}), token: cfg.token, two_way: !!cfg.accept_push }))
+    : ''
+  const addrLocal = /\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(addr)
+
+  const [joinCode, setJoinCode] = useState('')
+  const [joinLive, setJoinLive] = useState(true)
+  async function join() {
+    setMsg('')
     try {
-      const { data } = await launcher.post(`${base}/run`)
-      setJob({ status: 'queued', log: [] })
-      clearInterval(poll.current)
-      poll.current = setInterval(async () => {
-        try {
-          const r = await launcher.get(`/admin/services/${svc}/sync/jobs/${data.job_id}`)
-          setJob(r.data)
-          if (r.data.status === 'done' || r.data.status === 'error') { clearInterval(poll.current); load() }
-        } catch { /* keep polling */ }
-      }, 1200)
-    } catch (e) { setMsg(e?.response?.data?.detail || L('동기화를 시작하지 못했습니다', 'failed to start sync')) }
+      const { data } = await launcher.post(`/admin/services/${svc}/sync/join`, { code: joinCode.trim(), live: joinLive })
+      setJoinCode('')
+      setMsg(data.project
+        ? L(`'${data.project}' 프로젝트${data.made ? '를 만들고' : '에'} 연결했습니다${data.two_way ? ' (양방향)' : ''} — 첫 동기화 중`,
+          `${data.made ? 'made and ' : ''}linked project '${data.project}'${data.two_way ? ' (two-way)' : ''} — first sync running`)
+        : L(`서비스 전체를 연결했습니다${data.two_way ? ' (양방향)' : ''} — 첫 동기화 중`,
+          `linked the whole service${data.two_way ? ' (two-way)' : ''} — first sync running`))
+      load(); onChanged?.()
+      window.dispatchEvent(new Event('portal:projects'))
+      if (data.job_id) watch(data.job_id)
+    } catch (e) { setMsg(e?.response?.data?.detail || L('연결하지 못했습니다', 'could not join')) }
   }
 
   async function loadGrants(apply) {
@@ -144,13 +185,24 @@ export default function SyncPanel({ service, project = '', onChanged }) {
       {role === 'main' && (
         <>
           <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
-            {L('아래 두 값을 sub 서버의 같은 서비스에 붙여넣으세요.',
-              'Paste these two values into the same service on the sub server.')}
+            {L('연결 코드 하나를 sub 서버의 같은 서비스 → 동기화 → "연결 코드"에 붙여넣으면 프로젝트를 만들고 바로 동기화합니다. 코드에는 토큰이 들어 있으니 비밀번호처럼 다루세요.',
+              'Paste the connection code into the same service on the sub server (Sync → "Connection code"): it makes the project and syncs at once. The code holds the token — treat it like a password.')}
           </div>
           <div style={row}>
             <span style={lbl}>{L('주소', 'URL')}</span>
-            <input readOnly value={cfg.pair_url || ''} style={input} />
-            <Button variant="secondary" style={btn} onClick={() => copy(cfg.pair_url || '')}>{L('복사', 'Copy')}</Button>
+            <input value={addr} onChange={(e) => setAddr(e.target.value)} style={input}
+              placeholder="http://kiki.local:8025" />
+          </div>
+          {addrLocal && (
+            <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--warning-text, #b45309)' }}>
+              {L('localhost 는 다른 서버에서 닿지 않습니다 — 이 서버의 이름(kiki.local)이나 IP로 고치세요.',
+                'localhost cannot be reached from another server — use this server\'s name or IP.')}
+            </div>
+          )}
+          <div style={row}>
+            <span style={lbl}>{L('연결 코드', 'Code')}</span>
+            <input readOnly value={code} style={{ ...input, fontFamily: 'var(--font-mono)' }} onFocus={(e) => e.target.select()} />
+            <Button variant="primary" style={btn} disabled={!code} onClick={() => copy(code)}>{L('복사', 'Copy')}</Button>
           </div>
           <div style={row}>
             <span style={lbl}>{L('토큰', 'Token')}</span>
@@ -167,6 +219,24 @@ export default function SyncPanel({ service, project = '', onChanged }) {
             </label>
           </div>
         </>
+      )}
+
+      {/* The short way in: main's code makes the project, links it and syncs.
+          Offered at the service level — a project's code names its project. */}
+      {!project && role !== 'main' && (
+        <div style={{ ...row, paddingBottom: 6, borderBottom: '1px dashed var(--border-subtle)' }}>
+          <span style={lbl}>{L('연결 코드', 'Code')}</span>
+          <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)}
+            placeholder={L('main 에서 복사한 lilak-sync:… 코드', 'lilak-sync:… code copied from main')}
+            style={{ ...input, fontFamily: 'var(--font-mono)' }} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={joinLive} onChange={(e) => setJoinLive(e.target.checked)} />
+            {L('실시간', 'live')}
+          </label>
+          <Button variant="primary" style={btn} disabled={!joinCode.trim() || running} onClick={join}>
+            {L('받기', 'Join')}
+          </Button>
+        </div>
       )}
 
       {role === 'sub' && (
@@ -288,16 +358,17 @@ export default function SyncPanel({ service, project = '', onChanged }) {
               ))}
             </div>
           )}
-          {job && (
-            <pre style={{ margin: 0, maxHeight: 160, overflow: 'auto', fontSize: 'var(--fs-micro, 10px)', lineHeight: 1.5,
-              backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)', borderRadius: 8, padding: 10, whiteSpace: 'pre-wrap' }}>
-              {(job.log || []).join('\n') || '…'}{job.error ? `\n! ${job.error}` : ''}
-            </pre>
-          )}
         </>
       )}
 
       {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</div>}
+      {/* The last sync's log — after a join too, while the role still reads off. */}
+      {job && (
+        <pre style={{ margin: 0, maxHeight: 160, overflow: 'auto', fontSize: 'var(--fs-micro, 10px)', lineHeight: 1.5,
+          backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)', borderRadius: 8, padding: 10, whiteSpace: 'pre-wrap' }}>
+          {(job.log || []).join('\n') || '…'}{job.error ? `\n! ${job.error}` : ''}
+        </pre>
+      )}
     </div>
   )
 }

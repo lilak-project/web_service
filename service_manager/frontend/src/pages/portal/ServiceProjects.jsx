@@ -45,6 +45,12 @@ export default function ServiceProjects({ service, canManage, manage = false, on
     catch (e) { setErr(e?.response?.data?.detail || t('portal_proj_load_fail')) }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  // A sync (or a join from a code) can bring projects.
+  useEffect(() => {
+    const again = () => { load(); if (canManage && manage) loadLinked() }
+    window.addEventListener('portal:projects', again)
+    return () => window.removeEventListener('portal:projects', again)
+  })
 
   function enter(proj) {
     // SSO handoff (same origin): hand the self-UI service the portal token.

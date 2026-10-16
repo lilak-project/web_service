@@ -329,6 +329,64 @@ def rotate_project_token(svc: str, proj: str, _: models.User = Depends(require_p
     return _rotate(svc, proj)
 
 
+# ── joining from a code: everything the sub needs, in one paste ──────────────
+CODE_PREFIX = "lilak-sync:"
+
+
+class JoinBody(BaseModel):
+    code: str
+    live: bool = True               # follow main within seconds from the start
+
+
+def _decode(code: str) -> dict:
+    """main's connection code → {url, svc, proj, token, two_way}. Built by the
+    main's sync panel: the prefix and url-safe base64 of a small JSON."""
+    import base64
+    import json as _json
+    raw = (code or "").strip()
+    if raw.startswith(CODE_PREFIX):
+        raw = raw[len(CODE_PREFIX):]
+    try:
+        d = _json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8"))
+        assert isinstance(d, dict) and d.get("url") and d.get("svc") and d.get("token")
+    except Exception:                            # noqa: BLE001
+        raise HTTPException(400, "연결 코드를 읽을 수 없습니다 — main 에서 복사한 코드 전체를 붙여넣으세요.")
+    return d
+
+
+@router.post("/api/admin/services/{svc}/sync/join", status_code=202)
+def join_sync(svc: str, body: JoinBody, _: models.User = Depends(require_portal_admin)):
+    """Become a sub from main's connection code alone: check that main answers
+    to the token, make the project here if there is none, link it (the
+    project's own link for a project code, the service's otherwise) and start
+    the first sync."""
+    import json as _json
+    d = _decode(body.code)
+    if d["svc"] != svc:
+        raise HTTPException(400, f"이 코드는 '{d['svc']}' 서비스용입니다.")
+    url = str(d["url"]).strip().rstrip("/")
+    proj = str(d.get("proj") or "")
+    if proj and not registry.valid_name(proj):
+        raise HTTPException(400, "코드의 프로젝트 이름이 올바르지 않습니다.")
+    try:
+        listed = _json.loads(_get(f"{url}/api/sync/{svc}/projects", d["token"], timeout=10)).get("projects") or []
+    except urllib.error.HTTPError as e:
+        raise HTTPException(502, f"main 이 코드를 받지 않습니다 (HTTP {e.code}) — 토큰이 바뀌었으면 새 코드를 받으세요.")
+    except Exception as e:                       # noqa: BLE001
+        raise HTTPException(502, f"main 에 닿지 않습니다: {e} — 코드 속 주소({url})가 이 서버에서 열리는지 확인하세요.")
+    if proj and proj not in listed:
+        raise HTTPException(404, f"main 에 '{proj}' 프로젝트가 없습니다.")
+    made = False
+    if proj and not pr.project_dir(svc, proj).is_dir():
+        pr.create_project(svc, proj)
+        made = True
+    cfg = _put(svc, SyncCfg(role="sub", main_url=url, token=d["token"],
+                            two_way=bool(d.get("two_way")), live=bool(body.live)), proj)
+    job_id = _start_pull(svc, key=proj)
+    return {"job_id": job_id, "project": proj or None, "made": made,
+            "two_way": cfg["two_way"], "projects": listed}
+
+
 @router.get("/api/admin/services/{svc}/sync/projects")
 def sync_project_choices(svc: str, _: models.User = Depends(require_portal_admin)):
     """What the service's sub link can choose from: main's projects and this

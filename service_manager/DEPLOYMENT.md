@@ -239,7 +239,13 @@ public repo, so no GitHub credentials are needed.
 예: `s2`의 elog를 원본으로 두고 `s1`이 사본을 유지, 동시에 `s3`의 asset_manager를
 `s1`이 미러링. 설정은 **관리 모드 → 서비스 카드 → 동기화** 에 있습니다.
 
-**설정 순서**
+**가장 쉬운 방법 — 연결 코드**: main에서 역할을 `main (원본)`으로 두면 **연결 코드**(`lilak-sync:…`) 한
+줄이 나옵니다. 주소 칸이 `localhost`면 다른 서버가 닿는 이름(`kiki.local`)이나 IP로 고친 뒤 코드를
+복사하세요. sub 서버에서 같은 서비스 → 동기화 → `연결 코드`에 붙여넣고 `받기`를 누르면, 프로젝트가 없으면
+만들고 연결(양방향 여부는 main 설정을 따름)한 뒤 바로 첫 동기화를 합니다. 프로젝트 줄의 `Sync`에서 만든
+코드는 그 프로젝트만, 서비스의 코드는 서비스 전체를 연결합니다. 코드에는 토큰이 들어 있으니 비밀번호처럼 다루세요.
+
+**설정 순서 (직접 입력)**
 
 1. **원본 서버(main)** — 해당 서비스에서 역할을 `main (원본)`으로 바꾸면 **주소 + 토큰**이
    나옵니다. (토큰이 새면 데이터가 통째로 읽히므로 채팅 등으로 흘리지 마세요. 유출 시
@@ -298,6 +304,15 @@ manager)는 양쪽에서 고쳐도 됩니다.
 **English** — portals on different servers can mirror a service's project data:
 `s2`'s elog as the source with `s1` keeping a copy, while `s1` also mirrors
 `s3`'s asset_manager. Configure it under **manage mode → service card → Sync**.
+
+**Quickest — the connection code**: with the role at `main`, the panel shows one
+`lilak-sync:…` code (fix the address first if it says localhost — use a name or IP the
+other server can reach). On the other server, paste it under the same service → Sync →
+`Code` and press `Join`: it makes the project if missing, links it (two-way if main
+accepts edits) and runs the first sync. A project row's code links that project; the
+service's links the whole service. The code holds the token — treat it as a secret.
+
+Or by hand:
 
 1. On the **source**, set the role to `main` — it shows a **URL + token** (treat the
    token as a secret: it grants a full read of that service's data; `Rotate` if it
