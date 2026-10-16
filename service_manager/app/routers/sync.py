@@ -52,6 +52,11 @@ from ..deps import require_portal_admin
 
 router = APIRouter(tags=["portal-sync"])
 
+# Every request to another portal says who it is. A portal behind Cloudflare
+# answers Python's default "Python-urllib/x.y" with 403 (error 1010, a bot
+# signature) before the portal ever sees it.
+UA = {"User-Agent": "lilak-portal-sync/1"}
+
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
 _busy: set[str] = set()          # services with a pull in flight
@@ -512,7 +517,7 @@ def pair_request(svc: str, body: PairRequest, user: models.User = Depends(requir
                        "from_name": socket.gethostname(), "by": user.username}).encode()
     try:
         req = urllib.request.Request(f"{url}/api/sync/{svc}/requests", data=ask, method="POST",
-                                     headers={"Content-Type": "application/json"})
+                                     headers={"Content-Type": "application/json", **UA})
         with urllib.request.urlopen(req, timeout=10) as r:
             got = _json.loads(r.read())
     except urllib.error.HTTPError as e:
@@ -595,13 +600,13 @@ def sync_project_choices(svc: str, _: models.User = Depends(require_portal_admin
 
 
 def _get(url: str, token: str, timeout: int = 60) -> bytes:
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}", **UA})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
 
 
 def _send(method: str, url: str, token: str, data: bytes = None, timeout: int = 120) -> bytes:
-    req = urllib.request.Request(url, data=data, method=method, headers={
+    req = urllib.request.Request(url, data=data, method=method, headers={**UA,
         "Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
