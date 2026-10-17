@@ -123,7 +123,7 @@ function AuthorRows({ value = [], doc, onChange, onRegister, onOpenAuthor }) {
 /** A paper's reference list. Entry 5 is either a paper in this list — press its
  *  number and you are reading it — or a line of text for one that is not here
  *  yet. Both are kept: a citation you cannot link is still a citation. */
-function CiteRows({ value = [], refs, mine, onChange, onOpen }) {
+function CiteRows({ value = [], refs, mine, onChange, onOpen, onGroup }) {
   // citeKey → id, so the picker can be typed into and pasted into.
   const byLabel = useMemo(() => {
     const m = new Map()
@@ -168,6 +168,13 @@ function CiteRows({ value = [], refs, mine, onChange, onOpen }) {
           onClick={() => onChange([...value, { n: String(value.length + 1), ref: '', raw: '' }])}>
           + 참고문헌
         </button>
+        {/* The list beside the editor becomes this paper's reference list —
+            the same tab the count in the table opens, reachable from in here
+            where you are actually working on them. */}
+        {value.some((c) => c.ref) && (
+          <button type="button" className="rl-btn" title="목록을 이 참고문헌들로 바꿉니다"
+            onClick={onGroup}>그룹 열기 ({value.filter((c) => c.ref).length})</button>
+        )}
         <span className="rl-hint">
           {value.filter((c) => c.ref).length}개 연결 · {value.filter((c) => !c.ref && c.raw).length}개 글자만
         </span>
@@ -369,7 +376,12 @@ registerType('cites', {
   },
   Edit: ({ value, onChange, ctx, rec }) => (
     <CiteRows value={value || []} refs={ctx.doc?.references || []} mine={rec.id}
-      onChange={onChange} onOpen={(id) => ctx.openItem?.(id)} />
+      onChange={onChange} onOpen={(id) => ctx.openItem?.(id)}
+      // From what is in the form, not what was saved: a row you just linked
+      // belongs in the group you open.
+      onGroup={() => idsTab(ctx, `cites:${rec.id}`, `${refLabel(rec)} →`,
+        [...linkedCites({ cites: value })]
+          .sort((x, y) => (Number(x.n) || 999) - (Number(y.n) || 999)).map((c) => c.ref))} />
   ),
   // A paper other papers cite is taken out of their lists by keeping the line
   // and dropping the link — a citation you cannot link is still a citation.
