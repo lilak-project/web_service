@@ -22,7 +22,7 @@ import {
   RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
   RackEditClass,
   bySome, asSorts, bumpSort, byKeys, FilterBar, FacetRows,
-  PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders,
+  PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders, RackBar,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
 // and one newline means one line break, because a note is typed, not typeset.
@@ -361,12 +361,7 @@ export default function App() {
   return (
     <div className="rl" style={brandStyle()}>
       <section className="rl-mod">
-        <header className="rl-bar">
-          <b>노트</b>
-          <span className="rl-n">{index ? `${notes.length}개` : ''}</span>
-          <span className="rl-sp" />
-          <span className="rl-n">{PORTAL_PROJECT}</span>
-        </header>
+        <RackBar title="노트" count={index ? `${notes.length}개` : ''} />
 
         <div className="rl-cmd">
           <button type="button" className="rl-btn rl-go" onClick={() => create(null)}>+ 새 노트</button>
