@@ -196,6 +196,19 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   color: var(--rk-mute); cursor: pointer;
 }
 .nt-fold:hover { border-color: var(--rk-edge); color: var(--rk-dim); }
+/* The fold sits under the title with the tags beside it: a row of its own, so
+   the title has the whole line and the caret is where what it opens appears. */
+.nt-foldrow {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 11px 2px;
+}
+.nt-date {
+  height: 22px; padding: 0 4px;
+  border: 1px solid var(--rk-edge); border-radius: 0;
+  background: var(--rk-panel); font: inherit; font-size: var(--rk-fs);
+  color: var(--rk-text);
+}
 .nt-tagline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rk-cite-t); }
 .nt-meta-open {
   flex: 0 0 auto;
@@ -268,14 +281,16 @@ body.nt-paper #root { height: auto; min-height: 100%; }
    one, which paints its own segment over the list's bar. */
 .nt-prose li > p::before { content: none; }
 .nt-prose li::before { content: none; }
-.nt-prose li > p.nt-at::before {
+/* Every level the same: the bar belongs to the line's OWN list, whose box is
+   already a step in — the depth is in the layout, not in the number. (Adding
+   a step per level is what the old one-gutter-for-everything bars needed, and
+   leaving it in let a deep rule outrank the checkbox and drag it to the left
+   margin.) A task item is not here: its paragraph is holding the checkbox. */
+.nt-prose li:not([data-item-type="task"]) > p.nt-at::before {
   content: '';
   left: calc(-18px - 1.5em);
   background: var(--rk-cite-t);
 }
-.nt-prose li li > p.nt-at::before { left: calc(-18px - 3em); }
-.nt-prose li li li > p.nt-at::before { left: calc(-18px - 4.5em); }
-.nt-prose li li li li > p.nt-at::before { left: calc(-18px - 6em); }
 /* A task item's paragraph is busy holding the checkbox, so its lit segment is
    the item's own, one line tall. */
 .nt-prose li[data-item-type="task"]:has(> .nt-at)::before {
@@ -285,8 +300,6 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   width: 3px; border-radius: 1px;
   background: var(--rk-cite-t);
 }
-.nt-prose li li[data-item-type="task"]:has(> .nt-at)::before { left: calc(-18px - 3em); }
-.nt-prose li li li[data-item-type="task"]:has(> .nt-at)::before { left: calc(-18px - 4.5em); }
 .nt-prose blockquote > p::before { content: none; }
 /* The lit one, everywhere else. */
 .nt-prose .nt-at::before { background: var(--rk-cite-t); }

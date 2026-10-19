@@ -568,11 +568,11 @@ export default function App() {
  *  editor does not, which is not a change anyone made. Everything else (the
  *  version, the date) comes back from the server on every save and would read
  *  as one. */
-const sameNote = (a, b) => a.title === b.title
+const sameNote = (a, b) => a.title === b.title && (a.date || '') === (b.date || '')
   && String(a.body || '').trimEnd() === String(b.body || '').trimEnd()
 const putNote = (id, baseVersion, v) => ask(`/notes/${encodeURIComponent(id)}`, {
   method: 'PUT',
-  body: JSON.stringify({ baseVersion, title: v.title, body: v.body }),
+  body: JSON.stringify({ baseVersion, title: v.title, date: v.date, body: v.body }),
 })
 
 /** The note is read when the tab opens, not from the list — the list carries a
@@ -679,16 +679,23 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
       <div className="nt-titlerow" hidden={read}>
         <input className="nt-title" ref={titleRef} value={f.title} placeholder="제목"
           onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} />
-        {/* Everything that is not the title or the body is behind this. */}
+      </div>
+      {/* Under the title, not beside it: the fold is about the note, not about
+          the name, and the line it opens starts with the date you can change. */}
+      <div className="nt-foldrow" hidden={read}>
         <button type="button" className="nt-fold" onClick={() => setOpen(!open)}
           title={open ? '접기' : '날짜 · 태그 · 파일 이름'} aria-expanded={open}>
           <i className="rl-caret">{open ? '▾' : '▸'}</i>
-          {tags.length ? <span className="nt-tagline">{tags.map((t) => `#${t}`).join(' ')}</span> : null}
         </button>
+        {tags.length ? <span className="nt-tagline">{tags.map((t) => `#${t}`).join(' ')}</span> : null}
       </div>
       {open && !read && (
         <div className="nt-meta-open">
-          <span className="rl-hint">{f.date || '날짜 없음'}</span>
+          <label className="rl-hint">
+            날짜{' '}
+            <input type="date" className="rl-in nt-date" value={f.date || ''}
+              onChange={(e) => setF((s) => ({ ...s, date: e.target.value }))} />
+          </label>
           <span className="rl-hint rl-mono">{f.id}.md</span>
           {Object.entries(f.fields || {}).map(([k, v]) => (
             <span key={k} className="rl-hint"><b className="rl-mono">{k}</b> {String(v ?? '')}</span>
