@@ -80,6 +80,14 @@ export function renameBodyTag(body, from, to) {
     (name === from ? `${lead}#${to}` : m))
 }
 
+/** The todo without its tags: they have a column of their own, and a list of a
+ *  hundred reads better when the sentence is the sentence. The note keeps them
+ *  — this is what the table shows, not what is saved. */
+const untagged = (text) => String(text || '')
+  .replace(TAG_RE, (m, lead) => lead)
+  .replace(/\s{2,}/g, ' ')
+  .trim()
+
 const COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
@@ -467,7 +475,7 @@ export default function App() {
                       chk: <input type="checkbox" checked={t.done} aria-label={t.text}
                         onChange={() => toggleTodo(t)} onClick={(e) => e.stopPropagation()} />,
                       num: i + 1,
-                      text: t.text || D,
+                      text: untagged(t.text) || D,
                       title: (
                         <button type="button" className="rl-lnk"
                           onClick={(e) => { e.stopPropagation(); openEdit(t.id, t.title) }}>{t.title}</button>
