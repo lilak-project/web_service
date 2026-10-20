@@ -8,9 +8,9 @@
  *   - 이름 (Academic_20131207_HIM2013) is a naming rule — `fill` writes it for a
  *     new activity, and one typed by hand is kept as it is.
  *   - 위치 and 도시 went together, so a place is a record with its city.
- *   - 장비 held several names in one cell; it is a list now, with a tab of the
- *     names in use. 책임자 links to the people in author_manager (matched by
- *     name; one 김민주 of two, the CENS one), and its tab lists them.
+ *   - 장비 held several names in one cell; it is a list now. 책임자 links to the
+ *     people in author_manager (matched by name; one 김민주 of two, the CENS
+ *     one). Neither has a tab of its own.
  *   - The Proposals sheet is a class of its own records, which an activity of
  *     kind 제안서 can point at.
  */
@@ -81,8 +81,6 @@ export default {
       { k: 'name', label: '이름', type: 'text', col: 160, required: true },
       { k: 'city', label: '도시', type: 'text', col: 120 },
     ] },
-    { k: 'equipment', label: '장비', field: 'equipment' },
-    { k: 'leads', label: '책임자', field: 'leads' },
     // No tab of its own: a proposal is reached from the activity that points
     // at it (its name in the 제안서 field opens it).
     { k: 'proposals', label: '제안서', tab: false, fields: [
