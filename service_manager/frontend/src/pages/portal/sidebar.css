@@ -109,6 +109,17 @@
    stand down to grey, and come back when the pointer does. */
 .pl-root.mini .pl-side { filter: grayscale(1) opacity(.6); }
 .pl-root.mini .pl-side:hover, .pl-root.mini .pl-side:focus-within { filter: none; }
+/* …and the service tiles go further: no square or circle behind them, every
+   icon the same pale grey — a column of marks, not of badges. The tile's colour
+   is inline, so it takes !important; the colours come back with the pointer. */
+.pl-root.mini .pl-side:not(:hover):not(:focus-within) .pl-nav .pl-av {
+  background: transparent !important;
+  box-shadow: none;
+}
+.pl-root.mini .pl-side:not(:hover):not(:focus-within) .pl-nav .pl-av svg {
+  color: var(--text-muted) !important;
+  fill: var(--text-muted) !important;
+}
 /* Collapsed, a card's hit area is a square INSIDE the bar (10..54) rather than a
    260px strip running off the right edge. */
 .pl-root.mini .pl-row {
