@@ -98,15 +98,16 @@ export default {
       { k: 'papers', label: '논문', type: 'refs', to: PAPERS },
     ] },
   ],
-  // The calendar tab: a bar from 행사 시작 to 행사 끝 (발표일자 strong inside it,
-  // the trip as a border around it), coloured by what kind of activity it is.
+  // The calendar tab: one bar per activity in its group's colour — the trip
+  // hatched, 행사 시작~끝 plain, 발표일자 strong.
   calendar: {
     start: 'start', end: 'end', mark: 'talkDate',
     outline: { start: 'tripStart', end: 'tripEnd' },
     groups: [
       { label: '학회 · 워크샵 · 미팅', color: '#2f6fde', match: (r) => ['학회', '워크샵', '미팅'].includes(r.kind) },
       { label: '세미나 · 강연 · 학교', color: '#1f9d55', match: (r) => ['세미나', '강연', '학교'].includes(r.kind) },
-      { label: '실험 · 연구 출장', color: '#e8730c', match: (r) => ['실험', '연구 출장'].includes(r.kind) },
+      { label: '실험', color: '#e8730c', match: (r) => r.kind === '실험' },
+      { label: '연구 출장', color: '#0f9aa8', match: (r) => r.kind === '연구 출장' },
       { label: '보고서 · 제안서 · PAC', color: '#8b3fd9', match: (r) => ['보고서', '제안서', 'PAC'].includes(r.kind) },
     ],
     // 행사이름(위치, 참여형태) — what is missing is left out.
