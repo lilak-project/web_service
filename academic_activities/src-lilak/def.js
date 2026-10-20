@@ -98,6 +98,23 @@ export default {
       { k: 'papers', label: '논문', type: 'refs', to: PAPERS },
     ] },
   ],
+  // The calendar tab: a bar from 행사 시작 to 행사 끝 (발표일자 strong inside it,
+  // the trip as a border around it), coloured by what kind of activity it is.
+  calendar: {
+    start: 'start', end: 'end', mark: 'talkDate',
+    outline: { start: 'tripStart', end: 'tripEnd' },
+    groups: [
+      { label: '학회 · 워크샵 · 미팅', color: '#2f6fde', match: (r) => ['학회', '워크샵', '미팅'].includes(r.kind) },
+      { label: '세미나 · 강연 · 학교', color: '#1f9d55', match: (r) => ['세미나', '강연', '학교'].includes(r.kind) },
+      { label: '실험 · 연구 출장', color: '#e8730c', match: (r) => ['실험', '연구 출장'].includes(r.kind) },
+      { label: '보고서 · 제안서 · PAC', color: '#8b3fd9', match: (r) => ['보고서', '제안서', 'PAC'].includes(r.kind) },
+    ],
+    // 행사이름(위치, 참여형태) — what is missing is left out.
+    label: (r, text) => {
+      const more = [text('place'), text('role')].filter((x) => String(x || '').trim())
+      return `${r.name || ''}${more.length ? `(${more.join(', ')})` : ''}`
+    },
+  },
   listing: { presets: [
     ['CV', '{start}  {name} — {발표 제목} ({참여 형태})', '⏎'],
     ['발표 목록', '{발표 제목}, {name}, {위치} ({YEAR})', '⏎'],
