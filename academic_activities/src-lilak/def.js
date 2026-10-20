@@ -21,6 +21,7 @@ const KINDS = [
   ['세미나', 'Seminar'], ['강연', 'Lecture'], ['학교', 'School'],
   ['실험', 'Experiment'], ['연구 출장', 'BusinessTrip'],
   ['보고서', 'Report'], ['제안서', 'Proposal'], ['PAC', 'PAC'],
+  ['기타', 'Activity'],
 ]
 const PREFIX = Object.fromEntries(KINDS)
 
@@ -99,16 +100,16 @@ export default {
     ] },
   ],
   // The calendar tab: one bar per activity in its group's colour — the trip
-  // hatched, 행사 시작~끝 plain, 발표일자 strong.
+  // light gray, 행사 시작~끝 light, 발표일자 underlined by a band.
   calendar: {
     start: 'start', end: 'end', mark: 'talkDate',
     outline: { start: 'tripStart', end: 'tripEnd' },
     groups: [
       { label: '학회 · 워크샵 · 미팅', color: '#2f6fde', match: (r) => ['학회', '워크샵', '미팅'].includes(r.kind) },
-      { label: '세미나 · 강연 · 학교', color: '#e8730c', match: (r) => ['세미나', '강연', '학교'].includes(r.kind) },
-      { label: '실험', color: '#1f9d55', match: (r) => r.kind === '실험' },
-      { label: '연구 출장', color: '#0f9aa8', match: (r) => r.kind === '연구 출장' },
+      { label: '세미나 · 강연 · 학교 · 연구 출장', color: '#e6b000', match: (r) => ['세미나', '강연', '학교', '연구 출장'].includes(r.kind) },
+      { label: '실험', color: '#0f9aa8', match: (r) => r.kind === '실험' },
       { label: '보고서 · 제안서 · PAC', color: '#8b3fd9', match: (r) => ['보고서', '제안서', 'PAC'].includes(r.kind) },
+      { label: '기타', color: '#2b313b', solid: true, match: (r) => r.kind === '기타' },
     ],
     // 행사이름 (위치 | 참여형태) — what is missing is left out.
     label: (r, text) => {
