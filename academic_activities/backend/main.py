@@ -14,6 +14,8 @@ from fastapi import FastAPI
 
 from lilak_portal_auth.store import Document, mount_folders, mount_spa
 
+from gcal import mount_gcal
+
 DATA = Path(os.environ.get("ACADEMIC_ACTIVITIES_DATA_DIR", "./data"))
 PROJECT = os.environ.get("PORTAL_PROJECT", "")
 DIST = Path(os.environ.get("ACADEMIC_ACTIVITIES_DIST_DIR", "./dist"))
@@ -24,6 +26,7 @@ DOC = Document(DATA / "data.json", keys=("activities", "places", "proposals", "s
 app = FastAPI(title="academic_activities")
 DOC.mount(app, project=PROJECT)
 mount_folders(app, DOC)   # a folder per record, under settings.folderRoots
+mount_gcal(app, DOC, DATA)   # Google Calendar: connect, preview, read-only overlays (gcal.py)
 
 # Must stay last: the catch-all would shadow /api/*.
 mount_spa(app, DIST, name="academic_activities")

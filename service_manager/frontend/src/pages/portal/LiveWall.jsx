@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button, Icon, tr } from 'lilak-ui'
 import { useLang } from '../../context/LangContext'
 import LiveTiles from './LiveTiles'
 
@@ -37,7 +37,6 @@ function pack(cards, heights, cols, areaH, fallbackH) {
 
 export default function LiveWall({ cards, big, onDone, iconFor, framed = false }) {
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const areaRef = useRef(null)
   const [dims, setDims] = useState({ w: 0, h: 0 })
   const [page, setPage] = useState(0)
@@ -138,17 +137,17 @@ export default function LiveWall({ cards, big, onDone, iconFor, framed = false }
       {/* the one bar: pager + Done */}
       <div style={{ height: BAR_H, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--border-subtle)' }}>
         <Icon name="broadcast" size={18} color="var(--warning-text, #e67700)" />
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{L('라이브', 'Live')} · {cards.length}</span>
+        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{tr("p_live_2")} · {cards.length}</span>
         <span style={{ flex: 1 }} />
         {pages.length > 1 && (
           <>
-            <Button variant="secondary" size="sm" disabled={cur === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} title={L('이전', 'Previous')}><Icon name="caret-left" size={15} /> {L('이전', 'Prev')}</Button>
+            <Button variant="secondary" size="sm" disabled={cur === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} title={tr("p_previous")}><Icon name="caret-left" size={15} /> {tr("p_prev")}</Button>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', minWidth: 48, textAlign: 'center' }}>{cur + 1} / {pages.length}</span>
-            <Button variant="secondary" size="sm" disabled={cur >= pages.length - 1} onClick={() => setPage((p) => Math.min(pages.length - 1, p + 1))} title={L('다음', 'Next')}>{L('다음', 'Next')} <Icon name="caret-right" size={15} /></Button>
+            <Button variant="secondary" size="sm" disabled={cur >= pages.length - 1} onClick={() => setPage((p) => Math.min(pages.length - 1, p + 1))} title={tr("p_next")}>{tr("p_next")} <Icon name="caret-right" size={15} /></Button>
             <span style={{ width: 8 }} />
           </>
         )}
-        <Button variant="primary" size="sm" onClick={onDone} style={{ minWidth: 76, justifyContent: 'center' }}>{L('완료', 'Done')}</Button>
+        <Button variant="primary" size="sm" onClick={onDone} style={{ minWidth: 76, justifyContent: 'center' }}>{tr("p_done")}</Button>
       </div>
       {/* the wall: every card of the page is one absolutely-placed box in ONE
           container, so a card that moves to another column keeps its DOM node
@@ -156,7 +155,7 @@ export default function LiveWall({ cards, big, onDone, iconFor, framed = false }
       <div ref={areaRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         {cards.length === 0 && (
           <div style={{ textAlign: 'center', paddingTop: 80, color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
-            {L('라이브를 지원하는 서비스가 없습니다.', 'No service supports live yet.')}
+            {tr("p_no_service_supports_live_yet")}
           </div>
         )}
         {placed.map(({ card: p, left, top, width }) => (
@@ -165,7 +164,7 @@ export default function LiveWall({ cards, big, onDone, iconFor, framed = false }
               minHeight: cardMin, maxHeight: Math.max(cardMin, dims.h), overflow: 'hidden', border: '1.5px solid var(--border-strong, #94a3b8)', borderRadius: 16, background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px 6px', flexShrink: 0 }}>
               <Icon name={iconFor(p.name, p.icon)} size={30} weight="fill" color={p.color || 'var(--text-primary)'} />
-              <span style={{ fontSize: 18, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.name}</span>
+              <span style={{ fontSize: 'var(--fs-xlarge)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.name}</span>
               <span style={{ marginLeft: 'auto', width: 10, height: 10, borderRadius: 999, background: dot(p), flexShrink: 0 }} />
             </div>
             <LiveTiles service={p} big wall pad="4px 18px 16px" />

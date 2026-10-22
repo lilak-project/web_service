@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon, Avatar } from 'lilak-ui'
+import { Button, Icon, Avatar, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import GroupsAdmin from './GroupsAdmin'
@@ -12,6 +12,8 @@ import GuideView from './GuideView'
 import ProfileEditor from './ProfileEditor'
 import GroupMark from './GroupMark'
 import ExpandBox from './ExpandBox'
+
+const LANG_NAMES = { ko: '한국어', en: 'English', ja: '日本語', zh: '中文' }
 
 /**
  * AccountView — account settings. A LEFT vertical menu switches between sub-tabs:
@@ -51,16 +53,15 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
 
 // The settings sub-menu, shared so the header can drive it on narrow screens.
 export function settingsMenu(isManager, lang) {
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   return [
-    ['me', 'user', L('내 계정', 'My account')],
-    ['feedback', 'chats', L('피드백', 'Feedback')],
+    ['me', 'user', tr("p_my_account")],
+    ['feedback', 'chats', tr("p_feedback")],
     ...(isManager ? [
-      ['accounts', 'users', L('계정', 'Accounts')],
-      ['groups', 'tree', L('그룹', 'Groups')],
-      ['invites', 'key', L('초대 코드', 'Invite codes')],
-      ['system', 'sliders', L('시스템', 'System')],
-      ['handshake', 'plug', L('핸드셰이크', 'Handshake')],
+      ['accounts', 'users', tr("p_accounts")],
+      ['groups', 'tree', tr("p_groups")],
+      ['invites', 'key', tr("p_invite_codes")],
+      ['system', 'sliders', tr("p_system")],
+      ['handshake', 'plug', tr("p_handshake")],
     ] : []),
   ]
 }
@@ -68,7 +69,13 @@ export function settingsMenu(isManager, lang) {
 // tab/onTab make the active sub-tab controllable from the header; hideMenu drops
 // the left sidebar (the header dropdown navigates instead) on narrow screens.
 export default function AccountView({ isManager, onChanged, onAccountGone, tab: tabProp, onTab, hideMenu = false }) {
-  const { lang } = useLang()
+  const { lang, setLang, langs } = useLang()
+  // The language is the account's: saved on it, so it follows the person.
+  async function changeLang(v) {
+    setLang(v)
+    try { await launcher.put('/account/prefs', { lang: v }); notify(tr('p_language_saved'), 'ok') }
+    catch (e) { notify(e?.response?.data?.detail || tr('p_failed'), 'bad') }
+  }
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [me, setMe] = useState(null)
   const [users, setUsers] = useState([])
@@ -103,51 +110,49 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   useEffect(() => { if (me) setDname(me.display_name || me.username || '') }, [me?.display_name, me?.username])
 
   const say = (m, tone) => { setMsg(m); notify(m, tone) }
-  async function run(p, ok) { try { const r = await p; say(ok(r), 'ok'); await load(); onChanged?.() } catch (e) { say(e?.response?.data?.detail || L('실패', 'failed'), 'bad') } }
+  async function run(p, ok) { try { const r = await p; say(ok(r), 'ok'); await load(); onChanged?.() } catch (e) { say(e?.response?.data?.detail || tr("p_failed"), 'bad') } }
 
   // ── self actions ──
   const redeem = () => f.code.trim() && run(launcher.post('/invite-codes/redeem', { code: f.code.trim() }),
     (r) => {
       setF((s) => ({ ...s, code: '' }))
       const d = r.data
-      return d.kind === 'group' ? L(`그룹 가입: ${d.group}`, `joined group: ${d.group}`)
-        : L(`권한 획득: ${d.service}${d.project ? '/' + d.project : ''}`, `granted: ${d.service}${d.project ? '/' + d.project : ''}`)
+      return d.kind === 'group' ? tr("p_joined_group", d.group)
+        : tr("p_granted", d.service, d.project ? '/' + d.project : '')
     })
   const changePw = () => (f.cur && f.npw) && run(launcher.post('/account/password', { current_password: f.cur, new_password: f.npw }),
-    () => { setF((s) => ({ ...s, cur: '', npw: '' })); return L('비밀번호 변경됨', 'password changed') })
+    () => { setF((s) => ({ ...s, cur: '', npw: '' })); return tr("p_password_changed") })
   // Change only the display name (shown in the portal, nptoy, community). The login
   // id (username) is intentionally left fixed.
   const changeName = () => dname.trim() !== (me.display_name || me.username || '') && run(launcher.post('/account/profile', { display_name: dname.trim() || null }),
-    () => L('표시 이름 변경됨', 'display name changed'))
+    () => tr("p_display_name_changed"))
   const requestEmail = () => f.email.trim() && run(launcher.post('/account/request-email', { new_email: f.email.trim() }),
-    () => { setF((s) => ({ ...s, email: '' })); return L('이메일 변경 요청됨 (관리자 승인 대기)', 'email change requested (awaiting admin)') })
-  const reverify = () => run(launcher.post('/account/verify'), () => L('이메일 인증됨 (임시)', 'email verified (temp)'))
+    () => { setF((s) => ({ ...s, email: '' })); return tr("p_email_change_requested_awaiting_admin") })
+  const reverify = () => run(launcher.post('/account/verify'), () => tr("p_email_verified_temp"))
   async function deleteSelf() {
-    if (!window.confirm(L('정말 계정을 삭제할까요? 되돌릴 수 없습니다.', 'Delete your account? This cannot be undone.'))) return
-    try { await launcher.delete('/account'); onAccountGone?.() } catch (e) { say(e?.response?.data?.detail || L('실패', 'failed'), 'bad') }
+    if (!window.confirm(tr("p_delete_your_account_this_cannot"))) return
+    try { await launcher.delete('/account'); onAccountGone?.() } catch (e) { say(e?.response?.data?.detail || tr("p_failed"), 'bad') }
   }
 
   // ── admin actions on a user ──
-  const adminSetPw = async (u) => { const p = await askPassword(L(`${u.username}의 새 비밀번호`, `New password for ${u.username}`)); if (p) run(launcher.post(`/admin/users/${u.id}/password`, { new_password: p }), () => L('비밀번호 재설정됨', 'password reset')) }
-  const adminVerify = (u) => run(launcher.post(`/admin/users/${u.id}/verify`), () => L(`${u.username} 인증됨`, `${u.username} verified`))
-  const adminRequestVerify = (u) => run(launcher.post(`/admin/users/${u.id}/request-verify`), (r) => r.data.verify_url ? L(`인증 링크(개발): ${r.data.verify_url}`, `verify link (dev): ${r.data.verify_url}`) : L('인증 메일 요청됨', 'verification requested'))
-  const adminResetPwEmail = (u) => { if (!window.confirm(L(`${u.username}에게 새 임의 비밀번호를 발급할까요?`, `Issue a new random password for ${u.username}?`))) return; run(launcher.post(`/admin/users/${u.id}/reset-password-email`), (r) => r.data.password ? L(`새 비밀번호(개발): ${r.data.password}`, `new password (dev): ${r.data.password}`) : L('이메일로 발송됨', 'emailed')) }
-  const adminApprove = (u, approve) => run(launcher.post(`/admin/users/${u.id}/approve-email`, { approve }), () => approve ? L('이메일 변경 승인됨', 'email approved') : L('거절됨', 'rejected'))
-  const adminDelete = async (u) => { const pw = await askPassword(L(`${u.username} 삭제 — 확인을 위해 내 비밀번호를 입력하세요.`, `Delete ${u.username} — enter YOUR password to confirm.`)); if (pw == null) return; run(launcher.delete(`/admin/users/${u.id}`, { data: { password: pw } }), () => L('삭제됨', 'deleted')) }
+  const adminSetPw = async (u) => { const p = await askPassword(tr("p_new_password_for", u.username)); if (p) run(launcher.post(`/admin/users/${u.id}/password`, { new_password: p }), () => tr("p_password_reset")) }
+  const adminVerify = (u) => run(launcher.post(`/admin/users/${u.id}/verify`), () => tr("p_verified", u.username))
+  const adminRequestVerify = (u) => run(launcher.post(`/admin/users/${u.id}/request-verify`), (r) => r.data.verify_url ? tr("p_verify_link_dev", r.data.verify_url) : tr("p_verification_requested"))
+  const adminResetPwEmail = (u) => { if (!window.confirm(tr("p_issue_a_new_random_password", u.username))) return; run(launcher.post(`/admin/users/${u.id}/reset-password-email`), (r) => r.data.password ? tr("p_new_password_dev", r.data.password) : tr("p_emailed")) }
+  const adminApprove = (u, approve) => run(launcher.post(`/admin/users/${u.id}/approve-email`, { approve }), () => approve ? tr("p_email_approved") : tr("p_rejected_2"))
+  const adminDelete = async (u) => { const pw = await askPassword(tr("p_delete_enter_your_password_to", u.username)); if (pw == null) return; run(launcher.delete(`/admin/users/${u.id}`, { data: { password: pw } }), () => tr("p_deleted")) }
   const adminRole = (u) => {
     const to = u.role === 'manager' ? 'user' : 'manager'
     // Promoting to manager = GLOBAL admin over every service and project — warn first.
-    if (to === 'manager' && !window.confirm(L(
-      `${u.username}을(를) 전체 관리자(매니저)로 승격할까요?\n\n매니저는 모든 서비스·프로젝트·계정에 대한 관리 권한을 갖습니다. 특정 서비스만 맡기려면 아래의 "관리 권한 (서비스/프로젝트)"를 사용하세요.`,
-      `Promote ${u.username} to GLOBAL manager?\n\nA manager can administer every service, project and account. To delegate just one service, use "Admin (service / project)" below instead.`))) return
-    run(launcher.post(`/admin/users/${u.id}/role`, { role: to }), () => L(`${u.username} → ${to}`, `${u.username} → ${to}`))
+    if (to === 'manager' && !window.confirm(tr("p_promote_to_global_manager_a", u.username))) return
+    run(launcher.post(`/admin/users/${u.id}/role`, { role: to }), () => tr("p_from_to", u.username, to))
   }
-  const adminActive = (u) => run(launcher.post(`/admin/users/${u.id}/active`, { active: u.is_active === false }), () => L(u.is_active === false ? '활성화됨' : '비활성화됨', u.is_active === false ? 'activated' : 'deactivated'))
-  const removeFromGroup = (u, g) => run(launcher.delete(`/admin/groups/${g.id}/members/${u.id}`), () => L(`${g.name}에서 제외됨`, `removed from ${g.name}`))
-  const resolveReq = (rid, action) => run(launcher.post(`/admin/access-requests/${rid}`, { action }), () => action === 'approve' ? L('승인됨', 'approved') : L('거절됨', 'rejected'))
+  const adminActive = (u) => run(launcher.post(`/admin/users/${u.id}/active`, { active: u.is_active === false }), () => (u.is_active === false ? tr('p_user_activated') : tr('p_user_deactivated')))
+  const removeFromGroup = (u, g) => run(launcher.delete(`/admin/groups/${g.id}/members/${u.id}`), () => tr("p_removed_from", g.name))
+  const resolveReq = (rid, action) => run(launcher.post(`/admin/access-requests/${rid}`, { action }), () => action === 'approve' ? tr("p_approved") : tr("p_rejected_2"))
   // scoped (service/project) admin: grant sets is_admin (also grants access); revoke drops admin, keeps access.
-  const grantScopedAdmin = (u) => agrant.svc && run(launcher.post('/admin/permissions', { user_id: u.id, service: agrant.svc, project: agrant.proj.trim(), admin: true }), () => { setAgrant({ svc: '', proj: '' }); return L('관리 권한 부여됨', 'admin granted') })
-  const revokeScopedAdmin = (u, p) => run(launcher.post('/admin/permissions', { user_id: u.id, service: p.service, project: p.project || '', admin: false }), () => L('관리 권한 해제됨', 'admin revoked'))
+  const grantScopedAdmin = (u) => agrant.svc && run(launcher.post('/admin/permissions', { user_id: u.id, service: agrant.svc, project: agrant.proj.trim(), admin: true }), () => { setAgrant({ svc: '', proj: '' }); return tr("p_admin_granted") })
+  const revokeScopedAdmin = (u, p) => run(launcher.post('/admin/permissions', { user_id: u.id, service: p.service, project: p.project || '', admin: false }), () => tr("p_admin_revoked"))
   // Selecting a service loads its project list once, for the project dropdown
   // (a single-project service 404s → empty list → only "whole service" remains).
   async function agrantPickSvc(svc) {
@@ -160,11 +165,11 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
 
   if (!me) return <div style={{ color: 'var(--text-primary)', fontSize: 'var(--fs-small,12px)' }}>{msg || '…'}</div>
 
-  const verifyText = (ago, left) => (ago == null ? L('미인증', 'unverified')
-    : L(`인증 ${ago}일 전 · ${left}일 남음`, `verified ${ago}d ago · ${left}d left`))
+  const verifyText = (ago, left) => (ago == null ? tr("p_unverified")
+    : tr("p_verified_d_ago_d_left", ago, left))
   const verifyChip = me.verification_current
     ? <Pill tone="ok">{verifyText(me.verify_days_ago, me.verify_days_left)}</Pill>
-    : <Pill tone="bad">{L('재인증 필요', 're-verify')}{me.verify_days_ago != null ? ` (${me.verify_days_ago}d)` : ''}</Pill>
+    : <Pill tone="bad">{tr("p_re_verify")}{me.verify_days_ago != null ? ` (${me.verify_days_ago}d)` : ''}</Pill>
 
   const MENU = settingsMenu(isManager, lang)
   const menuBtn = ([key, icon, label]) => {
@@ -181,104 +186,112 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
 
   const permChips = (list, keyPrefix) => list.map((p, i) => (
     <span key={keyPrefix + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>
-      {p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}{p.group ? ' · ' + p.group : ''}
+      {p.service}{p.project ? '/' + p.project : ' (' + tr("p_all") + ')'}{p.group ? ' · ' + p.group : ''}
     </span>
   ))
 
   const MyAccount = (
     <>
-      <Panel title={L('계정', 'Account')} hint={`@${me.username}${isManager ? ' · ' + L('매니저', 'manager') : ''}`}>
-        <Field label={L('이름', 'Name')}>
+      <Panel title={tr("p_account")} hint={`@${me.username}${isManager ? ' · ' + tr("p_manager") : ''}`}>
+        <Field label={tr("p_name")}>
           <span>{me.display_name || me.username}</span>
           {(me.groups || []).map((g) => (
             <span key={g.id} style={fieldChip}><GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}</span>
           ))}
         </Field>
 
-        <Field label={L('프로필 아바타', 'Profile avatar')} align="start">
+        <Field label={tr("p_profile_avatar")} align="start">
           <ProfileEditor me={me} onSaved={load} />
         </Field>
 
-        <Field label={L('표시 이름', 'Display name')}>
+        <Field label={tr("p_display_name")}>
           <input value={dname} onChange={(e) => setDname(e.target.value)} placeholder={me.username} style={{ ...input, flex: 1 }}
             onKeyDown={(e) => e.key === 'Enter' && changeName()}
             name="portal-display-name" autoComplete="off" data-1p-ignore data-lpignore="true" />
         </Field>
         <FieldActions>
-          <Button variant="secondary" disabled={dname.trim() === (me.display_name || me.username || '')} onClick={changeName}>{L('변경', 'Update')}</Button>
-          <span style={fieldMuted}>{L(`로그인 아이디: ${me.username} (변경 불가)`, `Login ID: ${me.username} (fixed)`)}</span>
+          <Button variant="secondary" disabled={dname.trim() === (me.display_name || me.username || '')} onClick={changeName}>{tr("p_update")}</Button>
+          <span style={fieldMuted}>{tr("p_login_id_fixed", me.username)}</span>
         </FieldActions>
+
+        <Field label={tr('p_language')}>
+          {/* Each language by its own name, so it can be found in any of them. */}
+          <select value={lang} onChange={(e) => changeLang(e.target.value)} style={{ ...input, flex: 'none', minWidth: 160 }}>
+            {(langs || ['ko', 'en']).map((l) => <option key={l} value={l}>{LANG_NAMES[l] || l}</option>)}
+          </select>
+          <span style={fieldMuted}>{tr('p_language_hint')}</span>
+        </Field>
       </Panel>
 
-      <Panel title={L('이메일 · 비밀번호', 'Email · password')}>
-        <Field label={L('이메일', 'Email')}>
+      <Panel title={tr("p_email_password")}>
+        <Field label={tr("p_email")}>
           <span>{me.email}</span>
           {verifyChip}
-          {me.pending_email && <span style={fieldChip}>{L('변경대기', 'pending')}: {me.pending_email}</span>}
+          {me.pending_email && <span style={fieldChip}>{tr("p_pending")}: {me.pending_email}</span>}
         </Field>
 
-        <Field label={L('이메일 변경', 'Change email')}>
-          <input value={f.email} onChange={setField('email')} placeholder={L('새 이메일 (관리자 승인)', 'new email (admin-approved)')} style={{ ...input, flex: 1 }}
+        <Field label={tr("p_change_email")}>
+          <input value={f.email} onChange={setField('email')} placeholder={tr("p_new_email_admin_approved")} style={{ ...input, flex: 1 }}
             name="portal-new-email" autoComplete="off" data-1p-ignore data-lpignore="true" />
         </Field>
         <FieldActions>
-          <Button variant="secondary" disabled={!f.email.trim()} onClick={requestEmail}>{L('요청', 'Request')}</Button>
+          <Button variant="secondary" disabled={!f.email.trim()} onClick={requestEmail}>{tr("p_request")}</Button>
         </FieldActions>
 
         {isManager && (
           <>
-            <Field label={L('이메일 인증', 'Email verification')}>
+            <Field label={tr("p_email_verification")}>
               {me.verification_current
-                ? <span>{L('인증됨', 'verified')}</span>
-                : <span style={{ color: 'var(--danger-text)' }}>{L('인증이 만료되어 프로젝트는 보기 전용입니다.', 'Verification lapsed — projects are view-only.')}</span>}
+                ? <span>{tr("p_verified_2")}</span>
+                : <span style={{ color: 'var(--danger-text)' }}>{tr("p_verification_lapsed_projects_are_view")}</span>}
             </Field>
             <FieldActions>
-              <Button variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{L('인증 요청 (임시)', 'Request verification (temp)')}</Button>
+              <Button variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{tr("p_request_verification_temp")}</Button>
             </FieldActions>
           </>
         )}
 
-        <Field label={L('비밀번호 변경', 'Change password')}>
-          <input type="password" value={f.cur} onChange={setField('cur')} placeholder={L('현재', 'current')} style={{ ...input, flex: 1 }}
+        <Field label={tr("p_change_password")}>
+          <input type="password" value={f.cur} onChange={setField('cur')} placeholder={tr("p_current")} style={{ ...input, flex: 1 }}
             name="portal-cur-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
-          <input type="password" value={f.npw} onChange={setField('npw')} placeholder={L('새 비밀번호', 'new')} style={{ ...input, flex: 1 }}
+          <input type="password" value={f.npw} onChange={setField('npw')} placeholder={tr("p_new")} style={{ ...input, flex: 1 }}
             name="portal-new-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true" />
         </Field>
         <FieldActions>
-          <Button variant="secondary" disabled={!f.cur || !f.npw} onClick={changePw}>{L('변경', 'Update')}</Button>
+          <Button variant="secondary" disabled={!f.cur || !f.npw} onClick={changePw}>{tr("p_update")}</Button>
         </FieldActions>
       </Panel>
 
-      <Panel title={L('접근 권한', 'Access')} hint={L('관리자가 부여합니다', 'granted by an administrator')}>
-        <Field label={L('내 접근 권한', 'My access')} align="start">
+      <Panel title={tr("p_access")} hint={tr("p_granted_by_an_administrator")}>
+        <Field label={tr("p_my_access")} align="start">
           {((me.permissions || []).length + (me.inherited_permissions || []).length) === 0
-            ? <span style={fieldMuted}>{L('접근 가능한 서비스 없음', 'no access yet')}</span>
+            ? <span style={fieldMuted}>{tr("p_no_access_yet")}</span>
             : <>{permChips(me.permissions || [], 'd')}{permChips(me.inherited_permissions || [], 'g')}</>}
         </Field>
         {(me.role === 'manager' || (me.admin_scopes || []).length > 0) && (
-          <Field label={L('내 관리 범위', 'I administer')} align="start">
+          <Field label={tr("p_i_administer")} align="start">
             {me.role === 'manager'
-              ? L('전체 (관리자)', 'everything (manager)')
+              ? tr("p_everything_manager")
               : permChips(me.admin_scopes || [], 'a')}
           </Field>
         )}
 
-        <Field label={L('초대 코드', 'Invite code')}>
+        <Field label={tr("p_invite_code")}>
           <input value={f.code} onChange={setField('code')} placeholder="XXXXXXXX" style={{ ...input, flex: 1 }} onKeyDown={(e) => e.key === 'Enter' && redeem()}
             name="portal-invite-code" autoComplete="off" data-1p-ignore data-lpignore="true" />
         </Field>
         <FieldActions>
-          <Button variant="primary" disabled={!f.code.trim()} onClick={redeem}>{L('등록', 'Add')}</Button>
-          <span style={fieldMuted}>{L('받은 코드를 입력하면 그 서비스·그룹에 들어갑니다.', 'A code you were given joins you to that service or group.')}</span>
+          <Button variant="primary" disabled={!f.code.trim()} onClick={redeem}>{tr("p_add")}</Button>
+          <span style={fieldMuted}>{tr("p_a_code_you_were_given")}</span>
         </FieldActions>
       </Panel>
 
       {/* Signing out belongs with the account, not on the cover's account card:
           it is something you do TO this account, like changing its password. */}
-      <Panel danger title={L('되돌릴 수 없는 것', 'Cannot be undone')}>
-        <Field label={L('계정 삭제', 'Delete account')}>{L('계정이 사라집니다. 작성한 기록은 남습니다.', 'The account goes; what it wrote stays.')}</Field>
+      <Panel danger title={tr("p_cannot_be_undone")}>
+        <Field label={tr("p_delete_account")}>{tr("p_the_account_goes_what_it")}</Field>
         <FieldActions>
-          <Button variant="dangerSoft" onClick={deleteSelf}>{L('계정 삭제', 'Delete account')}</Button>
+          <Button variant="dangerSoft" onClick={deleteSelf}>{tr("p_delete_account")}</Button>
         </FieldActions>
       </Panel>
     </>
@@ -291,22 +304,22 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   const Accounts = (
     <>
       {requests.length > 0 && (
-        <Panel bare title={L('접근 요청', 'Access requests')} hint={String(requests.length)}>
+        <Panel bare title={tr("p_access_requests")} hint={String(requests.length)}>
           {requests.map((r) => (
             <Row key={r.id}>
               <span>{r.username}</span>
               <span className="sub mono">→ {r.service}{r.project ? '/' + r.project : ''}</span>
               <span className="sp" />
-              <Button variant="primary" onClick={() => resolveReq(r.id, 'approve')}>{L('승인', 'Approve')}</Button>
-              <Button variant="secondary" onClick={() => resolveReq(r.id, 'reject')}>{L('거절', 'Reject')}</Button>
+              <Button variant="primary" onClick={() => resolveReq(r.id, 'approve')}>{tr("p_approve")}</Button>
+              <Button variant="secondary" onClick={() => resolveReq(r.id, 'reject')}>{tr("p_reject")}</Button>
             </Row>
           ))}
         </Panel>
       )}
-      <Panel bare title={L('계정', 'Accounts')} hint={`${shownUsers.length}`}
+      <Panel bare title={tr("p_accounts")} hint={`${shownUsers.length}`}
         right={
           <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} style={{ ...input, maxWidth: 200 }}>
-            <option value="">{L('그룹별 보기: 전체', 'By group: all')}</option>
+            <option value="">{tr("p_by_group_all")}</option>
             {Array.from(new Map(users.flatMap((u) => u.groups || []).map((g) => [g.id, g])).values())
               .map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>}>
@@ -320,71 +333,71 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
           title={u.username}
           badges={<>
             <Pill tone={u.role === 'manager' ? 'warn' : undefined}>{u.role}</Pill>
-            {u.is_active === false && <Pill tone="bad">{L('비활성', 'inactive')}</Pill>}
+            {u.is_active === false && <Pill tone="bad">{tr("p_inactive")}</Pill>}
           </>}
         >
             <div className={FIELD_CARD_CLASS}>
-              <Field label={L('이메일 · 인증', 'Email · verification')}>
-                {u.email} · {u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{L('재인증 필요', 're-verify')}</span>
-                  : (u.verify_days_left != null ? L(`인증됨 · ${u.verify_days_left}일 남음`, `verified · ${u.verify_days_left}d left`) : L('미인증', 'unverified'))}
+              <Field label={tr("p_email_verification_2")}>
+                {u.email} · {u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{tr("p_re_verify")}</span>
+                  : (u.verify_days_left != null ? tr("p_verified_d_left", u.verify_days_left) : tr("p_unverified"))}
               </Field>
               <FieldActions>
-                <Button variant="secondary" onClick={() => adminRequestVerify(u)}>{L('메일 인증 요청', 'Request verification')}</Button>
-                <Button variant="secondary" onClick={() => adminVerify(u)}>{L('매니저 인증', 'Verify')}</Button>
+                <Button variant="secondary" onClick={() => adminRequestVerify(u)}>{tr("p_request_verification")}</Button>
+                <Button variant="secondary" onClick={() => adminVerify(u)}>{tr("p_verify")}</Button>
               </FieldActions>
 
               {u.pending_email && (
                 <>
-                  <Field label={L('이메일 변경 대기', 'Pending email change')}>{u.pending_email}</Field>
+                  <Field label={tr("p_pending_email_change")}>{u.pending_email}</Field>
                   <FieldActions>
-                    <Button variant="primary" onClick={() => adminApprove(u, true)}>{L('승인', 'Approve')}</Button>
-                    <Button variant="secondary" onClick={() => adminApprove(u, false)}>{L('거절', 'Reject')}</Button>
+                    <Button variant="primary" onClick={() => adminApprove(u, true)}>{tr("p_approve")}</Button>
+                    <Button variant="secondary" onClick={() => adminApprove(u, false)}>{tr("p_reject")}</Button>
                   </FieldActions>
                 </>
               )}
 
-              <Field label={L('역할', 'Role')}>{u.role}</Field>
+              <Field label={tr("p_role")}>{u.role}</Field>
               <FieldActions>
-                <Button variant="secondary" onClick={() => adminRole(u)}>{u.role === 'manager' ? L('매니저 해제', 'Revoke manager') : L('매니저 부여', 'Grant manager')}</Button>
+                <Button variant="secondary" onClick={() => adminRole(u)}>{u.role === 'manager' ? tr("p_revoke_manager") : tr("p_grant_manager")}</Button>
               </FieldActions>
 
-              <Field label={L('그룹', 'Groups')} align="start">
+              <Field label={tr("p_groups")} align="start">
                 {(u.groups || []).length === 0
                   ? <span style={fieldMuted}>—</span>
                   : (u.groups || []).map((g) => (
                       <span key={g.id} style={fieldChip}>
                         <GroupMark icon={g.icon} color={g.color} size={13} /> {g.name}
-                        <button type="button" className="set-plain set-x" onClick={() => removeFromGroup(u, g)} title={L('제외', 'Remove')}>✕</button>
+                        <button type="button" className="set-plain set-x" onClick={() => removeFromGroup(u, g)} title={tr("p_remove")}>✕</button>
                       </span>
                     ))}
               </Field>
 
               {/* service permissions — direct grants vs group-inherited, shown separately */}
-              <Field label={L('직접 부여 권한', 'Direct permissions')} align="start">
+              <Field label={tr("p_direct_permissions")} align="start">
                 {(u.permissions || []).length === 0
-                  ? <span style={fieldMuted}>{L('직접 부여된 권한 없음', 'no direct grants')}</span>
+                  ? <span style={fieldMuted}>{tr("p_no_direct_grants")}</span>
                   : permChips(u.permissions || [], 'd')}
               </Field>
-              <Field label={L('그룹 상속 권한', 'Inherited (group) permissions')} align="start">
+              <Field label={tr("p_inherited_group_permissions")} align="start">
                 {(u.inherited_permissions || []).length === 0
-                  ? <span style={fieldMuted}>{L('그룹에서 상속받은 권한 없음', 'no inherited grants')}</span>
+                  ? <span style={fieldMuted}>{tr("p_no_inherited_grants")}</span>
                   : permChips(u.inherited_permissions || [], 'g')}
               </Field>
 
               {/* scoped (service/project) admin grants */}
-              <Field label={L('관리 권한 (서비스/프로젝트)', 'Admin (service / project)')} align="start">
+              <Field label={tr("p_admin_service_project")} align="start">
                 {(u.permissions || []).filter((p) => p.admin).length === 0 && (u.inherited_permissions || []).filter((p) => p.admin).length === 0
-                  ? <span style={fieldMuted}>{L('부여된 관리 권한 없음', 'no admin grants')}</span>
+                  ? <span style={fieldMuted}>{tr("p_no_admin_grants")}</span>
                   : <>
                       {(u.permissions || []).filter((p) => p.admin).map((p, i) => (
-                        <span key={'d' + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'}
-                          <button type="button" className="set-plain set-x" onClick={() => revokeScopedAdmin(u, p)} title={L('해제', 'Revoke')}>✕</button>
+                        <span key={'d' + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + tr("p_all") + ')'}
+                          <button type="button" className="set-plain set-x" onClick={() => revokeScopedAdmin(u, p)} title={tr("p_revoke")}>✕</button>
                         </span>
                       ))}
                       {/* group-inherited admin: revoked from the group, not per-user — no ✕ here */}
                       {(u.inherited_permissions || []).filter((p) => p.admin).map((p, i) => (
-                        <span key={'g' + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }} title={L('그룹에서 상속됨', 'inherited from group')}>
-                          {p.service}{p.project ? '/' + p.project : ' (' + L('전체', 'all') + ')'} · {p.group}
+                        <span key={'g' + i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }} title={tr("p_inherited_from_group")}>
+                          {p.service}{p.project ? '/' + p.project : ' (' + tr("p_all") + ')'} · {p.group}
                         </span>
                       ))}
                     </>}
@@ -392,36 +405,36 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
               {openUser === u.id && (
                 <FieldActions>
                   <select value={agrant.svc} onChange={(e) => agrantPickSvc(e.target.value)} style={{ ...input, height: 28, maxWidth: 180 }}>
-                    <option value="">{L('서비스 선택', 'service…')}</option>
+                    <option value="">{tr("p_service")}</option>
                     {services.map((s) => <option key={s.name} value={s.name}>{s.label || s.name}</option>)}
                   </select>
                   <select value={agrant.proj} onChange={(e) => setAgrant((s) => ({ ...s, proj: e.target.value }))} disabled={!agrant.svc} style={{ ...input, height: 28, flex: 1, minWidth: 140 }}>
-                    <option value="">{L('전체 (서비스 전체)', 'all (whole service)')}</option>
+                    <option value="">{tr("p_all_whole_service")}</option>
                     {(projCache[agrant.svc] || []).map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
                   </select>
-                  <Button variant="secondary" disabled={!agrant.svc} onClick={() => grantScopedAdmin(u)}>{L('관리자 부여', 'Grant admin')}</Button>
+                  <Button variant="secondary" disabled={!agrant.svc} onClick={() => grantScopedAdmin(u)}>{tr("p_grant_admin")}</Button>
                 </FieldActions>
               )}
 
-              <Field label={L('비밀번호', 'Password')}>
-                {L('새 비밀번호를 메일로 보내거나, 직접 정합니다.', 'Mail a new one, or set it yourself.')}
+              <Field label={tr("p_password")}>
+                {tr("p_mail_a_new_one_or")}
               </Field>
               <FieldActions>
-                <Button variant="secondary" onClick={() => adminResetPwEmail(u)}>{L('이메일로 새 비번 발송', 'Change password via email')}</Button>
-                <Button variant="secondary" onClick={() => adminSetPw(u)}>{L('비밀번호 직접 설정', 'Set password')}</Button>
+                <Button variant="secondary" onClick={() => adminResetPwEmail(u)}>{tr("p_change_password_via_email")}</Button>
+                <Button variant="secondary" onClick={() => adminSetPw(u)}>{tr("p_set_password")}</Button>
               </FieldActions>
 
-              <Field label={L('계정', 'Account')}>
-                {L('이 계정을 끄거나 지웁니다.', 'Turn this account off, or remove it.')}
+              <Field label={tr("p_account")}>
+                {tr("p_turn_this_account_off_or")}
               </Field>
               <FieldActions>
-                <Button variant="warning" onClick={() => adminActive(u)}>{u.is_active === false ? L('활성화', 'Activate') : L('비활성화', 'Deactivate')}</Button>
-                <Button variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {L('계정 삭제', 'Delete account')}</Button>
+                <Button variant="warning" onClick={() => adminActive(u)}>{u.is_active === false ? tr("p_activate") : tr("p_deactivate")}</Button>
+                <Button variant="dangerSoft" onClick={() => adminDelete(u)}><Icon name="trash" size={14} /> {tr("p_delete_account")}</Button>
               </FieldActions>
             </div>
         </ExpandBox>
       ))}
-      {shownUsers.length === 0 && <Row className="empty">{L('다른 계정 없음', 'no other accounts')}</Row>}
+      {shownUsers.length === 0 && <Row className="empty">{tr("p_no_other_accounts")}</Row>}
       </div>
       </Panel>
     </>
@@ -439,7 +452,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   return (
     <div>
       {pwAsk && (
-        <PwPrompt title={pwAsk.title} confirmLabel={L('확인', 'OK')} cancelLabel={L('취소', 'Cancel')}
+        <PwPrompt title={pwAsk.title} confirmLabel={tr("p_ok")} cancelLabel={tr("p_cancel")}
           onSubmit={(v) => { pwAsk.resolve(v); setPwAsk(null) }}
           onCancel={() => { pwAsk.resolve(null); setPwAsk(null) }} />
       )}

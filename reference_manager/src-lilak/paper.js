@@ -1,3 +1,5 @@
+import './strings.js'
+import { tr } from 'lilak-ui'
 /**
  * What makes a reference a REFERENCE — the parts of reference_manager that are
  * about papers rather than about lists: how a name is spelled three ways, the
@@ -131,7 +133,7 @@ export const linkedCites = (r) => citesOf(r).filter((c) => c.ref)
 
 /** How a paper is named when it is not the row you are reading: its cite key,
  *  or the start of its title when it has none. */
-export const refLabel = (r) => (r?.citeKey || '').trim() || (r?.title || '').slice(0, 32) || '논문'
+export const refLabel = (r) => (r?.citeKey || '').trim() || (r?.title || '').slice(0, 32) || tr("rm_paper")
 
 // ─── The cite key ───────────────────────────────────────────────────────────
 // The key is also a file name — the PDFs on disk are named after it — so every
@@ -230,7 +232,7 @@ export const PRESETS = [
     + '\n  pages = {{pages}},\n  doi = {{doi}},\n  url = {{url}},\n}', '⏎⏎'],
 ]
 
-export const ROLE_LABEL = { all: '', first: '1저자', second: '2저자', corr: 'corr.', other: '그 외' }
+export const ROLE_LABEL = { all: '', first: tr("rm_role_first"), second: tr("rm_role_second"), corr: 'corr.', other: tr("rm_role_other") }
 
 // ─── Pasting a citation ─────────────────────────────────────────────────────
 /** What a publisher's site hands you is a BibTeX entry or a RIS block, so

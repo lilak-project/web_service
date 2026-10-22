@@ -188,7 +188,7 @@
       "repo": "",
       "label": "activity manager",
       "icon": "calendar",
-      "color": "#b45309",
+      "color": "#3f4651",
       "needs_kit": true,
       "ko": "학술 활동 목록 — 행사·발표·역할, 레퍼런스·저자와 연결 (멀티프로젝트)",
       "en": "Academic activities — events, talks, roles, linked to references and authors (multi-project)"

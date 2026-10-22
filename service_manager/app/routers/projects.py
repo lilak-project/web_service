@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from sqlalchemy.orm import Session
 
-from .. import config, models, permissions, registry
+from .. import config, models, permissions, prefs, registry
 from ..adapters import get_adapter
 from ..db import get_db
 from ..deps import require_portal_admin, require_portal_user
@@ -88,8 +88,10 @@ def list_raw_services() -> list[dict]:
 
 
 @router.get("/api/projects")
-def api_projects(_user=Depends(require_portal_user)):
-    return list_raw_services()
+def api_projects(user=Depends(require_portal_user)):
+    # Which project a card opens straight away is each account's own choice
+    # (prefs.entry), falling back to the service's default entrance.
+    return prefs.with_entries(user, list_raw_services())
 
 
 @router.get("/api/public-services")

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Icon } from 'lilak-ui'
+import { Icon, tr } from 'lilak-ui'
 
 /**
  * HomeModeMenu — the small menu that drops under the Home tab when Home is
@@ -39,9 +39,9 @@ export default function HomeModeMenu({ open, onClose, mode, onPick, isManager, l
     <div ref={ref} style={{ position: 'absolute', [anchor]: 0, top: 'calc(100% + 6px)', minWidth: 250, zIndex: 1000,
       background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 12,
       boxShadow: '0 8px 26px rgba(0,0,0,.16)', padding: 6 }}>
-      <div style={{ padding: '4px 12px 8px', fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{L('홈 보기 모드', 'Home mode')}</div>
+      <div style={{ padding: '4px 12px 8px', fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{tr("p_home_mode")}</div>
       <button type="button" style={row(mode == null)} onClick={() => { onPick(null); onClose?.() }}>
-        <Icon name="home" size={16} /> <span style={{ flex: 1 }}>{L('일반', 'Normal')}</span>{mode == null && <Icon name="check" size={14} />}
+        <Icon name="home" size={16} /> <span style={{ flex: 1 }}>{tr("p_normal")}</span>{mode == null && <Icon name="check" size={14} />}
       </button>
       {items.map((m) => {
         const active = mode === m.id

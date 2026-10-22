@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from .. import models, permissions, project_runtime as pr
+from .. import models, permissions, prefs, project_runtime as pr
 from .. import registry, security
 from ..db import SessionLocal, get_db
 from ..deps import require_portal_admin, require_portal_user
@@ -157,22 +157,23 @@ class EntryProject(BaseModel):
 def set_entry_project(svc: str, body: EntryProject,
                       user: models.User = Depends(require_portal_user),
                       db: Session = Depends(get_db)):
-    """Nominate one project as the service's entrance, or clear it.
+    """Nominate one project as this service's entrance FOR THIS ACCOUNT, or clear it.
 
     With it set, pressing the service on the cover opens that project rather
-    than listing them — a service that is multi-project in shape but has one
-    project in practice stops asking a question with one answer. A manager's
-    call: it changes what the card does for everyone.
+    than listing them. It is the account's own choice (prefs.entry): someone
+    else pressing the same service still gets theirs — or the service's
+    default entrance (manifest `entry_project`) when they have made none.
+    Clearing it stores an empty choice, so the list shows even where the
+    service has a default.
     """
     _require_multi(svc)
-    if not permissions.is_admin(user):
-        raise HTTPException(403, "매니저만 바꿀 수 있습니다.")
     want = (body.project or "").strip()
     if want and want not in {p["name"] for p in pr.list_projects(svc)}:
         raise HTTPException(404, f"'{want}' 없음")
-    manifest = registry.read_manifest(svc)
-    manifest["entry_project"] = want or None
-    registry.write_manifest(svc, manifest)
+    entry = dict(prefs.get(user).get("entry") or {})
+    entry[svc] = want
+    prefs.put(user, entry=entry)
+    db.commit()
     return {"service": svc, "entry_project": want}
 
 

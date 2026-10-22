@@ -42,6 +42,8 @@
    hangs by. The shape is one clip-path, so changing it to a plain pill is one
    line. Used in the editor (a decoration over the text, which stays `#태그`)
    and where a note is read. */
+/* The `#` is how the text says it is a tag; the chip says it by its shape. */
+.nt-tag-hash { display: none; }
 .nt-tag-in, .nt-tag {
   --nt-point: 9px;
   display: inline-block;
@@ -51,7 +53,6 @@
   background: var(--rk-cite, #dbeafe);
   color: var(--rk-cite-t, #1d4ed8);
   font-size: .92em;
-  line-height: 1.5;
 }
 /* the hole */
 .nt-tag-in::before, .nt-tag::before {
@@ -77,6 +78,55 @@
   background: var(--rk-cite); color: var(--rk-cite-t);
   font-size: .85em; text-decoration: none; white-space: nowrap;
   user-select: none;
+}
+
+/* The due date as a label: the tag's silhouette mirrored — a tag hangs by its
+   point on the left, a date points forward on the right — and the hole sits by
+   the point as it does on a tag. The calendar glyph beside it is hidden: the
+   shape says what it is. */
+.nt-due-cal { display: none; }
+/* The date a calendar field is changing, while the field stands in its place. */
+.nt-due-hide { display: none; }
+/* A 📅 with no whole date after it: a chip that asks for one. */
+.nt-due-in.nt-due-bad { background: var(--rk-panel); border: 1px dashed var(--rk-tab-t); border-left-width: 6px; border-left-style: solid; cursor: pointer; }
+/* A calendar, not a tag: square, with the dark strip a calendar wears at its
+   head. Nothing is borrowed from the tag's silhouette — side by side they are
+   two different things, at one height. */
+.nt-due-in {
+  display: inline-block;
+  cursor: pointer;
+  padding: 0 7px;
+  border-left: 6px solid var(--rk-tab-t);
+  background: var(--rk-tab); color: var(--rk-tab-t);
+  font-size: .92em;
+}
+/* Its day has passed and the line is still open. */
+.nt-due-in.nt-due-late {
+  background: #fee2e2;
+  border-left-color: var(--rk-danger, #b91c1c);
+  color: var(--rk-danger, #b91c1c);
+}
+/* The day it was finished: the same label, said quietly — it is a record. */
+.nt-done-in {
+  display: inline-block;
+  padding: 0 7px;
+  border-left: 6px solid var(--rk-mute);
+  background: var(--rk-line); color: var(--rk-dim);
+  font-size: .92em;
+}
+
+/* Every chip stands a touch shorter than the line it sits on — one rule, so
+   they cannot drift apart again. */
+.nt-tag-in, .nt-tag, .nt-due-in, .nt-done-in { line-height: 1.6; }
+
+/* The calendar `>> ` opens: it stands in the line, in the field's own clothes.
+   Picking a day writes the 📅 mark and the field goes away. */
+.nt-duepick {
+  height: 20px; margin: 0 2px; padding: 0 4px;
+  border: 1px solid var(--rk-cite-t); border-radius: 2px;
+  background: var(--rk-panel);
+  font: inherit; font-size: .9em; color: var(--rk-text);
+  vertical-align: baseline;
 }
 
 /* A file is over the note: where it would land, said plainly. */
@@ -186,30 +236,15 @@ body.nt-paper #root { height: auto; min-height: 100%; }
 }
 .nt-title:focus { outline: none; }
 .nt-title::placeholder { color: var(--rk-mute); }
-.nt-fold {
-  flex: 0 0 auto;
-  display: flex; align-items: center; gap: 6px;
-  max-width: 50%;
-  height: 22px; padding: 0 6px;
-  border: 1px solid transparent; border-radius: 0;
-  background: none; font: inherit; font-size: var(--rk-fs);
-  color: var(--rk-mute); cursor: pointer;
-}
-.nt-fold:hover { border-color: var(--rk-edge); color: var(--rk-dim); }
-/* The fold sits under the title with the tags beside it: a row of its own, so
-   the title has the whole line and the caret is where what it opens appears. */
-.nt-foldrow {
-  flex: 0 0 auto;
-  display: flex; align-items: center; gap: 6px;
-  padding: 0 11px 2px;
-}
+.nt-fold { height: 26px; gap: 5px; display: inline-flex; align-items: center; }
+.nt-caret { font-style: normal; font-size: 15px; line-height: 1; }
 .nt-date {
   height: 22px; padding: 0 4px;
   border: 1px solid var(--rk-edge); border-radius: 0;
   background: var(--rk-panel); font: inherit; font-size: var(--rk-fs);
   color: var(--rk-text);
 }
-.nt-tagline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rk-cite-t); }
+.nt-tagline { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rk-cite-t); }
 .nt-meta-open {
   flex: 0 0 auto;
   /* A field is as wide as what it says — an imported minute carries a line of
@@ -376,3 +411,7 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   background: var(--rk-gut); color: var(--rk-dim);
 }
 .rl-btn.nt-send:hover { background: var(--rk-head); color: var(--rk-ink); }
+
+/* ?solo: the editor alone, filling the frame another service shows it in. */
+.nt-solo { height: 100vh; display: flex; flex-direction: column; background: var(--rk-panel); }
+.nt-solo-note { padding: 4px 11px; border-top: 1px solid var(--rk-line); }

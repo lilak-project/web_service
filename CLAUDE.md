@@ -122,6 +122,22 @@ build; the elog/asset frontends are served by their own backends through the pro
   its password instead of offering sign-up (`/api/auth/setup`, gated on the user
   count; `needs_setup` rides along on `/api/health`). Later signups are ordinary
   users.
+- **Type is decided in one place:** `lilak_ui/src/fonts/fonts.css` — the font files
+  (NanumSquare Neo, IBM Plex Sans, D2 coding, kept in the kit, no CDN), `--font-sans` /
+  `--font-mono`, and the `--fs-*` size scale (+ `--fs-plate` 15px, RACK's nameplate rank,
+  which rack lists use as `--rk-fs`). Use the variables, not px numbers.
+- **Every UI string goes through a dictionary** (kit `i18n.jsx`, elog's `t()` model):
+  each module registers `{ ko, en }` with `addStrings` (portal `src/i18n/`, rack kit
+  `racklist/i18n/` + `strings.js`, each rack service `src-lilak/i18n/` + `strings.js`,
+  imported first by every file that shows text) and calls `tr('key', …args)` anywhere,
+  `trx()` when the sentence holds markup. One choice (`lilak-ui-lang`) covers the portal
+  and every service on the origin; a rack service reloads when it changes. The choice is
+  the account's (Settings → My account), applied on sign-in.
+- **Per-account settings live on the account** (`users.preferences_json`, `app/prefs.py`):
+  `lang`, and `entry` — the project a multi-project service's card opens straight away
+  ("open directly"; each account's own, falling back to the manifest's `entry_project`). Adding a
+  language = one dictionary file per module. Stored values stay as stored (activity
+  kinds are Korean in the data and translated only for display).
 - Adding a service = write `data/<name>/service.json` + a `Service` DB row (via the
   admin Services UI, the `/api/handshake` self-registration, or directly). Set
   `capabilities.multi_project` for elog-style services.

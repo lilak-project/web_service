@@ -10,10 +10,12 @@
  *   EditMany editing the selection at once (affiliations and groups they share)
  *   AuthorCommands  add to group · make group · remove from group
  */
+import './strings.js'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   registerType, RackActions, RackField as Fld, fill as fillTpl, newId,
 } from 'lilak-ui/racklist'
+import { tr } from 'lilak-ui'
 import {
   anyName, engName, citeShort, currentAffs, isCurrent, inGrp, TOKENS, PRESETS, nameIn, recOf, choices,
 } from './people.js'
@@ -105,9 +107,9 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
     : list.map((a) => fill(tpl, a)).filter(Boolean).join(sep.replaceAll('⏎', '\n'))
 
   async function copy() {
-    if (!out) { say('나열할 것이 없습니다.'); return }
-    try { await navigator.clipboard.writeText(out); say('복사했습니다.') }
-    catch { say('복사 실패 — 직접 선택해 복사하세요.') }
+    if (!out) { say(tr("am_nothing_to_list")); return }
+    try { await navigator.clipboard.writeText(out); say(tr("am_copied")) }
+    catch { say(tr("am_copy_failed")) }
   }
 
   const none = list.length === 0
@@ -118,8 +120,8 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
       <button type="button" className={`rl-outhead${open ? ' on' : ''}`} onClick={() => setOpen(!open)}
         aria-expanded={open}>
         <i className="rl-caret">{open ? '▾' : '▸'}</i>
-        <span>나열</span>
-        <span className="rl-hint">{picked ? `선택한 ${list.length}명` : `${list.length}명`}</span>
+        <span>{tr("am_listing")}</span>
+        <span className="rl-hint">{picked ? tr("am_selected_n", list.length) : tr("am_n_people", list.length)}</span>
       </button>
       {open && (<>
       <div className="rl-outbar">
@@ -142,7 +144,7 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
               onClick={() => setNameAs(v)}>{label}</button>
           ))}
           <span className="rl-gap" />
-          {[['addr', '소속+주소'], ['name', '소속만'], ['none', '소속 없이']].map(([v, label]) => (
+          {[['addr', tr("am_aff_with_address")], ['name', tr("am_aff_only")], ['none', tr("am_aff_none")]].map(([v, label]) => (
             <button key={v} type="button" className={`rl-btn${affAs === v ? ' on' : ''}`}
               onClick={() => setAffAs(v)}>{label}</button>
           ))}
@@ -153,13 +155,13 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
 
       {/* The rule itself, editable. The tokens are the column names. */}
       <div className="rl-rule-line">
-        <span className="rl-hint">나열 규칙</span>
+        <span className="rl-hint">{tr("am_listing_rule")}</span>
         <input className="rl-in rl-mono" style={{ flex: 1, minWidth: 180 }} value={tpl}
           disabled={!!mode} onChange={(e) => { setMode(''); setTpl(e.target.value) }} />
-        <span className="rl-hint">사이</span>
+        <span className="rl-hint">{tr("am_between")}</span>
         <input className="rl-in rl-mono" style={{ width: 66 }} value={sep} disabled={!!mode}
-          onChange={(e) => setSep(e.target.value)} title="구분기호" />
-        <button type="button" className="rl-btn" title="줄바꿈 추가" disabled={!!mode}
+          onChange={(e) => setSep(e.target.value)} title={tr("am_separator")} />
+        <button type="button" className="rl-btn" title={tr("am_add_newline")} disabled={!!mode}
           onClick={() => setSep((v) => `${v}⏎`)}>+⏎</button>
       </div>
       <div className="rl-tokens">
@@ -170,7 +172,7 @@ function ListOut({ list, picked, doc, say, open, setOpen }) {
       </div>
 
       <textarea className="rl-outbox" value={out} readOnly
-        placeholder={none ? '이 탭에 사람이 없습니다.' : ''} />
+        placeholder={none ? tr("am_tab_empty") : ''} />
       </>)}
     </div>
   )
@@ -283,46 +285,44 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
     const n = ids.length
     // save saves: the selection is still the selection, and the next field you
     // want to set for all of them is in the form you are looking at.
-    await onSave({ authors }, `${n}명 한번에 저장했습니다.`)
+    await onSave({ authors }, tr("am_saved_many", n))
   }
 
-  if (!people.length) return <p className="rl-msg">선택된 저자가 없습니다.</p>
+  if (!people.length) return <p className="rl-msg">{tr("am_none_selected")}</p>
   return (
     <div className="rl-tab-body">
       <RackActions onSave={save} onCancel={onCancel}
         onRevert={() => { setF(base); setDrop({ aff: [], grp: [] }); setAdd2({ aff: [], grp: [] }) }} />
       <div className="rl-rec">
-        <Fld label="대상">
+        <Fld label={tr("am_targets")}>
           <div className="rl-rows">
-            <span className="rl-hint">{people.length}명</span>
+            <span className="rl-hint">{tr("am_n_people", people.length)}</span>
             <div className="rl-rrow">
               {people.slice(0, 20).map((a) => <span key={a.id} className="rl-tag">{anyName(a)}</span>)}
-              {people.length > 20 && <span className="rl-hint">… 외 {people.length - 20}명</span>}
+              {people.length > 20 && <span className="rl-hint">{tr("am_and_more", people.length - 20)}</span>}
             </div>
-            <span className="rl-hint">
-              이름 · 이메일 · 전화 · 링크 · 첨부는 한 사람의 것이라 여기서 고치지 않습니다.
-            </span>
+            <span className="rl-hint">{tr("am_bulk_personal_hint")}</span>
           </div>
         </Fld>
 
-        <Fld label="소속 이력">
+        <Fld label={tr("am_aff_history")}>
           <div className="rl-rows rl-grid">
-            {affTags.length === 0 && <span className="rl-hint rl-full">모두가 함께 가진 소속이 없습니다.</span>}
+            {affTags.length === 0 && <span className="rl-hint rl-full">{tr("am_no_shared_aff")}</span>}
             {affTags.map((t) => {
               const off = drop.aff.includes(t)
               return (
                 <div key={t} className="rl-rrow" style={off ? { opacity: 0.45 } : null}>
                   <span className="rl-tag">{affN(t)}</span>
                   <input className="rl-in" style={{ width: 150 }} disabled={off}
-                    placeholder={mixed('affiliations', 'tag', t, 'dept') ? '(여러 값)' : '부서'}
+                    placeholder={mixed('affiliations', 'tag', t, 'dept') ? tr("am_mixed") : tr("am_department")}
                     value={f.aff[t]?.dept ?? ''} onChange={(e) => put('aff', t, 'dept', e.target.value)} />
                   <input className="rl-in" style={{ width: 170 }} disabled={off}
-                    placeholder={mixed('affiliations', 'tag', t, 'position') ? '(여러 값)' : 'position'}
+                    placeholder={mixed('affiliations', 'tag', t, 'position') ? tr("am_mixed") : 'position'}
                     value={f.aff[t]?.position ?? ''} onChange={(e) => put('aff', t, 'position', e.target.value)} />
                   <input className="rl-in" style={{ width: 90 }} disabled={off}
-                    placeholder={mixed('affiliations', 'tag', t, 'since') ? '(여러 값)' : '2020-01'}
+                    placeholder={mixed('affiliations', 'tag', t, 'since') ? tr("am_mixed") : '2020-01'}
                     value={f.aff[t]?.since ?? ''} onChange={(e) => put('aff', t, 'since', e.target.value)} />
-                  <button type="button" className="rl-x" title={off ? '되돌리기' : '모두에게서 빼기'}
+                  <button type="button" className="rl-x" title={off ? tr("am_undo") : tr("am_remove_from_all")}
                     onClick={() => toggleDrop('aff', t)}>{off ? '↺' : '×'}</button>
                 </div>
               )
@@ -330,37 +330,37 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
             {add2.aff.map((t) => (
               <div key={t} className="rl-rrow rl-full">
                 <span className="rl-tag">{affN(t)}</span>
-                <span className="rl-hint">모두에게 추가됩니다.</span>
-                <button type="button" className="rl-x" title="취소"
+                <span className="rl-hint">{tr("am_added_to_all")}</span>
+                <button type="button" className="rl-x" title={tr("am_cancel")}
                   onClick={() => setAdd2((s) => ({ ...s, aff: s.aff.filter((x) => x !== t) }))}>×</button>
               </div>
             ))}
             <div className="rl-rrow rl-full">
               <select className="rl-btn rl-pick" value="" disabled={!affLeft.length}
                 onChange={(e) => setAdd2((s) => ({ ...s, aff: [...s.aff, e.target.value] }))}>
-                <option value="">+ 소속 추가</option>
+                <option value="">{tr("am_add_aff")}</option>
                 {affLeft.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
               </select>
             </div>
           </div>
         </Fld>
 
-        <Fld label="그룹 소속">
+        <Fld label={tr("am_group_member")}>
           <div className="rl-rows rl-grid">
-            {grpNames2.length === 0 && <span className="rl-hint rl-full">모두가 함께 속한 그룹이 없습니다.</span>}
+            {grpNames2.length === 0 && <span className="rl-hint rl-full">{tr("am_no_shared_group")}</span>}
             {grpNames2.map((g) => {
               const off = drop.grp.includes(g)
               return (
                 <div key={g} className="rl-rrow" style={off ? { opacity: 0.45 } : null}>
                   <span className="rl-tag">{grpN(g)}</span>
                   <input className="rl-in" style={{ width: 200 }} disabled={off}
-                    placeholder={mixed('groups', 'group', g, 'role') ? '(여러 값)' : 'role'}
+                    placeholder={mixed('groups', 'group', g, 'role') ? tr("am_mixed") : 'role'}
                     value={f.grp[g]?.role ?? ''} onChange={(e) => put('grp', g, 'role', e.target.value)} />
                   <input className="rl-in rl-mono" style={{ width: 70 }} disabled={off}
-                    placeholder={mixed('groups', 'group', g, 'core') ? '(여러 값)' : 'core'}
+                    placeholder={mixed('groups', 'group', g, 'core') ? tr("am_mixed") : 'core'}
                     value={f.grp[g]?.core ?? ''} onChange={(e) => put('grp', g, 'core', e.target.value)} />
-                  <span className="rl-hint">저자 순서</span>
-                  <button type="button" className="rl-x" title={off ? '되돌리기' : '모두에게서 빼기'}
+                  <span className="rl-hint">{tr("am_author_order")}</span>
+                  <button type="button" className="rl-x" title={off ? tr("am_undo") : tr("am_remove_from_all")}
                     onClick={() => toggleDrop('grp', g)}>{off ? '↺' : '×'}</button>
                 </div>
               )
@@ -368,15 +368,15 @@ function EditMany({ ids, doc, onSave, onDone, onCancel, say }) {
             {add2.grp.map((g) => (
               <div key={g} className="rl-rrow rl-full">
                 <span className="rl-tag">{grpN(g)}</span>
-                <span className="rl-hint">모두에게 추가됩니다 (core 10).</span>
-                <button type="button" className="rl-x" title="취소"
+                <span className="rl-hint">{tr("am_added_to_all_core")}</span>
+                <button type="button" className="rl-x" title={tr("am_cancel")}
                   onClick={() => setAdd2((s) => ({ ...s, grp: s.grp.filter((x) => x !== g) }))}>×</button>
               </div>
             ))}
             <div className="rl-rrow rl-full">
               <select className="rl-btn rl-pick" value="" disabled={!grpLeft.length}
                 onChange={(e) => setAdd2((s) => ({ ...s, grp: [...s.grp, e.target.value] }))}>
-                <option value="">+ 그룹 추가</option>
+                <option value="">{tr("am_add_group")}</option>
                 {grpLeft.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
               </select>
             </div>
@@ -401,26 +401,25 @@ function EmailRows({ value = [], rep, onChange }) {
   }
   return (
     <div className="rl-rows">
-      {value.length === 0 && <span className="rl-hint">없음</span>}
+      {value.length === 0 && <span className="rl-hint">{tr("am_none")}</span>}
       {value.map((v, i) => (
         <div key={i} className="rl-rrow">
-          <label className="rl-hint" title="대표 주소로">
+          <label className="rl-hint" title={tr("am_make_primary")}>
             <input type="radio" checked={!!clean(v) && clean(v) === clean(rep)}
-              onChange={() => onChange(value, v)} /> 대표
-          </label>
+              onChange={() => onChange(value, v)} /> {tr("am_primary")}</label>
           <input className="rl-in" style={{ width: 280 }} placeholder="name@lab.kr" value={v}
             onChange={(e) => put(i, e.target.value)} />
-          <button type="button" className="rl-x" title="이 줄 지우기"
+          <button type="button" className="rl-x" title={tr("am_delete_row")}
             onClick={() => onChange(value.filter((_, j) => j !== i),
               clean(v) === clean(rep) ? '' : rep)}>×</button>
         </div>
       ))}
       <div className="rl-rrow">
         <button type="button" className="rl-btn"
-          onClick={() => onChange([...value, ''], rep)}>+ 이메일</button>
+          onClick={() => onChange([...value, ''], rep)}>{tr("am_add_email")}</button>
         <span className="rl-hint">
-          {clean(rep) ? `대표 ${clean(rep)}` : (value.some((x) => clean(x))
-            ? '대표를 고르지 않으면 맨 위가 대표가 됩니다.' : '')}
+          {clean(rep) ? tr("am_primary_is", clean(rep)) : (value.some((x) => clean(x))
+            ? tr("am_primary_default") : '')}
         </span>
       </div>
     </div>
@@ -443,19 +442,19 @@ function AffRows({ value = [], options, onChange }) {
   }
   return (
     <div className="rl-rows">
-      {value.length === 0 && <span className="rl-hint">없음</span>}
+      {value.length === 0 && <span className="rl-hint">{tr("am_none")}</span>}
       {value.map((x, i) => (
         <div key={i} className="rl-rrow">
           <select className="rl-in" style={{ width: 120 }} value={x.tag || ''}
             onChange={(e) => put(i, 'tag', e.target.value)}>
-            <option value="">(소속)</option>
+            <option value="">{tr("am_aff_placeholder")}</option>
             {/* An entry pointing at a class that is gone stays selectable, so
                 saving does not quietly change who someone was. */}
             {withOwn(options, x.tag).map(([id, n]) => (
               <option key={id} value={id}>{n}</option>
             ))}
           </select>
-          <input className="rl-in" style={{ width: 150 }} placeholder="부서"
+          <input className="rl-in" style={{ width: 150 }} placeholder={tr("am_department")}
             value={x.dept || ''} onChange={(e) => put(i, 'dept', e.target.value)} />
           <input className="rl-in" style={{ width: 170 }} placeholder="position"
             value={x.position || ''} onChange={(e) => put(i, 'position', e.target.value)} />
@@ -465,36 +464,31 @@ function AffRows({ value = [], options, onChange }) {
             value={x.since || ''} onChange={(e) => put(i, 'since', e.target.value)} />
           {/* A person can be in two places at once, so this is a box per entry,
               not a crown the latest date wears. */}
-          <label className="rl-hint" title="지금도 이 소속입니다">
+          <label className="rl-hint" title={tr("am_current_hint")}>
             <input type="checkbox" checked={isCurrent(x)}
-              onChange={(e) => put(i, 'current', e.target.checked)} /> 현재
-          </label>
+              onChange={(e) => put(i, 'current', e.target.checked)} /> {tr("am_current")}</label>
           {value.length > 1 && (<>
-            <button type="button" className="rl-x" title="위로" disabled={i === 0}
+            <button type="button" className="rl-x" title={tr("am_up")} disabled={i === 0}
               onClick={() => move(i, -1)}>↑</button>
-            <button type="button" className="rl-x" title="아래로" disabled={i === value.length - 1}
+            <button type="button" className="rl-x" title={tr("am_down")} disabled={i === value.length - 1}
               onClick={() => move(i, 1)}>↓</button>
           </>)}
-          <button type="button" className="rl-x" title="이 줄 지우기"
+          <button type="button" className="rl-x" title={tr("am_delete_row")}
             onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
       <div className="rl-rrow">
         <button type="button" className="rl-btn" onClick={() =>
-          onChange([...value, { tag: '', dept: '', position: '', email: '', since: '', current: true }])}>
-          + 소속
-        </button>
+          onChange([...value, { tag: '', dept: '', position: '', email: '', since: '', current: true }])}>{tr("am_add_aff_short")}</button>
         {/* Moved away and we do not know where: the history stays, nothing is
             current, and the list says 모름 rather than going blank — a blank is
             what someone with no affiliation at all looks like. */}
         <button type="button" className="rl-btn" disabled={!nowCount}
-          title="이전 소속은 남기고, 지금 소속은 모르는 상태로 둡니다"
-          onClick={() => onChange(value.map((x) => ({ ...x, current: false })))}>
-          지금은 모름
-        </button>
+          title={tr("am_now_unknown_hint")}
+          onClick={() => onChange(value.map((x) => ({ ...x, current: false })))}>{tr("am_now_unknown")}</button>
         <span className="rl-hint">
-          {nowCount ? `현재 ${nowCount}곳${nowCount > 1 ? ' · 위에 있는 것이 먼저 나옵니다' : ''}`
-            : (value.some((x) => x.tag) ? '현재 소속 모름' : '')}
+          {nowCount ? tr("am_current_n", nowCount, nowCount > 1 ? tr("am_top_first") : '')
+            : (value.some((x) => x.tag) ? tr("am_current_unknown") : '')}
         </span>
       </div>
     </div>
@@ -509,12 +503,12 @@ function GrpRows({ value = [], options, onChange }) {
   const put = (i, k, v) => onChange(value.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
   return (
     <div className="rl-rows">
-      {value.length === 0 && <span className="rl-hint">없음</span>}
+      {value.length === 0 && <span className="rl-hint">{tr("am_none")}</span>}
       {value.map((x, i) => (
         <div key={i} className="rl-rrow">
           <select className="rl-in" style={{ width: 190 }} value={x.group || ''}
             onChange={(e) => put(i, 'group', e.target.value)}>
-            <option value="">(그룹)</option>
+            <option value="">{tr("am_group_placeholder")}</option>
             {withOwn(options, x.group).map(([id, n]) => (
               <option key={id} value={id}>{n}</option>
             ))}
@@ -523,13 +517,13 @@ function GrpRows({ value = [], options, onChange }) {
             value={x.role || ''} onChange={(e) => put(i, 'role', e.target.value)} />
           <input className="rl-in" style={{ width: 66 }} type="number" min="1" placeholder="core"
             value={x.core ?? ''} onChange={(e) => put(i, 'core', e.target.value === '' ? '' : Number(e.target.value))} />
-          <span className="rl-hint">저자 순서</span>
-          <button type="button" className="rl-x" title="이 줄 지우기"
+          <span className="rl-hint">{tr("am_author_order")}</span>
+          <button type="button" className="rl-x" title={tr("am_delete_row")}
             onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
       <button type="button" className="rl-btn" onClick={() =>
-        onChange([...value, { group: '', role: '', core: 10 }])}>+ 그룹</button>
+        onChange([...value, { group: '', role: '', core: 10 }])}>{tr("am_add_group_short")}</button>
     </div>
   )
 }
@@ -584,32 +578,32 @@ export function AuthorCommands({ api }) {
   function addToGroup(gid) {
     if (!gid) return
     const fresh = chosen.filter((a) => !inGrp(a, gid))
-    if (!chosen.length) { setNote('선택된 저자가 없습니다.'); return }
-    if (!fresh.length) { setNote(`이미 모두 '${gName(gid)}'에 있습니다.`); return }
+    if (!chosen.length) { setNote(tr("am_none_selected")); return }
+    if (!fresh.length) { setNote(tr("am_all_already_in", gName(gid))); return }
     const ids = new Set(fresh.map((a) => a.id))
     commit({
       authors: doc.authors.map((a) => (ids.has(a.id)
         ? { ...a, groups: [...(a.groups || []), { group: gid, role: '', core: 10 }] } : a)),
-    }, `'${gName(gid)}'에 ${fresh.length}명 추가`)
+    }, tr("am_added_to_group", gName(gid), fresh.length))
   }
   /** Out of the group whose tab you are on. Only this group's entry goes — the
    *  people and their other groups stay. */
   function removeFromGroup(gid) {
     const out = chosen.filter((a) => inGrp(a, gid))
-    if (!out.length) { setNote('선택된 저자가 없습니다.'); return }
+    if (!out.length) { setNote(tr("am_none_selected")); return }
     const ids = new Set(out.map((a) => a.id))
     commit({
       authors: doc.authors.map((a) => (ids.has(a.id)
         ? { ...a, groups: (a.groups || []).filter((g) => g.group !== gid) } : a)),
-    }, `'${gName(gid)}'에서 ${out.length}명 뺐습니다.`)
+    }, tr("am_removed_from_group", gName(gid), out.length))
     setPicked((s2) => { const n = new Set(s2); ids.forEach((id) => n.delete(id)); return n })
   }
   /** A new group out of the ticked people. */
   function makeGroup(f) {
     const name = String(f.shortName || f.fullName || '').trim()
-    if (!name) { setNote('그룹 이름이 필요합니다.'); return false }
-    if ((doc.groups || []).some((g) => g.name === name)) { setNote('같은 이름의 그룹이 있습니다.'); return false }
-    if (!chosen.length) { setNote('선택된 저자가 없습니다.'); return false }
+    if (!name) { setNote(tr("am_group_name_needed")); return false }
+    if ((doc.groups || []).some((g) => g.name === name)) { setNote(tr("am_group_name_taken")); return false }
+    if (!chosen.length) { setNote(tr("am_none_selected")); return false }
     const ids = new Set(chosen.map((a) => a.id))
     const now = new Date().toISOString()
     const gid = newId()
@@ -617,7 +611,7 @@ export function AuthorCommands({ api }) {
       groups: [...(doc.groups || []), { ...f, id: gid, name, shortName: name, createdAt: now, updatedAt: now }],
       authors: doc.authors.map((a) => (ids.has(a.id)
         ? { ...a, groups: [...(a.groups || []), { group: gid, role: '', core: 10 }] } : a)),
-    }, `'${name}' 그룹 생성 · ${ids.size}명 추가`)
+    }, tr("am_group_made", name, ids.size))
     return true
   }
 
@@ -641,7 +635,7 @@ export function AuthorCommands({ api }) {
           <button type="button" className="rl-btn rl-go"
             onClick={() => { if (makeGroup(form)) setForm(null) }}>save</button>
           <button type="button" className="rl-btn" onClick={() => setForm(null)}>cancel</button>
-          <span className="rl-hint">선택한 {chosen.length}명 (core 10)</span>
+          <span className="rl-hint">{tr("am_selected_core", chosen.length)}</span>
         </>
       )}
       {/* Only on a group's own tab: it is that group you would take them out of. */}

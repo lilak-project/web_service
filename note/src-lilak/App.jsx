@@ -15,6 +15,7 @@
  * The table, tabs, selection and portal plumbing are the kit's `racklist`,
  * shared with author_manager and reference_manager.
  */
+import './strings.js'
 import { Children, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   RackTable, RackRow, RackTabs, RackActions,
@@ -22,7 +23,7 @@ import {
   RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
   RackEditClass,
   bySome, asSorts, bumpSort, byKeys, FilterBar, FacetRows,
-  PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders, RackBar,
+  PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders, RackBar, takeOpenRequest,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
 // and one newline means one line break, because a note is typed, not typeset.
@@ -35,6 +36,7 @@ import MarkdownArea, { TAG_RE, EMBED_RE, embedSpec } from './MarkdownArea.jsx'
 import 'katex/dist/katex.min.css'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
+import { tr } from 'lilak-ui'
 
 const VIEW_KEY = projectKey('nt', 'view')
 /** Where a file a note embeds is served from. */
@@ -45,7 +47,7 @@ async function putFile(file) {
   const form = new FormData()
   form.append('f', file)
   const r = await fetch(`${PORTAL_BASE}/api/file`, { method: 'POST', headers: authHeaders(), body: form })
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `올리지 못했습니다 (${r.status}).`)
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || tr("nt_upload_failed", r.status))
   return (await r.json()).name
 }
 const api = (p, o) => fetch(`${PORTAL_BASE}/api${p}`, {
@@ -94,9 +96,9 @@ const COLS = [
   { k: 'date', w: 100, min: 84, label: 'date' },   // a whole 2026-08-04 at 15px
   { k: 'title', w: 260, min: 100, label: 'title' },
   { k: 'tags', w: 170, min: 60, label: 'tags' },
-  { k: 'todo', w: 52, min: 40, label: '할 일', num: true },
+  { k: 'todo', w: 52, min: 40, label: tr("nt_todo"), num: true },
   { k: 'words', w: 58, min: 40, label: 'words', num: true, drop: 1040 },
-  { k: 'excerpt', w: 360, min: 120, label: '첫 줄', drop: 1180 },
+  { k: 'excerpt', w: 360, min: 120, label: tr("nt_first_line"), drop: 1180 },
 ]
 const CLS_COLS = [
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
@@ -106,12 +108,12 @@ const CLS_COLS = [
 const TODO_COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
-  { k: 'text', w: 380, min: 120, label: '할 일' },
+  { k: 'text', w: 380, min: 120, label: tr("nt_todo") },
   { k: 'tags', w: 150, min: 60, label: 'tags' },
   { k: 'title', w: 200, min: 80, label: 'note' },
   { k: 'date', w: 100, min: 84, label: 'date' },
-  { k: 'due', w: 100, min: 84, label: '마감' },
-  { k: 'done', w: 100, min: 84, label: '완료' },
+  { k: 'due', w: 100, min: 84, label: tr("nt_due") },
+  { k: 'done', w: 100, min: 84, label: tr("nt_done") },
 ]
 const TONE = { title: 'ink', text: 'ink', date: 'dim', tags: 'dim', excerpt: 'dim' }
 
@@ -136,9 +138,9 @@ const TODO_SORTERS = {
 const late = (t) => !t.done && !!t.due && t.due < new Date().toISOString().slice(0, 10)
 
 const TODO_SCOPES = [
-  { k: 'open', label: '남은 일', is: (t) => !t.done },
-  { k: 'all', label: '전체', is: () => true },
-  { k: 'done', label: '끝난 일', is: (t) => t.done },
+  { k: 'open', label: tr("nt_open"), is: (t) => !t.done },
+  { k: 'all', label: tr("nt_all"), is: () => true },
+  { k: 'done', label: tr("nt_finished"), is: (t) => t.done },
 ]
 const CLS_SORTERS = { name: (r) => r.name, count: (r) => r.count }
 
@@ -196,7 +198,7 @@ export default function App() {
     } catch (e) { setErr(String(e.message || e)) }
   }, [])
   useEffect(() => {
-    if (!PORTAL_PROJECT) { setErr('이 앱은 LILAK 포털을 통해 열어야 합니다.'); return }
+    if (!PORTAL_PROJECT) { setErr(tr("nt_open_via_portal")); return }
     reload()
   }, [reload])
 
@@ -261,6 +263,15 @@ export default function App() {
   const showEdit = L.showEdit && !!index
   const showList = !showEdit || L.showList
   const openEdit = (id, label) => { panes.open({ id, label }); setFresh(id) }
+  // Sent here from another service (#open=<id>, an activity's note): that
+  // note opens once the list is in.
+  const asked = useRef(takeOpenRequest())
+  useEffect(() => {
+    if (!index || !asked.current) return
+    const n = notes.find((x) => x.id === asked.current)
+    asked.current = ''
+    if (n) panes.open({ id: n.id, label: n.title || n.id })
+  }, [index])   // eslint-disable-line react-hooks/exhaustive-deps
   /** Which notes wear any of these tags — what the tag editor lists. */
   const tagUsers = useCallback((names) => notes
     .filter((n) => names.some((t) => inTag(n, t)))
@@ -286,10 +297,10 @@ export default function App() {
 
   async function create(template) {
     try {
-      const { body } = await ask('/notes', { method: 'POST', body: JSON.stringify({ title: '제목 없음', template }) })
+      const { body } = await ask('/notes', { method: 'POST', body: JSON.stringify({ title: tr("nt_untitled"), template }) })
       await reload()
       openEdit(body.id, body.title)
-      setNote(template ? `'${template}' 템플릿으로 만들었습니다.` : '새 노트를 만들었습니다.')
+      setNote(template ? tr("nt_made_from_template", template) : tr("nt_made_new"))
     } catch (e) { setNote(String(e.message || e)) }
   }
   /** Today's note, under the name it always has. One a day: if today's is
@@ -300,7 +311,7 @@ export default function App() {
     const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     const title = `Daily ${day}`
     const had = notes.find((n) => n.title === title)
-    if (had) { openEdit(had.id, had.title); setNote(`'${title}'을 열었습니다.`); return }
+    if (had) { openEdit(had.id, had.title); setNote(tr("nt_opened", title)); return }
     try {
       const template = (index?.templates || []).includes('daily') ? 'daily' : null
       const { body } = await ask('/notes', { method: 'POST', body: JSON.stringify({ title, template }) })
@@ -311,7 +322,7 @@ export default function App() {
       }
       await reload()
       openEdit(body.id, title)
-      setNote(`'${title}'을 만들었습니다.`)
+      setNote(tr("nt_made_named", title))
     } catch (e) { setNote(String(e.message || e)) }
   }
   /** Folding tags here is not one document save: a tag is text inside a file,
@@ -328,7 +339,7 @@ export default function App() {
         for (const g of gone) text = renameBodyTag(text, g, to)
         if (text === cur.body) continue
         const { conflict, body } = await putNote(u.id, cur.version, { title: cur.title, body: text })
-        if (conflict) { stopped = `'${cur.title}'이(가) 그 사이 바뀌었습니다`; break }
+        if (conflict) { stopped = tr("nt_changed_meanwhile", cur.title); break }
         if (body) done += 1
       } catch (e) { stopped = String(e.message || e); break }
     }
@@ -336,15 +347,15 @@ export default function App() {
     panes.close('mergetags')
     merge.off()
     setNote(stopped
-      ? `${stopped} — 노트 ${done}편까지 바꿨습니다.`
-      : said ? `${said} · 노트 ${done}편`
-        : `태그 ${gone.length + 1}개를 '${to}' 하나로 합쳤습니다 · 노트 ${done}편`)
+      ? tr("nt_changed_up_to", stopped, done)
+      : said ? tr("nt_x_notes", said, done)
+        : tr("nt_tags_merged", gone.length + 1, to, done))
   }
   async function toggleTodo(t) {
     try {
       const { conflict, body } = await ask('/todos', { method: 'PUT',
         body: JSON.stringify({ id: t.id, line: t.line, done: !t.done, text: t.text }) })
-      if (conflict) { setNote(body.detail || '노트가 바뀌었습니다.'); await reload(); return }
+      if (conflict) { setNote(body.detail || tr("nt_note_changed")); await reload(); return }
       await reload()
     } catch (e) { setNote(String(e.message || e)) }
   }
@@ -352,7 +363,7 @@ export default function App() {
    *  prints, because a PDF with Korean in it needs the system's fonts, which is
    *  the one thing a JS pdf library makes hard and a print dialog makes free. */
   function preview(ids) {
-    if (!ids.length) { setNote('볼 노트를 고르세요.'); return }
+    if (!ids.length) { setNote(tr("nt_pick_note")); return }
     window.open(`${PORTAL_BASE}/?print=${ids.join(',')}`, '_blank', 'noopener')
   }
 
@@ -361,41 +372,37 @@ export default function App() {
   return (
     <div className="rl" style={brandStyle()}>
       <section className="rl-mod">
-        <RackBar title="노트" count={index ? `${notes.length}개` : ''} />
+        <RackBar title={tr("nt_notes")} count={index ? tr("nt_n", notes.length) : ''} />
 
         <div className="rl-cmd">
-          <button type="button" className="rl-btn rl-go" onClick={() => create(null)}>+ 새 노트</button>
-          <button type="button" className="rl-btn rl-go" title="오늘 날짜의 노트 — 있으면 열고, 없으면 만듭니다"
+          <button type="button" className="rl-btn rl-go" onClick={() => create(null)}>{tr("nt_new_note")}</button>
+          <button type="button" className="rl-btn rl-go" title={tr("nt_today_hint")}
             onClick={openDaily}>daily</button>
           {!!index?.templates?.length && (
             /* A template is a note in templates/ — so this list is a folder
                listing, not a feature with a store behind it. */
             <select className="rl-btn rl-go rl-pick" value=""
               onChange={(e) => { if (e.target.value) create(e.target.value) }}>
-              <option value="">템플릿으로…</option>
+              <option value="">{tr("nt_from_template")}</option>
               {index.templates.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           )}
           <button type="button" className="rl-btn" disabled={!picked.size}
-            onClick={() => preview([...picked])}>미리보기 ({picked.size})</button>
+            onClick={() => preview([...picked])}>{tr("nt_preview_n", picked.size)}</button>
           {onTags && (
-            <RackMergeButtons merge={merge} noun="태그"
+            <RackMergeButtons merge={merge} noun={tr("nt_tag")}
               onOpen={(names) => panes.open({ id: 'mergetags', kind: 'mergetags', names,
-                label: `태그 ${names.length}개 합치기` })} />
+                label: tr("nt_merge_n_tags", names.length) })} />
           )}
           <button type="button" className="rl-btn" disabled={!picked.size}
             onClick={clearPicked}>clear</button>
           {tabs.length > FIXED.length && (
-            <button type="button" className="rl-btn" title="열어둔 탭을 모두 닫습니다"
-              onClick={L.closeOpened}>
-              탭 닫기 ({tabs.length - FIXED.length})
-            </button>
+            <button type="button" className="rl-btn" title={tr("nt_close_tabs_hint")}
+              onClick={L.closeOpened}>{tr("nt_close_tabs_n", tabs.length - FIXED.length)}</button>
           )}
           {panes.count > 0 && (
-            <button type="button" className="rl-btn" title="편집 패널의 탭을 모두 닫습니다"
-              onClick={panes.closeAll}>
-              편집 닫기 ({panes.count})
-            </button>
+            <button type="button" className="rl-btn" title={tr("nt_close_editors_hint")}
+              onClick={panes.closeAll}>{tr("nt_close_editors_n", panes.count)}</button>
           )}
           <span className="rl-gap" />
           {tab?.kind === 'notes' && <FilterBar f={filter} />}
@@ -410,7 +417,7 @@ export default function App() {
               on offer. */}
           <input ref={findRef} type="search" className="rl-find"
             value={filter.mode ? filter.find : query}
-            placeholder={filter.mode ? '고를 값 찾기   (⌘F)' : '제목 · 태그 · 본문   (⌘F)'}
+            placeholder={filter.mode ? tr("nt_find_value") : tr("nt_find_hint")}
             onChange={(e) => (filter.mode ? filter.setFind : setQuery)(e.target.value)} />
         </div>
 
@@ -420,7 +427,7 @@ export default function App() {
               onPick={L.setActive} onClose={closeTab} />
 
             {err && <p className="rl-msg">{err}</p>}
-            {!err && !index && <p className="rl-msg">읽는 중…</p>}
+            {!err && !index && <p className="rl-msg">{tr("nt_loading")}</p>}
 
             {index && tab?.kind === 'notes' && (
               <RackTable cols={cols} onDrag={drag('')}
@@ -439,7 +446,7 @@ export default function App() {
                       onContextMenu={(e) => { e.preventDefault(); openEdit(n.id, n.title) }}
                       cell={{
                         chk: <input type="checkbox" checked={on} tabIndex={-1} readOnly
-                          aria-label={`${n.title} 선택`} />,
+                          aria-label={tr("nt_select_x", n.title)} />,
                         num: i + 1,
                         date: n.date || D,
                         title: n.title,
@@ -452,7 +459,7 @@ export default function App() {
                       }} />
                   )
                 })}
-                {!filter.mode && rows.length === 0 && <p className="rl-msg">해당하는 노트가 없습니다.</p>}
+                {!filter.mode && rows.length === 0 && <p className="rl-msg">{tr("nt_no_match")}</p>}
               </RackTable>
             )}
 
@@ -463,7 +470,7 @@ export default function App() {
                 {todoRows.map((t, i) => (
                   <RackRow key={`${t.id}:${t.line}`} cols={todoCols} tone={TONE}
                     className={`rl-hit${t.done ? ' rl-done' : ''}${late(t) ? ' nt-late' : ''}`}
-                    title="눌러서 끝냄 · 오른쪽 클릭으로 그 노트"
+                    title={tr("nt_todo_hint")}
                     onClick={() => toggleTodo(t)}
                     onContextMenu={(e) => { e.preventDefault(); openEdit(t.id, t.title) }}
                     cell={{
@@ -481,7 +488,7 @@ export default function App() {
                       done: t.doneAt || D,
                     }} />
                 ))}
-                {todoRows.length === 0 && <p className="rl-msg">할 일이 없습니다 — 노트에 `- [ ] 할 일`을 적으면 여기 모입니다.</p>}
+                {todoRows.length === 0 && <p className="rl-msg">{tr("nt_no_todos")}</p>}
               </RackTable>
             )}
 
@@ -502,11 +509,11 @@ export default function App() {
                     }}
                     cell={{
                       ...(merge.mode ? { chk: <input type="checkbox" checked={chosen} tabIndex={-1}
-                        readOnly aria-label={`${r.name} 선택`} /> } : {}),
+                        readOnly aria-label={tr("nt_select_x", r.name)} /> } : {}),
                       num: i + 1, name: r.name, count: r.count }} />
                   )
                 })}
-                {classes.length === 0 && <p className="rl-msg">아직 태그가 없습니다.</p>}
+                {classes.length === 0 && <p className="rl-msg">{tr("nt_no_tags")}</p>}
               </RackTable>
             )}
           </div>)}
@@ -522,7 +529,7 @@ export default function App() {
                   const live = (cur.names || []).filter((t) => all.includes(t))
                   const users = notes.filter((n) => live.some((t) => inTag(n, t)))
                   return (
-                    <RackMerge names={cur.names || []} noun="태그" exists={all}
+                    <RackMerge names={cur.names || []} noun={tr("nt_tag")} exists={all}
                       count={(t) => notes.filter((n) => inTag(n, t)).length}
                       users={users.map((n) => n.title || n.id)}
                       onMerge={(gone, to) => mergeTags(gone, to, users)}
@@ -532,7 +539,7 @@ export default function App() {
                   /* The same editor every rack-list service gives a class.
                      What is ours is the save: a tag is text in the notes, so
                      renaming one rewrites every note that wears it. */
-                  <RackEditClass name={cur.who} noun="태그" wears="쓰는 노트" unit="편"
+                  <RackEditClass name={cur.who} noun={tr("nt_tag")} wears={tr("nt_notes_using")} unit={tr("nt_unit")}
                     exists={[...new Set(notes.flatMap(tagsOf))].sort()}
                     wearing={tagUsers}
                     onOpen={(id) => openEdit(id, (notes.find((n) => n.id === id) || {}).title)}
@@ -554,11 +561,11 @@ export default function App() {
         </div>
 
         <footer className="rl-foot">
-          <span>{note || '왼쪽 클릭으로 선택, shift로 범위, 오른쪽 클릭으로 편집.'}</span>
+          <span>{note || tr("nt_status_hint")}</span>
           <span className="rl-sp" />
           <span className="rl-mono">
-            {tab?.kind === 'todos' ? (todoRows.length ? `${todoRows.length}줄` : '')
-              : rows.length ? `${rows.length}줄` : ''}
+            {tab?.kind === 'todos' ? (todoRows.length ? tr("nt_n_rows", todoRows.length) : '')
+              : rows.length ? tr("nt_n_rows", rows.length) : ''}
           </span>
         </footer>
       </section>
@@ -580,6 +587,24 @@ const putNote = (id, baseVersion, v) => ask(`/notes/${encodeURIComponent(id)}`, 
 
 /** The note is read when the tab opens, not from the list — the list carries a
  *  first line, and this needs the file. */
+/** ?solo=<id>: one note's editor and nothing else — what another service
+ *  opens as a tab of its own (an activity's note, beside the activity). Its
+ *  cancel has no list to go back to; a note deleted here says so. */
+export function SoloNote({ id }) {
+  const [said, say] = useState('')
+  const [gone, setGone] = useState(false)
+  const closed = () => { ask(`/notes/${encodeURIComponent(id)}`).catch(() => setGone(true)) }
+  return (
+    <div className="rl nt-solo" style={brandStyle()}>
+      {gone ? <p className="rl-msg">{tr("nt_deleted")}</p> : (
+        <Editor id={id} say={say} onClosed={closed}
+          onPrint={() => window.open(`${PORTAL_BASE}/?print=${encodeURIComponent(id)}`, '_blank', 'noopener')} />
+      )}
+      {said && <div className="rl-hint nt-solo-note">{said}</div>}
+    </div>
+  )
+}
+
 function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   const [n, setN] = useState(null)
   const [f, setF] = useState(null)
@@ -625,7 +650,8 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
     const el = titleRef.current
     if (!el) return
     el.focus()
-    if (n.title === '제목 없음') el.select()
+    // Untitled in this language, or in Korean (notes made before English existed).
+    if (n.title === tr("nt_untitled") || n.title === '제목 없음') el.select()
     else el.setSelectionRange(el.value.length, el.value.length)
     onCaret?.()
   }, [takeCaret, n])   // eslint-disable-line react-hooks/exhaustive-deps
@@ -636,7 +662,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   // is a blank pane, not a missing shortcut.
   useRackKeys({ onSave: () => { if (f && n) saveNote() } })
 
-  if (!f || !n) return <p className="rl-msg">읽는 중…</p>
+  if (!f || !n) return <p className="rl-msg">{tr("nt_loading")}</p>
   const dirty = !sameNote(f, n)
   // Tags live in the BODY now (#태그), so this is what the note will carry the
   // moment it is saved — shown rather than edited.
@@ -644,7 +670,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   async function saveNote() {
     const { conflict, body } = await putNote(id, n.version, f)
     if (conflict) {
-      say(body.detail || '다른 곳에서 바뀌었습니다.')
+      say(body.detail || tr("nt_changed_elsewhere"))
       setN(body.current); setF(body.current)
       return
     }
@@ -655,7 +681,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   }
   async function remove() {
     await ask(`/notes/${encodeURIComponent(id)}`, { method: 'DELETE' })
-    say(`'${n.title}' 삭제됨`)
+    say(tr("nt_deleted_named", n.title))
     onClosed?.(id)
   }
 
@@ -666,37 +692,31 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
       {/* The note saves itself; save is still here for the hand that wants to
           press it, and it is the one button that says whether it is needed. */}
       <RackActions key={id}
-        onSave={() => saveNote()} saveDisabled={!dirty}
-        hint={dirty ? '쓰는 중…' : '저장됨'}
+        onSave={() => saveNote()} saveDisabled={!dirty} pending={dirty}
         onCancel={() => onClosed?.(id)}
         extra={<>
           <button type="button" className={`rl-btn${read ? ' on' : ''}`}
-            onClick={() => setRead(!read)}>{read ? '편집' : '미리보기'}</button>
-          {read ? <button type="button" className="rl-btn" onClick={onPrint}>인쇄 · PDF</button> : null}
+            onClick={() => setRead(!read)}>{read ? tr("nt_edit") : tr("nt_preview")}</button>
+          {read ? <button type="button" className="rl-btn" onClick={onPrint}>{tr("nt_print")}</button> : null}
         </>}
-        onRevert={() => setF(orig.current)} revertTitle="이 탭을 열었을 때로 되돌립니다"
+        onRevert={() => setF(orig.current)} revertTitle={tr("nt_revert_hint")}
         onDelete={remove}
-        deleteWarn="파일이 지워집니다. 되돌릴 수 없습니다." />
+        deleteWarn={tr("nt_delete_warn")} />
 
       {/* Reading, the sheet carries the title and the date itself. */}
+      {/* One line: the title, its tags, and the fold — a button with a word on
+          it, big enough to hit — which opens the date and the file's name below. */}
       <div className="nt-titlerow" hidden={read}>
-        <input className="nt-title" ref={titleRef} value={f.title} placeholder="제목"
+        <input className="nt-title" ref={titleRef} value={f.title} placeholder={tr("nt_title")}
           onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} />
-      </div>
-      {/* Under the title, not beside it: the fold is about the note, not about
-          the name, and the line it opens starts with the date you can change. */}
-      <div className="nt-foldrow" hidden={read}>
-        <button type="button" className="nt-fold" onClick={() => setOpen(!open)}
-          title={open ? '접기' : '날짜 · 태그 · 파일 이름'} aria-expanded={open}>
-          <i className="rl-caret">{open ? '▾' : '▸'}</i>
-        </button>
         {tags.length ? <span className="nt-tagline">{tags.map((t) => `#${t}`).join(' ')}</span> : null}
+        <button type="button" className="rl-btn nt-fold" onClick={() => setOpen(!open)}
+          title={open ? tr("nt_fold") : tr("nt_date_file")} aria-expanded={open}>{tr("nt_info")} <i className="nt-caret">{open ? '▾' : '▸'}</i>
+        </button>
       </div>
       {open && !read && (
         <div className="nt-meta-open">
-          <label className="rl-hint">
-            날짜{' '}
-            <input type="date" className="rl-in nt-date" value={f.date || ''}
+          <label className="rl-hint">{tr("nt_date_with", ' ')}<input type="date" className="rl-in nt-date" value={f.date || ''}
               onChange={(e) => setF((s) => ({ ...s, date: e.target.value }))} />
           </label>
           <span className="rl-hint rl-mono">{f.id}.md</span>
@@ -704,7 +724,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
             <span key={k} className="rl-hint"><b className="rl-mono">{k}</b> {String(v ?? '')}</span>
           ))}
           <span className="rl-sp" />
-          <span className="rl-hint">{f.body.split(/\s+/).filter(Boolean).length}단어</span>
+          <span className="rl-hint">{tr("nt_n_words", f.body.split(/\s+/).filter(Boolean).length)}</span>
         </div>
       )}
 
@@ -719,7 +739,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
           </article>
         </div>
       ) : (
-        <MarkdownArea value={f.body} fileSrc={fileSrc} placeholder="markdown. #태그 로 태그를, `- [ ] 할 일`로 todos 탭에."
+        <MarkdownArea value={f.body} fileSrc={fileSrc} placeholder={tr("nt_body_placeholder")}
           onFiles={(file) => putFile(file).catch((e) => { say(String(e.message || e)); return null })}
           onChange={(v) => setF((s) => ({ ...s, body: v }))} />
       )}
@@ -728,19 +748,26 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
 }
 
 // ─── Reading ────────────────────────────────────────────────────────────────
-/** The body, rendered — with `#태그` drawn as a tag rather than left as the
- *  text it is in the file. react-markdown hands text through as strings, so the
- *  tags are picked out of those on the way to the page. */
+/** The body, rendered — with `#태그` drawn as a tag and `📅 2026-12-24` as the
+ *  calendar label the editor draws, rather than left as the text they are in
+ *  the file. react-markdown hands text through as strings, so both are picked
+ *  out of those on the way to the page. */
+const CHIP_RE = new RegExp(`${TAG_RE.source}|(📅|✅)\\s*(\\d{4}-\\d{2}-\\d{2})`, 'g')
+
 function tagify(children) {
   return Children.map(children, (child) => {
     if (typeof child !== 'string') return child
     const out = []
     let last = 0
-    for (const m of child.matchAll(TAG_RE)) {
-      const at = m.index + m[1].length
+    for (const m of child.matchAll(CHIP_RE)) {
+      // A tag (lead + #name) or a date (mark + day) — one of the two matched.
+      const tag = m[2] !== undefined
+      const at = m.index + (tag ? m[1].length : 0)
       if (at > last) out.push(child.slice(last, at))
-      out.push(<span className="nt-tag" key={at}>#{m[2]}</span>)
-      last = at + 1 + m[2].length
+      out.push(tag
+        ? <span className="nt-tag" key={at}>{m[2]}</span>
+        : <span className={m[3] === '📅' ? 'nt-due-in' : 'nt-done-in'} key={at}>{m[4]}</span>)
+      last = at + (tag ? 1 + m[2].length : m[0].length)
     }
     out.push(child.slice(last))
     return out
@@ -797,13 +824,13 @@ export function PrintView({ ids }) {
       .then(setNotes)
       .catch(() => setNotes([]))
   }, [])   // eslint-disable-line react-hooks/exhaustive-deps
-  if (!notes) return <p className="nt-print-msg">읽는 중…</p>
-  if (!notes.length) return <p className="nt-print-msg">노트를 읽지 못했습니다.</p>
+  if (!notes) return <p className="nt-print-msg">{tr("nt_loading")}</p>
+  if (!notes.length) return <p className="nt-print-msg">{tr("nt_read_failed")}</p>
   return (
     <div className="nt-print">
       <div className="nt-print-bar">
-        <button type="button" onClick={() => window.print()}>인쇄 · PDF로 저장</button>
-        <span>인쇄 대화상자에서 “PDF로 저장”을 고르면 파일이 됩니다.</span>
+        <button type="button" onClick={() => window.print()}>{tr("nt_print_save_pdf")}</button>
+        <span>{tr("nt_print_hint")}</span>
       </div>
       {notes.map((n) => (
         <article key={n.id} className="nt-sheet">

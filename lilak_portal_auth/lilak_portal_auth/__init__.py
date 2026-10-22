@@ -26,13 +26,30 @@ from typing import Optional
 from fastapi import Header, Request
 from jose import jwt
 
-# Secret precedence matches the portal (service_manager/app/config.py) and elog:
-# PORTAL_SECRET_KEY, then ELOG_SECRET_KEY, then the shared dev default.
-SECRET_KEY = (
-    os.environ.get("PORTAL_SECRET_KEY")
-    or os.environ.get("ELOG_SECRET_KEY")
-    or "lilak-dev-secret-CHANGE-in-production"
-)
+def _secret_key() -> str:
+    """The key the portal signs tokens with, found the way the portal
+    (service_manager/app/config.py) and elog find it: an explicit variable,
+    else the data root's _portal/secret.key — which the portal creates and every
+    service it starts can read (it is handed PORTAL_DATA_ROOT). Without the file
+    a service under a portal that keeps its key there knew no key but the dev
+    default, so it read every login as anonymous. The dev default is left only
+    for a service run on its own, with no portal around."""
+    for var in ("PORTAL_SECRET_KEY", "ELOG_SECRET_KEY"):
+        if os.environ.get(var):
+            return os.environ[var]
+    root = os.environ.get("PORTAL_DATA_ROOT")
+    path = os.environ.get("PORTAL_SECRET_FILE") or (os.path.join(root, "_portal", "secret.key") if root else "")
+    try:
+        if path and os.path.exists(path):
+            val = open(path, encoding="utf-8").read().strip()
+            if val:
+                return val
+    except OSError:
+        pass
+    return "lilak-dev-secret-CHANGE-in-production"
+
+
+SECRET_KEY = _secret_key()
 ALGORITHM = "HS256"
 MANAGER_COLOR = os.environ.get("MANAGER_COLOR", "#111827")
 

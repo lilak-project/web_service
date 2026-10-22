@@ -74,6 +74,15 @@
 /* Hovered, the kit fills the button solid and flips the text white — a white
    outline on a solid fill is the same shape, one shade lighter. */
 :is(.set-panel, .set-card, .set-row) button:not(.set-plain):not(.set-pick *):hover { border-color: currentColor !important; }
+/* A button whose thing is ON (a project synced on its own) says so with a red
+   outline, kept on hover. Same weight as the rule above, so it wins by order.
+   The second pixel is an inset shadow, not a wider border: a border grows the
+   button, the shadow is drawn inside it and moves nothing. */
+:is(.set-panel, .set-card, .set-row) button.set-linked:not(.set-plain),
+:is(.set-panel, .set-card, .set-row) button.set-linked:not(.set-plain):hover {
+  border-color: var(--danger-text) !important;
+  box-shadow: inset 0 0 0 1px var(--danger-text) !important;
+}
 /* A range is not a field and a checkbox is not a box to type in; a picker
    brings its own square controls. `.set-pick` is the way out for a widget that
    has to keep its own shape inside a panel. */
@@ -174,6 +183,8 @@
   flex-wrap: wrap;
 }
 .set-row + .set-row { border-top: 1px solid var(--border-default); }
+/* The row a service's card opens straight into (the entry project). */
+.set-row.entry { background: var(--info-bg); box-shadow: inset 3px 0 0 var(--info-text); }
 .set-row .sp { flex: 1; }
 .set-row .mono { font-family: var(--font-mono); letter-spacing: .5px; }
 /* A row's secondary half — who/when/where — is grey, the subject stays ink. */
@@ -233,7 +244,7 @@
    fact row nobody reads. */
 :is(.pl-setpage, .pl-mgpage) .set-title {
   margin: 0 0 10px;
-  font-size: 15px;
+  font-size: var(--fs-plate);
   font-weight: var(--rack-weight);
   color: var(--text-emphasis);
 }
@@ -385,14 +396,14 @@
    size, the RACK grey around white. */
 .pl-log { display: flex; flex-direction: column; border-top: 1px solid var(--border-default); }
 .pl-logbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; }
-.pl-logpath { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.pl-logpath { font-family: var(--font-mono); font-size: var(--fs-small); color: var(--text-muted); overflow-wrap: anywhere; }
 .pl-logtext {
   margin: 0; max-height: 360px; overflow: auto; padding: 10px 12px;
   background: var(--surface-2); border-top: 1px solid var(--border-default);
-  font-family: var(--font-mono); font-size: 12px; line-height: 1.45;
+  font-family: var(--font-mono); font-size: var(--fs-small); line-height: 1.45;
   white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary);
 }
-.pl-logempty { padding: 10px 12px; font-size: 13px; color: var(--text-muted); border-top: 1px solid var(--border-default); }
+.pl-logempty { padding: 10px 12px; font-size: var(--fs-body); color: var(--text-muted); border-top: 1px solid var(--border-default); }
 
 /* A link that leaves the portal (a repository, a commit): the info colour, so it
    reads as somewhere else, and an arrow in the text that says so too. */

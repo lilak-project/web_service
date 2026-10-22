@@ -12,12 +12,14 @@
  *   rolecount  an author's papers in one role, a count you can press
  *   authorpapers  the same, in the author's own form
  */
+import './strings.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { registerType, newId } from 'lilak-ui/racklist'
 import {
   authorRows, autRoles, handleFor, refLabel, linkedCites, citesOf, mainTag, tagsOf,
   ruleFor, citeKeyFor, parseCitation, splitAuthors, authorList, ROLE_LABEL,
 } from './paper.js'
+import { tr } from 'lilak-ui'
 
 const D = '·'
 const list = (v) => (Array.isArray(v) ? v : (v ? [v] : []))
@@ -57,7 +59,7 @@ function AuthorRows({ value = [], doc, onChange, onRegister, onOpenAuthor }) {
 
   return (
     <div className="rl-rows">
-      {value.length === 0 && <span className="rl-hint">없음</span>}
+      {value.length === 0 && <span className="rl-hint">{tr("rm_none")}</span>}
       {(open ? value : value.slice(0, SHOWN)).map((a, i) => {
         const rec = a.ref ? recs.find((x) => x.id === a.ref) : null
         return (
@@ -67,13 +69,13 @@ function AuthorRows({ value = [], doc, onChange, onRegister, onOpenAuthor }) {
               <span className="rl-tag">
                 {/* The handle is the way IN to that person; unlinking is its
                     own button, and it says so rather than wearing an ×. */}
-                <button type="button" className="rl-tagpick" title={`${rec.fullName || rec.name} 편집`}
+                <button type="button" className="rl-tagpick" title={tr("rm_edit_x", rec.fullName || rec.name)}
                   onClick={() => onOpenAuthor?.(rec.id)}>#{rec.tag}</button>
               </span>
             ) : (
               <>
                 <input className="rl-in" style={{ width: 210 }} list="rl-auts" value={a.name || ''}
-                  placeholder="이름 또는 #handle"
+                  placeholder={tr("rm_name_or_handle")}
                   onChange={(e) => {
                     const v = e.target.value
                     // Two letters at least: a record whose whole name is 'J'
@@ -82,8 +84,8 @@ function AuthorRows({ value = [], doc, onChange, onRegister, onOpenAuthor }) {
                     row(i, id ? { ref: id, name: '' } : { name: v })
                   }} />
                 <button type="button" className="rl-btn" disabled={!String(a.name || '').trim()}
-                  title="이 이름으로 저자를 등록하고 같은 이름의 줄을 모두 연결합니다"
-                  onClick={() => onRegister?.(a.name)}>등록</button>
+                  title={tr("rm_register_author_hint")}
+                  onClick={() => onRegister?.(a.name)}>{tr("rm_register")}</button>
               </>
             )}
             <span className="rl-hint">{rec ? (rec.fullName || rec.name) : ''}</span>
@@ -92,12 +94,12 @@ function AuthorRows({ value = [], doc, onChange, onRegister, onOpenAuthor }) {
                 onChange={(e) => row(i, { corr: e.target.checked })} /> corr.
             </label>
             {rec && (
-              <button type="button" className="rl-x" title="연결 끊기 (이름만 남김)"
+              <button type="button" className="rl-x" title={tr("rm_unlink_keep_name")}
                 onClick={() => row(i, { ref: '', name: rec.name })}>↩</button>
             )}
-            <button type="button" className="rl-x" title="위로" onClick={() => move(i, -1)}>↑</button>
-            <button type="button" className="rl-x" title="아래로" onClick={() => move(i, 1)}>↓</button>
-            <button type="button" className="rl-x" title="이 줄 지우기"
+            <button type="button" className="rl-x" title={tr("rm_up")} onClick={() => move(i, -1)}>↑</button>
+            <button type="button" className="rl-x" title={tr("rm_down")} onClick={() => move(i, 1)}>↓</button>
+            <button type="button" className="rl-x" title={tr("rm_delete_row")}
               onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
           </div>
         )
@@ -106,14 +108,12 @@ function AuthorRows({ value = [], doc, onChange, onRegister, onOpenAuthor }) {
       <div className="rl-rrow">
         {value.length > SHOWN && (
           <button type="button" className="rl-btn" onClick={() => setOpen(!open)}>
-            {open ? '접기' : `열기 (${value.length - SHOWN}명 더)`}
+            {open ? tr("rm_fold") : tr("rm_unfold_more", value.length - SHOWN)}
           </button>
         )}
         <button type="button" className="rl-btn"
-          onClick={() => { setOpen(true); onChange([...value, { name: '', ref: '', corr: false }]) }}>
-          + 저자
-        </button>
-        <span className="rl-hint">{value.length}명 · {linked}명 연결</span>
+          onClick={() => { setOpen(true); onChange([...value, { name: '', ref: '', corr: false }]) }}>{tr("rm_add_author")}</button>
+        <span className="rl-hint">{tr("rm_authors_linked", value.length, linked)}</span>
       </div>
     </div>
   )
@@ -136,28 +136,28 @@ function CiteRows({ value = [], refs, mine, onChange, onOpen, onGroup }) {
 
   return (
     <div className="rl-rows">
-      {value.length === 0 && <span className="rl-hint">없음</span>}
+      {value.length === 0 && <span className="rl-hint">{tr("rm_none")}</span>}
       {value.map((c, i) => {
         const linked = c.ref && refs.some((r) => r.id === c.ref)
         return (
           <div key={i} className="rl-rrow">
             <input className="rl-in rl-mono" style={{ width: 44 }} value={c.n ?? ''} placeholder="#"
-              onChange={(e) => row(i, { n: e.target.value })} title="이 논문에서의 인용 번호" />
+              onChange={(e) => row(i, { n: e.target.value })} title={tr("rm_cite_number")} />
             <input className="rl-in" style={{ width: 240 }} list="rl-refs"
-              value={linked ? labelOf(c.ref) : ''} placeholder="목록에서 찾기"
+              value={linked ? labelOf(c.ref) : ''} placeholder={tr("rm_find_in_list")}
               onChange={(e) => {
                 const id = byLabel.get(e.target.value.trim())
                 // Typing over a link clears it; a name that matches makes one.
                 row(i, id ? { ref: id, raw: '' } : { ref: '' })
               }} />
             {linked ? (
-              <button type="button" className="rl-btn" onClick={() => onOpen?.(c.ref)}>열기</button>
+              <button type="button" className="rl-btn" onClick={() => onOpen?.(c.ref)}>{tr("rm_open")}</button>
             ) : (
               <input className="rl-in" style={{ width: 300 }} value={c.raw || ''}
                 placeholder="J. Doe et al., PRC 99 (2019) 014601"
                 onChange={(e) => row(i, { raw: e.target.value })} />
             )}
-            <button type="button" className="rl-x" title="이 줄 지우기"
+            <button type="button" className="rl-x" title={tr("rm_delete_row")}
               onClick={() => onChange(value.filter((_, j) => j !== i))}>×</button>
           </div>
         )
@@ -165,19 +165,15 @@ function CiteRows({ value = [], refs, mine, onChange, onOpen, onGroup }) {
       <datalist id="rl-refs">{labels.map((l) => <option key={l} value={l} />)}</datalist>
       <div className="rl-rrow">
         <button type="button" className="rl-btn"
-          onClick={() => onChange([...value, { n: String(value.length + 1), ref: '', raw: '' }])}>
-          + 참고문헌
-        </button>
+          onClick={() => onChange([...value, { n: String(value.length + 1), ref: '', raw: '' }])}>{tr("rm_add_cite")}</button>
         {/* The list beside the editor becomes this paper's reference list —
             the same tab the count in the table opens, reachable from in here
             where you are actually working on them. */}
         {value.some((c) => c.ref) && (
-          <button type="button" className="rl-btn" title="목록을 이 참고문헌들로 바꿉니다"
-            onClick={onGroup}>그룹 열기 ({value.filter((c) => c.ref).length})</button>
+          <button type="button" className="rl-btn" title={tr("rm_open_group_hint")}
+            onClick={onGroup}>{tr("rm_open_group", value.filter((c) => c.ref).length)}</button>
         )}
-        <span className="rl-hint">
-          {value.filter((c) => c.ref).length}개 연결 · {value.filter((c) => !c.ref && c.raw).length}개 글자만
-        </span>
+        <span className="rl-hint">{tr("rm_cites_linked", value.filter((c) => c.ref).length, value.filter((c) => !c.ref && c.raw).length)}</span>
       </div>
     </div>
   )
@@ -186,7 +182,7 @@ function CiteRows({ value = [], refs, mine, onChange, onOpen, onGroup }) {
 /** Which papers cite this one. Counted, never stored: one fact in one place. */
 function CitedBy({ refs, mine, onOpen }) {
   const users = refs.filter((r) => (r.cites || []).some((c) => c.ref === mine))
-  if (!users.length) return <span className="rl-hint">없음</span>
+  if (!users.length) return <span className="rl-hint">{tr("rm_none")}</span>
   return (
     <div className="rl-rows">
       {users.map((r) => {
@@ -222,25 +218,25 @@ function TagRows({ value = [], onChange, options, main, onMain }) {
           <span key={t} className={`rl-tag${onMain && t === main ? ' rl-main' : ''}`}>
             {onMain ? (
               <button type="button" className="rl-tagpick"
-                title={t === main ? '메인 태그' : '메인 태그로'}
+                title={t === main ? tr("rm_main_tag") : tr("rm_make_main_tag")}
                 onClick={() => onMain(t)}>{t}</button>
             ) : t}
-            <button type="button" className="rl-x" title="이 태그 떼기"
+            <button type="button" className="rl-x" title={tr("rm_remove_tag")}
               onClick={() => onChange(value.filter((x) => x !== t))}>×</button>
           </span>
         ))}
-        {value.length === 0 && <span className="rl-hint">없음</span>}
+        {value.length === 0 && <span className="rl-hint">{tr("rm_none")}</span>}
       </div>
       <div className="rl-rrow">
         {/* Leaving the box is as good as pressing the button: a tag typed and
             then saved used to vanish without a word, which is the worst way
             for a field to behave. */}
         <input className="rl-in" style={{ width: 220 }} list="rl-tags" value={add}
-          placeholder="태그" onChange={(e) => setAdd(e.target.value)} onBlur={put}
+          placeholder={tr("rm_tags")} onChange={(e) => setAdd(e.target.value)} onBlur={put}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); put() } }} />
         <datalist id="rl-tags">{options.map((t) => <option key={t} value={t} />)}</datalist>
-        <button type="button" className="rl-btn" onClick={put} disabled={!add.trim()}>+ 태그</button>
-        {add.trim() && <span className="rl-warn">엔터를 눌러야 붙습니다</span>}
+        <button type="button" className="rl-btn" onClick={put} disabled={!add.trim()}>{tr("rm_add_tag")}</button>
+        {add.trim() && <span className="rl-warn">{tr("rm_enter_to_add")}</span>}
       </div>
     </div>
   )
@@ -254,18 +250,18 @@ function PasteBox({ onTake, say }) {
   return (
     <div className="rl-rows">
       <textarea className="rl-in rl-mono" rows={4} style={{ width: '100%', minWidth: 260 }}
-        placeholder="BibTeX 또는 RIS를 붙여넣으세요" value={text}
+        placeholder={tr("rm_paste_hint")} value={text}
         onChange={(e) => setText(e.target.value)} />
       <div className="rl-rrow">
         <button type="button" className="rl-btn rl-go" disabled={found.length < 2}
           onClick={() => {
             onTake(got)
-            say(`${found.length}개 항목을 읽었습니다.`)
+            say(tr("rm_read_n", found.length))
             setText('')
-          }}>읽어서 채우기</button>
-        <button type="button" className="rl-btn" disabled={!text} onClick={() => setText('')}>지우기</button>
+          }}>{tr("rm_read_and_fill")}</button>
+        <button type="button" className="rl-btn" disabled={!text} onClick={() => setText('')}>{tr("rm_clear")}</button>
         <span className="rl-hint">
-          {text ? (found.length ? found.map(([k]) => k).join(' · ') : '읽을 수 있는 항목이 없습니다.') : ''}
+          {text ? (found.length ? found.map(([k]) => k).join(' · ') : tr("rm_nothing_readable")) : ''}
         </span>
       </div>
     </div>
@@ -295,7 +291,7 @@ async function registerAuthor(name, { doc, commit }, patch, rows) {
   await commit({
     authors: existing ? doc.authors : [...(doc.authors || []), rec],
     references: doc.references.map((r) => ({ ...r, authors: link(r.authors) })),
-  }, existing ? `${rec.tag} 로 연결 · ${hits}줄` : `${rec.tag} 등록 · ${hits}줄 연결`)
+  }, existing ? tr("rm_link_to_rows", rec.tag, hits) : tr("rm_register_link_rows", rec.tag, hits))
 }
 
 registerType('authors', {
@@ -331,9 +327,9 @@ function CiteKey({ value, onChange, ctx, rec, draft }) {
         placeholder={suggested || 'JAlmeid_ApJ_1983'} />
       <button type="button" className="rl-btn" disabled={!suggested || value === suggested}
         title={`${rule} → ${suggested || ''}`}
-        onClick={() => { typed.current = true; onChange(suggested) }}>자동</button>
+        onClick={() => { typed.current = true; onChange(suggested) }}>{tr("rm_auto")}</button>
       <span className="rl-hint rl-mono">{rule}</span>
-      {taken && <span className="rl-warn">같은 키의 논문이 있습니다.</span>}
+      {taken && <span className="rl-warn">{tr("rm_key_taken")}</span>}
     </>
   )
 }
@@ -370,7 +366,7 @@ registerType('cites', {
     if (!linked.length) return citesOf(r).length || D
     const ids = [...linked].sort((x, y) => (Number(x.n) || 999) - (Number(y.n) || 999)).map((c) => c.ref)
     return (
-      <button type="button" className="rl-lnk" title="이 논문이 인용한 것"
+      <button type="button" className="rl-lnk" title={tr("rm_cited_by_this")}
         onClick={(e) => { e.stopPropagation(); idsTab(ctx, `cites:${r.id}`, `${refLabel(r)} →`, ids) }}>{linked.length}</button>
     )
   },
@@ -408,7 +404,7 @@ registerType('citedby', {
     if (!v) return D
     const r = ctx.rec
     return (
-      <button type="button" className="rl-lnk" title="이 논문을 인용한 것"
+      <button type="button" className="rl-lnk" title={tr("rm_citing_this")}
         onClick={(e) => {
           e.stopPropagation()
           const ids = [...(citedBy(ctx.doc).get(r.id) || [])]
@@ -490,7 +486,7 @@ registerType('rolecount', {
   },
 })
 
-const ROLES = [['first', '1저자'], ['second', '2저자'], ['corr', 'corresponding'], ['other', '그 외']]
+const ROLES = [['first', tr("rm_role_first")], ['second', tr("rm_role_second")], ['corr', 'corresponding'], ['other', tr("rm_role_other")]]
 registerType('authorpapers', {
   Show: ({ ctx, rec }) => {
     const mine = papersOf(ctx.doc, rec.id)
@@ -508,7 +504,7 @@ registerType('authorpapers', {
               </span>
             )
           })}
-          <span className="rl-hint">· 모두 {mine.length}편</span>
+          <span className="rl-hint">{tr("rm_all_n_papers", mine.length)}</span>
         </div>
         {mine.slice(0, 14).map((r) => (
           <div key={r.id} className="rl-rrow">
@@ -516,7 +512,7 @@ registerType('authorpapers', {
             <span className="rl-hint">{autRoles(r, rec.id).map((x) => ROLE_LABEL[x]).filter(Boolean).join(' · ')}</span>
           </div>
         ))}
-        {mine.length > 14 && <span className="rl-hint">… 모두 {mine.length}편</span>}
+        {mine.length > 14 && <span className="rl-hint">{tr("rm_all_n_papers_more", mine.length)}</span>}
       </div>
     )
   },

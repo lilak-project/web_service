@@ -1,3 +1,5 @@
+import './strings.js'
+import { tr } from 'lilak-ui'
 /**
  * What makes an author an AUTHOR — the parts of author_manager that are about
  * people rather than lists: a name in three scripts, where someone is now, the
@@ -13,7 +15,7 @@
 // written: 한인식.
 export const korName = (a) => `${(a.korFamily || '').trim()}${(a.korGiven || '').trim()}`
 export const engName = (a) => [a.engFirst, a.engMiddle, a.engLast].filter(Boolean).join(' ')
-export const anyName = (a) => a.nick || korName(a) || engName(a) || '(이름 없음)'
+export const anyName = (a) => a.nick || korName(a) || engName(a) || tr("am_no_name")
 export const citeLast = (a) => a.engLast || ''
 export const citeFirst = (a) => [a.engFirst, a.engMiddle].filter(Boolean).join(' ')
 export const citeInit = (a) => [a.engFirst, a.engMiddle, a.engLast]
@@ -47,7 +49,7 @@ export const choices = (doc, list) => (doc?.[list] || []).filter((r) => r.id)
 /** What the affiliation cell says. Two current places read as both; a person
  *  with a history but nothing current reads 모름, which is not the same as the
  *  blank of someone who never had one. */
-export const AFF_UNKNOWN = '모름'
+export const AFF_UNKNOWN = tr("am_unknown")
 export function affilText(a, doc) {
   const now = currentAffs(a)
   if (now.length) return now.map((x) => nameIn(doc, 'affiliations', x.tag)).join(', ')
@@ -104,15 +106,15 @@ export const spanOf = (from, to) => {
 /** What a group IS. A paper's author list is assembled for different reasons,
  *  and a list of fifteen groups is unreadable without saying which is which. */
 export const GROUP_TYPES = [
-  ['organization', '조직 · 팀 (CENS, IRIS 실험장치팀)'],
-  ['experiment', '실험 (STARK, PKU, RAON, KO-25-20)'],
-  ['presentation', '발표 · 포스터 (ICABU, INPC)'],
-  ['project', '과제'],
-  ['other', '그 밖'],
+  ['organization', tr("am_gt_org")],
+  ['experiment', tr("am_gt_experiment")],
+  ['presentation', tr("am_gt_presentation")],
+  ['project', tr("am_gt_project")],
+  ['other', tr("am_gt_other")],
 ]
 
 export const PRESETS = [
-  ['이름 나열', '{이름}'],
+  [tr("am_preset_names"), '{이름}'],
   ['full names', '{name}'],
   ['abv. names', '{abv-name}'],
   ['email list', '"{name}" <{email}>'],

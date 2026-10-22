@@ -65,7 +65,8 @@ export default function ServiceProjects({ service, canManage, manage = false, on
 
   async function start(proj) {
     setBusy(proj); setErr('')
-    try { await launcher.post(`/services/${svc}/projects/${proj}/start`); enter(proj); await load() }
+    // Managing, Start only starts — the project is entered with Enter when wanted.
+    try { await launcher.post(`/services/${svc}/projects/${proj}/start`); if (!manage) enter(proj); await load() }
     catch (e) { setErr(e?.response?.data?.detail || t('portal_proj_start_fail')) }
     finally { setBusy('') }
   }
@@ -171,7 +172,8 @@ export default function ServiceProjects({ service, canManage, manage = false, on
           const viewOnly = p.view_only && !p.can_enter
           return (
             <Fragment key={p.name}>
-            <Row>
+            {/* The project the service's card opens straight into stands out. */}
+            <Row className={entry === p.name ? 'entry' : undefined}>
               <span className="mono">{p.label || p.name}</span>
               {viewOnly ? <Pill>{t('portal_proj_view_only')}</Pill>
                 : p.can_enter ? (p.running
@@ -207,9 +209,10 @@ export default function ServiceProjects({ service, canManage, manage = false, on
               )}
               {canManage && manage && (
                 <Button variant={syncOf === p.name ? 'primary' : 'secondary'}
-                  title="이 프로젝트만 따로 다른 서버와 동기화"
+                  className={linked.includes(p.name) ? 'set-linked' : undefined}
+                  title={linked.includes(p.name) ? '이 프로젝트는 따로 다른 서버와 동기화 중' : '이 프로젝트만 따로 다른 서버와 동기화'}
                   onClick={() => { setSyncOf((x) => (x === p.name ? '' : p.name)); loadLinked() }}>
-                  Sync{linked.includes(p.name) ? ' ●' : ''}
+                  Sync
                 </Button>
               )}
               {canManage && manage && (

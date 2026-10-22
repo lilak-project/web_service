@@ -252,10 +252,16 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
 }
 
 export default function ProjectsPage() {
-  const { t, lang } = useLang()
+  const { t, lang, setLang } = useLang()
 
   // ── the session ──
   const [user, setUser] = useState(null)        // null = signed out
+  // Signed in: the account's language wins over this browser's last choice.
+  useEffect(() => {
+    let want = ''
+    try { want = JSON.parse(user?.preferences_json || '{}').lang || '' } catch { /* none */ }
+    if (want && want !== lang) setLang(want)
+  }, [user?.id, user?.preferences_json])  // eslint-disable-line react-hooks/exhaustive-deps
   const [authReady, setAuthReady] = useState(false)
   const isManager = user?.role === 'manager'
   const [settingsTab, setSettingsTab] = useState('me')

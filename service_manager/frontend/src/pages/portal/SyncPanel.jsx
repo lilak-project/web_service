@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button, Icon, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 
@@ -24,7 +24,6 @@ const btn = { height: 32, borderRadius: 8, padding: '0 14px', fontSize: 'var(--f
 
 export default function SyncPanel({ service, project = '', onChanged }) {
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const svc = service.name
   // One project linked on its own, or the service as a whole.
   const base = project ? `/admin/services/${svc}/projects/${project}/sync` : `/admin/services/${svc}/sync`
@@ -68,15 +67,15 @@ export default function SyncPanel({ service, project = '', onChanged }) {
       const { data } = await launcher.put(base, body)
       setCfg(data)
       setPick(null)
-      setMsg(L('저장됨', 'saved'))
+      setMsg(tr("p_saved"))
       if (data.role === 'sub' && !project) loadChoices()
       onChanged?.()
-    } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    } catch (e) { setMsg(e?.response?.data?.detail || tr("p_failed")) }
   }
 
   async function rotate() {
-    try { setCfg((await launcher.post(`${base}/rotate`)).data); setMsg(L('새 코드 발급됨 — 이전 코드는 막혔습니다. sub 에 새 코드를 붙여넣으세요', 'new code — earlier ones stop working; paste it on the sub')) }
-    catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    try { setCfg((await launcher.post(`${base}/rotate`)).data); setMsg(tr("p_new_code_earlier_ones_stop")) }
+    catch (e) { setMsg(e?.response?.data?.detail || tr("p_failed")) }
   }
 
   function watch(jobId) {
@@ -98,7 +97,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
   async function runNow() {
     setMsg('')
     try { watch((await launcher.post(`${base}/run`)).data.job_id) }
-    catch (e) { setMsg(e?.response?.data?.detail || L('동기화를 시작하지 못했습니다', 'failed to start sync')) }
+    catch (e) { setMsg(e?.response?.data?.detail || tr("p_failed_to_start_sync")) }
   }
 
   // ── the connection code: main hands out one line, a sub pastes it ──
@@ -126,14 +125,12 @@ export default function SyncPanel({ service, project = '', onChanged }) {
       const { data } = await launcher.post(`/admin/services/${svc}/sync/join`, { code: joinCode.trim(), live: joinLive })
       setJoinCode('')
       setMsg(data.project
-        ? L(`'${data.project}' 프로젝트${data.made ? '를 만들고' : '에'} 연결했습니다${data.two_way ? ' (양방향)' : ''} — 첫 동기화 중`,
-          `${data.made ? 'made and ' : ''}linked project '${data.project}'${data.two_way ? ' (two-way)' : ''} — first sync running`)
-        : L(`서비스 전체를 연결했습니다${data.two_way ? ' (양방향)' : ''} — 첫 동기화 중`,
-          `linked the whole service${data.two_way ? ' (two-way)' : ''} — first sync running`))
+        ? tr("p_linked_project_first_sync_running", data.project, data.made ? '를 만들고' : '에', data.two_way ? ' (양방향)' : '', data.made ? 'made and ' : '', data.two_way ? ' (two-way)' : '')
+        : tr("p_linked_the_whole_service_first", data.two_way ? ' (양방향)' : '', data.two_way ? ' (two-way)' : ''))
       load(); onChanged?.()
       window.dispatchEvent(new Event('portal:projects'))
       if (data.job_id) watch(data.job_id)
-    } catch (e) { setMsg(e?.response?.data?.detail || L('연결하지 못했습니다', 'could not join')) }
+    } catch (e) { setMsg(e?.response?.data?.detail || tr("p_could_not_join")) }
   }
 
   // ── by request (handshake): an address, an approval on main, nothing pasted ──
@@ -149,8 +146,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
       for (const p of r.data) {
         const before = was.find((x) => x.id === p.id)
         if (before?.status === 'pending' && p.status === 'joined') {
-          setMsg(L(`승인되어 연결했습니다${p.project ? ` — '${p.project}'` : ''}. 첫 동기화 중`,
-            `approved and linked${p.project ? ` — '${p.project}'` : ''}; first sync running`))
+          setMsg(tr("p_approved_and_linked_first_sync", p.project ? ` — '${p.project}'` : ''))
           load(); onChanged?.(); window.dispatchEvent(new Event('portal:projects'))
           if (p.job_id) watch(p.job_id)
         }
@@ -174,39 +170,38 @@ export default function SyncPanel({ service, project = '', onChanged }) {
       const { data } = await launcher.post(`/admin/services/${svc}/sync/request`,
         { url: joinCode.trim(), project: askProj.trim(), two_way: askTwo, live: joinLive })
       setJoinCode('')
-      setMsg(L(`요청을 보냈습니다. main 관리자에게 확인 번호 ${data.pin} 를 알려 주세요 — 승인되면 저절로 연결됩니다.`,
-        `request sent. Tell main's admin the pin ${data.pin} — it links itself once approved.`))
+      setMsg(tr("p_request_sent_tell_main_s", data.pin))
       loadPending()
-    } catch (e) { setMsg(e?.response?.data?.detail || L('요청하지 못했습니다', 'could not send the request')) }
+    } catch (e) { setMsg(e?.response?.data?.detail || tr("p_could_not_send_the_request")) }
   }
   async function decide(r, action, acceptPush) {
     try {
       await launcher.post(`/admin/services/${svc}/sync/requests/${r.id}`, { action, accept_push: acceptPush })
-      setMsg(action === 'approve' ? L('승인했습니다 — 상대 서버가 곧 연결합니다', 'approved — the other server links in a moment')
-        : L('거절했습니다', 'rejected'))
+      setMsg(action === 'approve' ? tr("p_approved_the_other_server_links")
+        : tr("p_rejected"))
       loadAsked(); load(); onChanged?.()
-    } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    } catch (e) { setMsg(e?.response?.data?.detail || tr("p_failed")) }
   }
   const forget = (r) => launcher.delete(`/admin/services/${svc}/sync/pending/${r.id}`).then(loadPending)
-  const STATUS = { pending: L('승인 대기', 'waiting'), joined: L('연결됨', 'linked'), rejected: L('거절됨', 'rejected'),
-    expired: L('만료됨', 'expired'), failed: L('실패', 'failed') }
+  const STATUS = { pending: tr("p_waiting"), joined: tr("p_linked"), rejected: tr("p_rejected_2"),
+    expired: tr("p_expired"), failed: tr("p_failed") }
 
   async function loadGrants(apply) {
     setMsg('')
     try {
       const { data } = await launcher.post(`/admin/services/${svc}/sync/grants?apply=${apply ? 'true' : 'false'}${project ? `&project=${project}` : ''}`)
       setGrants(data)
-      if (apply) setMsg(L(`권한 ${data.applied}건 적용됨`, `${data.applied} grant(s) applied`))
-    } catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+      if (apply) setMsg(tr("p_grant_s_applied", data.applied))
+    } catch (e) { setMsg(e?.response?.data?.detail || tr("p_failed")) }
   }
 
-  const copy = (v) => { try { navigator.clipboard.writeText(v) } catch { /* ignore */ } setMsg(L('복사됨', 'copied')) }
+  const copy = (v) => { try { navigator.clipboard.writeText(v) } catch { /* ignore */ } setMsg(tr("p_copied")) }
   const role = pick ?? (cfg?.role || '')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
       <div style={row}>
-        <span style={lbl}>{L('동기화', 'Sync')}</span>
+        <span style={lbl}>{tr("p_sync")}</span>
         {/* off and main need nothing typed, so they save on the spot; sub
             opens its form and waits for 연결 저장. */}
         <select value={role} style={sel}
@@ -214,60 +209,54 @@ export default function SyncPanel({ service, project = '', onChanged }) {
             const v = e.target.value
             if (v === 'sub' && cfg?.role !== 'sub') {
               setPick('sub')
-              setMsg(L('main 주소를 넣고 연결 요청을 누르세요 (연결 코드가 있으면 그것을 붙여넣고 받기).',
-                'type main\'s address and press Ask (or paste a connection code and press Join)'))
+              setMsg(tr("p_type_main_s_address_and"))
             } else { setPick(null); save(v) }
           }}>
-          <option value="">{L('사용 안 함', 'off')}</option>
-          <option value="main">{L('main (원본)', 'main (source)')}</option>
-          <option value="sub">{L('sub (미러)', 'sub (mirror)')}</option>
+          <option value="">{tr("p_off")}</option>
+          <option value="main">{tr("p_main_source")}</option>
+          <option value="sub">{tr("p_sub_mirror")}</option>
         </select>
         {cfg?.last_sync && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
-          {L('마지막', 'last')}: {cfg.last_sync}
+          {tr("p_last")}: {cfg.last_sync}
         </span>}
       </div>
       <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
         {project
-          ? L(`프로젝트 ${project} 만의 연결입니다. 켜면 서비스 전체 설정 대신 이것을 씁니다 — 상대 서버·토큰·방향이 따로입니다.`,
-            `A link for project ${project} alone. When on, it replaces the service's — its own partner, token and direction.`)
+          ? tr("p_a_link_for_project_alone", project)
           : (cfg?.own_links?.length
-            ? L(`따로 연결된 프로젝트(${cfg.own_links.join(', ')})는 이 설정에서 빠집니다.`,
-              `Projects linked on their own (${cfg.own_links.join(', ')}) are left out of this one.`)
-            : L('서비스의 모든 프로젝트에 적용됩니다. 프로젝트마다 따로 하려면 아래 프로젝트 줄의 Sync 를 누르세요.',
-              'Applies to every project. To link one project on its own, press Sync on its row below.'))}
+            ? tr("p_projects_linked_on_their_own", cfg.own_links.join(', '))
+            : tr("p_applies_to_every_project_to"))}
       </div>
 
       {role === 'main' && (
         <>
           <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
-            {L('연결 코드 하나를 sub 서버의 같은 서비스 → 동기화 → "연결 코드"에 붙여넣으면 프로젝트를 만들고 바로 동기화합니다. 코드에는 토큰이 들어 있으니 비밀번호처럼 다루세요.',
-              'Paste the connection code into the same service on the sub server (Sync → "Connection code"): it makes the project and syncs at once. The code holds the token — treat it like a password.')}
+            {tr("p_paste_the_connection_code_into")}
           </div>
           <div style={row}>
-            <span style={lbl}>{L('주소', 'URL')}</span>
+            <span style={lbl}>{tr("p_url")}</span>
             <input value={addr} onChange={(e) => setAddr(e.target.value)} style={input}
               placeholder="http://kiki.local:8025" />
           </div>
           {addrLocal && (
             <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--warning-text, #b45309)' }}>
-              {L('localhost 는 다른 서버에서 닿지 않습니다 — 이 서버의 이름(kiki.local)이나 IP로 고치세요.',
-                'localhost cannot be reached from another server — use this server\'s name or IP.')}
+              {tr("p_localhost_cannot_be_reached_from")}
             </div>
           )}
           <div style={row}>
-            <span style={lbl}>{L('연결 코드', 'Code')}</span>
+            <span style={lbl}>{tr("p_code")}</span>
             <input readOnly value={code} style={{ ...input, fontFamily: 'var(--font-mono)' }} onFocus={(e) => e.target.select()} />
-            <Button variant="primary" style={btn} disabled={!code} onClick={() => copy(code)}>{L('복사', 'Copy')}</Button>
+            <Button variant="primary" style={btn} disabled={!code} onClick={() => copy(code)}>{tr("p_copy")}</Button>
             {/* A code that leaked: a new token, and every earlier code stops working. */}
-            <Button variant="dangerSoft" style={btn} title={L('새 코드를 만들고 이전 코드는 막습니다', 'new code; earlier ones stop working')}
-              onClick={rotate}>{L('재발급', 'Rotate')}</Button>
+            <Button variant="dangerSoft" style={btn} title={tr("p_new_code_earlier_ones_stop_2")}
+              onClick={rotate}>{tr("p_rotate")}</Button>
           </div>
           <div style={row}>
-            <span style={lbl}>{L('양방향', 'Two-way')}</span>
+            <span style={lbl}>{tr("p_two_way")}</span>
             <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
               <input type="checkbox" checked={!!cfg.accept_push}
                 onChange={(e) => save('main', { accept_push: e.target.checked })} />
-              {L('sub 에서 고친 것도 받기', 'accept edits made on the sub')}
+              {tr("p_accept_edits_made_on_the")}
             </label>
           </div>
         </>
@@ -278,16 +267,16 @@ export default function SyncPanel({ service, project = '', onChanged }) {
       {asked.filter((r) => r.status === 'pending' && mine(r)).map((r) => (
         <div key={r.id} style={{ ...row, padding: 8, borderRadius: 8, background: 'var(--surface-2)' }}>
           <span style={{ fontSize: 'var(--fs-small, 12px)', flex: 1, minWidth: 220 }}>
-            <b>{L('연결 요청', 'Link request')}</b> · {r.from_name || '?'} <span style={{ color: 'var(--text-muted)' }}>({r.from_url || '?'})</span>
-            {' · '}{r.by || '?'} · {r.project ? L(`프로젝트 ${r.project}`, `project ${r.project}`) : L('서비스 전체', 'whole service')}
-            {' · '}{L('확인 번호', 'pin')} <b style={{ fontFamily: 'var(--font-mono)' }}>{r.pin}</b>
+            <b>{tr("p_link_request")}</b> · {r.from_name || '?'} <span style={{ color: 'var(--text-muted)' }}>({r.from_url || '?'})</span>
+            {' · '}{r.by || '?'} · {r.project ? tr("p_project", r.project) : tr("p_whole_service")}
+            {' · '}{tr("p_pin")} <b style={{ fontFamily: 'var(--font-mono)' }}>{r.pin}</b>
           </span>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
-            <input type="checkbox" defaultChecked={!!r.two_way} id={`ap-${r.id}`} /> {L('양방향 허용', 'allow two-way')}
+            <input type="checkbox" defaultChecked={!!r.two_way} id={`ap-${r.id}`} /> {tr("p_allow_two_way")}
           </label>
           <Button variant="primary" style={btn}
-            onClick={() => decide(r, 'approve', document.getElementById(`ap-${r.id}`)?.checked)}>{L('승인', 'Approve')}</Button>
-          <Button variant="dangerSoft" style={btn} onClick={() => decide(r, 'reject')}>{L('거절', 'Reject')}</Button>
+            onClick={() => decide(r, 'approve', document.getElementById(`ap-${r.id}`)?.checked)}>{tr("p_approve")}</Button>
+          <Button variant="dangerSoft" style={btn} onClick={() => decide(r, 'reject')}>{tr("p_reject")}</Button>
         </div>
       ))}
 
@@ -295,9 +284,9 @@ export default function SyncPanel({ service, project = '', onChanged }) {
       {role !== 'main' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 6, borderBottom: '1px dashed var(--border-subtle)' }}>
           <div style={row}>
-            <span style={lbl}>{L('main 연결', 'Link to')}</span>
+            <span style={lbl}>{tr("p_link_to")}</span>
             <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)}
-              placeholder={L('main 주소 (http://…:8025) 또는 연결 코드', 'main address (http://…:8025) or a code')}
+              placeholder={tr("p_main_address_http_8025_or")}
               style={{ ...input, fontFamily: 'var(--font-mono)' }} />
           </div>
           {joinCode.trim() && (
@@ -305,19 +294,19 @@ export default function SyncPanel({ service, project = '', onChanged }) {
               <span style={lbl} />
               {!isCode && (<>
                 <input value={askProj} onChange={(e) => setAskProj(e.target.value)} disabled={!!project}
-                  placeholder={L('프로젝트 (비우면 서비스 전체)', 'project (empty = whole service)')}
+                  placeholder={tr("p_project_empty_whole_service")}
                   style={{ ...input, flex: 'none', width: 220, fontFamily: 'var(--font-mono)' }} />
                 <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={askTwo} onChange={(e) => setAskTwo(e.target.checked)} />
-                  {L('양방향', 'two-way')}
+                  {tr("p_two_way_2")}
                 </label>
               </>)}
               <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={joinLive} onChange={(e) => setJoinLive(e.target.checked)} />
-                {L('실시간', 'live')}
+                {tr("p_live")}
               </label>
               <Button variant="primary" style={btn} disabled={running} onClick={isCode ? join : ask}>
-                {isCode ? L('받기', 'Join') : L('연결 요청', 'Ask')}
+                {isCode ? tr("p_join") : tr("p_ask")}
               </Button>
             </div>
           )}
@@ -325,12 +314,12 @@ export default function SyncPanel({ service, project = '', onChanged }) {
             <div key={p.id} style={{ ...row, fontSize: 'var(--fs-small, 12px)' }}>
               <span style={lbl} />
               <span style={{ flex: 1 }}>
-                {p.url} · {p.project || L('서비스 전체', 'whole service')} · <b>{STATUS[p.status] || p.status}</b>
-                {p.status === 'pending' && <> · {L('확인 번호', 'pin')} <b style={{ fontFamily: 'var(--font-mono)' }}>{p.pin}</b></>}
+                {p.url} · {p.project || tr("p_whole_service")} · <b>{STATUS[p.status] || p.status}</b>
+                {p.status === 'pending' && <> · {tr("p_pin")} <b style={{ fontFamily: 'var(--font-mono)' }}>{p.pin}</b></>}
                 {p.error ? ` — ${p.error}` : ''}
               </span>
               <Button variant="secondary" style={btn} onClick={() => forget(p)}>
-                {p.status === 'pending' ? L('취소', 'Cancel') : L('지우기', 'Dismiss')}
+                {p.status === 'pending' ? tr("p_cancel") : tr("p_dismiss")}
               </Button>
             </div>
           ))}
@@ -346,17 +335,17 @@ export default function SyncPanel({ service, project = '', onChanged }) {
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)' }}>{cfg?.main_url}</span>
           </div>
           <div style={row}>
-            <span style={lbl}>{L('방향', 'Direction')}</span>
+            <span style={lbl}>{tr("p_direction")}</span>
             <select value={form.two_way ? 'two' : 'one'} style={sel}
               onChange={(e) => setForm((f) => ({ ...f, two_way: e.target.value === 'two' }))}>
-              <option value="one">{L('main → 여기 (미러)', 'main → here (mirror)')}</option>
-              <option value="two">{L('양방향', 'two-way')}</option>
+              <option value="one">{tr("p_main_here_mirror")}</option>
+              <option value="two">{tr("p_two_way_2")}</option>
             </select>
             {!form.two_way && (
               <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.read_only}
                   onChange={(e) => setForm((f) => ({ ...f, read_only: e.target.checked }))} />
-                {L('읽기 전용으로 잠그기 (권장)', 'lock read-only (recommended)')}
+                {tr("p_lock_read_only_recommended")}
               </label>
             )}
           </div>
@@ -364,7 +353,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
               are both offered: two-way sends a project made here too. */}
           {choices && !project && (
             <div style={{ ...row, alignItems: 'flex-start' }}>
-              <span style={lbl}>{L('프로젝트', 'Projects')}</span>
+              <span style={lbl}>{tr("p_projects")}</span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', flex: 1 }}>
                 {[...new Set([...(choices.main || []), ...(form.two_way ? choices.local || [] : [])])].sort().map((p) => (
                   <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
@@ -372,19 +361,19 @@ export default function SyncPanel({ service, project = '', onChanged }) {
                       onChange={(e) => setForm((f) => ({ ...f, projects: e.target.checked
                         ? [...f.projects, p] : f.projects.filter((x) => x !== p) }))} />
                     <span style={{ fontFamily: 'var(--font-mono)' }}>{p}</span>
-                    {!(choices.main || []).includes(p) && <span style={{ color: 'var(--text-muted)' }}>{L('(이 서버만)', '(here only)')}</span>}
+                    {!(choices.main || []).includes(p) && <span style={{ color: 'var(--text-muted)' }}>{tr("p_here_only")}</span>}
                   </label>
                 ))}
                 <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', flexBasis: '100%' }}>
                   {choices.error || (form.projects.length
-                    ? L(`${form.projects.length}개만 동기화합니다`, `only these ${form.projects.length}`)
-                    : L('아무것도 고르지 않으면 전부 동기화합니다', 'none ticked = every project'))}
+                    ? tr("p_only_these", form.projects.length)
+                    : tr("p_none_ticked_every_project"))}
                 </span>
               </div>
             </div>
           )}
           <div style={row}>
-            <span style={lbl}>{L('자동', 'Auto')}</span>
+            <span style={lbl}>{tr("p_auto")}</span>
             {/* Live is not "a shorter interval": it asks main every few seconds
                 which projects changed — a stat on main's side — and pulls only
                 those, so a mirror trails main by seconds without re-reading the
@@ -395,58 +384,56 @@ export default function SyncPanel({ service, project = '', onChanged }) {
                 setForm((f) => (v === 'live' ? { ...f, live: true, interval_min: 0 }
                   : { ...f, live: false, interval_min: Number(v) }))
               }} style={sel}>
-              <option value="live">{L('실시간 (몇 초 안에)', 'live (within seconds)')}</option>
-              <option value={0}>{L('수동만', 'manual only')}</option>
-              <option value={1}>{L('1분마다', 'every 1 min')}</option>
-              <option value={5}>{L('5분마다', 'every 5 min')}</option>
-              <option value={15}>{L('15분마다', 'every 15 min')}</option>
-              <option value={60}>{L('1시간마다', 'hourly')}</option>
+              <option value="live">{tr("p_live_within_seconds")}</option>
+              <option value={0}>{tr("p_manual_only")}</option>
+              <option value={1}>{tr("p_every_1_min")}</option>
+              <option value={5}>{tr("p_every_5_min")}</option>
+              <option value={15}>{tr("p_every_15_min")}</option>
+              <option value={60}>{tr("p_hourly")}</option>
             </select>
             <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
-              {L('저장해야 적용됩니다', 'takes effect on save')}
+              {tr("p_takes_effect_on_save")}
             </span>
           </div>
           <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
             {form.two_way
-              ? L('양쪽에서 고친 것이 서로에게 갑니다. 같은 항목을 양쪽에서 고치면 필드별로 합치고, 노트·파일은 사본을 남깁니다. main 에서 "sub 에서 고친 것도 받기"를 켜야 합니다. 데이터베이스를 쓰는 서비스(elog)는 양방향이 안 됩니다.',
-                'Edits on either side reach the other. The same record edited on both is merged field by field; notes and files keep a copy. Main must tick "accept edits made on the sub". Services on a database (elog) cannot go two-way.')
-              : L('동기화하면 main 에 있는 프로젝트가 이 서버 것을 덮어씁니다. main 에 없는 프로젝트는 그대로 둡니다.',
-                'A sync overwrites this server\'s copy with main\'s projects. Projects absent on main are left alone.')}
+              ? tr("p_edits_on_either_side_reach")
+              : tr("p_a_sync_overwrites_this_server")}
           </div>
           <div style={row}>
             <span style={lbl} />
-            <Button variant="secondary" style={btn} onClick={() => save('sub')}>{L('설정 저장', 'Save settings')}</Button>
+            <Button variant="secondary" style={btn} onClick={() => save('sub')}>{tr("p_save_settings")}</Button>
             <Button variant="primary" style={btn} disabled={running} onClick={runNow}>
-              {running ? L('동기화 중…', 'syncing…') : L('지금 동기화', 'Sync now')}
+              {running ? tr("p_syncing") : tr("p_sync_now")}
             </Button>
           </div>
           <div style={{ ...row, paddingTop: 4, borderTop: '1px dashed var(--border-subtle)' }}>
-            <span style={lbl}>{L('권한', 'Grants')}</span>
+            <span style={lbl}>{tr("p_grants")}</span>
             <Button variant="secondary" style={btn} onClick={() => loadGrants(false)}>
-              {L('main 권한 확인', 'Check main')}
+              {tr("p_check_main")}
             </Button>
             {grants && grants.matched.length > 0 && (
               <Button variant="primary" style={btn} onClick={() => loadGrants(true)}>
-                {L('이 서버 계정에 적용', 'Apply here')}
+                {tr("p_apply_here")}
               </Button>
             )}
           </div>
           {grants && (
             <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)',
               background: 'var(--surface-2)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {grants.matched.length === 0 && grants.skipped.length === 0 && <span>{L('main 에 권한이 없습니다.', 'no grants on main')}</span>}
+              {grants.matched.length === 0 && grants.skipped.length === 0 && <span>{tr("p_no_grants_on_main")}</span>}
               {grants.matched.map((m, i) => (
                 <span key={'m' + i}>
-                  ✓ {m.local_user} · {m.project || L('서비스 전체', 'whole service')}
-                  {m.is_admin ? L(' · 관리', ' · admin') : ''}
-                  {m.already ? L(' (이미 있음)', ' (already)') : ''}
-                  {m.matched_by === 'email' ? L(' [이메일로 매칭]', ' [matched by email]') : ''}
-                  {m.email_differs ? L(' [이메일 다름]', ' [email differs]') : ''}
+                  ✓ {m.local_user} · {m.project || tr("p_whole_service")}
+                  {m.is_admin ? tr("p_admin") : ''}
+                  {m.already ? tr("p_already") : ''}
+                  {m.matched_by === 'email' ? tr("p_matched_by_email") : ''}
+                  {m.email_differs ? tr("p_email_differs") : ''}
                 </span>
               ))}
               {grants.skipped.map((s2, i) => (
                 <span key={'s' + i} style={{ opacity: 0.75 }}>
-                  – {s2.username} · {L('이 서버에 계정 없음 — 건너뜀', 'no local account — skipped')}
+                  – {s2.username} · {tr("p_no_local_account_skipped")}
                 </span>
               ))}
             </div>

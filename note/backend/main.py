@@ -60,6 +60,15 @@ DONE_RE = re.compile(r"\s*✅\s*(\d{4}-\d{2}-\d{2})")
 # spelling of it — the editor turns one into the other as you write, and a
 # file written elsewhere is read either way.
 DUE_RE = re.compile(r"\s*(?:📅|>>)\s*(\d{4}-\d{2}-\d{2})")
+# An empty line inside a checklist is written out as `- [ ] <br />`: a box with
+# nothing in it, which is a blank line the person is still typing on, not a job.
+BLANK_RE = re.compile(r"(?:\s|<br\s*/?>|&nbsp;)*$")
+
+
+def _todo(line: str):
+    """The checkbox on this line, if it has anything in it."""
+    m = TODO_RE.match(line)
+    return m if m and not BLANK_RE.fullmatch(m.group(4)) else None
 
 
 def _todo_text(raw: str) -> tuple[str, str, str]:
@@ -177,7 +186,7 @@ def _summary(n: dict) -> dict:
     folder of long notes still lists in one small response."""
     first = next((ln.strip() for ln in n["body"].splitlines()
                   if ln.strip() and not ln.startswith("#")), "")
-    todos = [m for m in (TODO_RE.match(ln) for ln in n["body"].splitlines()) if m]
+    todos = [m for m in (_todo(ln) for ln in n["body"].splitlines()) if m]
     return {
         "id": n["id"], "title": n["title"], "date": n["date"], "tags": n["tags"],
         "fields": n["fields"], "excerpt": first[:160], "version": n["version"],
@@ -290,7 +299,7 @@ def todos(_: dict = Depends(identity)) -> dict:
     out = []
     for n in _all(NOTES):
         for i, ln in enumerate(n["body"].splitlines()):
-            m = TODO_RE.match(ln)
+            m = _todo(ln)
             if m:
                 text, due, at = _todo_text(m.group(4))
                 # The tags of the LINE, not of the note: a todo wears what was

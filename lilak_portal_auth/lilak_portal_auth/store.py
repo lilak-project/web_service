@@ -81,7 +81,7 @@ class Document:
     """
 
     def __init__(self, path: Path, keys: tuple, what: str = "데이터", keep_days: int = 0,
-                 links: tuple = ()):
+                 links: tuple = (), trash_days: int = 30):
         self.path = Path(path)                   # where the single file lived
         self.dir = self.path.with_suffix("")     # data.json → data/
         self.keys = tuple(keys)
@@ -96,6 +96,9 @@ class Document:
         # record under .history/, and the whole document once a day under
         # backups/ (the copy for the mistake nobody noticed for a week).
         self.keep_days = keep_days
+        # A deleted record waits in .trash/ this many days, to be brought back
+        # (GET /api/trash, POST /api/trash/restore) — whatever keep_days says.
+        self.trash_days = trash_days
         self.lock = threading.Lock()
         self._cache = None
         self._stamp = None
@@ -396,6 +399,31 @@ class Document:
         except Exception:
             pass    # a full disk must not cost the user the save they just made
 
+    # ── the bin ───────────────────────────────────────────────────────────
+    def _trash_file(self, k: str, rid: str) -> Path:
+        return self.dir / ".trash" / k / f"{self._fname(rid)}.json"
+
+    def _trash(self, k: str, rec: dict, version: int, who: str) -> None:
+        """A deleted record, as it was, with when and by whom."""
+        if not self.trash_days:
+            return
+        try:
+            atomic_write(self._trash_file(k, str(rec["id"])), self._dump(
+                {"record": rec, "deletedAt": _now(), "by": who, "version": version}))
+        except Exception:
+            pass    # a full disk must not cost the user the save they just made
+        self.prune_trash()
+
+    def prune_trash(self) -> None:
+        """Out of the bin for good, trash_days after going in."""
+        cut = datetime.now(timezone.utc).timestamp() - self.trash_days * 86400
+        for f in (self.dir / ".trash").glob("*/*.json"):
+            try:
+                if f.stat().st_mtime < cut:
+                    f.unlink(missing_ok=True)
+            except OSError:
+                pass
+
     def _daily(self, doc: dict) -> None:
         if not self.keep_days:
             return
@@ -459,9 +487,12 @@ class Document:
                     rv.setdefault(k, {})[rid] = version
                     trail(k, rid, r)
                     (gone.get(k) or {}).pop(rid, None)
+                    if rid not in old:
+                        self._trash_file(k, rid).unlink(missing_ok=True)   # back: out of the bin
             for rid in old:
                 if rid not in ids:
                     self._keep_record(k, rid, version)
+                    self._trash(k, old[rid], version, who)
                     self._rec(k, rid).unlink(missing_ok=True)
                     rv.setdefault(k, {}).pop(rid, None)
                     # A tombstone: when it went, and what it was — so a client
@@ -570,6 +601,37 @@ class Document:
                         "current": cur, "conflicts": clash,
                     })
                 return doc_.write(new, me.get("email") or me.get("username") or "", replaces=cur)
+
+        @app.get("/api/trash")
+        def get_trash(_: dict = Depends(identity)) -> list:
+            """What was deleted in the last trash_days, newest first."""
+            doc_.prune_trash()
+            out = []
+            for f in (doc_.dir / ".trash").glob("*/*.json"):
+                try:
+                    out.append({"key": f.parent.name, **json.loads(f.read_text(encoding="utf-8"))})
+                except Exception:
+                    continue
+            return sorted(out, key=lambda t: t.get("deletedAt") or "", reverse=True)
+
+        @app.post("/api/trash/restore")
+        def restore(body: dict = Body(...), me: dict = Depends(identity)):
+            """A record back from the bin, at the top of its list; the
+            document after."""
+            k, rid = str(body.get("key") or ""), str(body.get("id") or "")
+            if k not in doc_.keys or k == "settings":
+                raise HTTPException(400, "되살릴 수 없는 종류입니다.")
+            f = doc_._trash_file(k, rid)
+            if not f.exists():
+                raise HTTPException(404, "휴지통에 없습니다.")
+            rec = json.loads(f.read_text(encoding="utf-8"))["record"]
+            with doc_.lock:
+                cur = doc_.read()
+                if any(str(r.get("id")) == rid for r in cur.get(k) or []):
+                    f.unlink(missing_ok=True)        # already back (restored, or synced)
+                    return cur
+                return doc_.write({**cur, k: [rec] + list(cur.get(k) or [])},
+                                  me.get("email") or me.get("username") or "", replaces=cur)
 
         @app.get("/api/data/version")
         def get_version(_: dict = Depends(identity)) -> dict:

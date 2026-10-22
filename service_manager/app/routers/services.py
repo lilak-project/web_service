@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import config, models, permissions, registry, security
+from .. import config, models, permissions, registry, security, prefs
 from ..db import get_db
 from ..deps import require_portal_admin, require_portal_user
 from ..models import (
@@ -107,7 +107,8 @@ def list_services(
     user: models.User = Depends(require_portal_user),
     db: Session = Depends(get_db),
 ):
-    out = annotate_services(db, user, list_raw_services())
+    # Which project a card opens straight away is the account's own choice.
+    out = annotate_services(db, user, prefs.with_entries(user, list_raw_services()))
     if not _is_admin(user):
         # Hidden in manage mode, or inside a group that is hidden as a whole.
         from .service_groups import all_groups

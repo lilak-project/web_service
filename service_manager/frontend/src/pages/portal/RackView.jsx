@@ -1,3 +1,4 @@
+import { tr } from 'lilak-ui'
 import { useLang } from '../../context/LangContext'
 import { Panel, Field, Row, Pill, FIELD_CARD_CLASS } from './Field'
 import INVENTORY from './rack.json'
@@ -37,11 +38,11 @@ export default function RackView() {
 
   // The parts, each row carrying a live specimen of itself.
   const parts = [
-    ['모듈', '.set-panel', 'Panel', L('회색 바닥 위의 흰 상자', 'the white box on the grey ground')],
-    ['명판', '.set-bar', 'Panel title', L('모듈의 제목이자 종류. 줄과 같은 높이', 'the title and the kind, at the height of a row')],
-    ['표', '.set-card', 'Field', L('이름/값 두 칸 격자', 'the label/value grid')],
-    ['채널', '.set-row', 'Row', L('기록 한 건', 'one record')],
-    ['표시등', '.set-pill', 'Pill', L('상태', 'state')],
+    ['모듈', '.set-panel', 'Panel', tr("p_the_white_box_on_the")],
+    ['명판', '.set-bar', 'Panel title', tr("p_the_title_and_the_kind")],
+    ['표', '.set-card', 'Field', tr("p_the_label_value_grid")],
+    ['채널', '.set-row', 'Row', tr("p_one_record")],
+    ['표시등', '.set-pill', 'Pill', tr("p_state")],
   ]
 
   const byPlate = PLATES.map((p) => [p, INVENTORY.filter((s) => s.plate === p.key)])
@@ -50,20 +51,17 @@ export default function RackView() {
 
   return (
     <>
-      <Panel title={L('규칙 셋', 'Three rules')}
-        hint={L('모든 화면이 지킵니다', 'every screen obeys them')}>
-        <Field label="1">{L('화면은 회색 바닥입니다. 내용이 바닥에 직접 놓이지 않고 흰 모듈 위에 놓입니다.',
-          'A screen is a grey ground. Content never sits on it directly — it sits on white modules.')}</Field>
-        <Field label="2">{L('모듈의 제목은 위에 떠 있는 제목이 아니라 명판입니다. 띠 색이 종류를 말하므로 굵게 쓰지 않습니다.',
-          "A module's title is its nameplate, not a heading floating above it. The strip's colour says the kind, so the text is not bold.")}</Field>
-        <Field label="3">{L('모듈 안은 전부 한 크기의 줄입니다. 세로줄은 긋지 않습니다.',
-          'Inside a module everything is a row of one text size. No vertical rules.')}</Field>
+      <Panel title={tr("p_three_rules")}
+        hint={tr("p_every_screen_obeys_them")}>
+        <Field label="1">{tr("p_a_screen_is_a_grey")}</Field>
+        <Field label="2">{tr("p_a_module_s_title_is")}</Field>
+        <Field label="3">{tr("p_inside_a_module_everything_is")}</Field>
       </Panel>
 
-      <Panel title={L('부품', 'Parts')} bare
-        hint={L('이 화면도 같은 부품으로 짜여 있습니다', 'this screen is built out of them too')}>
+      <Panel title={tr("p_parts")} bare
+        hint={tr("p_this_screen_is_built_out")}>
         <Row className="cols head" style={{ gridTemplateColumns: '90px 110px 110px 1fr' }}>
-          <span>{L('이름', 'Name')}</span><span>CSS</span><span>JSX</span><span>{L('무엇', 'What')}</span>
+          <span>{tr("p_name")}</span><span>CSS</span><span>JSX</span><span>{tr("p_what")}</span>
         </Row>
         {parts.map(([name, cls, jsx, what]) => (
           <Row key={cls} className="cols" style={{ gridTemplateColumns: '90px 110px 110px 1fr' }}>
@@ -78,56 +76,56 @@ export default function RackView() {
       {/* Not a table of colour chips: four real panels, each wearing its own
           plate. The colour is a thing you can point at, and the specimen is
           made the same way every screen makes one. */}
-      <h2>{L('명판 색 — 색이 화면의 종류를 말합니다', 'Nameplates — the colour says what kind of screen it is')}</h2>
+      <h2>{tr("p_nameplates_the_colour_says_what")}</h2>
       {PLATES.map((p) => (
         <Panel key={p.key} title={`${P(p.what)} · ${P(p.colour)}`} hint={P(p.where)}
           bare style={{ '--plate': p.plate, '--plate-fg': p.fg, '--plate-border': p.border }} />
       ))}
 
-      <Panel title={L('치수', 'Dimensions')}>
-        <Field label={L('한 줄', 'One line')}>
+      <Panel title={tr("p_dimensions")}>
+        <Field label={tr("p_one_line")}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-row</span> = 36px
-          <span style={{ color: 'var(--text-secondary)' }}>{L('명판 · 머리줄 · 기록줄이 모두 같은 높이', 'nameplate, column head and record are all this height')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{tr("p_nameplate_column_head_and_record")}</span>
         </Field>
-        <Field label={L('줄의 규칙', 'How a line behaves')}>
-          <span style={{ color: 'var(--text-secondary)' }}>{L('채널에는 바닥(늘어날 수 있음), 표 줄에는 고정 — 넘치면 말줄임', 'a floor for record rows, fixed for table rows, ellipsised when it overruns')}</span>
+        <Field label={tr("p_how_a_line_behaves")}>
+          <span style={{ color: 'var(--text-secondary)' }}>{tr("p_a_floor_for_record_rows")}</span>
         </Field>
-        <Field label={L('칸', 'Column')}>
+        <Field label={tr("p_column")}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-col</span> = 760px
-          <span style={{ color: 'var(--text-secondary)' }}>{L('모든 랙 화면이 이 칸으로 가운데 정렬됩니다', 'every rack screen is this column, centred')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{tr("p_every_rack_screen_is_this")}</span>
         </Field>
-        <Field label={L('컨트롤', 'Controls')}>
+        <Field label={tr("p_controls")}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-ctl</span> = 28px
-          <span style={{ color: 'var(--text-secondary)' }}>{L('줄에서 한 단계 안쪽 — 줄 높이를 바꾸면 같이 움직입니다', 'one step inside the line, so it moves when the line does')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{tr("p_one_step_inside_the_line")}</span>
         </Field>
-        <Field label={L('모서리', 'Corners')}>
+        <Field label={tr("p_corners")}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-radius</span> = 0
-          <span style={{ color: 'var(--text-secondary)' }}>{L('포털 전체가 직각입니다. 둥근 물건을 그리는 것만 예외 — 표시등의 둥근 끝, 아바타, 아이콘 미리보기.', 'the whole portal is square. The exceptions draw a rounded object rather than being chrome: the pill, avatars, icon previews.')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{tr("p_the_whole_portal_is_square")}</span>
         </Field>
-        <Field label={L('모듈 사이', 'Between modules')}>8px</Field>
-        <Field label={L('글자', 'Text')}>
+        <Field label={tr("p_between_modules")}>8px</Field>
+        <Field label={tr("p_glyph")}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--fs-medium</span>
-          <span style={{ color: 'var(--text-secondary)' }}>{L('한 크기. 버튼과 태그도 예외가 아닙니다', 'one size — buttons and tags included')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{tr("p_one_size_buttons_and_tags")}</span>
         </Field>
-        <Field label={L('굵기', 'Weight')}>
+        <Field label={tr("p_weight")}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>--rack-weight</span> = 400
-          <span style={{ color: 'var(--text-secondary)' }}>{L('굵게 쓰지 않습니다. 서체가 400과 700만 실어서, 500은 브라우저가 700으로 그립니다', 'no bold: the face ships 400 and 700 only, so 500 was being rendered as 700')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{tr("p_no_bold_the_face_ships")}</span>
         </Field>
       </Panel>
 
-      <Panel title={L('랙에 꽂힌 화면', 'On the rack')} bare
-        hint={`${INVENTORY.length}${L('장', '')}`}>
+      <Panel title={tr("p_on_the_rack")} bare
+        hint={`${INVENTORY.length}${tr("p_unit_sheets")}`}>
         {byPlate.map(([p, list]) => list.length > 0 && (
           <div key={p.key}>
             <Row className="cols head" style={cols}>
               <span>{P(p.what)} · {P(p.colour)}</span>
-              <span>{L('부품', 'Parts')}</span>
+              <span>{tr("p_parts")}</span>
             </Row>
             {list.map((s) => (
               <Row key={s.path} className="cols" style={cols}>
                 <span style={{ fontFamily: 'var(--font-mono)', minWidth: 0, overflowWrap: 'anywhere' }}>
                   {s.path}
-                  {s.handrolled && <> <Pill tone="warn">{L('직접 마크업', 'hand-rolled')}</Pill></>}
+                  {s.handrolled && <> <Pill tone="warn">{tr("p_hand_rolled")}</Pill></>}
                 </span>
                 <span style={{ color: 'var(--text-secondary)' }}>{s.parts.join('·')}</span>
               </Row>
@@ -137,8 +135,8 @@ export default function RackView() {
         {loose.length > 0 && (
           <>
             <Row className="cols head" style={cols}>
-              <span>{L('명판 미정 · 어느 화면에도 안 걸림', 'unfiled — on no screen yet')}</span>
-              <span>{L('부품', 'Parts')}</span>
+              <span>{tr("p_unfiled_on_no_screen_yet")}</span>
+              <span>{tr("p_parts")}</span>
             </Row>
             {loose.map((s) => (
               <Row key={s.path} className="cols" style={cols}>
@@ -150,17 +148,15 @@ export default function RackView() {
         )}
       </Panel>
 
-      <Panel title={L('룰을 바꿀 때', 'Changing a rule')}>
-        <Field label="1"><span style={{ fontFamily: 'var(--font-mono)' }}>Field.jsx</span> {L('나', 'or')} <span style={{ fontFamily: 'var(--font-mono)' }}>settings.css</span> {L('를 고칩니다', '')}</Field>
+      <Panel title={tr("p_changing_a_rule")}>
+        <Field label="1"><span style={{ fontFamily: 'var(--font-mono)' }}>Field.jsx</span> {tr("p_or")} <span style={{ fontFamily: 'var(--font-mono)' }}>settings.css</span> {tr("p_edit_suffix")}</Field>
         <Field label="2">
           <span style={{ fontFamily: 'var(--font-mono)' }}>python3 scripts/rack.py --check</span>
-          <span style={{ color: 'var(--text-secondary)' }}>{L('표가 어긋나면 알려줍니다', 'it fails when the table has drifted')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{tr("p_it_fails_when_the_table")}</span>
         </Field>
-        <Field label="3">{L('위 목록의 화면을 명판 색깔별로 최소 한 장씩 열어봅니다.',
-          'Open at least one screen per nameplate colour from the list above.')}</Field>
-        <Field label="4">{L('화면이 늘거나 줄었으면 --write 로 표를 갱신하고 명판 칸을 채웁니다.',
-          'A screen joined or left: --write the table, then fill in its nameplate.')}</Field>
-        <Field label={L('원본', 'Source')}>
+        <Field label="3">{tr("p_open_at_least_one_screen")}</Field>
+        <Field label="4">{tr("p_a_screen_joined_or_left")}</Field>
+        <Field label={tr("p_source")}>
           <span style={{ fontFamily: 'var(--font-mono)' }}>frontend/src/pages/portal/RACK.md</span>
         </Field>
       </Panel>

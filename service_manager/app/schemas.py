@@ -49,3 +49,5 @@ class UserOut(BaseModel):
     role: str
     profile_color: Optional[str] = None
     profile_shape: Optional[str] = None
+    # The account's own settings (app/prefs.py) — the portal applies its language on sign-in.
+    preferences_json: Optional[str] = None

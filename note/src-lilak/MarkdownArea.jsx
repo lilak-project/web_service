@@ -16,6 +16,7 @@
  * through here comes back in Milkdown's spelling of the same markup (which
  * bullet, how many blank lines), so the file is normalised on the first save.
  */
+import './strings.js'
 import { useEffect, useRef, useState } from 'react'
 import {
   Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx, editorViewCtx,
@@ -38,6 +39,7 @@ import { $inputRule, $remark, $view } from '@milkdown/kit/utils'
 import { $prose } from '@milkdown/kit/utils'
 import { Plugin, PluginKey } from '@milkdown/kit/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
+import { tr } from 'lilak-ui'
 
 /** A bar in the margin beside every line, lit on the one the caret is in —
  *  and on all of them when a selection spans several. The bar itself is CSS on
@@ -134,7 +136,10 @@ const make = (root, value, onMarkdown, fileSrc, onFiles) => Editor.make()
   .use(activeLine)
   .use(checkRule)
   .use(dueRule)
+  .use(duePickRule)
+  .use(duePick)
   .use(tagInDoc)
+  .use(dueInDoc)
   .use(embedInDoc(fileSrc))
   .create()
 
@@ -294,7 +299,7 @@ const linkOpen = $prose(() => {
           go.href = s.href
           go.target = '_blank'
           go.rel = 'noreferrer'
-          go.textContent = '열기 ↗'
+          go.textContent = tr("nt_open_link")
           go.contentEditable = 'false'
           return go
         }, { side: 1, key: `open:${s.href}` })])
@@ -492,9 +497,185 @@ const dueRule = $inputRule(() => new InputRule(
   (state, match, start, end) => state.tr.insertText(` 📅 ${match[1]} `, start, end),
 ))
 
+/** …and `>> ` with no date opens a calendar to pick one from — as does
+ *  pressing a due date already written, to change it.
+ *
+ *  The same field the note's own date uses — `<input type="date">`, so it is
+ *  the browser's calendar, in the reader's locale, with no picker of our own
+ *  to maintain. It stands where the caret is (or in place of the date it
+ *  edits), takes the keyboard, and what it returns is the same mark typing
+ *  the date would have left. Emptied, it takes the date away.
+ *
+ *  A written date is one thing, not text to pick at: the caret never edits it
+ *  a digit at a time (which left a bare 📅 and half a date). Backspace beside
+ *  it takes it whole; a key typed inside it opens the calendar instead. */
+const duePickKey = new PluginKey('nt-due-pick')
+// A due mark, whole or (written elsewhere, or left half-typed) not.
+const MARK_RE = /📅\s*([\d-]*)/g
+const FULL = /^\d{4}-\d{2}-\d{2}$/
+
+/** The due mark at this position (`pos` on it or at either end): { from, to, value }. */
+const markAt = (state, pos) => {
+  const $p = state.doc.resolve(pos)
+  const start = $p.start()
+  let found = null
+  $p.parent.forEach((node, off) => {
+    if (found || !node.isText) return
+    for (const m of node.text.matchAll(MARK_RE)) {
+      const from = start + off + m.index, to = from + m[0].length
+      if (pos >= from && pos <= to) { found = { from, to, value: FULL.test(m[1]) ? m[1] : '' }; return }
+    }
+  })
+  return found
+}
+
+const duePickRule = $inputRule(() => new InputRule(/(?:^|\s)>>\s$/, (state, match, start, end) => {
+  // Keep the space that preceded `>>`; the mark brings its own.
+  const at = match[0].startsWith('>') ? start : start + 1
+  return state.tr.delete(at, end).setMeta(duePickKey, { from: at, to: at, value: '' })
+}))
+
+const duePick = $prose(() => new Plugin({
+  key: duePickKey,
+  state: {
+    init: () => null,
+    apply(tr, prev) {
+      const set = tr.getMeta(duePickKey)
+      if (set !== undefined) return set
+      if (prev == null) return null
+      return tr.docChanged ? null : prev     // a keystroke elsewhere closes it
+    },
+  },
+  props: {
+    decorations(state) {
+      const at = duePickKey.getState(state)
+      if (at == null) return null
+      const deco = [Decoration.widget(at.from, (view) => {
+        const pick = document.createElement('input')
+        pick.type = 'date'
+        pick.className = 'nt-duepick'
+        pick.contentEditable = 'false'
+        pick.value = at.value
+        const shut = () => {
+          if (duePickKey.getState(view.state) != null) {
+            view.dispatch(view.state.tr.setMeta(duePickKey, null))
+          }
+        }
+        pick.addEventListener('change', () => {
+          const s = duePickKey.getState(view.state)
+          if (s == null) return
+          if (pick.value) {
+            // A new mark brings its own trailing space; one put back in place does not.
+            view.dispatch(view.state.tr.insertText(`📅 ${pick.value}${s.from === s.to ? ' ' : ''}`, s.from, s.to)
+              .setMeta(duePickKey, null))
+          } else if (s.to > s.from) {
+            view.dispatch(view.state.tr.delete(s.from, s.to).setMeta(duePickKey, null))
+          } else shut()
+          view.focus()
+        })
+        pick.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') { e.preventDefault(); shut(); view.focus() }
+        })
+        // Leaving it alone is cancelling it — but a click INSIDE the calendar
+        // blurs the field too, so the close waits a beat for the change.
+        pick.addEventListener('blur', () => setTimeout(shut, 200))
+        requestAnimationFrame(() => {
+          pick.focus()
+          try { pick.showPicker() } catch { /* the field is enough */ }
+        })
+        return pick
+      }, { side: 1, key: `duepick:${at.from}:${at.to}` })]
+      // The date being changed steps aside while its field stands there.
+      if (at.to > at.from) deco.push(Decoration.inline(at.from, at.to, { class: 'nt-due-hide' }))
+      return DecorationSet.create(state.doc, deco)
+    },
+    handleKeyDown(view, e) {
+      const { selection } = view.state
+      if (!selection.empty || e.metaKey || e.ctrlKey || e.altKey) return false
+      const pos = selection.from
+      const m = markAt(view.state, pos)
+      if (!m) return false
+      if ((e.key === 'Backspace' && pos > m.from) || (e.key === 'Delete' && pos < m.to)) {
+        view.dispatch(view.state.tr.delete(m.from, m.to))
+        return true
+      }
+      if (pos > m.from && pos < m.to && (e.key.length === 1 || e.key === 'Enter')) {
+        view.dispatch(view.state.tr.setMeta(duePickKey, m))
+        return true
+      }
+      return false
+    },
+    handleDOMEvents: {
+      mousedown: (view, e) => {
+        if (e.target?.classList?.contains('nt-duepick')) return true
+        const chip = e.target?.closest?.('.nt-due-in')
+        if (!chip || !view.editable) return false
+        const m = markAt(view.state, view.posAtDOM(chip, 0))
+        if (!m) return false
+        e.preventDefault()
+        view.dispatch(view.state.tr.setMeta(duePickKey, m))
+        return true
+      },
+    },
+  },
+}))
+
 /** `#태그` — Obsidian's spelling, and markdown keeps it apart from a heading
  *  (`# ` has a space after the hash). */
 export const TAG_RE = /(^|[\s(])#([^\s#.,;:!?()[\]{}'"]+)/g
+
+/** The due date drawn as a label: the tag's shape mirrored — a tag hangs by
+ *  its point on the left, a date points forward on the right — in the amber
+ *  the rack keeps for "this belongs to one thing". Past and still open, it is
+ *  red. Only a DECORATION: the text is `📅 2026-12-24` and so is the file; the
+ *  calendar glyph is merely hidden, so the date is still ordinary text you can
+ *  put the caret in. */
+export const DUE_RE = /📅\s*(\d{4}-\d{2}-\d{2})/g
+/** The day it was finished, written the same way. A quiet label: it is a
+ *  record, not something to do. */
+export const DONE_RE = /✅\s*(\d{4}-\d{2}-\d{2})/g
+
+/** Is this position inside a list item that is ticked? A finished todo is
+ *  never late, however long ago its day was. */
+const inDone = (state, at) => {
+  const $at = state.doc.resolve(at)
+  for (let d = $at.depth; d > 0; d -= 1) {
+    if ($at.node(d).type.name === 'list_item') return !!$at.node(d).attrs.checked
+  }
+  return false
+}
+
+const dueInDoc = $prose(() => new Plugin({
+  key: new PluginKey('nt-due-chip'),
+  props: {
+    decorations(state) {
+      const today = new Date().toISOString().slice(0, 10)
+      const marks = []
+      state.doc.descendants((node, pos) => {
+        if (!node.isText) return true
+        for (const [re, cls] of [[MARK_RE, 'nt-due-in'], [DONE_RE, 'nt-done-in']]) {
+          for (const m of node.text.matchAll(re)) {
+            const at = pos + m.index
+            const date = at + m[0].length - m[1].length
+            // The glyph says nothing the shape does not; the date is the label.
+            marks.push(Decoration.inline(at, date, { class: 'nt-due-cal' }))
+            // A mark with no whole date (half-typed, or written elsewhere) is
+            // still a chip — pressed, it asks for the day.
+            const bad = cls === 'nt-due-in' && !FULL.test(m[1])
+            const late = cls === 'nt-due-in' && !bad && m[1] < today && !inDone(state, at)
+            if (bad) marks.push(Decoration.widget(date, () => {
+              const x = document.createElement('span'); x.className = 'nt-due-in nt-due-bad'; x.textContent = m[1] || '—'; return x
+            }, { side: -1, key: `due-bad:${at}:${m[1]}` }), Decoration.inline(date, at + m[0].length, { class: 'nt-due-hide' }))
+            else marks.push(Decoration.inline(date, at + m[0].length,
+              { class: `${cls}${late ? ' nt-due-late' : ''}` }))
+          }
+        }
+        return true
+      })
+      return DecorationSet.create(state.doc, marks)
+    },
+  },
+}))
 
 /** A tag drawn as a tag. Only a DECORATION: the text in the document is still
  *  `#태그` and so is the file — nothing is turned into a node that the
@@ -508,7 +689,11 @@ const tagInDoc = $prose(() => new Plugin({
         if (!node.isText) return true
         for (const m of node.text.matchAll(TAG_RE)) {
           const from = pos + m.index + m[1].length
-          marks.push(Decoration.inline(from, from + 1 + m[2].length, { class: 'nt-tag-in' }))
+          // The hash is what MAKES it a tag in the text; the shape is what says
+          // so on the page, so the chip shows the name alone. The file keeps
+          // the `#` — this only hides it.
+          marks.push(Decoration.inline(from, from + 1, { class: 'nt-tag-hash' }))
+          marks.push(Decoration.inline(from + 1, from + 1 + m[2].length, { class: 'nt-tag-in' }))
         }
         return true
       })

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon, ColorPicker, AVATAR_COLORS } from 'lilak-ui'
+import { Button, Icon, ColorPicker, AVATAR_COLORS, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import IconPick, { ICON_WEIGHT } from './IconPick'
@@ -26,7 +26,6 @@ function where(url) {
 
 export default function LinksView({ links, manage, onChanged }) {
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [rows, setRows] = useState(links || [])
   const setMsg = (m, tone) => m && notify(m, tone)
   const [saving, setSaving] = useState(false)
@@ -54,17 +53,17 @@ export default function LinksView({ links, manage, onChanged }) {
       // one the admin added and then left empty.
       const links = rows.filter((r) => (r.label || '').trim() && (r.url || '').trim())
       const { data } = await launcher.put('/admin/links', { links })
-      setRows(data.links); setMsg(L('링크 저장됨', 'links saved'), 'ok'); onChanged?.()
-    } catch (e) { setMsg(e?.response?.data?.detail || L('저장 실패', 'Save failed'), 'bad') }
+      setRows(data.links); setMsg(tr("p_links_saved"), 'ok'); onChanged?.()
+    } catch (e) { setMsg(e?.response?.data?.detail || tr("p_save_failed"), 'bad') }
     finally { setSaving(false) }
   }
 
   if (!manage) {
     return (
       <div className="svc-mg">
-        <Panel bare title={L('링크', 'Links')} hint={String(rows.length)}>
+        <Panel bare title={tr("p_links")} hint={String(rows.length)}>
           {rows.length === 0 && (
-            <Row className="empty">{L('아직 링크가 없습니다. 관리 모드에서 추가하세요.', 'No links yet — add them in manage mode.')}</Row>
+            <Row className="empty">{tr("p_no_links_yet_add_them")}</Row>
           )}
           {rows.map((r, i) => (
             // rel="noreferrer" with target=_blank: without it the opened page gets
@@ -85,19 +84,19 @@ export default function LinksView({ links, manage, onChanged }) {
 
   return (
     <div className="svc-mg">
-      <Panel bare title={L('링크', 'Links')} hint={String(rows.length)}
+      <Panel bare title={tr("p_links")} hint={String(rows.length)}
         right={<Button variant="primary" disabled={!dirty || saving} onClick={save}>
-          {saving ? L('저장 중…', 'Saving…') : L('저장', 'Save')}
+          {saving ? tr("p_saving") : tr("p_save")}
         </Button>}>
         {rows.map((r, i) => (
           <div key={i} className="set-row">
             <IconPick value={r.icon || 'link'} onChange={(v) => edit(i, 'icon', v)} color={r.color || 'var(--text-secondary)'} />
             <ColorPicker value={r.color || AVATAR_COLORS[0]} onChange={(v) => edit(i, 'color', v)} />
-            <input style={{ ...fieldInput, width: 150 }} value={r.label} placeholder={L('이름', 'Name')}
+            <input style={{ ...fieldInput, width: 150 }} value={r.label} placeholder={tr("p_name")}
               onChange={(e) => edit(i, 'label', e.target.value)} />
             <input style={{ ...fieldInput, flex: 1, minWidth: 200 }} value={r.url} placeholder="https://…"
               onChange={(e) => edit(i, 'url', e.target.value)} />
-            <input style={{ ...fieldInput, width: 130 }} value={r.note || ''} placeholder={L('설명(선택)', 'Note (optional)')}
+            <input style={{ ...fieldInput, width: 130 }} value={r.note || ''} placeholder={tr("p_note_optional")}
               onChange={(e) => edit(i, 'note', e.target.value)} />
             <span className="sp" />
             <Button variant="secondary" disabled={i === 0} onClick={() => move(i, -1)}><Icon name="caret-up" size={14} /></Button>
@@ -106,7 +105,7 @@ export default function LinksView({ links, manage, onChanged }) {
           </div>
         ))}
         <Row>
-          <Button variant="secondary" onClick={add}><Icon name="plus" size={14} /> {L('링크 추가', 'Add link')}</Button>
+          <Button variant="secondary" onClick={add}><Icon name="plus" size={14} /> {tr("p_add_link")}</Button>
         </Row>
       </Panel>
     </div>

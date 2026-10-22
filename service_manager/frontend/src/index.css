@@ -37,11 +37,8 @@
      --fs-xlarge(18) h2
      --fs-title (22) h1 / page titles
      --fs-display(28) stat big numbers                                          */
-:root {
-  --fs-micro: 10px;  --fs-tiny: 11px;  --fs-small: 12px;  --fs-body: 13px;
-  --fs-medium: 14px; --fs-large: 16px; --fs-xlarge: 18px; --fs-title: 22px;
-  --fs-display: 28px;
-}
+/* The values live in the kit (lilak-ui fonts/fonts.css), shared with every
+   rack service; "large" mode below redefines them one step up. */
 
 /* Single source of truth for type size: route Tailwind's text utilities through
    the --fs-* scale too, so pages still using `className="text-sm"` (the admin
@@ -808,7 +805,7 @@ html {
   font-size: 17px;   /* base bump for any remaining rem-based content */
   --fs-micro: 11px;  --fs-tiny: 12px;  --fs-small: 13px;  --fs-body: 14px;
   --fs-medium: 16px; --fs-large: 18px; --fs-xlarge: 20px; --fs-title: 24px;
-  --fs-display: 32px;
+  --fs-display: 32px; --fs-plate: 16px;
 }
 /* Control heights stay fixed across size modes so toolbar buttons match the
    kit's fixed-height chips (only the text inside scales). */

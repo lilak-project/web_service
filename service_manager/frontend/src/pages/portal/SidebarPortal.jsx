@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Avatar, Icon, MANAGER_COLOR } from 'lilak-ui'
+import { Avatar, Icon, MANAGER_COLOR, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { HOME_MODES } from './HomeModeMenu'
@@ -225,7 +225,6 @@ function Slider({ open, className = '', children }) {
 
 function ProjectList({ svc, color, sel, onPick, open }) {
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [rows, setRows] = useState(null)
 
   useEffect(() => {
@@ -237,7 +236,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
     <Slider open={open} className="pl-plist">
       {rows === null && <div className="pl-proj" style={{ color: 'var(--text-muted)' }}>…</div>}
       {rows?.length === 0 && (
-        <div className="pl-proj" style={{ color: 'var(--text-muted)' }}>{L('프로젝트 없음', 'no projects')}</div>
+        <div className="pl-proj" style={{ color: 'var(--text-muted)' }}>{tr("p_no_projects")}</div>
       )}
       {(rows || []).map((p) => {
         const on = sel?.svc === svc && sel?.proj === p.name
@@ -246,7 +245,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
             onClick={() => onPick(p.name)}>
             <RunDot on={!!p.running} />
             <span className="pl-txt">{p.name}</span>
-            <span className="pl-out" role="button" tabIndex={-1} title={L('새 창', 'new tab')}
+            <span className="pl-out" role="button" tabIndex={-1} title={tr("p_new_tab")}
               onClick={(e) => { e.stopPropagation(); window.open(`/pp/${svc}/${p.name}/`, '_blank') }}>
               <Icon name="link" size={13} />
             </span>
@@ -275,7 +274,6 @@ export default function SidebarPortal({
     miniBefore.current = null; viewBefore.current = null
   }, [signedOut])
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
 
   const [mini, setMini] = useState(() => {
     // On a phone the bar is a drawer over the panel: arriving with a service
@@ -606,7 +604,7 @@ export default function SidebarPortal({
     if (!stored) {
       const sys = SYSTEM_KEYS.map((k) => byKey.get(k)).filter(Boolean)
       sys.forEach((c) => taken.add(cardKey(c)))
-      if (sys.length) out.push({ g: { id: SYSTEM_ID, name: L('시스템', 'System'), fixed: true }, items: sys })
+      if (sys.length) out.push({ g: { id: SYSTEM_ID, name: tr("p_system"), fixed: true }, items: sys })
     }
     const gs = [...(groups || [])]
       .filter((g) => !g.hidden || (manage && isManager))
@@ -631,7 +629,7 @@ export default function SidebarPortal({
     // In group mode EVERY card is in a band, so the eye reads one kind of thing
     // down the bar instead of bands and then loose cards.
     const rest = list.filter((c) => !taken.has(cardKey(c)))
-    out.push({ g: { id: NOGROUP_ID, name: L('그룹 없음', 'No group'), loose: true }, items: rest })
+    out.push({ g: { id: NOGROUP_ID, name: tr("p_no_group"), loose: true }, items: rest })
     return out
   }, [cards, groups, flat, manage, isManager, signedOut, lang])
 
@@ -840,7 +838,7 @@ export default function SidebarPortal({
                 icon sideways in one jump, and a width that animates lets the
                 row make room instead. */}
             {isManager && (
-              <span className={`pl-grip${manage ? ' on' : ''}`} title={L('끌어서 정렬', 'drag to arrange')}>
+              <span className={`pl-grip${manage ? ' on' : ''}`} title={tr("p_drag_to_arrange")}>
                 <Icon name="drag-handle" size={14} color="var(--text-muted)" />
               </span>
             )}
@@ -882,7 +880,7 @@ export default function SidebarPortal({
         .map((k) => (cards || []).find((c) => cardKey(c) === k)).filter(Boolean)
       return (
         <>
-          <h1 className="pl-mgtitle">{selGroup.name || L('그룹', 'Group')}</h1>
+          <h1 className="pl-mgtitle">{selGroup.name || tr("p_group")}</h1>
           <GroupManagePanel group={selGroup} members={mem} onChanged={onRefresh} />
         </>
       )
@@ -899,8 +897,8 @@ export default function SidebarPortal({
       return (
         <div className="pl-empty">
           <div>
-            <div className="big">{L('관리 모드', 'Manage mode')}</div>
-            <div>{L('왼쪽에서 서비스나 그룹을 고르면 설정이 여기에 열립니다.', 'Pick a service or a group on the left to edit it here.')}</div>
+            <div className="big">{tr("p_manage_mode")}</div>
+            <div>{tr("p_pick_a_service_or_a")}</div>
           </div>
         </div>
       )
@@ -949,8 +947,8 @@ export default function SidebarPortal({
           <button type="button" className="pl-logo" disabled={manage && isManager}
             onClick={() => { endPeek(); setPinned(mini); setMini((m) => !m) }}
             title={manage && isManager
-              ? L('관리 모드에서는 접을 수 없습니다', 'not while managing')
-              : L('사이드바 접기/펼치기', 'collapse / expand')}>
+              ? tr("p_not_while_managing")
+              : tr("p_collapse_expand")}>
             <span className="pl-mark"><Icon name="lilak" size={26} /></span>
             {/* Where "portal" used to be: WHICH portal. With a main and its
                 mirrors (sync), the brand alone does not say which server this
@@ -962,7 +960,7 @@ export default function SidebarPortal({
           </button>
           <span style={{ flex: 1 }} />
           <button type="button" className="pl-fold"
-            title={anyOpen ? L('전부 접기', 'Collapse all') : L('전부 펼치기', 'Expand all')}
+            title={anyOpen ? tr("p_collapse_all") : tr("p_expand_all")}
             onClick={foldAll}>
             <Icon name={anyOpen ? 'caret-up' : 'caret-down'} size={14} color="var(--text-secondary)" />
           </button>
@@ -985,7 +983,7 @@ export default function SidebarPortal({
                   <span className={`pl-gchev${groupOpen(g.id) || (manage && isManager) ? ' open' : ''}`}>
                     <Icon name="caret-right" size={14} weight="bold" color="var(--text-secondary)" />
                   </span>
-                  <span className="pl-txt">{g.name || L('그룹', 'Group')}</span>
+                  <span className="pl-txt">{g.name || tr("p_group")}</span>
                   <span className="pl-gcount">{items.length}</span>
                 </button>
               </div>
@@ -994,7 +992,7 @@ export default function SidebarPortal({
               <Slider open={groupOpen(g.id) || (manage && isManager)} className="pl-gitems">
                 {items.map(serviceCard)}
                 {manage && isManager && items.length === 0 && (
-                  <div className="pl-gempty" {...bandDrop(g)}>{L('여기로 끌어다 놓으세요', 'drop things here')}</div>
+                  <div className="pl-gempty" {...bandDrop(g)}>{tr("p_drop_things_here")}</div>
                 )}
               </Slider>
             </div>
@@ -1031,8 +1029,8 @@ export default function SidebarPortal({
         )}
         {cmd && (
           <div className="pl-cmdhint">
-            <b>1–9</b> {L('서비스', 'service')} · <b>0</b> {L('설정', 'settings')}
-            {' · '}<b>`</b> {L('접기', 'fold')} · <b>Esc</b> {L('끝내기', 'exit')}
+            <b>1–9</b> {tr("p_service_2")} · <b>0</b> {tr("p_settings")}
+            {' · '}<b>`</b> {tr("p_fold")} · <b>Esc</b> {tr("p_exit")}
           </div>
         )}
       </aside>
@@ -1046,7 +1044,7 @@ export default function SidebarPortal({
         kind={manage && isManager ? 'manage' : 'settings'}>
         {manage && isManager ? (
           <>
-          <div className="pl-b2head"><b>{L('관리', 'Manage')}</b></div>
+          <div className="pl-b2head"><b>{tr("p_manage")}</b></div>
           <div className="pl-nav2">
             {/* What the cover DOES, then what you can do to it. Same items the
                 settings menu carries, in the same class, so managing is one
@@ -1055,18 +1053,18 @@ export default function SidebarPortal({
             <button type="button" className={`pl-c2${flat ? '' : ' on'}`}
               onClick={() => setFlat((f) => !f)}>
               <Icon name="tree" size={15} />
-              <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
+              <span className="pl-txt">{tr("p_group_mode")}</span>
             </button>
             <button type="button" className={`pl-c2${view === 'live' ? ' on' : ''}`}
               onClick={enterLive}>
               <Icon name="broadcast" size={15} />
-              <span className="pl-txt">{L('라이브 모드', 'Live mode')}</span>
+              <span className="pl-txt">{tr("p_live_mode")}</span>
             </button>
 
             <div className="pl-sep" />
             <button type="button" className="pl-c2" onClick={() => onCreateGroup?.()}>
               <Icon name="folder-plus" size={15} />
-              <span className="pl-txt">{L('그룹 생성', 'New group')}</span>
+              <span className="pl-txt">{tr("p_new_group")}</span>
             </button>
             {/* Only when there is something in it: an empty archive is not a
                 place anyone needs to go. */}
@@ -1074,7 +1072,7 @@ export default function SidebarPortal({
               <button type="button" className={`pl-c2${sel?.svc === ARCHIVE_KEY ? ' on' : ''}`}
                 onClick={() => { setSel({ svc: ARCHIVE_KEY, proj: '' }); setView('manage') }}>
                 <Icon name="archive" size={15} />
-                <span className="pl-txt">{L(`보관함 (${archivedN})`, `Archive (${archivedN})`)}</span>
+                <span className="pl-txt">{tr("p_archive", archivedN)}</span>
               </button>
             )}
             {/* The room the bar has left over IS the target, and it is here
@@ -1087,7 +1085,7 @@ export default function SidebarPortal({
               onDragLeave={() => setDropAt((d) => (d?.hide ? null : d))}
               onDrop={(e) => { e.preventDefault(); hideDropped() }}>
               <Icon name="eye-off" size={14} />
-              <span>{L('여기로 끌어다 놓으면 숨김', 'drop a card here to hide it')}</span>
+              <span>{tr("p_drop_a_card_here_to")}</span>
             </div>
 
             {/* Last of all, like Log out in the settings bar: leaving is not
@@ -1095,13 +1093,13 @@ export default function SidebarPortal({
             <div className="pl-sep" />
             <button type="button" className="pl-c2 out" onClick={toggleManage}>
               <Icon name="close" size={15} />
-              <span className="pl-txt">{L('관리 모드 끝내기', 'Exit manage mode')}</span>
+              <span className="pl-txt">{tr("p_exit_manage_mode")}</span>
             </button>
           </div>
           </>
         ) : (
           <>
-          <div className="pl-b2head"><b>{L('설정', 'Settings')}</b></div>
+          <div className="pl-b2head"><b>{tr("p_settings_2")}</b></div>
           <div className="pl-nav2">
             {settingsMenu(isManager, lang).map(([key, , label], i, arr) => (
               <div key={key} style={{ display: 'contents' }}>
@@ -1133,7 +1131,7 @@ export default function SidebarPortal({
               }}>
               <Icon name={mini ? 'caret-right' : 'caret-left'} size={15} />
               <span className="pl-txt">
-                {mini ? L('사이드바 펼치기', 'Expand sidebar') : L('사이드바 접기', 'Collapse sidebar')}
+                {mini ? tr("p_expand_sidebar") : tr("p_collapse_sidebar")}
               </span>
             </button>
             {modes.map((m) => (
@@ -1152,14 +1150,14 @@ export default function SidebarPortal({
             <button type="button" className={`pl-c2${flat ? '' : ' on'}`}
               onClick={() => setFlat((f) => !f)}>
               <Icon name="tree" size={15} />
-              <span className="pl-txt">{L('그룹 모드', 'Group mode')}</span>
+              <span className="pl-txt">{tr("p_group_mode")}</span>
             </button>
 
             {/* Last of all: leaving is not a page and not a mode. */}
             <div className="pl-sep" />
             <button type="button" className="pl-c2 out" onClick={onLogout}>
               <Icon name="logout" size={15} />
-              <span className="pl-txt">{L('로그아웃', 'Log out')}</span>
+              <span className="pl-txt">{tr("p_log_out")}</span>
             </button>
           </div>
           </>
@@ -1229,10 +1227,9 @@ export default function SidebarPortal({
                   // The grant is there; what is missing is this year's email
                   // check. Say so, and point at where it is done.
                   <div className="pl-lockhint">
-                    <span>{L('이메일 인증이 1년이 지나 보기 전용이 됐습니다. 재인증하면 다시 들어갈 수 있습니다.',
-                      'Your email verification is over a year old, so this is view-only. Re-verify to enter again.')}</span>
+                    <span>{tr("p_your_email_verification_is_over")}</span>
                     <button type="button" className="pl-lockbtn" onClick={() => openSettings('me')}>
-                      {L('내 계정에서 재인증', 'Re-verify in My account')}
+                      {tr("p_re_verify_in_my_account")}
                     </button>
                   </div>
                 )}
@@ -1251,8 +1248,8 @@ export default function SidebarPortal({
           ) : (
             <div className="pl-empty">
               <div>
-                <div className="big">{L('서비스를 선택하세요', 'Pick a service')}</div>
-                <div>{L('왼쪽 목록에서 고르면 여기에 열립니다.', 'It opens here.')}</div>
+                <div className="big">{tr("p_pick_a_service")}</div>
+                <div>{tr("p_it_opens_here")}</div>
               </div>
             </div>
           )}

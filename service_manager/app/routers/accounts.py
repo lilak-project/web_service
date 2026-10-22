@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import config, emailer, models, permissions, registry, security
+from .. import config, emailer, models, permissions, registry, security, prefs
 from ..db import get_db
 from ..deps import require_portal_admin, require_portal_user
 from ..models import VERIFY_VALID_DAYS
@@ -268,6 +268,8 @@ def _account_view(db: Session, u: models.User) -> dict:
         "verified_at": u.email_verified_at.isoformat() if u.email_verified_at else None,
         "verify_days_ago": days_ago, "verify_days_left": left, "pending_email": u.pending_email,
         "groups": _user_groups(db, u.id),
+        # The account's own settings (language, …) — they follow it to any browser.
+        "prefs": prefs.get(u),
     }
 
 
@@ -339,6 +341,23 @@ def update_profile(body: ProfileBody, user: models.User = Depends(require_portal
         user.profile_color = None
     db.commit()
     return _account_view(db, user)
+
+
+class PrefsBody(BaseModel):
+    lang: Optional[str] = None
+
+
+@router.put("/api/account/prefs")
+def update_prefs(body: PrefsBody, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    """Save this account's own settings. Only the fields sent change."""
+    data = body.model_dump(exclude_unset=True)
+    if "lang" in data:
+        lang = (data["lang"] or "").strip()
+        if lang and not re.fullmatch(r"[a-z]{2}(-[A-Za-z]{2})?", lang):
+            raise HTTPException(400, "언어 코드가 올바르지 않습니다.")
+        prefs.put(user, lang=lang or None)
+    db.commit()
+    return {"prefs": prefs.get(user)}
 
 
 class PasswordBody(BaseModel):

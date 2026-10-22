@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Avatar, AVATAR_ICONS, AVATAR_COLORS, randomAvatar, MANAGER_COLOR, Button, Icon, searchIcons } from 'lilak-ui'
+import { Avatar, AVATAR_ICONS, AVATAR_COLORS, randomAvatar, MANAGER_COLOR, Button, Icon, searchIcons, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { notify } from './settingsMsg'
@@ -15,7 +15,6 @@ const rowS = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
 
 export default function ProfileEditor({ me, onSaved }) {
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const isManager = me.is_admin || me.role === 'manager'
   const MC = me.manager_color || MANAGER_COLOR
   // Global managers lock to black; scoped (service/project) admins lock to dark grey.
@@ -53,8 +52,8 @@ export default function ProfileEditor({ me, onSaved }) {
         profile_shape: shape || null,
         ...(locked ? {} : { profile_color: color || null }),
       })
-      setMsg(L('저장됨', 'saved')); notify(L('아바타 저장됨', 'avatar saved'), 'ok'); onSaved?.()
-    } catch (e) { const m = e?.response?.data?.detail || L('실패', 'failed'); setMsg(m); notify(m, 'bad') }
+      setMsg(tr("p_saved")); notify(tr("p_avatar_saved"), 'ok'); onSaved?.()
+    } catch (e) { const m = e?.response?.data?.detail || tr("p_failed"); setMsg(m); notify(m, 'bad') }
     finally { setBusy(false) }
   }
 
@@ -66,13 +65,13 @@ export default function ProfileEditor({ me, onSaved }) {
       <div style={rowS}>
         <Avatar icon={shape} color={effColor} seed={me.username} size={40} />
         {shape && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{shape}</span>}
-        {locked && <span style={{ color: 'var(--text-secondary)' }}>{isManager ? L('관리자는 검은색 고정', 'managers locked to black') : L('부분 관리자는 짙은 회색 고정', 'scoped admins locked to grey')}</span>}
-        {dirty && <span style={{ color: 'var(--warning-text, #b45309)' }}>{L('저장 안 됨', 'unsaved')}</span>}
+        {locked && <span style={{ color: 'var(--text-secondary)' }}>{isManager ? tr("p_managers_locked_to_black") : tr("p_scoped_admins_locked_to_grey")}</span>}
+        {dirty && <span style={{ color: 'var(--warning-text, #b45309)' }}>{tr("p_unsaved")}</span>}
       </div>
       <div style={rowS}>
-        <Button variant="secondary" onClick={roll}><Icon name="refresh" size={13} /> {L('랜덤', 'Random')}</Button>
-        <Button variant={open ? 'warning' : 'info'} onClick={() => { setQ(''); setOpen((o) => !o) }}>{open ? L('닫기', 'Close') : L('고르기', 'Pick')}</Button>
-        <Button variant="primary" disabled={!dirty || busy} onClick={save}>{L('저장', 'Save')}</Button>
+        <Button variant="secondary" onClick={roll}><Icon name="refresh" size={13} /> {tr("p_random_3")}</Button>
+        <Button variant={open ? 'warning' : 'info'} onClick={() => { setQ(''); setOpen((o) => !o) }}>{open ? tr("p_close") : tr("p_pick")}</Button>
+        <Button variant="primary" disabled={!dirty || busy} onClick={save}>{tr("p_save")}</Button>
       </div>
       {open && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, border: '1px solid var(--border-strong)', borderRadius: 'var(--rack-radius, 0)' }}>
@@ -88,7 +87,7 @@ export default function ProfileEditor({ me, onSaved }) {
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder={L('검색 (이름 또는 태그: nut, ufo…)', 'search (name or tag: nut, ufo…)')}
+              placeholder={tr("p_search_name_or_tag_nut")}
               style={{ flex: 1, backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
                 border: '1px solid var(--input-border)' }} />
             <span style={{ color: 'var(--text-secondary)' }}>{shown.length}</span>
@@ -104,7 +103,7 @@ export default function ProfileEditor({ me, onSaved }) {
             ))}
             {shown.length === 0 && (
               <span style={{ gridColumn: '1 / -1', color: 'var(--text-secondary)', padding: 4 }}>
-                {L('결과 없음', 'no match')}
+                {tr("p_no_match_2")}
               </span>
             )}
           </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button, Icon, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { Panel, Field, FieldActions, Row, Pill, fieldMuted } from './Field'
@@ -33,7 +33,7 @@ export default function StoreView({ onChanged }) {
 
   async function load() {
     try { setItems((await launcher.get('/admin/store')).data.services) }
-    catch (e) { setErr(e?.response?.data?.detail || L('목록을 불러오지 못했습니다.', 'failed to load catalog')) }
+    catch (e) { setErr(e?.response?.data?.detail || tr("p_failed_to_load_catalog")) }
   }
   useEffect(() => { load(); return () => clearInterval(poll.current) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (logBox.current) logBox.current.scrollTop = logBox.current.scrollHeight }, [job])
@@ -62,34 +62,34 @@ export default function StoreView({ onChanged }) {
       watch(data.job_id, name)
     } catch (e) { setErr(e?.response?.data?.detail || failMsg) }
   }
-  const install = (name) => run('install', name, L('설치를 시작하지 못했습니다.', 'failed to start install'))
-  const update = (name) => run('update', name, L('업데이트를 시작하지 못했습니다.', 'failed to start update'))
+  const install = (name) => run('install', name, tr("p_failed_to_start_install"))
+  const update = (name) => run('update', name, tr("p_failed_to_start_update"))
 
   async function buildPortal() {
     setErr('')
     try {
       const { data } = await launcher.post('/admin/store/build-portal', { pull })
       watch(data.job_id, 'portal')
-    } catch (e) { setErr(e?.response?.data?.detail || L('빌드를 시작하지 못했습니다.', 'failed to start build')) }
+    } catch (e) { setErr(e?.response?.data?.detail || tr("p_failed_to_start_build")) }
   }
 
   const stateBadge = (s) => s.registered
-    ? <Pill tone="ok">{L('설치됨', 'installed')}</Pill>
+    ? <Pill tone="ok">{tr("p_installed")}</Pill>
     : s.code_present
-      ? <Pill tone="warn">{L('코드만 있음', 'code only')}</Pill>
-      : <Pill>{L('미설치', 'not installed')}</Pill>
+      ? <Pill tone="warn">{tr("p_code_only")}</Pill>
+      : <Pill>{tr("p_not_installed")}</Pill>
 
   return (
     <div className="svc-mg">
-      <Panel bare title={L('서비스 카탈로그', 'Service catalogue')}
+      <Panel bare title={tr("p_service_catalogue")}
         hint={items ? String(items.length) : '…'}>
         {/* A grid, not a flex line: fourteen rows only read as a list if the
             state, the description and the button start at the same x on each. */}
         <Row className="cols head" style={COLS}>
           <span />
-          <span>{L('서비스', 'Service')}</span>
-          <span>{L('상태', 'State')}</span>
-          <span>{L('상세', 'Detail')}</span>
+          <span>{tr("p_service_4")}</span>
+          <span>{tr("p_state_2")}</span>
+          <span>{tr("p_detail")}</span>
           <span />
         </Row>
         {items === null && <Row className="empty">…</Row>}
@@ -106,34 +106,34 @@ export default function StoreView({ onChanged }) {
             <span className="ell" title={s.repo}>{s.label || s.name}</span>
             <span style={{ display: 'flex', gap: 4 }}>
               {stateBadge(s)}
-              {s.private && <Pill tone="warn">{L('비공개', 'private')}</Pill>}
+              {s.private && <Pill tone="warn">{tr("p_private")}</Pill>}
             </span>
             {/* Truncated with an ellipsis rather than wrapping the row; the
                 whole sentence is on the cell's own tooltip. */}
             <span className="sub ell" title={L(s.ko, s.en)}>{L(s.ko, s.en)}</span>
             {s.registered ? (
               <Button variant="secondary" disabled={running} onClick={() => update(s.name)}
-                title={L('git pull 후 다시 빌드', 'git pull, then rebuild')}>
-                {L('업데이트', 'Update')}
+                title={tr("p_git_pull_then_rebuild")}>
+                {tr("p_update_2")}
               </Button>
             ) : (
               <Button variant="primary" disabled={running} onClick={() => install(s.name)}>
-                {L('설치', 'Install')}
+                {tr("p_install")}
               </Button>
             )}
           </Row>
         ))}
       </Panel>
 
-      <Panel title={L('포털', 'Portal')}>
-        <Field label={L('프론트엔드 빌드', 'Rebuild frontend')}>
-          {L('빌드가 끝난 뒤 새로고침하면 반영됩니다.', 'Refresh once it finishes and the new build is live.')}
+      <Panel title={tr("p_portal")}>
+        <Field label={tr("p_rebuild_frontend")}>
+          {tr("p_refresh_once_it_finishes_and")}
         </Field>
         <FieldActions>
-          <Button variant="primary" disabled={running} onClick={buildPortal}>{L('포털 빌드', 'Build portal')}</Button>
+          <Button variant="primary" disabled={running} onClick={buildPortal}>{tr("p_build_portal")}</Button>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
             <input type="checkbox" checked={pull} onChange={(e) => setPull(e.target.checked)} />
-            {L('git pull 먼저 (--ff-only)', 'git pull first (--ff-only)')}
+            {tr("p_git_pull_first_ff_only")}
           </label>
         </FieldActions>
       </Panel>
@@ -141,8 +141,8 @@ export default function StoreView({ onChanged }) {
       {/* live job log */}
       {job && (
         <Panel bare
-          title={job.name === 'portal' ? L('포털 빌드', 'portal build') : job.name}
-          hint={running ? L('진행 중…', 'running…') : job.status === 'done' ? L('완료', 'done') : L('실패', 'failed')}>
+          title={job.name === 'portal' ? tr("p_portal_build") : job.name}
+          hint={running ? tr("p_running") : job.status === 'done' ? tr("p_done_2") : tr("p_failed")}>
           {job.error && <div className="set-row" style={{ color: 'var(--danger-text)' }}>{job.error}</div>}
           <pre ref={logBox} style={{
             margin: 14, maxHeight: 240, overflow: 'auto', fontSize: 'var(--fs-small, 13px)', lineHeight: 1.5,

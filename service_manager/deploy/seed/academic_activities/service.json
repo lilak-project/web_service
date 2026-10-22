@@ -19,7 +19,7 @@
     "import_export": true
   },
   "icon": "calendar",
-  "color": "#b45309",
+  "color": "#3f4651",
   "label": "activity manager",
   "open": "panel"
 }

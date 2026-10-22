@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button } from 'lilak-ui'
+import { Button, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { Panel, Field, FieldActions, Pill, fieldInput, fieldMuted } from './Field'
@@ -11,7 +11,6 @@ const input = { ...fieldInput, width: 100 }
 // run at once (each launched service claims one loopback port from this range).
 export default function SystemAdmin() {
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [d, setD] = useState(null)          // server status
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
@@ -26,7 +25,7 @@ export default function SystemAdmin() {
   const save = async () => {
     try {
       const r = await launcher.put('/admin/system/ports', { start: Number(start), end: Number(end) })
-      setD(r.data); flash(L('포트 범위 저장됨', 'port range saved'), 'ok')
+      setD(r.data); flash(tr("p_port_range_saved"), 'ok')
     } catch (e) { flash(e?.response?.data?.detail || String(e), 'bad') }
   }
 
@@ -38,33 +37,31 @@ export default function SystemAdmin() {
 
   return (
     <>
-      <Panel title={L('서비스 포트 배정', 'Service port pool')} hint={msg}
-        right={<Button variant="secondary" onClick={load}>{L('새로고침', 'Refresh')}</Button>}>
-        <Field label={L('사용 현황', 'In use')}>
-          <Pill>{L('총 슬롯', 'total')} {d.total}</Pill>
-          <Pill tone="warn">{L('사용 중', 'in use')} {d.in_use}</Pill>
-          <Pill tone={d.free ? 'ok' : 'bad'}>{L('여유', 'free')} {d.free}</Pill>
+      <Panel title={tr("p_service_port_pool")} hint={msg}
+        right={<Button variant="secondary" onClick={load}>{tr("p_refresh")}</Button>}>
+        <Field label={tr("p_in_use")}>
+          <Pill>{tr("p_total")} {d.total}</Pill>
+          <Pill tone="warn">{tr("p_in_use_2")} {d.in_use}</Pill>
+          <Pill tone={d.free ? 'ok' : 'bad'}>{tr("p_free")} {d.free}</Pill>
         </Field>
 
-        <Field label={L('범위', 'Range')}>
+        <Field label={tr("p_range")}>
           <input style={input} type="number" value={start} onChange={(e) => setStart(e.target.value)} />
           <span style={fieldMuted}>–</span>
           <input style={input} type="number" value={end} onChange={(e) => setEnd(e.target.value)} />
           <span style={{ color: bad ? 'var(--danger-text)' : 'var(--text-secondary)' }}>
-            = {Number.isFinite(slots) ? slots : '?'} {L('슬롯', 'slots')}
+            = {Number.isFinite(slots) ? slots : '?'} {tr("p_slots")}
           </span>
         </Field>
         <FieldActions>
-          <Button variant="primary" disabled={!dirty || bad} onClick={save}>{L('저장', 'Save')}</Button>
+          <Button variant="primary" disabled={!dirty || bad} onClick={save}>{tr("p_save")}</Button>
           <span style={fieldMuted}>
-            {L(`기본값 ${d.default_start}–${d.default_end} · 허용 ${d.min}–${d.max}, 최대 ${d.max_slots}슬롯`,
-              `Default ${d.default_start}–${d.default_end} · allowed ${d.min}–${d.max}, up to ${d.max_slots} slots`)}
+            {tr("p_default_allowed_up_to_slots", d.default_start, d.default_end, d.min, d.max, d.max_slots)}
           </span>
         </FieldActions>
 
-        <Field label={L('설명', 'What this is')}>
-          {L(`실행되는 각 세션은 이 범위에서 포트를 하나씩 사용합니다. 범위가 모두 차면 "No free service port" 오류가 납니다. 넓히면 더 많은 동시 사용자를 받을 수 있습니다. 컨테이너 내부 포트이고, 재시작 없이 즉시 반영됩니다. 포탈 포트 ${d.portal_port}은 범위에서 제외해야 합니다.`,
-            `Each running session claims one port from this range. When it fills up you get "No free service port" — widen it to admit more concurrent users. These are internal container ports, applied live with no restart. Portal port ${d.portal_port} must stay outside the range.`)}
+        <Field label={tr("p_what_this_is")}>
+          {tr("p_each_running_session_claims_one", d.portal_port)}
         </Field>
       </Panel>
     </>

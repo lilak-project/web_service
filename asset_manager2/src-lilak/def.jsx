@@ -1,3 +1,5 @@
+import './strings.js'
+import { tr } from 'lilak-ui'
 /**
  * asset manager — the declaration. The table, the tabs, the editors, the
  * selection and the lists are the kit's <RackService>; what is here is what
@@ -15,13 +17,13 @@ const day = (v) => String(v || '').slice(0, 10)
 // What a list was made for. 반출 · 반입 · 연장 are the same act: the place on
 // the list is written onto every asset in it.
 const LIST_TYPES = [
-  ['save', '목록'], ['update', '위치 변경'], ['checkout', '반출'],
-  ['checkin', '반입'], ['extension', '연장'], ['request', '요청'], ['hide', '숨김'],
+  ['save', tr("as_lt_save")], ['update', tr("as_lt_update")], ['checkout', tr("as_lt_checkout")],
+  ['checkin', tr("as_lt_checkin")], ['extension', tr("as_lt_extend")], ['request', tr("as_lt_request")], ['hide', tr("as_hide")],
 ]
-const typeLabel = (t) => (LIST_TYPES.find(([k]) => k === t) || [, t || '목록'])[1]
+const typeLabel = (t) => (LIST_TYPES.find(([k]) => k === t) || [, t || tr("as_lt_save")])[1]
 /** The state of a list, said in one line: waiting, applied, or neither. */
-const listState = (r) => (r?.pending ? '승인 대기 중'
-  : (r?.appliedAt ? `적용됨 ${String(r.appliedAt).slice(0, 10)}` : ''))
+const listState = (r) => (r?.pending ? tr("as_pending")
+  : (r?.appliedAt ? tr("as_applied_at", String(r.appliedAt).slice(0, 10)) : ''))
 
 /** What a list can DO, beside being saved: the place written onto its assets,
  *  a manager's approval asked for, its assets hidden or shown. Nothing here
@@ -33,37 +35,35 @@ function ListActions({ f, setF, ctx }) {
   const place = String(f.location || '').trim()
   const putList = (next, said) => commit({ records: doc.records.map((r) => (r.id === rec.id ? next : r)) }, said)
   async function apply() {
-    if (!place) { say?.('위치를 먼저 정하세요.'); return }
-    if (!ids.length) { say?.('리스트가 비어 있습니다.'); return }
+    if (!place) { say?.(tr("as_set_location_first")); return }
+    if (!ids.length) { say?.(tr("as_list_empty")); return }
     const now = new Date().toISOString()
     const seen = new Set(ids)
     await commit({
       records: doc.records.map((r) => (r.id === rec.id ? { ...f, assetIds: ids, appliedAt: now, pending: false } : r)),
       assets: doc.assets.map((a) => (seen.has(a.assetId)
         ? { ...a, location: place, lastUpdate: now, lastInOutDate: now } : a)),
-    }, `${ids.length}개를 '${place}'로`)
+    }, tr("as_moved_to", ids.length, place))
   }
   async function setHidden(hidden) {
     const seen = new Set(ids)
     await commit({ assets: doc.assets.map((a) => (seen.has(a.assetId) ? { ...a, hidden } : a)) },
-      hidden ? `${ids.length}개를 숨겼습니다.` : `${ids.length}개의 숨김을 풀었습니다.`)
+      hidden ? tr("as_hidden_n", ids.length) : tr("as_unhidden_n", ids.length))
   }
   return (
     <>
       <button type="button" className="rl-btn rl-go" onClick={apply}
-        title="리스트의 위치를 자산들에 적용합니다">위치 적용</button>
+        title={tr("as_apply_location_hint")}>{tr("as_apply_location")}</button>
       {/* A non-manager asks instead of doing: the list waits for a manager. */}
       {!isAdmin && (
         <button type="button" className="rl-btn" onClick={() => putList(
-          { ...f, assetIds: ids, type: f.type === 'request' ? f.type : 'request', pending: true }, '승인을 요청했습니다.')}>
-          승인 요청
-        </button>
+          { ...f, assetIds: ids, type: f.type === 'request' ? f.type : 'request', pending: true }, tr("as_approval_requested"))}>{tr("as_request_approval")}</button>
       )}
-      {isAdmin && rec.pending && <button type="button" className="rl-btn rl-go" onClick={apply}>승인</button>}
+      {isAdmin && rec.pending && <button type="button" className="rl-btn rl-go" onClick={apply}>{tr("as_approve")}</button>}
       {isAdmin && (
         <>
-          <button type="button" className="rl-btn" onClick={() => setHidden(true)}>숨김</button>
-          <button type="button" className="rl-btn" onClick={() => setHidden(false)}>숨김 해제</button>
+          <button type="button" className="rl-btn" onClick={() => setHidden(true)}>{tr("as_hide")}</button>
+          <button type="button" className="rl-btn" onClick={() => setHidden(false)}>{tr("as_unhide")}</button>
         </>
       )}
       {listState(rec) && <span className="rl-hint">{listState(rec)}</span>}
@@ -72,60 +72,60 @@ function ListActions({ f, setF, ctx }) {
 }
 
 export default {
-  name: 'asset_manager2', title: '자산', unit: '개', key: 'am2',
+  name: 'asset_manager2', title: tr("as_title"), unit: tr("as_unit"), key: 'am2',
   item: {
-    key: 'assets', id: 'assetId', noun: '자산', allLabel: 'assets', tabId: 'assets',
-    label: (a) => a.assetId || a.name || '자산',
+    key: 'assets', id: 'assetId', noun: tr("as_asset"), allLabel: 'assets', tabId: 'assets',
+    label: (a) => a.assetId || a.name || tr("as_asset"),
     order: { k: 'assetId', dir: 1 },
-    findHint: '자산번호 · 이름 · 위치 · 메모   (⌘F)',
+    findHint: tr("as_find_hint"),
     check: (a, doc, prev) => {
       const id = String(a.assetId || '').trim()
-      if (!id) return '자산번호가 있어야 합니다.'
-      return (doc.assets || []).some((x) => x.assetId === id && x !== prev) ? '같은 번호가 있습니다.' : ''
+      if (!id) return tr("as_need_number")
+      return (doc.assets || []).some((x) => x.assetId === id && x !== prev) ? tr("as_number_taken") : ''
     },
     // Every save says when the asset last changed.
     fill: (a) => ({ ...a, assetId: String(a.assetId || '').trim(), lastUpdate: new Date().toISOString() }),
     fields: [
       // The sticker first, then the whole thing — photo2 and photo1, the names
       // the old app wrote and the data still uses.
-      { k: 'photo2', label: '자산 스티커', type: 'image', group: '사진', bulk: false },
-      { k: 'photo1', label: '자산 전체', type: 'image', group: '사진', bulk: false },
-      { k: 'assetId', label: '자산번호', type: 'text', mono: true, width: 160, required: true,
+      { k: 'photo2', label: tr("as_photo_sticker"), type: 'image', group: tr("as_photos"), bulk: false },
+      { k: 'photo1', label: tr("as_photo_whole"), type: 'image', group: tr("as_photos"), bulk: false },
+      { k: 'assetId', label: tr("as_number"), type: 'text', mono: true, width: 160, required: true,
         col: { w: 118, min: 70 } },
-      { k: 'name', label: '자산명', type: 'text', width: 320, col: { w: 250, min: 110 }, tone: 'ink' },
+      { k: 'name', label: tr("as_name"), type: 'text', width: 320, col: { w: 250, min: 110 }, tone: 'ink' },
       // A location and a type are words other assets already use, offered as
       // you type — and, being shared, they can be set on many at once.
-      { k: 'location', label: '위치', type: 'class', col: { w: 150, min: 70 }, tone: 'dim' },
+      { k: 'location', label: tr("as_location"), type: 'class', col: { w: 150, min: 70 }, tone: 'dim' },
       { k: 'type', label: 'Type', type: 'class', col: { w: 120, min: 60, drop: 1180 }, tone: 'dim' },
-      { k: 'assetClass', label: '자산분류', type: 'text', width: 200, col: { w: 120, min: 60, drop: 1100 }, tone: 'dim' },
-      { k: 'accountHolder', label: '관리책임자', type: 'text', width: 200, col: { w: 112, min: 60, drop: 1400 }, tone: 'dim' },
-      { k: 'applicationName', label: '신청품목명', type: 'text', width: 320 },
-      { k: 'spec', label: '규격', type: 'text', width: 240 },
-      { k: 'manufacturerProvider', label: '제조사', type: 'text', width: 240 },
-      { k: 'acquisitionDate', label: '취득일', type: 'text', width: 140 },
-      { k: 'acquisitionPriceKrw', label: '취득가', type: 'text', width: 140 },
-      { k: 'description', label: '설명', type: 'longtext', rows: 2 },
-      { k: 'memo', label: '메모', type: 'longtext', rows: 2 },
-      { k: 'upd', label: '최근변경', get: (a) => day(a.lastUpdate), col: { w: 96, min: 70, drop: 900 }, tone: 'dim' },
+      { k: 'assetClass', label: tr("as_category"), type: 'text', width: 200, col: { w: 120, min: 60, drop: 1100 }, tone: 'dim' },
+      { k: 'accountHolder', label: tr("as_custodian"), type: 'text', width: 200, col: { w: 112, min: 60, drop: 1400 }, tone: 'dim' },
+      { k: 'applicationName', label: tr("as_requested_item"), type: 'text', width: 320 },
+      { k: 'spec', label: tr("as_spec"), type: 'text', width: 240 },
+      { k: 'manufacturerProvider', label: tr("as_maker"), type: 'text', width: 240 },
+      { k: 'acquisitionDate', label: tr("as_acquired"), type: 'text', width: 140 },
+      { k: 'acquisitionPriceKrw', label: tr("as_price"), type: 'text', width: 140 },
+      { k: 'description', label: tr("as_description"), type: 'longtext', rows: 2 },
+      { k: 'memo', label: tr("as_memo"), type: 'longtext', rows: 2 },
+      { k: 'upd', label: tr("as_last_change"), get: (a) => day(a.lastUpdate), col: { w: 96, min: 70, drop: 900 }, tone: 'dim' },
     ],
   },
   // The lists, newest first.
   classSort: { k: 'at', dir: -1 },
   classes: [
-    { k: 'records', label: 'lists', noun: '리스트', countLabel: '개수',
+    { k: 'records', label: 'lists', noun: tr("as_list"), countLabel: tr("as_count"),
       list: { ids: 'assetIds', owner: 'user', show: (a) => [a.name, a.location].filter(Boolean).join(' · ') },
-      rowLabel: (r) => r.name || '리스트',
+      rowLabel: (r) => r.name || tr("as_list"),
       actions: (f, setF, ctx) => <ListActions f={f} setF={setF} ctx={ctx} />,
-      deleteWarn: () => '리스트만 지웁니다. 자산은 그대로입니다.',
+      deleteWarn: () => tr("as_delete_list_warn"),
       fields: [
-        { k: 'name', label: '이름', type: 'text', required: true, width: 280, col: { w: 230, min: 100 }, tone: 'ink' },
-        { k: 'type', label: '종류', type: 'select', options: LIST_TYPES, default: 'save',
-          col: { w: 96, min: 60 }, tone: 'dim', hint: '반출·반입·연장은 위치를 적용하는 같은 동작입니다.',
-          cell: (r) => typeLabel(r.type) + (r.pending ? ' · 대기' : '') },
-        { k: 'location', label: '위치', type: 'class', placeholder: '자산들이 갈 곳', col: { w: 150, min: 70 }, tone: 'dim' },
-        { k: 'user', label: '만든이', type: 'text', edit: false, col: { w: 120, min: 60, drop: 1100 }, tone: 'dim',
+        { k: 'name', label: tr("as_list_name"), type: 'text', required: true, width: 280, col: { w: 230, min: 100 }, tone: 'ink' },
+        { k: 'type', label: tr("as_list_type"), type: 'select', options: LIST_TYPES, default: 'save',
+          col: { w: 96, min: 60 }, tone: 'dim', hint: tr("as_list_type_hint"),
+          cell: (r) => typeLabel(r.type) + (r.pending ? tr("as_waiting_suffix") : '') },
+        { k: 'location', label: tr("as_location"), type: 'class', placeholder: tr("as_destination"), col: { w: 150, min: 70 }, tone: 'dim' },
+        { k: 'user', label: tr("as_made_by"), type: 'text', edit: false, col: { w: 120, min: 60, drop: 1100 }, tone: 'dim',
           cell: (r) => (r.user ? String(r.user).split('@')[0] : D) },
-        { k: 'at', label: '시각', get: (r) => r.createdAt || '', col: { w: 150, min: 90, drop: 900 }, tone: 'dim',
+        { k: 'at', label: tr("as_time"), get: (r) => r.createdAt || '', col: { w: 150, min: 90, drop: 900 }, tone: 'dim',
           cell: (r) => String(r.createdAt || '').slice(0, 16).replace('T', ' ') || D },
       ] },
   ],

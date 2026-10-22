@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button, Icon, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import ExpandBox from './ExpandBox'
@@ -36,21 +36,21 @@ export default function FeedbackView({ isManager }) {
     } catch (e) { notify(e?.response?.data?.detail || 'load failed', 'bad') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
-  async function run(p, ok) { try { const r = await p; if (ok) notify(ok(r), 'ok'); await load() } catch (e) { notify(e?.response?.data?.detail || L('실패', 'failed'), 'bad') } }
+  async function run(p, ok) { try { const r = await p; if (ok) notify(ok(r), 'ok'); await load() } catch (e) { notify(e?.response?.data?.detail || tr("p_failed"), 'bad') } }
 
   const submit = () => {
-    if (!f.subject.trim() && !f.body.trim()) { notify(L('내용을 입력하세요.', 'Write something first.'), 'bad'); return }
-    run(launcher.post('/reports', f), () => { setF({ kind: 'inquiry', subject: '', body: '' }); return L('보냈습니다. 감사합니다!', 'Sent — thank you!') })
+    if (!f.subject.trim() && !f.body.trim()) { notify(tr("p_write_something_first"), 'bad'); return }
+    run(launcher.post('/reports', f), () => { setF({ kind: 'inquiry', subject: '', body: '' }); return tr("p_sent_thank_you") })
   }
-  const sendReply = (r) => run(launcher.post(`/admin/reports/${r.id}/reply`, { reply: drafts[r.id] ?? r.reply ?? '' }), () => L('답장 저장됨', 'Reply saved'))
-  const toggleResolve = (r) => run(launcher.post(`/admin/reports/${r.id}/resolve`, { resolved: r.status !== 'resolved' }), () => r.status === 'resolved' ? L('다시 열림', 'Reopened') : L('처리완료', 'Resolved'))
-  const del = (r) => { if (window.confirm(L('이 리포트를 삭제할까요?', 'Delete this report?'))) run(launcher.delete(`/admin/reports/${r.id}`), () => L('삭제됨', 'deleted')) }
+  const sendReply = (r) => run(launcher.post(`/admin/reports/${r.id}/reply`, { reply: drafts[r.id] ?? r.reply ?? '' }), () => tr("p_reply_saved"))
+  const toggleResolve = (r) => run(launcher.post(`/admin/reports/${r.id}/resolve`, { resolved: r.status !== 'resolved' }), () => r.status === 'resolved' ? tr("p_reopened") : tr("p_resolved"))
+  const del = (r) => { if (window.confirm(tr("p_delete_this_report"))) run(launcher.delete(`/admin/reports/${r.id}`), () => tr("p_deleted")) }
 
   const fmt = (iso) => { try { return new Date(iso).toLocaleString() } catch { return iso } }
   const km = (k) => KIND[k] || KIND.inquiry
   const statusBadge = (s) => s === 'resolved'
-    ? <Pill tone="ok">{L('처리완료', 'resolved')}</Pill>
-    : <Pill tone="warn">{L('접수', 'open')}</Pill>
+    ? <Pill tone="ok">{tr("p_resolved_2")}</Pill>
+    : <Pill tone="warn">{tr("p_open")}</Pill>
 
   const item = (r, admin) => {
     const m = km(r.kind)
@@ -59,7 +59,7 @@ export default function FeedbackView({ isManager }) {
         outerProps={{ className: open === r.id ? 'on' : undefined }}
         style={{ opacity: r.status === 'resolved' ? 0.72 : 1 }}
         icon={<Icon name={m.icon} size={22} color={m.color} weight="duotone" />}
-        title={r.subject || L('(제목 없음)', '(no subject)')}
+        title={r.subject || tr("p_no_subject")}
         badges={<>
           <span className="set-pill" style={{ color: m.color }}>{L(m.ko, m.en)}</span>
           {statusBadge(r.status)}
@@ -71,20 +71,20 @@ export default function FeedbackView({ isManager }) {
           {admin ? (
             <>
               <textarea value={drafts[r.id] ?? r.reply ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
-                rows={3} placeholder={L('답장을 입력…', 'write a reply…')} style={textarea} />
+                rows={3} placeholder={tr("p_write_a_reply")} style={textarea} />
               <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
-                <Button variant="secondary" onClick={() => sendReply(r)}>{L('답장 저장', 'Save reply')}</Button>
+                <Button variant="secondary" onClick={() => sendReply(r)}>{tr("p_save_reply")}</Button>
                 <Button variant={r.status === 'resolved' ? 'ghost' : 'primary'} onClick={() => toggleResolve(r)}>
-                  {r.status === 'resolved' ? L('다시 열기', 'Reopen') : L('처리완료로 변경', 'Mark resolved')}
+                  {r.status === 'resolved' ? tr("p_reopen") : tr("p_mark_resolved")}
                 </Button>
                 <div style={{ flex: 1 }} />
-                <Button variant="dangerSoft" onClick={() => del(r)}><Icon name="trash" size={14} /> {L('삭제', 'Delete')}</Button>
+                <Button variant="dangerSoft" onClick={() => del(r)}><Icon name="trash" size={14} /> {tr("p_delete")}</Button>
               </div>
             </>
           ) : (
             <div style={{ whiteSpace: 'pre-wrap', borderTop: '1px solid var(--border-default)', paddingTop: 10,
               color: r.reply ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-              {r.reply || L('아직 답장이 없습니다.', 'No reply yet.')}
+              {r.reply || tr("p_no_reply_yet")}
             </div>
           )}
         </div>
@@ -96,8 +96,8 @@ export default function FeedbackView({ isManager }) {
   return (
     <>
       {/* compose — everyone */}
-      <Panel bare title={L('새 리포트', 'New report')}
-        hint={L('버그 신고 · 제안 · 문의', 'bug · recommendation · inquiry')}>
+      <Panel bare title={tr("p_new_report")}
+        hint={tr("p_bug_recommendation_inquiry")}>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {Object.entries(KIND).map(([k, m]) => (
@@ -112,20 +112,20 @@ export default function FeedbackView({ isManager }) {
             ))}
           </div>
           <input value={f.subject} onChange={(e) => setF((s) => ({ ...s, subject: e.target.value }))}
-            placeholder={L('제목', 'Subject')} style={{ ...input, width: '100%' }} />
+            placeholder={tr("p_subject")} style={{ ...input, width: '100%' }} />
           <textarea value={f.body} onChange={(e) => setF((s) => ({ ...s, body: e.target.value }))}
-            rows={4} placeholder={L('내용을 자세히 적어주세요…', 'Describe it in detail…')} style={textarea} />
+            rows={4} placeholder={tr("p_describe_it_in_detail")} style={textarea} />
           <div style={{ display: 'flex' }}><div style={{ flex: 1 }} />
-            <Button variant="primary" onClick={submit}>{L('보내기', 'Send')}</Button>
+            <Button variant="primary" onClick={submit}>{tr("p_send")}</Button>
           </div>
         </div>
       </Panel>
 
       {/* thread */}
-      <Panel bare title={isManager ? L('받은 리포트', 'Received reports') : L('내 리포트', 'My reports')}
+      <Panel bare title={isManager ? tr("p_received_reports") : tr("p_my_reports")}
         hint={String(rows.length)}>
         {rows.length === 0
-          ? <Row className="empty">{L('아직 없습니다.', 'Nothing yet.')}</Row>
+          ? <Row className="empty">{tr("p_nothing_yet")}</Row>
           : <div className="set-list">{rows.map((r) => item(r, isManager))}</div>}
       </Panel>
     </>

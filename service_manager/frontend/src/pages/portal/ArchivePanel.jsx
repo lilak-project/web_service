@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon } from 'lilak-ui'
+import { Button, Icon, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { Panel, Row } from './Field'
@@ -19,7 +19,6 @@ import { Panel, Row } from './Field'
  */
 export default function ArchivePanel({ signal, onChanged, always = false }) {
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [items, setItems] = useState([])
   const [msg, setMsg] = useState('')
   const [sure, setSure] = useState('')     // the name whose delete is being asked about
@@ -30,22 +29,21 @@ export default function ArchivePanel({ signal, onChanged, always = false }) {
   useEffect(() => { load() }, [signal])  // eslint-disable-line react-hooks/exhaustive-deps
   async function run(p, ok) {
     try { await p; setMsg(ok); await load(); onChanged?.() }
-    catch (e) { setMsg(e?.response?.data?.detail || L('실패', 'failed')) }
+    catch (e) { setMsg(e?.response?.data?.detail || tr("p_failed")) }
   }
 
-  const restore = (n) => run(launcher.post(`/admin/archived/${n}/restore`), L(`'${n}' 복구됨`, `'${n}' restored`))
-  const purge = (n) => { setSure(''); run(launcher.delete(`/admin/archived/${n}`), L(`'${n}' 삭제됨`, `'${n}' deleted`)) }
+  const restore = (n) => run(launcher.post(`/admin/archived/${n}/restore`), tr("p_restored", n))
+  const purge = (n) => { setSure(''); run(launcher.delete(`/admin/archived/${n}`), tr("p_deleted_2", n)) }
 
   if (items.length === 0 && !always) return null
   return (
     <div className="svc-mg">
-      <Panel bare title={L('보관함', 'Archive')} hint={String(items.length)}>
+      <Panel bare title={tr("p_archive_3")} hint={String(items.length)}>
         <Row className="empty">
-          {L('데이터를 지운 서비스의 정의가 여기 남습니다. 복구하면 빈 상태로 돌아오고, 완전 삭제하면 정의까지 지웁니다.',
-            'A service whose data was deleted keeps its definition here. Restore brings it back empty; delete removes the definition too.')}
+          {tr("p_a_service_whose_data_was")}
         </Row>
         {msg && <Row className="empty">{msg}</Row>}
-        {items.length === 0 && <Row className="empty">{L('보관된 서비스가 없습니다.', 'Nothing is archived.')}</Row>}
+        {items.length === 0 && <Row className="empty">{tr("p_nothing_is_archived")}</Row>}
         {items.map((s) => (
           <Row key={s.name}>
             <Icon name={s.icon || 'box'} size={16} color={s.color || 'var(--text-muted)'} />
@@ -54,14 +52,14 @@ export default function ArchivePanel({ signal, onChanged, always = false }) {
             <span className="sp" />
             {sure === s.name ? (
               <>
-                <span style={{ color: 'var(--text-muted)' }}>{L('되돌릴 수 없습니다.', 'This cannot be undone.')}</span>
-                <Button variant="danger" onClick={() => purge(s.name)}>{L('정말 삭제', 'Delete for good')}</Button>
-                <Button variant="secondary" onClick={() => setSure('')}>{L('취소', 'Cancel')}</Button>
+                <span style={{ color: 'var(--text-muted)' }}>{tr("p_this_cannot_be_undone")}</span>
+                <Button variant="danger" onClick={() => purge(s.name)}>{tr("p_delete_for_good")}</Button>
+                <Button variant="secondary" onClick={() => setSure('')}>{tr("p_cancel")}</Button>
               </>
             ) : (
               <>
-                <Button variant="secondary" onClick={() => restore(s.name)}>{L('복구', 'Restore')}</Button>
-                <Button variant="dangerSoft" title={L('완전 삭제', 'Delete permanently')}
+                <Button variant="secondary" onClick={() => restore(s.name)}>{tr("p_restore")}</Button>
+                <Button variant="dangerSoft" title={tr("p_delete_permanently")}
                   onClick={() => setSure(s.name)}><Icon name="trash" size={15} /></Button>
               </>
             )}

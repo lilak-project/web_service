@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button } from 'lilak-ui'
+import { Button, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 
@@ -15,7 +15,6 @@ import { useLang } from '../../context/LangContext'
  */
 export default function LogBox({ url }) {
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [data, setData] = useState(null)   // null = loading
   const [busy, setBusy] = useState(false)
   const pre = useRef(null)
@@ -24,7 +23,7 @@ export default function LogBox({ url }) {
     setBusy(true)
     try { setData((await launcher.get(url)).data) }
     catch (e) {
-      setData({ text: '', path: '', error: e?.response?.data?.detail || L('로그를 불러오지 못했습니다.', 'Could not read the log.') })
+      setData({ text: '', path: '', error: e?.response?.data?.detail || tr("p_could_not_read_the_log") })
     } finally { setBusy(false) }
   }
   useEffect(() => { load() }, [url])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -36,12 +35,12 @@ export default function LogBox({ url }) {
         <span className="pl-logpath">{data?.path || ''}</span>
         <span className="sp" />
         <Button variant="secondary" disabled={busy} onClick={load}>
-          {busy ? L('읽는 중…', 'Reading…') : L('새로고침', 'Refresh')}
+          {busy ? tr("p_reading") : tr("p_refresh")}
         </Button>
       </div>
       {data?.error ? <div className="pl-logempty">{data.error}</div>
-        : data === null ? <div className="pl-logempty">{L('읽는 중…', 'Reading…')}</div>
-          : !data.text ? <div className="pl-logempty">{L('아직 기록이 없습니다 — 시작한 적이 없거나, 아무것도 출력하지 않았습니다.', 'Nothing yet — it has not been started, or printed nothing.')}</div>
+        : data === null ? <div className="pl-logempty">{tr("p_reading")}</div>
+          : !data.text ? <div className="pl-logempty">{tr("p_nothing_yet_it_has_not")}</div>
             : <pre ref={pre} className="pl-logtext">{data.text}</pre>}
     </div>
   )

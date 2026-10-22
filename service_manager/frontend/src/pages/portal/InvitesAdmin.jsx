@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button } from 'lilak-ui'
+import { Button, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { Panel, Row, Pill, Field, FieldActions, fieldInput, fieldMuted } from './Field'
@@ -16,7 +16,6 @@ const input = fieldInput
 
 export default function InvitesAdmin({ services, onChanged }) {
   const { lang } = useLang()
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [codes, setCodes] = useState([])
   const [groups, setGroups] = useState([])
   const [projCache, setProjCache] = useState({})
@@ -30,7 +29,7 @@ export default function InvitesAdmin({ services, onChanged }) {
     } catch (e) { notify(e?.response?.data?.detail || 'load failed', 'bad') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
-  async function run(p, ok) { try { const r = await p; if (ok) notify(ok(r), 'ok'); await load(); onChanged?.() } catch (e) { notify(e?.response?.data?.detail || L('실패', 'failed'), 'bad') } }
+  async function run(p, ok) { try { const r = await p; if (ok) notify(ok(r), 'ok'); await load(); onChanged?.() } catch (e) { notify(e?.response?.data?.detail || tr("p_failed"), 'bad') } }
 
   async function pickSvc(svc) {
     setF((s) => ({ ...s, service: svc, project: '' }))
@@ -46,104 +45,104 @@ export default function InvitesAdmin({ services, onChanged }) {
       max_uses: Math.max(0, Number(f.max_uses) || 0), count, no_verify: !!f.no_verify }
     if (f.kind === 'project') { body.service = f.service; body.project = f.project }
     else body.group_id = Number(f.group_id)
-    if (f.kind === 'project' ? !f.service : !f.group_id) { notify(L('대상을 선택하세요.', 'pick a target'), 'bad'); return }
+    if (f.kind === 'project' ? !f.service : !f.group_id) { notify(tr("p_pick_a_target"), 'bad'); return }
     run(launcher.post('/admin/invite-codes', body), (r) => {
       setF((s) => ({ ...s, code: '' }))
       const codes = (r.data.codes || []).map((c) => c.code)
-      return codes.length > 1 ? L(`${codes.length}개 생성: ${codes.join(', ')}`, `${codes.length} created: ${codes.join(', ')}`)
-        : L(`코드 생성: ${codes[0] || r.data.code}`, `code: ${codes[0] || r.data.code}`)
+      return codes.length > 1 ? tr("p_created", codes.length, codes.join(', '))
+        : tr("p_code_2", codes[0] || r.data.code)
     })
   }
-  const extend = (c) => { const d = window.prompt(L('며칠 연장? (1~365)', 'extend by days (1–365)'), '7'); if (d) run(launcher.put(`/admin/invite-codes/${c.id}`, { days: Number(d) }), () => L('기간 연장됨', 'extended')) }
-  const pruneExpired = () => run(launcher.post('/admin/invite-codes/prune-expired'), (r) => L(`만료 코드 ${r.data.deleted}개 삭제됨`, `${r.data.deleted} expired codes deleted`))
-  const del = (c) => { if (window.confirm(L(`코드 ${c.code} 삭제?`, `Delete code ${c.code}?`))) run(launcher.delete(`/admin/invite-codes/${c.id}`), () => L('삭제됨', 'deleted')) }
-  const copy = (code) => { try { navigator.clipboard.writeText(code) } catch { /* ignore */ } notify(L(`복사됨: ${code}`, `copied: ${code}`), 'ok') }
+  const extend = (c) => { const d = window.prompt(tr("p_extend_by_days_1_365"), '7'); if (d) run(launcher.put(`/admin/invite-codes/${c.id}`, { days: Number(d) }), () => tr("p_extended")) }
+  const pruneExpired = () => run(launcher.post('/admin/invite-codes/prune-expired'), (r) => tr("p_expired_codes_deleted", r.data.deleted))
+  const del = (c) => { if (window.confirm(tr("p_delete_code", c.code))) run(launcher.delete(`/admin/invite-codes/${c.id}`), () => tr("p_deleted")) }
+  const copy = (code) => { try { navigator.clipboard.writeText(code) } catch { /* ignore */ } notify(tr("p_copied_2", code), 'ok') }
   const fmt = (iso) => { try { return new Date(iso).toLocaleDateString() } catch { return iso } }
 
   return (
     <div>
       {/* create — one aligned control per row (label column + input column) */}
-      <Panel title={L('코드 만들기', 'New code')}>
-        <Field label={L('종류', 'Kind')}>
+      <Panel title={tr("p_new_code")}>
+        <Field label={tr("p_kind")}>
           <select value={f.kind} onChange={setF1('kind')} style={{ ...input, maxWidth: 220 }}>
-            <option value="project">{L('프로젝트/서비스', 'project/service')}</option>
-            <option value="group">{L('그룹', 'group')}</option>
+            <option value="project">{tr("p_project_service")}</option>
+            <option value="group">{tr("p_group_2")}</option>
           </select>
         </Field>
 
-        <Field label={L('대상', 'Target')}>
+        <Field label={tr("p_target")}>
           {f.kind === 'project' ? (
             <>
               <select value={f.service} onChange={(e) => pickSvc(e.target.value)} style={{ ...input, maxWidth: 150 }}>
-                <option value="">{L('서비스…', 'service…')}</option>
+                <option value="">{tr("p_service_3")}</option>
                 {services.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
               </select>
               <select value={f.project} onChange={setF1('project')} style={{ ...input, maxWidth: 150 }} disabled={!f.service}>
-                <option value="">{L('전체', 'all')}</option>
+                <option value="">{tr("p_all")}</option>
                 {(projCache[f.service] || []).map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
               </select>
             </>
           ) : (
             <select value={f.group_id} onChange={setF1('group_id')} style={{ ...input, maxWidth: 200 }}>
-              <option value="">{L('그룹…', 'group…')}</option>
+              <option value="">{tr("p_group_3")}</option>
               {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           )}
         </Field>
 
-        <Field label={L('직접 코드', 'Custom code')}>
+        <Field label={tr("p_custom_code")}>
           <input value={f.code} onChange={setF1('code')} disabled={Number(f.count) > 1}
-            placeholder={Number(f.count) > 1 ? L('여러 개는 자동 생성', 'auto for bulk') : L('선택 · 8자 이상', 'optional · 8+ chars')}
+            placeholder={Number(f.count) > 1 ? tr("p_auto_for_bulk") : tr("p_optional_8_chars")}
             style={{ ...input, maxWidth: 260, opacity: Number(f.count) > 1 ? 0.5 : 1 }} />
         </Field>
 
-        <Field label={L('유효기간', 'Valid for')}>
+        <Field label={tr("p_valid_for")}>
           <input type="number" min={1} max={365} value={f.days} onChange={setF1('days')} style={{ ...input, width: 80 }} />
-          <span style={fieldMuted}>{L('일', 'days')}</span>
+          <span style={fieldMuted}>{tr("p_days")}</span>
         </Field>
 
-        <Field label={L('사용 횟수', 'Max uses')}>
+        <Field label={tr("p_max_uses")}>
           <input type="number" min={0} max={100000} value={f.max_uses} onChange={setF1('max_uses')} style={{ ...input, width: 80 }} />
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
             <input type="checkbox" checked={Number(f.max_uses) === 1} onChange={(e) => setF((s) => ({ ...s, max_uses: e.target.checked ? 1 : 0 }))} />
-            {L('일회용', 'single-use')}
+            {tr("p_single_use")}
           </label>
-          <span style={fieldMuted}>{L('0 = 무제한', '0 = unlimited')}</span>
+          <span style={fieldMuted}>{tr("p_0_unlimited")}</span>
         </Field>
 
-        <Field label={L('만들 개수', 'How many')}>
+        <Field label={tr("p_how_many")}>
           <input type="number" min={1} max={100} value={f.count} onChange={setF1('count')} style={{ ...input, width: 80 }} />
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
             <input type="checkbox" checked={!!f.no_verify} onChange={(e) => setF((s) => ({ ...s, no_verify: e.target.checked }))} />
-            {L('이메일 인증 생략', 'skip email verify')}
+            {tr("p_skip_email_verify")}
           </label>
         </Field>
 
         <FieldActions>
-          <Button variant="primary" onClick={create}>{L('코드 생성', 'Generate')}</Button>
+          <Button variant="primary" onClick={create}>{tr("p_generate")}</Button>
         </FieldActions>
       </Panel>
 
       {/* list — one ROW per issued code, so ten codes read as a list and not as
           ten boxes. The code, what it grants, its state, what you can do to it. */}
-      <Panel bare title={L('발급된 코드', 'Issued codes')} hint={String(codes.length)}
+      <Panel bare title={tr("p_issued_codes")} hint={String(codes.length)}
         right={codes.some((c) => c.status === 'expired')
-          ? <Button variant="dangerSoft" onClick={pruneExpired}>{L('만료 코드 일괄 삭제', 'Delete expired')}</Button>
+          ? <Button variant="dangerSoft" onClick={pruneExpired}>{tr("p_delete_expired")}</Button>
           : null}>
-        {codes.length === 0 && <Row className="empty">{L('코드 없음', 'no codes')}</Row>}
+        {codes.length === 0 && <Row className="empty">{tr("p_no_codes")}</Row>}
         {codes.map((c) => (
           <Row key={c.id}>
             <span className="mono">{c.code}</span>
-            <Pill>{c.kind === 'group' ? `${L('그룹', 'group')}: ${c.group}` : `${c.service}${c.project ? '/' + c.project : ''}`}</Pill>
-            {c.no_verify && <Pill tone="warn">{L('인증생략', 'no-verify')}</Pill>}
+            <Pill>{c.kind === 'group' ? `${tr("p_group_2")}: ${c.group}` : `${c.service}${c.project ? '/' + c.project : ''}`}</Pill>
+            {c.no_verify && <Pill tone="warn">{tr("p_no_verify")}</Pill>}
             <Pill tone={c.status === 'active' ? 'ok' : 'bad'}>{c.status}</Pill>
             <span className="sub">
-              {c.uses}/{c.max_uses ? c.max_uses : '∞'}{L('회', 'x')}{c.max_uses === 1 ? L(' (일회용)', ' (single)') : ''} · ~{fmt(c.expires_at)}
+              {c.uses}/{c.max_uses ? c.max_uses : '∞'}{tr("p_x")}{c.max_uses === 1 ? tr("p_single") : ''} · ~{fmt(c.expires_at)}
             </span>
             <span className="sp" />
-            <Button variant="secondary" onClick={() => copy(c.code)}>{L('복사', 'Copy')}</Button>
-            <Button variant="secondary" onClick={() => extend(c)}>{L('연장', 'Extend')}</Button>
-            <Button variant="dangerSoft" onClick={() => del(c)}>{L('삭제', 'Remove')}</Button>
+            <Button variant="secondary" onClick={() => copy(c.code)}>{tr("p_copy")}</Button>
+            <Button variant="secondary" onClick={() => extend(c)}>{tr("p_extend")}</Button>
+            <Button variant="dangerSoft" onClick={() => del(c)}>{tr("p_remove_2")}</Button>
           </Row>
         ))}
       </Panel>
