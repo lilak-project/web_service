@@ -1,5 +1,6 @@
 import './strings.js'
 import { tr } from 'lilak-ui'
+import { FAV } from 'lilak-ui/racklist'
 /**
  * What makes a reference a REFERENCE — the parts of reference_manager that are
  * about papers rather than about lists: how a name is spelled three ways, the
@@ -144,7 +145,9 @@ export const slug = (v) => deburr(v).replace(/[^A-Za-z0-9-]+/g, '_').replace(/_+
   .replace(/^_|_$/g, '')
 /** The tag this paper is filed under. One of its own, chosen; the first one
  *  when nobody has chosen. */
-export const mainTag = (r) => (tagsOf(r).includes(r.mainTag) ? r.mainTag : tagsOf(r)[0] || '')
+// Never the favorite tag (the kit's ★): a key filed under it would move each
+// time a paper is starred.
+export const mainTag = (r) => (tagsOf(r).includes(r.mainTag) ? r.mainTag : tagsOf(r).find((t) => t !== FAV) || '')
 /** Every paper wearing one of `from` wears `to` instead — once, and its main
  *  tag follows. A key is filed under the main tag, so one left naming a tag
  *  that has gone would quietly move to whichever tag happens to be first. */
