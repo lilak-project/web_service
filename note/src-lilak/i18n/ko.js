@@ -48,6 +48,7 @@ export default {
   nt_deleted_named: (a0) => `'${a0}' 삭제됨`,
   nt_edit: "편집",
   nt_preview: "미리보기",
+  nt_raw: "원문",
   nt_print: "인쇄 · PDF",
   nt_revert_hint: "이 탭을 열었을 때로 되돌립니다",
   nt_delete_warn: "파일이 지워집니다. 되돌릴 수 없습니다.",

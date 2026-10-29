@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from lilak_portal_auth import identity
+from lilak_portal_auth import identity, signed_in
 
 DATA = Path(os.environ.get("NOTE_DATA_DIR", "./data"))
 PROJECT = os.environ.get("PORTAL_PROJECT", "")
@@ -230,14 +230,14 @@ class TodoBody(BaseModel):
 
 
 @app.get("/api/notes")
-def list_notes(_: dict = Depends(identity)) -> dict:
+def list_notes(_: dict = Depends(signed_in)) -> dict:
     notes = [_summary(n) for n in _all(NOTES)]
     return {"notes": notes, "templates": [n["id"] for n in _all(TEMPLATES)],
             "project": PROJECT, "updatedAt": _now()}
 
 
 @app.get("/api/notes/{note_id}")
-def get_note(note_id: str, _: dict = Depends(identity)) -> dict:
+def get_note(note_id: str, _: dict = Depends(signed_in)) -> dict:
     p = _path(note_id)
     if not p.is_file():
         raise HTTPException(404, "그 노트가 없습니다.")
@@ -245,7 +245,7 @@ def get_note(note_id: str, _: dict = Depends(identity)) -> dict:
 
 
 @app.post("/api/notes", status_code=201)
-def new_note(body: NewBody, _: dict = Depends(identity)) -> dict:
+def new_note(body: NewBody, _: dict = Depends(signed_in)) -> dict:
     title = body.title.strip() or "제목 없음"
     meta, text = {"title": title, "date": date.today().isoformat()}, ""
     if body.template:
@@ -266,7 +266,7 @@ def new_note(body: NewBody, _: dict = Depends(identity)) -> dict:
 
 
 @app.put("/api/notes/{note_id}")
-def put_note(note_id: str, body: SaveBody, _: dict = Depends(identity)):
+def put_note(note_id: str, body: SaveBody, _: dict = Depends(signed_in)):
     p = _path(note_id)
     if not p.is_file():
         raise HTTPException(404, "그 노트가 없습니다.")
@@ -285,7 +285,7 @@ def put_note(note_id: str, body: SaveBody, _: dict = Depends(identity)):
 
 
 @app.delete("/api/notes/{note_id}")
-def delete_note(note_id: str, _: dict = Depends(identity)) -> dict:
+def delete_note(note_id: str, _: dict = Depends(signed_in)) -> dict:
     p = _path(note_id)
     if p.is_file():
         p.unlink()
@@ -293,7 +293,7 @@ def delete_note(note_id: str, _: dict = Depends(identity)) -> dict:
 
 
 @app.get("/api/todos")
-def todos(_: dict = Depends(identity)) -> dict:
+def todos(_: dict = Depends(signed_in)) -> dict:
     """Every GFM checkbox in every note. Collected, never stored — the line in
     the note is the only copy, so a box ticked here is ticked there."""
     out = []
@@ -313,7 +313,7 @@ def todos(_: dict = Depends(identity)) -> dict:
 
 
 @app.put("/api/todos")
-def set_todo(body: TodoBody, _: dict = Depends(identity)):
+def set_todo(body: TodoBody, _: dict = Depends(signed_in)):
     p = _path(body.id)
     if not p.is_file():
         raise HTTPException(404, "그 노트가 없습니다.")
@@ -341,7 +341,7 @@ def set_todo(body: TodoBody, _: dict = Depends(identity)):
 
 
 @app.get("/api/search")
-def search(q: str = "", _: dict = Depends(identity)) -> dict:
+def search(q: str = "", _: dict = Depends(signed_in)) -> dict:
     """Body search, which the list cannot do — it only carries a first line."""
     needle = q.strip().lower()
     if not needle:
@@ -357,7 +357,7 @@ def search(q: str = "", _: dict = Depends(identity)) -> dict:
 
 
 @app.get("/api/file/{name}")
-def get_file(name: str, _: dict = Depends(identity)):
+def get_file(name: str, _: dict = Depends(signed_in)):
     """A file a note embeds — `![[name.png]]`, which is Obsidian's spelling and
     names the file alone. It never leaves the project's files folder."""
     if not name or "/" in name or "\\" in name or name.startswith("."):
@@ -369,7 +369,7 @@ def get_file(name: str, _: dict = Depends(identity)):
 
 
 @app.post("/api/file")
-async def put_file(f: UploadFile = File(...), _: dict = Depends(identity)):
+async def put_file(f: UploadFile = File(...), _: dict = Depends(signed_in)):
     """A file dropped into a note. It lands beside the notes under its own
     name, the way a vault keeps it; a name already taken grows a number rather
     than overwriting someone else's picture."""
@@ -400,8 +400,8 @@ if _assets.is_dir():
 
 @app.get("/{path:path}")
 def spa(path: str):
-    candidate = DIST / path
-    if path and candidate.is_file():
+    candidate = (DIST / path).resolve()
+    if path and candidate.is_file() and candidate.is_relative_to(DIST.resolve()):
         return FileResponse(candidate)
     index = DIST / "index.html"
     if index.is_file():

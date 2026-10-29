@@ -34,7 +34,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import identity
+from . import identity, is_manager, manager, signed_in
 
 
 def _now() -> str:
@@ -579,14 +579,15 @@ class Document:
         doc_ = self
 
         @app.get("/api/data")
-        def get_data(_: dict = Depends(identity)) -> dict:
+        def get_data(_: dict = Depends(signed_in)) -> dict:
             with doc_.lock:
                 return doc_.read()
 
         @app.put("/api/data")
-        def put_data(body: dict = Body(...), me: dict = Depends(identity)):
+        def put_data(body: dict = Body(...), me: dict = Depends(signed_in)):
             with doc_.lock:
                 cur = doc_.read()
+                _guard_roots(body, cur, me)
                 new, clash = doc_.merge(body, cur)
                 # A name typed that is a record's (or a client from before
                 # ids) is stored as that record's id.
@@ -603,7 +604,7 @@ class Document:
                 return doc_.write(new, me.get("email") or me.get("username") or "", replaces=cur)
 
         @app.get("/api/trash")
-        def get_trash(_: dict = Depends(identity)) -> list:
+        def get_trash(_: dict = Depends(signed_in)) -> list:
             """What was deleted in the last trash_days, newest first."""
             doc_.prune_trash()
             out = []
@@ -615,7 +616,7 @@ class Document:
             return sorted(out, key=lambda t: t.get("deletedAt") or "", reverse=True)
 
         @app.post("/api/trash/restore")
-        def restore(body: dict = Body(...), me: dict = Depends(identity)):
+        def restore(body: dict = Body(...), me: dict = Depends(signed_in)):
             """A record back from the bin, at the top of its list; the
             document after."""
             k, rid = str(body.get("key") or ""), str(body.get("id") or "")
@@ -634,7 +635,7 @@ class Document:
                                   me.get("email") or me.get("username") or "", replaces=cur)
 
         @app.get("/api/data/version")
-        def get_version(_: dict = Depends(identity)) -> dict:
+        def get_version(_: dict = Depends(signed_in)) -> dict:
             # Cheap poll target: ask for the version, fetch the document only
             # when it moved.
             with doc_.lock:
@@ -663,6 +664,42 @@ def _desktop(path: str, how: str) -> list:
     return ["xdg-open", target]
 
 
+# Settings that name folders on the host the service will serve files from.
+# They are part of the document, so a save could point one at "/" — only a
+# manager may change them, and none may reach the portal's own data (its
+# signing key lives there).
+_ROOT_SETTINGS: set = set()
+
+
+def _guard_roots(body: dict, cur: dict, me: dict) -> None:
+    new_s = body.get("settings") if isinstance(body.get("settings"), dict) else {}
+    cur_s = cur.get("settings") or {}
+    if is_manager(me):
+        return
+    for k in _ROOT_SETTINGS:
+        if k in new_s and new_s.get(k) != cur_s.get(k):
+            raise HTTPException(403, "폴더 위치는 관리자만 바꿀 수 있습니다.")
+
+
+def _portal_private() -> Path:
+    return (Path(os.environ.get("PORTAL_DATA_ROOT", "/app/data")) / "_portal").resolve()
+
+
+def _safe_roots(got: list) -> list:
+    """Resolved roots, minus any that would expose the portal's private folder."""
+    private = _portal_private()
+    out = []
+    for r in got or []:
+        try:
+            p = Path(str(r)).expanduser().resolve()
+        except Exception:
+            continue
+        if p == private or p in private.parents or private in p.parents:
+            continue
+        out.append(p)
+    return out
+
+
 def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> None:
     """A folder per record, found by its name, and the files in it.
 
@@ -682,15 +719,17 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
     the machine the backend runs on — useful only when that is the one you are
     looking at."""
 
+    _ROOT_SETTINGS.add(setting)
+
     def roots() -> list:
         with doc.lock:
-            return (doc.read().get("settings") or {}).get(setting) or []
+            return _safe_roots((doc.read().get("settings") or {}).get(setting))
 
     def found() -> dict:
         out = {}
         for r in roots():
             try:
-                for e in os.scandir(Path(r).expanduser()):
+                for e in os.scandir(r):
                     if e.is_dir() and not e.name.startswith("."):
                         out.setdefault(unicodedata.normalize("NFC", e.name), e.path)
             except OSError:
@@ -713,11 +752,11 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         return real
 
     @app.get("/api/folders")
-    def folders(_: dict = Depends(identity)) -> dict:
-        return {"roots": roots(), "dirs": found()}
+    def folders(_: dict = Depends(signed_in)) -> dict:
+        return {"roots": [str(r) for r in roots()], "dirs": found()}
 
     @app.get("/api/folders/list")
-    def list_files(name: str, _: dict = Depends(identity)) -> dict:
+    def list_files(name: str, _: dict = Depends(signed_in)) -> dict:
         base = folder(name)
         files = []
         for dirpath, dirs, names in os.walk(base):
@@ -737,7 +776,7 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         return {"path": str(base), "files": files}
 
     @app.get("/api/folders/file")
-    def get_file(name: str, path: str, download: int = 0, _: dict = Depends(identity)):
+    def get_file(name: str, path: str, download: int = 0, _: dict = Depends(signed_in)):
         real = inside(name, path)
         if not real.is_file():
             raise HTTPException(404, "파일이 아닙니다.")
@@ -745,7 +784,7 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
                             content_disposition_type="attachment" if download else "inline")
 
     @app.post("/api/folders/open")
-    def open_on_desktop(body: dict = Body(...), _: dict = Depends(identity)):
+    def open_on_desktop(body: dict = Body(...), _: dict = Depends(manager)):
         real = inside(body.get("name"), body.get("path") or "")
         how = "reveal" if body.get("how") == "reveal" else "open"
         try:
@@ -761,7 +800,7 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         return name
 
     @app.post("/api/folders/make")
-    def make(body: dict = Body(...), _: dict = Depends(identity)):
+    def make(body: dict = Body(...), _: dict = Depends(signed_in)):
         name = clean(body.get("name"))
         rs = roots()
         if not rs:
@@ -786,7 +825,7 @@ def mount_folders(app: FastAPI, doc: Document, setting: str = "folderRoots") -> 
         return max(count, key=count.get) if count else str(Path(rs[0]).expanduser())
 
     @app.post("/api/folders/adopt")
-    def adopt(body: dict = Body(...), _: dict = Depends(identity)):
+    def adopt(body: dict = Body(...), _: dict = Depends(signed_in)):
         """Make an existing folder this record's: rename it to the record's name
         (and lift it to the top of its root when it was deeper). `source` is a
         folder name from the listing or a path dropped from Finder; either way
@@ -844,16 +883,11 @@ def mount_files(app: FastAPI, doc: Document, setting: str = "fileRoots", exts: t
     convention be the link: a file named after a record's key is that record's.
     (These were reference_manager's own routes; the paths are unchanged.)"""
 
+    _ROOT_SETTINGS.add(setting)
+
     def roots() -> list:
         with doc.lock:
-            got = (doc.read().get("settings") or {}).get(setting) or []
-        out = []
-        for r in got:
-            try:
-                out.append(Path(r).expanduser().resolve())
-            except Exception:
-                pass
-        return out
+            return _safe_roots((doc.read().get("settings") or {}).get(setting))
 
     def inside(path: Path, rs: list):
         try:
@@ -870,23 +904,23 @@ def mount_files(app: FastAPI, doc: Document, setting: str = "fileRoots", exts: t
         if not rs:
             raise HTTPException(409, "허용 루트가 설정되지 않았습니다.")
         real = inside(Path(path), rs)
-        if not real:
+        if not real or not real.name.lower().endswith(tuple(e.lower() for e in exts)):
             raise HTTPException(404, "그 경로의 파일이 없거나 허용 루트 밖입니다.")
         return real
 
     @app.get("/api/file")
-    def get_file(path: str, download: int = 0, _: dict = Depends(identity)):
+    def get_file(path: str, download: int = 0, _: dict = Depends(signed_in)):
         real = found(path)
         return FileResponse(real, filename=real.name,
                             content_disposition_type="attachment" if download else "inline")
 
     @app.get("/api/realpath")
-    def realpath(path: str, _: dict = Depends(identity)) -> dict:
+    def realpath(path: str, _: dict = Depends(signed_in)) -> dict:
         real = found(path)
         return {"path": str(real), "name": real.name}
 
     @app.post("/api/reveal")
-    def reveal(body: dict = Body(...), _: dict = Depends(identity)):
+    def reveal(body: dict = Body(...), _: dict = Depends(manager)):
         real = found(str(body.get("path") or ""))
         where = "Finder" if sys.platform == "darwin" else "탐색기" if os.name == "nt" else "파일 관리자"
         try:
@@ -896,7 +930,7 @@ def mount_files(app: FastAPI, doc: Document, setting: str = "fileRoots", exts: t
         return {"ok": True, "where": where, "path": str(real)}
 
     @app.get("/api/scan")
-    def scan(_: dict = Depends(identity)) -> dict:
+    def scan(_: dict = Depends(signed_in)) -> dict:
         out: dict = {}
         for root in roots():
             for dirpath, _dirs, names in os.walk(root):
@@ -917,8 +951,8 @@ def mount_spa(app: FastAPI, dist: Path, name: str = "service") -> None:
 
     @app.get("/{path:path}")
     def spa(path: str):
-        candidate = dist / path
-        if path and candidate.is_file():
+        candidate = (dist / path).resolve()
+        if path and candidate.is_file() and candidate.is_relative_to(dist.resolve()):
             return FileResponse(candidate)
         index = dist / "index.html"
         if index.is_file():

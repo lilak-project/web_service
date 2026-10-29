@@ -99,6 +99,14 @@ def _pid_alive(pid: int) -> bool:
         return True                       # exists but not signalable by us → alive
     except OSError:
         return False
+    # Our own child: waitpid answers directly, on every OS (macOS has no /proc).
+    try:
+        done, _ = os.waitpid(pid, os.WNOHANG)
+        return done == 0                  # 0 → still running; its pid → it had exited (now reaped)
+    except ChildProcessError:
+        pass                              # not our child: fall through to procfs
+    except OSError:
+        pass
     # A ZOMBIE answers signal 0 — the process is dead, but its entry lingers until
     # the parent reaps it, and the portal spawns with Popen and never wait()s. So a
     # service killed out from under the portal kept a PID that looked alive, the

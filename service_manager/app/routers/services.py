@@ -111,9 +111,13 @@ def list_services(
     out = annotate_services(db, user, prefs.with_entries(user, list_raw_services()))
     if not _is_admin(user):
         # Hidden in manage mode, or inside a group that is hidden as a whole.
-        from .service_groups import all_groups
+        # "No group" hidden takes every service filed nowhere with it.
+        from .service_groups import all_groups, loose
         in_hidden_group = {m for g in all_groups() if g.get("hidden") for m in g.get("members", [])}
-        out = [s for s in out if not s.get("hidden") and s["name"] not in in_hidden_group]
+        filed = {m for g in all_groups() for m in g.get("members", [])}
+        loose_hidden = bool(loose().get("hidden"))
+        out = [s for s in out if not s.get("hidden") and s["name"] not in in_hidden_group
+               and not (loose_hidden and s["name"] not in filed)]
     return out
 
 
@@ -495,6 +499,10 @@ def handshake(body: HandshakeBody, authorization: Optional[str] = Header(default
     # Layer the descriptor over the existing manifest (so a re-handshake updates
     # only what it sends), or over kind defaults for a brand-new service.
     manifest = registry.read_manifest(name) if existed else registry.default_manifest(body.kind, body.mode)
+    # A service the portal runs stays one: the shared registration token must
+    # not turn it into a forward to somewhere else (and every user's token with it).
+    if existed and manifest.get("mode") == "managed" and body.mode != "managed":
+        raise HTTPException(409, f"'{name}' 은 포털이 실행하는 서비스라 등록으로 바꿀 수 없습니다.")
     manifest.update({
         "kind": body.kind, "mode": body.mode,
         "health": body.health or "/", "entry": body.entry or "/",
@@ -647,7 +655,11 @@ def admin_remove_service(
     try:
         services_root = Path(os.environ.get("PORTAL_SERVICES_ROOT", str(config.ROOT.parent)))
         code_dir = services_root / name
-        if code_dir.is_dir() and code_dir.parent == services_root and not (code_dir / ".git").exists():
+        # …and only a service's own code (it has the portal's start script),
+        # never the data root or the portal beside it.
+        if (code_dir.is_dir() and code_dir.parent == services_root and not (code_dir / ".git").exists()
+                and (code_dir / "portal-serve.sh").is_file()
+                and code_dir.resolve() not in (config.DATA_ROOT.resolve(), config.ROOT.resolve())):
             shutil.rmtree(code_dir)
     except Exception:
         pass

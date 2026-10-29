@@ -19,7 +19,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
-from .. import config, models
+from .. import config, models, registry
 from ..deps import require_portal_admin
 
 router = APIRouter(tags=["iconlab"], prefix="/api/admin/iconlab")
@@ -105,7 +105,7 @@ def get_config(_: models.User = Depends(require_portal_admin)):
 def put_config(body: dict, _: models.User = Depends(require_portal_admin)):
     cfg = body.get("config", body)
     CFG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CFG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    registry._atomic_write_text(CFG_PATH, json.dumps(cfg, ensure_ascii=False, indent=2))
     return {"ok": True}
 
 
@@ -127,7 +127,7 @@ def put_presets(body: dict, _: models.User = Depends(require_portal_admin)):
         raise HTTPException(400, "presets must be a list")
     presets = presets[:MAX_PRESETS]
     PRESETS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    PRESETS_PATH.write_text(json.dumps({"presets": presets}, ensure_ascii=False, indent=2), encoding="utf-8")
+    registry._atomic_write_text(PRESETS_PATH, json.dumps({"presets": presets}, ensure_ascii=False, indent=2))
     return {"ok": True, "count": len(presets)}
 
 

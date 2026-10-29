@@ -207,7 +207,7 @@ if command -v npm >/dev/null 2>&1; then
 fi
 cd "$ROOT_DIR/backend"
 ${ENV}_DATA_DIR="\${PORTAL_PROJECT_DATA:-$ROOT_DIR/data}" ${ENV}_DIST_DIR="$ROOT_DIR/dist" \\
-  exec "$ROOT_DIR/../service_manager/.venv/bin/python" -m uvicorn main:app --host 0.0.0.0 --port "$PORT"
+  exec "$ROOT_DIR/../service_manager/.venv/bin/python" -m uvicorn main:app --host 127.0.0.1 --port "$PORT"
 `)
 await writeBackend()
 

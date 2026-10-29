@@ -34,10 +34,16 @@ def _read() -> dict:
             d.setdefault("builtins", {})
             d.setdefault("hidden_services", [])
             d.setdefault("live_hidden", [])
+            d.setdefault("live_public", [])
             return d
     except Exception:
         pass
-    return {"order": [], "builtins": {}, "hidden_services": [], "live_hidden": []}
+    return {"order": [], "builtins": {}, "hidden_services": [], "live_hidden": [], "live_public": []}
+
+
+def live_public() -> set[str]:
+    """Services whose live numbers a visitor may see without signing in."""
+    return set(_read().get("live_public") or [])
 
 
 def live_hidden() -> set[str]:
@@ -54,7 +60,7 @@ def hidden_services() -> set[str]:
 
 def _write(d: dict) -> None:
     _FILE.parent.mkdir(parents=True, exist_ok=True)
-    _FILE.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    registry._atomic_write_text(_FILE, json.dumps(d, ensure_ascii=False, indent=2))
 
 
 @router.get("/api/admin/home")
@@ -90,6 +96,7 @@ class HiddenServiceBody(BaseModel):
     name: str
     hidden: Optional[bool] = None        # off the cover (and therefore off the live wall)
     live_hidden: Optional[bool] = None   # off the live wall only
+    live_public: Optional[bool] = None   # on the signed-out live wall too
 
 
 @router.put("/api/admin/home-service")
@@ -97,14 +104,16 @@ def set_service_hidden(body: HiddenServiceBody, _: models.User = Depends(require
     if not registry.valid_name(body.name):
         raise HTTPException(400, "잘못된 서비스 이름")
     d = _read()
-    for key, flag in (("hidden_services", body.hidden), ("live_hidden", body.live_hidden)):
+    for key, flag in (("hidden_services", body.hidden), ("live_hidden", body.live_hidden),
+                      ("live_public", body.live_public)):
         if flag is None:
             continue
         current = set(d.get(key) or [])
         (current.add if flag else current.discard)(body.name)
         d[key] = sorted(current)
     _write(d)
-    return {"name": body.name, "hidden": body.name in d["hidden_services"], "live_hidden": body.name in d["live_hidden"]}
+    return {"name": body.name, "hidden": body.name in d["hidden_services"], "live_hidden": body.name in d["live_hidden"],
+            "live_public": body.name in d.get("live_public", [])}
 
 
 class BuiltinBody(BaseModel):

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Button, Icon } from 'lilak-ui'
-import { launcher } from '../../api'
+import { launcher, errText, store, PORTAL_TOKEN_KEY } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { Panel, Field, FieldActions, Row, Pill, fieldInput, fieldMuted } from './Field'
 import { notify } from './settingsMsg'
@@ -58,8 +58,8 @@ export default function ServiceProjects({ service, canManage, manage = false, on
 
   function enter(proj) {
     // SSO handoff (same origin): hand the self-UI service the portal token.
-    const tok = localStorage.getItem('lilak_portal_token')
-    if (tok) localStorage.setItem('elog_token', tok)
+    const tok = store.get(PORTAL_TOKEN_KEY)
+    if (tok) store.set('elog_token', tok)
     window.open(`/pp/${svc}/${proj}/`, '_blank')
   }
 
@@ -73,6 +73,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   async function stop(proj) {
     setBusy(proj)
     try { await launcher.post(`/services/${svc}/projects/${proj}/stop`); await load() }
+    catch (e) { setErr(errText(e, t('p_failed'))) }
     finally { setBusy('') }
   }
   // manager: delete a project — stops it, drops its data dir + per-project grants.

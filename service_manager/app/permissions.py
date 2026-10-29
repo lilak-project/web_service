@@ -176,4 +176,5 @@ def user_from_request(db: Session, token: str | None) -> models.User | None:
     if not payload:
         return None
     u = db.query(models.User).filter(models.User.id == int(payload.get("sub", 0))).first()
-    return u if (u and u.is_active) else None
+    from . import prefs
+    return u if (u and u.is_active and prefs.session_ok(u, payload)) else None

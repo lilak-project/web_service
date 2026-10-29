@@ -190,7 +190,7 @@ if _DIST.is_dir():
     async def spa(path: str):
         if path:
             candidate = (_DIST / path).resolve()
-            if candidate.is_file() and str(candidate).startswith(str(_DIST.resolve())):
+            if candidate.is_file() and candidate.is_relative_to(_DIST.resolve()):
                 return FileResponse(str(candidate))
         if _INDEX.is_file():
             return FileResponse(str(_INDEX))

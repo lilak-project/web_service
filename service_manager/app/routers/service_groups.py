@@ -47,11 +47,20 @@ def _read() -> dict:
 
 def _write(d: dict) -> None:
     _FILE.parent.mkdir(parents=True, exist_ok=True)
-    _FILE.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    registry._atomic_write_text(_FILE, json.dumps(d, ensure_ascii=False, indent=2))
 
 
 def all_groups() -> list[dict]:
     return _read()["groups"]
+
+
+# "No group" — the band of cards filed nowhere — is placed and hidden like a
+# group, under the reserved id "none" (stored ids are 8 hex digits, never this).
+LOOSE_ID = "none"
+
+
+def loose() -> dict:
+    return _read().get("loose") or {}
 
 
 def _find(d: dict, gid: str) -> dict:
@@ -87,8 +96,8 @@ def set_orders(keys: list[str]) -> None:
     d = _read()
     pos = {k: i for i, k in enumerate(keys)}
     changed = False
-    for g in d["groups"]:
-        i = pos.get(f"#g:{g['id']}")
+    for g in d["groups"] + [d.setdefault("loose", {})]:
+        i = pos.get(f"#g:{g.get('id', LOOSE_ID)}")
         if i is not None and g.get("order") != i:
             g["order"] = i
             changed = True
@@ -108,6 +117,10 @@ def list_groups(user: models.User = Depends(require_portal_user)):
         out.append({"id": g["id"], "name": g.get("name") or "", "icon": g.get("icon"), "color": g.get("color"),
                     "members": list(g.get("members", [])), "collapsed": bool(g.get("collapsed")),
                     "hidden": bool(g.get("hidden")), "order": g.get("order", 1000)})
+    lo = loose()
+    if admin or not lo.get("hidden"):
+        out.append({"id": LOOSE_ID, "name": "", "icon": None, "color": None, "members": [], "collapsed": False,
+                     "hidden": bool(lo.get("hidden")), "order": lo.get("order", 100000), "loose": True})
     return out
 
 
@@ -168,6 +181,12 @@ def update_group(gid: str, body: GroupBody, _: models.User = Depends(require_por
     if not _ID_RE.match(gid):
         raise HTTPException(400, "bad id")
     d = _read()
+    if gid == LOOSE_ID:
+        lo = d.setdefault("loose", {})
+        if body.hidden is not None:
+            lo["hidden"] = bool(body.hidden)
+        _write(d)
+        return lo
     g = _find(d, gid)
     _apply(g, body, d)
     _write(d)

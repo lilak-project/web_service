@@ -13,8 +13,8 @@ import { Icon, tr } from 'lilak-ui'
  * Closes on outside click or Escape.
  */
 export const HOME_MODES = [
-  { id: 'manage', icon: 'wrench', ko: '관리 모드', en: 'Manage mode', admin: true, ko_hint: '이름 · 아이콘 · 공개 범위 · 숨김 · 그룹 · 끌어서 정렬', en_hint: 'name · icon · visibility · hide · groups · drag to arrange' },
-  { id: 'live', icon: 'broadcast', ko: '라이브 모드', en: 'Live mode', admin: false, ko_hint: '지원하는 카드에 실시간 숫자 표시', en_hint: 'live numbers on cards that support it' },
+  { id: 'manage', icon: 'wrench', label: 'p_manage_mode', hint: 'p_manage_mode_hint', admin: true },
+  { id: 'live', icon: 'broadcast', label: 'p_live_mode', hint: 'p_live_mode_hint', admin: false },
 ]
 
 export default function HomeModeMenu({ open, onClose, mode, onPick, isManager, lang = 'ko', anchor = 'left' }) {
@@ -28,7 +28,6 @@ export default function HomeModeMenu({ open, onClose, mode, onPick, isManager, l
     return () => { clearTimeout(t); document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc) }
   }, [open, onClose])
   if (!open) return null
-  const L = (ko, en) => (lang === 'ko' ? ko : en)
   const items = HOME_MODES.filter((m) => !m.admin || isManager)
   const row = (active) => ({
     display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', cursor: 'pointer',
@@ -49,8 +48,8 @@ export default function HomeModeMenu({ open, onClose, mode, onPick, isManager, l
           <button key={m.id} type="button" style={row(active)} onClick={() => { onPick(active ? null : m.id); onClose?.() }}>
             <Icon name={m.icon} size={16} />
             <span style={{ flex: 1, display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-              <span>{L(m.ko, m.en)}</span>
-              <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{L(m.ko_hint, m.en_hint)}</span>
+              <span>{tr(m.label)}</span>
+              <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{tr(m.hint)}</span>
             </span>
             {active && <Icon name="check" size={14} />}
           </button>

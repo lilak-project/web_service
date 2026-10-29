@@ -46,7 +46,7 @@ def write(svc: str, cfg: dict, proj: str = "") -> dict:
         p.unlink(missing_ok=True)                # off: the service's link applies again
         return cfg
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    registry._atomic_write_text(p, json.dumps(cfg, ensure_ascii=False, indent=2))
     return cfg
 
 

@@ -47,26 +47,37 @@
 .nt-tag-in, .nt-tag {
   --nt-point: 9px;
   display: inline-block;
-  padding: 0 7px 0 calc(var(--nt-point) + 6px);
+  padding: 0 8px 0 calc(var(--nt-point) + 12px);
   position: relative;
   clip-path: polygon(0 50%, var(--nt-point) 0, 100% 0, 100% 100%, var(--nt-point) 100%);
-  background: var(--rk-cite, #dbeafe);
+  /* The clip takes a border off with the corner it cuts, so the edge IS the
+     chip: the element is painted in the edge colour, and a copy of the
+     silhouette one pixel in carries the fill. */
+  background: var(--rk-cite-t, #1d4ed8);
   color: var(--rk-cite-t, #1d4ed8);
   font-size: .92em;
+  z-index: 0;
+}
+.nt-tag-in::after, .nt-tag::after {
+  content: '';
+  position: absolute; inset: 1px; z-index: -1;
+  clip-path: polygon(0 50%, var(--nt-point) 0, 100% 0, 100% 100%, var(--nt-point) 100%);
+  background: var(--rk-cite, #dbeafe);
 }
 /* the hole */
 .nt-tag-in::before, .nt-tag::before {
   content: '';
   position: absolute;
-  left: calc(var(--nt-point) + 1px); top: 50%;
-  width: 3px; height: 3px; margin-top: -1.5px;
-  border-radius: 50%;
+  left: calc(var(--nt-point) + 2px); top: 50%;
+  width: 3px; height: 3px; margin-top: -2.5px;
+  border: 1px solid var(--rk-cite-t, #1d4ed8); border-radius: 50%;
   background: var(--rk-panel, #fff);
 }
 
 /* A tag, where a note is read: the same blue the rest of RACK cites with. */
-.nt-sheet .nt-tag { background: #eef2ff; color: #3730a3; }
-.nt-sheet .nt-tag::before { background: #fff; }
+.nt-sheet .nt-tag { background: #3730a3; color: #3730a3; }
+.nt-sheet .nt-tag::after { background: #eef2ff; }
+.nt-sheet .nt-tag::before { background: #fff; border-color: #3730a3; }
 
 /* ── the print page ──────────────────────────────────────────────────────
    Not a RACK screen: a sheet of paper. The browser's own printer writes the
@@ -96,21 +107,21 @@
   display: inline-block;
   cursor: pointer;
   padding: 0 7px;
-  border-left: 6px solid var(--rk-tab-t);
+  border: 1px solid var(--rk-tab-t); border-left-width: 6px;
   background: var(--rk-tab); color: var(--rk-tab-t);
   font-size: .92em;
 }
 /* Its day has passed and the line is still open. */
 .nt-due-in.nt-due-late {
   background: #fee2e2;
-  border-left-color: var(--rk-danger, #b91c1c);
+  border-color: var(--rk-danger, #b91c1c);
   color: var(--rk-danger, #b91c1c);
 }
 /* The day it was finished: the same label, said quietly — it is a record. */
 .nt-done-in {
   display: inline-block;
   padding: 0 7px;
-  border-left: 6px solid var(--rk-mute);
+  border: 1px solid var(--rk-mute); border-left-width: 6px;
   background: var(--rk-line); color: var(--rk-dim);
   font-size: .92em;
 }
@@ -195,11 +206,11 @@ body.nt-paper #root { height: auto; min-height: 100%; }
 .nt-sheet h2 { font-size: 13pt; }
 .nt-sheet h3 { font-size: 11.5pt; }
 .nt-sheet p, .nt-sheet ul, .nt-sheet ol { margin: 0 0 3mm; }
-.nt-sheet pre, .nt-sheet code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 10pt; }
+.nt-sheet pre { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 10pt; }
 .nt-sheet pre { background: #f8fafc; padding: 3mm; white-space: pre-wrap; }
 .nt-sheet blockquote { margin: 0 0 3mm; padding-left: 4mm; border-left: 2px solid #cbd5e1; color: #475569; }
 .nt-sheet table { border-collapse: collapse; }
-.nt-sheet th, .nt-sheet td { border: 1px solid #cbd5e1; padding: 1mm 2mm; }
+.nt-sheet th, .nt-sheet td { border: 1px solid #94a3b8; padding: 1mm 2mm; }
 
 @media print {
   @page { size: A4; margin: 14mm; }
@@ -223,6 +234,9 @@ body.nt-paper #root { height: auto; min-height: 100%; }
 .nt-edit { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* The actions are RackActions now (.rl-acts, sticky at the top of the pane),
    so this service no longer dresses its own. */
+/* Reading, the sheet carries the title itself — and `display: flex` here would
+   otherwise outrank the `hidden` that says so. */
+.nt-titlerow[hidden] { display: none; }
 .nt-titlerow {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 8px;
@@ -276,19 +290,16 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   word-break: break-word;
 }
 .nt-prose > :first-child { margin-top: 0; }
-/* A column of its own at the left, and every line's bar stands in it — all at
-   the same x, whatever the line is indented to. Lit on the line the caret is in
-   (and on each of them while a selection spans several).
+/* THE RAIL (레일) — one line down the left margin that every block stands on.
+   A paragraph, a list, a table each take a SEGMENT of it; the segment the
+   caret is in is LIT (as is each of them while a selection spans several).
+   One rail, one x: nothing is ever drawn at a second depth, however far the
+   line itself is indented.
 
-   The bar belongs to the LINE, so for a list item it is drawn on the item's own
-   paragraph rather than on the item: an item that holds a nested list is as
-   tall as everything under it, and its bar was a blue column behind all of
-   their grey ones.
-
-   The gutter is real space: .nt-prose is padded by it, so nothing is written
-   over the bars. */
+   The rail stands in real space: .nt-prose is padded by it, so nothing is
+   written over it. */
 .nt-prose { padding-left: 26px; }
-.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote, li) { position: relative; }
+.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote) { position: relative; }
 .nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote)::before {
   content: '';
   position: absolute;
@@ -297,14 +308,12 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   border-radius: 1px;
   background: var(--rk-line);
 }
-/* A LIST gets one bar for the whole of it, not one per line: where the bar
-   starts is where the list starts, where it stops is where the list stops, and
-   two lists running into each other are two bars with a gap — which is the
-   thing markdown gives you no other sign of. Nested lists need no arithmetic:
-   the bar stands 18px left of the list's own box, and a nested list's box is
-   already a step further in. */
-.nt-prose :where(ul, ol) { position: relative; }
-.nt-prose :where(ul, ol)::before {
+/* A LIST is ONE segment, not one per line: where it starts is where the list
+   starts, where it stops is where the list stops, and two lists running into
+   each other are two segments with a gap — the thing markdown gives you no
+   other sign of. A TABLE is one segment the same way. */
+.nt-prose :where(ul, ol, table) { position: relative; }
+.nt-prose :where(ul, ol, table)::before {
   content: '';
   position: absolute;
   left: -18px; top: .18em; bottom: .18em;
@@ -312,29 +321,36 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   border-radius: 1px;
   background: var(--rk-line);
 }
-/* So the lines inside it draw nothing of their own — until the caret is on
-   one, which paints its own segment over the list's bar. */
+/* …and a list inside a list draws none of its own: the outer segment already
+   runs the whole height of everything nested under it, so one list is one
+   piece of rail however deep it goes. The same for anything in a table cell —
+   the table's own segment covers all of it. */
+.nt-prose li :where(ul, ol) { position: static; }
+.nt-prose li :where(ul, ol)::before { content: none; }
+.nt-prose :where(th, td) p { position: static; margin: 0; }
+.nt-prose :where(th, td) p::before { content: none; }
+/* So the lines inside them draw nothing of their own — until the caret is on
+   one, which lights its own piece of the rail. */
 .nt-prose li > p::before { content: none; }
 .nt-prose li::before { content: none; }
-/* Every level the same: the bar belongs to the line's OWN list, whose box is
-   already a step in — the depth is in the layout, not in the number. (Adding
-   a step per level is what the old one-gutter-for-everything bars needed, and
-   leaving it in let a deep rule outrank the checkbox and drag it to the left
-   margin.) A task item is not here: its paragraph is holding the checkbox. */
-.nt-prose li:not([data-item-type="task"]) > p.nt-at::before {
-  content: '';
-  left: calc(-18px - 1.5em);
-  background: var(--rk-cite-t);
-}
-/* A task item's paragraph is busy holding the checkbox, so its lit segment is
-   the item's own, one line tall. */
-.nt-prose li[data-item-type="task"]:has(> .nt-at)::before {
+/* The lit piece, for a line inside a list or a table, on the one rail: the
+   line's own box is NOT positioned, so `left` is measured from the outermost
+   list (or the table), while `top: auto` leaves it beside the line it belongs
+   to. For a list item it is the ITEM's pseudo-element, never the paragraph's
+   — the paragraph is holding the checkbox — and one line tall, because an item
+   that holds a nested list is as tall as everything under it. */
+.nt-prose li:has(> .nt-at)::before {
   content: '';
   position: absolute;
-  left: calc(-18px - 1.5em); top: .18em; height: 1.1em;
+  left: -18px; top: auto; margin-top: .18em; height: 1.1em;
   width: 3px; border-radius: 1px;
   background: var(--rk-cite-t);
 }
+/* A table lights whole. Its cells are not lines — a row is not a box the rail
+   can measure from (generated content on a `tr` becomes an anonymous CELL and
+   pushes the real ones along), and a cell's own line has no static position to
+   trust inside table layout. The table is one block, so it is one lit piece. */
+.nt-prose table:has(.nt-at)::before { background: var(--rk-cite-t); }
 .nt-prose blockquote > p::before { content: none; }
 /* The lit one, everywhere else. */
 .nt-prose .nt-at::before { background: var(--rk-cite-t); }
@@ -379,22 +395,55 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   margin: 0 0 .55em; padding: 0 0 0 11px;
   border-left: 2px solid var(--rk-edge); color: var(--rk-dim);
 }
-.nt-prose code {
-  font-family: var(--rk-mono); font-size: 12.5px;
-  background: var(--rk-gut); padding: 0 4px; border-radius: 2px; color: #9a3412;
+/* `code`, written in a line: the same size as the words around it (monospace
+   reads smaller at the same px), on ink-and-paper — no colour of its own, so
+   it adds nothing to the blue a tag or a link already means. The edge is what
+   makes it a chip, so it is drawn a step stronger than a row divider. */
+.nt-prose code, .nt-sheet code {
+  font-family: var(--rk-mono); font-size: .95em;
+  background: var(--rk-gut, #f1f5f9); border: 1px solid var(--rk-mute, #94a3b8);
+  color: var(--rk-ink, #0f172a);
+  padding: 2px 6px; margin: 0 3px; border-radius: 2px;
 }
+.nt-prose pre code, .nt-sheet pre code { font-size: 1em; }
 .nt-prose pre {
   margin: 0 0 .55em; padding: 9px 11px;
   background: var(--rk-gut); border: 1px solid var(--rk-line);
   font-family: var(--rk-mono); font-size: 12.5px; overflow-x: auto;
 }
-.nt-prose pre code { background: none; padding: 0; color: inherit; }
+.nt-prose pre code, .nt-sheet pre code { background: none; border: 0; padding: 0; color: inherit; }
 .nt-prose a { color: var(--rk-cite-t); text-decoration: underline; text-underline-offset: 2px; }
 .nt-prose hr { margin: 1em 0; border: 0; border-top: 1px solid var(--rk-edge); }
 .nt-prose table { border-collapse: collapse; margin: 0 0 .55em; }
-.nt-prose :where(th, td) { border: 1px solid var(--rk-line); padding: 2px 8px; }
+/* The row is as tall as its tallest cell, so a cell's line sits in the MIDDLE
+   of it — and a paragraph in a cell drops the margin it would end a line with,
+   which is what pushed the text to the top. (Markdown has no way to say this;
+   it is the table's own style, here.) */
+.nt-prose :where(th, td) { border: 1px solid var(--rk-mute); padding: 2px 8px; vertical-align: middle; }
+.nt-prose :where(th, td) > p { margin: 0; }
 .nt-prose th { background: var(--rk-gut); font-weight: 600; }
 .nt-prose img { max-width: 100%; }
+/* The file itself, as text: no markdown is parsed and none is drawn, but it is
+   still the note — typing in it saves like anywhere else. */
+.nt-rawwrap { flex: 1; min-height: 0; display: flex; }
+/* The numbers scroll with the text but are not IN it: a textarea holds nothing
+   but its own value, so they ride alongside and follow its scrollTop. */
+.nt-rawnum {
+  flex: 0 0 auto; overflow: hidden;
+  padding: 10px 8px 24px 10px; text-align: right;
+  border-right: 1px solid var(--rk-line);
+  background: var(--rk-gut);
+  font-family: var(--rk-mono); font-size: var(--rk-fs); line-height: 1.75;
+  color: var(--rk-mute); user-select: none;
+}
+.nt-raw {
+  flex: 1; min-width: 0; min-height: 0;
+  margin: 0; padding: 10px 26px 24px 14px;
+  overflow: auto; white-space: pre;
+  border: 0; background: none; resize: none; outline: none;
+  font-family: var(--rk-mono); font-size: var(--rk-fs); line-height: 1.75;
+  color: var(--rk-text); caret-color: var(--rk-ink);
+}
 /* ProseMirror's own: the gap cursor and a selected node. */
 .nt-prose .ProseMirror-selectednode { outline: 2px solid var(--rk-cite-t); }
 

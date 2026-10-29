@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, PROJECT_ICONS } from 'lilak-ui'
-import { launcher, errText } from '../api'
+import { launcher, errText, store, PORTAL_TOKEN_KEY } from '../api'
 import { useLang } from '../context/LangContext'
 import SidebarPortal from './portal/SidebarPortal'
 import { Panel, Field, FieldActions, fieldInput, fieldMuted } from './portal/Field'
+import { notify } from './portal/settingsMsg'
 
 /**
  * ProjectsPage — the portal's cover: who you are, what you may open, and the
@@ -19,8 +20,6 @@ import { Panel, Field, FieldActions, fieldInput, fieldMuted } from './portal/Fie
  * the card list (services + builtins, in the saved order, with their groups),
  * and the writes that reorder and regroup it.
  */
-
-const PORTAL_TOKEN_KEY = 'lilak_portal_token'
 
 // Builtins: portal tools listed like services. Only the links card is for
 // everyone (and only once it has something in it); the rest are a manager's.
@@ -52,7 +51,7 @@ const cardStyle = { width: '100%', maxWidth: 420, margin: '28px auto 0' }
 // Attach / clear the portal bearer token on the shared launcher axios.
 function setPortalToken(token) {
   if (token) {
-    localStorage.setItem(PORTAL_TOKEN_KEY, token)
+    store.set(PORTAL_TOKEN_KEY, token)
     launcher.defaults.headers.common['Authorization'] = `Bearer ${token}`
     // Also a cookie so the reverse proxies (/p, /pp) can authorize a top-level
     // navigation (which carries no Authorization header) for per-project gating.
@@ -61,7 +60,7 @@ function setPortalToken(token) {
     const secure = location.protocol === 'https:' ? ' Secure;' : ''
     document.cookie = `${PORTAL_TOKEN_KEY}=${token}; path=/; SameSite=Lax;${secure} max-age=86400`
   } else {
-    localStorage.removeItem(PORTAL_TOKEN_KEY)
+    store.remove(PORTAL_TOKEN_KEY)
     delete launcher.defaults.headers.common['Authorization']
     document.cookie = `${PORTAL_TOKEN_KEY}=; path=/; max-age=0`
   }
@@ -269,10 +268,11 @@ export default function ProjectsPage() {
   // PWA / deep-link return: the proxies bounce an unauthenticated page navigation
   // here as /projects?next=<original-url>. Once a session exists — fresh sign-in
   // or restored token, both of which re-set the proxy cookie — go back. Same-origin
-  // paths only (no '//'): never an open redirect.
+  // paths only: one '/' then anything but '/', '\' or whitespace (browsers read
+  // '//x', '/\x' and '/<tab>/x' as another host) — never an open redirect.
   const nextParam = (() => {
     const v = new URLSearchParams(window.location.search).get('next') || ''
-    return v.startsWith('/') && !v.startsWith('//') ? v : ''
+    return /^\/[^/\\\s]/.test(v) ? v : ''
   })()
   useEffect(() => {
     if (user && nextParam) window.location.replace(nextParam)
@@ -285,6 +285,7 @@ export default function ProjectsPage() {
   const [links, setLinks] = useState(null)
   const [portalInfo, setPortalInfo] = useState(null)   // { host, version } — which server this is
   const [publicCards, setPublicCards] = useState([])   // the signed-out bar
+  const [publicLive, setPublicLive] = useState([])     // …and its live wall (what managers opened to visitors)
 
   useEffect(() => {
     launcher.get('/health').then((r) => setPortalInfo(r.data)).catch(() => {})
@@ -294,28 +295,49 @@ export default function ProjectsPage() {
   useEffect(() => {
     if (user) return
     launcher.get('/public-services').then((r) => setPublicCards(r.data || [])).catch(() => setPublicCards([]))
+    launcher.get('/public-live').then((r) => setPublicLive(r.data || [])).catch(() => setPublicLive([]))
   }, [user])
   // Restore a saved session.
+  // Only a refused token (401/403) is dropped; any other failure (a 502 while
+  // the backend restarts) keeps it and tries again, signed out meanwhile.
   useEffect(() => {
-    const tok = localStorage.getItem(PORTAL_TOKEN_KEY)
+    const tok = store.get(PORTAL_TOKEN_KEY)
     if (!tok) { setAuthReady(true); return }
     setPortalToken(tok)
-    launcher.get('/auth/me')
-      .then((r) => setUser(r.data))
-      .catch(() => setPortalToken(null))
-      .finally(() => setAuthReady(true))
+    let alive = true, timer = null
+    const tryMe = () => {
+      // Signed in or out by hand since: that session wins.
+      if (!alive || launcher.defaults.headers.common.Authorization !== `Bearer ${tok}`) return
+      launcher.get('/auth/me')
+        .then((r) => { if (alive) setUser(r.data) })
+        .catch((e) => {
+          const st = e?.response?.status
+          if (st === 401 || st === 403) setPortalToken(null)
+          else if (alive) timer = setTimeout(tryMe, 5000)
+        })
+        .finally(() => { if (alive) setAuthReady(true) })
+    }
+    tryMe()
+    return () => { alive = false; clearTimeout(timer) }
   }, [])
 
+  // Each refresh takes a number; only the latest one's answers are applied, so
+  // a slow, older response cannot overwrite a newer one (or a sign-out).
+  const refreshSeq = useRef(0)
   async function refresh() {
+    const seq = ++refreshSeq.current
+    const live = () => seq === refreshSeq.current
     try {
-      setProjects((await launcher.get('/services')).data)   // auth-aware, flagged list
+      const svcs = (await launcher.get('/services')).data   // auth-aware, flagged list
+      if (!live()) return
+      setProjects(svcs)
       // Every role: the links card and its appearance come from one call, because
       // /admin/home (which holds the appearance) is admin-only.
-      try { setLinks((await launcher.get('/links')).data) } catch { /* optional */ }
-      try { setGroups((await launcher.get('/service-groups')).data || []) } catch { /* optional */ }
-      if (isManager) { try { setHomeCfg((await launcher.get('/admin/home')).data) } catch { /* optional */ } }
+      try { const d = (await launcher.get('/links')).data; if (live()) setLinks(d) } catch { /* optional */ }
+      try { const d = (await launcher.get('/service-groups')).data; if (live()) setGroups(d || []) } catch { /* optional */ }
+      if (isManager) { try { const d = (await launcher.get('/admin/home')).data; if (live()) setHomeCfg(d) } catch { /* optional */ } }
     } catch {
-      setProjects([])
+      if (live()) setProjects([])
     }
   }
   useEffect(() => { if (user) refresh() }, [user])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -324,10 +346,63 @@ export default function ProjectsPage() {
     launcher.get('/admin/home').then((r) => setHomeCfg(r.data)).catch(() => {})
   }, [isManager])
 
+  // Signing out forgets everything the account loaded, so the next person on a
+  // shared PC does not see the last one's cards; any refresh in flight is dropped.
+  function signedOut() {
+    setPortalToken(null)
+    refreshSeq.current++
+    setUser(null); setProjects(null); setGroups([]); setHomeCfg(null); setLinks(null); setSettingsTab('me')
+  }
   function logout() {
     launcher.post('/auth/logout').catch(() => {})   // best-effort
-    setPortalToken(null); setUser(null)
+    signedOut()
   }
+
+  // ── the session ending under us ──
+  // A request refused for want of a session (api.js), or the portal's own
+  // sign-in page loading inside a service's frame (that frame's request was
+  // refused): the account is gone, so the whole cover drops to signed out —
+  // not the old account's sidebar, profile and manage mode with nothing behind them.
+  useEffect(() => {
+    const out = () => signedOut()
+    const onMsg = (e) => { if (e.origin === window.location.origin && e.data?.type === 'lilak-portal-signed-out') out() }
+    // A password change ends every session and hands this one a new token.
+    const onToken = (e) => { if (e.detail) setPortalToken(e.detail) }
+    window.addEventListener('portal:signed-out', out)
+    window.addEventListener('portal:token', onToken)
+    window.addEventListener('message', onMsg)
+    return () => {
+      window.removeEventListener('portal:signed-out', out)
+      window.removeEventListener('portal:token', onToken)
+      window.removeEventListener('message', onMsg)
+    }
+  }, [])
+  // Kept fresh while in use: a new token now and every half hour, and when the
+  // tab comes back after a while — so a day's work does not end at the 24-hour
+  // mark. A session left alone still runs out.
+  useEffect(() => {
+    if (!user) return
+    let last = 0
+    const renew = () => {
+      if (Date.now() - last < 10 * 60 * 1000) return
+      last = Date.now()
+      launcher.post('/auth/refresh').then((r) => r.data?.access_token && setPortalToken(r.data.access_token)).catch(() => {})
+    }
+    renew()
+    const timer = setInterval(renew, 30 * 60 * 1000)
+    const onShow = () => { if (document.visibilityState === 'visible') renew() }
+    document.addEventListener('visibilitychange', onShow)
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onShow) }
+  }, [user?.id])
+  // This page inside another portal page's frame (a service whose request was
+  // refused, sent here to sign in): tell the outer cover, and draw nothing of
+  // our own — a second sidebar inside the first is what that looked like.
+  const framed = typeof window !== 'undefined' && window.self !== window.top
+  useEffect(() => {
+    if (framed && authReady && !user) {
+      try { window.parent.postMessage({ type: 'lilak-portal-signed-out' }, window.location.origin) } catch { /* cross-origin parent */ }
+    }
+  }, [framed, authReady, user])
 
   // ── the cards ──
   // Builtins with the manager's saved label / icon / colour overrides applied.
@@ -376,15 +451,21 @@ export default function ProjectsPage() {
     try { await launcher.put('/admin/home-order', { keys }); await refresh() }
     catch { await refresh() }
   }
+  // A band draws its cards in its group's member order: a move inside a group
+  // is that list, rewritten.
+  async function setMembers(gid, members) {
+    try { await launcher.put(`/admin/service-groups/${gid}`, { members }); await refresh() }
+    catch { await refresh() }
+  }
   async function createGroup(name, members) {
     try {
-      const body = { name: name || (lang === 'ko' ? `그룹 ${groups.length + 1}` : `Group ${groups.length + 1}`) }
+      const body = { name: name || t('p_group_n', groups.filter((g) => !g.loose).length + 1) }
       const { data } = await launcher.post('/admin/service-groups', body)
       // A group made WITH members (the System band materialising, say) needs a
       // second call: create takes the name, membership is a patch.
       if (members?.length && data?.id) await launcher.put(`/admin/service-groups/${data.id}`, { members })
       await refresh()
-    } catch (e) { console.warn(errText(e, 'failed')) }
+    } catch (e) { notify(errText(e, t('p_failed')), 'bad') }
   }
 
   // Live mode: only live-capable services (no builtins, nothing hidden, nothing
@@ -394,6 +475,9 @@ export default function ProjectsPage() {
     .filter((c) => c && c.live && !c.builtin && !c.hidden && !c.live_hidden && !memberOf[cardKey(c)]?.hidden)
 
   if (!authReady) return null
+  if (framed && !user) {
+    return <p style={{ padding: 24, color: 'var(--text-muted)' }}>{t('p_signed_out_framed')}</p>
+  }
 
   // Signed out: the bar lists the services a manager marked PUBLIC (an untouched
   // portal has none, so the bar is simply empty) and the panel is the sign-in.
@@ -401,7 +485,7 @@ export default function ProjectsPage() {
     return (
       <SidebarPortal
         user={null} isManager={false} cards={publicCards} iconFor={iconFor}
-        groups={[]} liveCards={[]} links={[]} fullOrder={publicCards.map(cardKey)} info={portalInfo}
+        groups={[]} liveCards={publicLive} links={[]} fullOrder={publicCards.map(cardKey)} info={portalInfo}
         authCard={<AuthCard t={t} info={portalInfo} needsSetup={!!portalInfo?.needs_setup}
           onAuthed={(u) => setUser(u)} />}
       />
@@ -418,7 +502,7 @@ export default function ProjectsPage() {
       groups={groups} liveCards={liveCards} links={links?.links || []}
       fullOrder={fullOrder}
       onLogout={logout} onRefresh={refresh}
-      onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup}
+      onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup} onSetMembers={setMembers}
       settingsTab={settingsTab} onSettingsTab={setSettingsTab} info={portalInfo}
     />
   )

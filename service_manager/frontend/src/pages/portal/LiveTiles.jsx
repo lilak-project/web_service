@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import { serviceApi } from '../../api'
+import { serviceApi, store, PORTAL_TOKEN_KEY } from '../../api'
 
 /**
  * LiveTiles — the compact live numbers a service shows on its Home card in
@@ -27,7 +27,7 @@ const TONE = {
 }
 
 function authHeaders() {
-  const t = localStorage.getItem('lilak_portal_token')
+  const t = store.get(PORTAL_TOKEN_KEY)
   return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
@@ -52,7 +52,11 @@ export function useLive(service) {
 
     async function fetchOnce() {
       try {
-        if (service.multi_project) {
+        if (service.public_live) {
+          // Signed out: the portal asks the service on the visitor's behalf.
+          const r = await axios.get(`/launcher/api/public-live/${name}`, { timeout: 8000 })
+          if (alive) { const d = { items: r.data?.items || [], note: r.data?.note, layout: r.data?.layout, at: Date.now() }; CACHE.set(name, { data: d }); setData(d); setErr('') }
+        } else if (service.multi_project) {
           // Only projects that are RUNNING: asking a stopped one through the proxy
           // would start it, and a stopped logbook has nothing live to say anyway.
           // The list is re-read every poll so a project started meanwhile appears.
@@ -80,7 +84,7 @@ export function useLive(service) {
     fetchOnce()
     return () => { alive = false; clearTimeout(timer) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [service?.name, service?.multi_project, service?.builtin])
+  }, [service?.name, service?.multi_project, service?.builtin, service?.public_live])
 
   return { data, err, unsupported }
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Icon, copyText } from 'lilak-ui'
-import { launcher } from '../../api'
+import { launcher, errText, store, PORTAL_TOKEN_KEY } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { Panel, Field, FieldActions, Pill, fieldMuted } from './Field'
 import { notify } from './settingsMsg'
@@ -26,8 +26,8 @@ export default function ServiceSingle({ service, canManage, manage = false, onRe
 
   function enter() {
     // SSO handoff (same origin): hand the proxied service the portal token.
-    const tok = localStorage.getItem('lilak_portal_token')
-    if (tok) localStorage.setItem('elog_token', tok)
+    const tok = store.get(PORTAL_TOKEN_KEY)
+    if (tok) store.set('elog_token', tok)
     window.open(`/p/${svc}/`, '_blank')
   }
   async function start() {
@@ -39,6 +39,7 @@ export default function ServiceSingle({ service, canManage, manage = false, onRe
   async function stop() {
     setBusy(true)
     try { await launcher.post(`/projects/${svc}/stop`); onChanged?.() }
+    catch (e) { setErr(errText(e, t('p_failed'))) }
     finally { setBusy(false) }
   }
   async function request() {

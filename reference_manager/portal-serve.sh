@@ -29,8 +29,8 @@ if [ -x "$VENV_PY" ] && [ -f "$ROOT_DIR/backend/main.py" ]; then
   cd "$ROOT_DIR/backend"
   REFERENCE_DATA_DIR="${PORTAL_PROJECT_DATA:-$ROOT_DIR/data}" \
   REFERENCE_DIST_DIR="$ROOT_DIR/dist" \
-    exec "$VENV_PY" -m uvicorn main:app --host 0.0.0.0 --port "$PORT"
+    exec "$VENV_PY" -m uvicorn main:app --host 127.0.0.1 --port "$PORT"
 fi
 
 echo "[portal-serve] backend venv not found; falling back to static dist/" >&2
-exec python3 -m http.server "$PORT" --bind 0.0.0.0 --directory "$ROOT_DIR/dist"
+exec python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$ROOT_DIR/dist"

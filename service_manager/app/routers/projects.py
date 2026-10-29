@@ -67,6 +67,7 @@ def raw_service(name: str) -> dict:
         # Taken off this portal's cover in manage mode (data/_portal/home.json).
         "hidden": name in _hidden_services(),
         "live_hidden": name in _live_hidden(),
+        "live_public": name in _live_public(),
         "version": gitinfo.service_version((manifest.get("start") or {}).get("cwd")),  # {sha,date}|null
     }
 
@@ -74,6 +75,11 @@ def raw_service(name: str) -> dict:
 def _hidden_services() -> set[str]:
     from .home import hidden_services
     return hidden_services()
+
+
+def _live_public() -> set[str]:
+    from .home import live_public
+    return live_public()
 
 
 def _live_hidden() -> set[str]:
@@ -88,10 +94,16 @@ def list_raw_services() -> list[dict]:
 
 
 @router.get("/api/projects")
-def api_projects(user=Depends(require_portal_user)):
+def api_projects(user=Depends(require_portal_user), db: Session = Depends(get_db)):
     # Which project a card opens straight away is each account's own choice
     # (prefs.entry), falling back to the service's default entrance.
-    return prefs.with_entries(user, list_raw_services())
+    rows = list_raw_services()
+    if not permissions.is_admin(user):
+        # Only what /api/services shows this user — not hidden or admin-only ones.
+        from .services import list_services
+        seen = {s["name"] for s in list_services(user, db)}
+        rows = [r for r in rows if r["name"] in seen]
+    return prefs.with_entries(user, rows)
 
 
 @router.get("/api/public-services")
@@ -111,6 +123,75 @@ def api_public_services(db: Session = Depends(get_db)):
     return [{k: s.get(k) for k in ("name", "label", "icon", "color", "kind",
                                    "multi_project", "open", "order")}
             for s in list_raw_services() if s["name"] in public]
+
+
+# ── the live wall for visitors (signed out) ───────────────────────────────────
+_PUBLIC_LIVE_CACHE: dict = {}
+
+
+def _public_live_names() -> list[dict]:
+    from .home import hidden_services
+    out = []
+    for s in list_raw_services():
+        if s.get("live") and s.get("live_public") and not s.get("live_hidden") and s["name"] not in hidden_services():
+            out.append(s)
+    return out
+
+
+@router.get("/api/public-live")
+def api_public_live():
+    """The cards a visitor's live wall shows: only services a manager opened
+    to the signed-out wall (Manage → the service → Live wall). Name and mark,
+    nothing about who may enter."""
+    return [{k: s.get(k) for k in ("name", "label", "icon", "color", "multi_project")} | {"live": True, "public_live": True}
+            for s in _public_live_names()]
+
+
+@router.get("/api/public-live/{name}")
+def api_public_live_one(name: str):
+    """That service's live numbers, fetched by the portal on the visitor's
+    behalf — the same `/api/live` answer a signed-in wall gets, for what is
+    already running (nothing is started for an anonymous viewer). Cached a
+    few seconds so a wall left open on many screens costs one request."""
+    import json as _json
+    import time
+    import urllib.request
+    if name not in {s["name"] for s in _public_live_names()}:
+        raise HTTPException(404, "공개된 라이브가 아닙니다.")
+    hit = _PUBLIC_LIVE_CACHE.get(name)
+    if hit and time.time() - hit[0] < 3:
+        return hit[1]
+    manifest = registry.read_manifest(name)
+    adapter = get_adapter(manifest)
+
+    def ask(base, headers=None):
+        req = urllib.request.Request(f"{base.rstrip('/')}/api/live", headers=headers or {})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return _json.loads(r.read())
+    items, note, layout = [], None, None
+    if (manifest.get("capabilities") or {}).get("multi_project"):
+        from .. import project_runtime as pr
+        for p in pr.list_projects(name):
+            if not p.get("port"):
+                continue
+            try:
+                d = ask(f"http://127.0.0.1:{p['port']}")
+                items += [{**it, "label": f"{p['name']} · {it.get('label', '')}"} for it in d.get("items") or []]
+            except Exception:                    # noqa: BLE001 — a project with nothing to say
+                pass
+    else:
+        if not adapter.status(name, manifest).get("running"):
+            out = {"items": [], "note": None}
+            _PUBLIC_LIVE_CACHE[name] = (time.time(), out)
+            return out
+        try:
+            d = ask(adapter.target_base(name, manifest), adapter.proxy_headers(manifest))
+            items, note, layout = d.get("items") or [], d.get("note"), d.get("layout")
+        except Exception:                        # noqa: BLE001
+            pass
+    out = {"items": items, "note": note, "layout": layout}
+    _PUBLIC_LIVE_CACHE[name] = (time.time(), out)
+    return out
 
 
 class NewProject(BaseModel):
@@ -238,7 +319,7 @@ async def api_import(file: UploadFile = File(...), name: str | None = Form(None)
     root = sdir.resolve()
     for member in zf.namelist():
         dest = (sdir / member).resolve()
-        if not str(dest).startswith(str(root)):     # zip-slip guard
+        if not dest.is_relative_to(root):            # zip-slip guard
             continue
         if member.endswith("/"):
             dest.mkdir(parents=True, exist_ok=True)

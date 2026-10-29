@@ -86,7 +86,7 @@ def _scope(svc: str, authorization: Optional[str]) -> tuple:
 def _require_sync_token(svc: str, authorization: Optional[str], proj: str) -> None:
     """The token must open this project. One it does not open is answered as
     absent, so a project's token cannot probe for the others."""
-    if not sync.allows(_scope(svc, authorization), proj):
+    if (proj and not registry.valid_name(proj)) or not sync.allows(_scope(svc, authorization), proj):
         raise HTTPException(404, f"'{proj}' 없음")
 
 
@@ -143,7 +143,7 @@ def _writable(svc: str, proj: str, rel: str, authorization: Optional[str]):
         raise HTTPException(400, "이 파일은 동기화로 쓸 수 없습니다.")
     d = pr.project_dir(svc, proj).resolve()
     p = (d / rel).resolve()
-    if not str(p).startswith(str(d) + os.sep):
+    if p == d or not p.is_relative_to(d):
         raise HTTPException(400, "프로젝트 밖의 경로입니다.")
     return p
 
@@ -216,6 +216,30 @@ def sync_grants(svc: str, authorization: Optional[str] = Header(default=None),
     return {"service": svc, "grants": out}
 
 
+def _has_files(svc: str, proj: str) -> bool:
+    d = pr.project_dir(svc, proj)
+    return d.is_dir() and any(pr._syncable_files(d))
+
+
+@router.put("/api/sync/{svc}/projects/{proj}/seed")
+async def sync_seed(svc: str, proj: str, request: Request, authorization: Optional[str] = Header(default=None)):
+    """A sub that already holds data, linked to a main that holds none: the
+    sub's whole project becomes main's. Only into a project that is missing or
+    empty here — it can start a main, never overwrite one."""
+    _require_sync_token(svc, authorization, proj)
+    if not registry.valid_name(proj):
+        raise HTTPException(400, "프로젝트 이름이 올바르지 않습니다.")
+    raw = await request.body()
+    with _write_lock:
+        if _has_files(svc, proj):
+            raise HTTPException(409, "main 의 이 프로젝트에 이미 데이터가 있어 올리지 않습니다.")
+        try:
+            pr.import_project(svc, raw, proj, replace=True)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
 @router.get("/api/sync/{svc}/projects/{proj}/export")
 def sync_export(svc: str, proj: str, authorization: Optional[str] = Header(default=None)):
     _require_sync_token(svc, authorization, proj)
@@ -279,6 +303,9 @@ def _put(svc: str, body: SyncCfg, proj: str = "") -> dict:
         url = ((body.main_url or "").strip() or was.get("main_url") or "").rstrip("/")
         if not url.startswith(("http://", "https://")):
             raise HTTPException(400, "main 주소는 http(s):// 로 시작해야 합니다.")
+        if was.get("main_url") != url:          # another main: its first sync again
+            for k in ("settled", "last_sync", "last_error"):
+                cfg.pop(k, None)
         cfg["main_url"] = url
         cfg["token"] = (body.token or "").strip() or was.get("token") or ""
         cfg["read_only"] = bool(body.read_only)
@@ -409,6 +436,7 @@ class PairAsk(BaseModel):             # sub → main, no credentials
     from_url: str = ""
     from_name: str = ""
     by: str = ""
+    batch: str = ""                   # one "every service" request from one server
 
 
 @router.post("/api/sync/{svc}/requests", status_code=201)
@@ -433,7 +461,7 @@ def pair_ask(svc: str, body: PairAsk):
     clip = lambda v, n=200: str(v or "")[:n]
     row = {"id": uuid.uuid4().hex[:12], "claim": claim, "status": "pending", "at": now,
            "project": proj, "two_way": bool(body.two_way), "from_url": clip(body.from_url),
-           "from_name": clip(body.from_name, 80), "by": clip(body.by, 80)}
+           "from_name": clip(body.from_name, 80), "by": clip(body.by, 80), "batch": clip(body.batch, 40)}
     sync.write_list(svc, "sync-requests.json", rows + [row])
     return {"id": row["id"], "claim": claim, "pin": sync.pin(claim)}
 
@@ -473,6 +501,10 @@ def pair_decide(svc: str, rid: str, body: PairDecide, _: models.User = Depends(r
     """Approve: this side becomes main for that link (the project's own, or the
     service's) if it was not already, and the token waits for the sender to
     collect it. Reject: the sender is told so."""
+    return _decide(svc, rid, body)
+
+
+def _decide(svc: str, rid: str, body: PairDecide) -> dict:
     rows = sync.read_list(svc, "sync-requests.json")
     r = next((x for x in rows if x.get("id") == rid), None)
     if not r or r.get("status") != "pending":
@@ -505,6 +537,10 @@ class PairRequest(BaseModel):         # admin on the sub
 def pair_request(svc: str, body: PairRequest, user: models.User = Depends(require_portal_admin)):
     """Ask main, at an address, to let this server follow it. Waits for the
     approval in the background (see _check_pending)."""
+    return _ask(svc, body, user.username)
+
+
+def _ask(svc: str, body: PairRequest, by: str, batch: str = "") -> dict:
     import json as _json
     import socket
     url = body.url.strip().rstrip("/")
@@ -514,7 +550,7 @@ def pair_request(svc: str, body: PairRequest, user: models.User = Depends(requir
     if proj and not registry.valid_name(proj):
         raise HTTPException(400, "프로젝트 이름이 올바르지 않습니다.")
     ask = _json.dumps({"project": proj, "two_way": body.two_way, "from_url": config.BASE_URL,
-                       "from_name": socket.gethostname(), "by": user.username}).encode()
+                       "from_name": socket.gethostname(), "by": by, "batch": batch}).encode()
     try:
         req = urllib.request.Request(f"{url}/api/sync/{svc}/requests", data=ask, method="POST",
                                      headers={"Content-Type": "application/json", **UA})
@@ -531,7 +567,8 @@ def pair_request(svc: str, body: PairRequest, user: models.User = Depends(requir
     rows = [p for p in sync.read_list(svc, "sync-pending.json")
             if not (p["url"] == url and p["project"] == proj)]
     row = {"id": got["id"], "claim": got["claim"], "pin": got["pin"], "url": url, "project": proj,
-           "two_way": body.two_way, "live": body.live, "status": "pending"}
+           "two_way": body.two_way, "live": body.live, "status": "pending",
+           "bpin": sync.pin(batch) if batch else ""}
     sync.write_list(svc, "sync-pending.json", rows + [row])
     return {k: row[k] for k in ("id", "pin", "url", "project", "status")}
 
@@ -616,7 +653,7 @@ class _Moved(Exception):
     """The file changed while we were deciding — the next round sees it."""
 
 
-def _two_way_project(job_id: str, base: str, token: str, svc: str, proj: str) -> int:
+def _two_way_project(job_id: str, base: str, token: str, svc: str, proj: str, fresh: bool = False) -> int:
     """Bring this server's copy of ONE project and main's to the same files:
     what changed on one side goes to the other, what changed on both is merged.
     Returns the number of files that moved.
@@ -641,8 +678,12 @@ def _two_way_project(job_id: str, base: str, token: str, svc: str, proj: str) ->
     except FileNotFoundError:
         mine = {}
     if any(r.endswith(_DB_EXT) for r in list(mine) + list(theirs)):
+        if fresh and mine and not theirs:
+            return _seed(job_id, base, token, svc, proj)
         _log(job_id, f"  ! {proj}: 데이터베이스 파일이 있어 양방향으로 합칠 수 없습니다 — 건너뜀")
         return 0
+    if fresh and mine and theirs:
+        _backup(job_id, svc, proj)
 
     d = pr.project_dir(svc, proj)
     d.mkdir(parents=True, exist_ok=True)
@@ -652,7 +693,14 @@ def _two_way_project(job_id: str, base: str, token: str, svc: str, proj: str) ->
     except Exception:                            # noqa: BLE001 — first round
         agreed = {}
     sha = lambda b: hashlib.sha256(b).hexdigest()
-    local = lambda rel: (d / rel)
+
+    def inside(root, rel):
+        # File names come from the other server: never let one leave the folder.
+        p = (root / rel).resolve()
+        if p == root.resolve() or not p.is_relative_to(root.resolve()):
+            raise HTTPException(400, f"프로젝트 밖의 경로입니다: {rel}")
+        return p
+    local = lambda rel: inside(d, rel)
 
     def put_local(rel, raw, expect):
         p = local(rel)
@@ -724,27 +772,62 @@ def _two_way_project(job_id: str, base: str, token: str, svc: str, proj: str) ->
         if sync_merge.keeps_base(rel) and agreed.get(rel) != s_ and local(rel).is_file():
             raw = pr.file_bytes(local(rel))
             if sha(raw) == s_:
-                f = bdir / "files" / rel
+                f = inside(bdir / "files", rel)
                 f.parent.mkdir(parents=True, exist_ok=True)
                 f.write_bytes(raw)
     for rel in set(agreed) - set(now):
-        (bdir / "files" / rel).unlink(missing_ok=True)
+        inside(bdir / "files", rel).unlink(missing_ok=True)
     bdir.mkdir(parents=True, exist_ok=True)
-    (bdir / "manifest.json").write_text(_json.dumps(now, ensure_ascii=False), encoding="utf-8")
+    registry._atomic_write_text((bdir / "manifest.json"), _json.dumps(now, ensure_ascii=False))
     _log(job_id, f"  ✓ {proj} — " + (f"{moved}개 파일 주고받음" if moved else "변경 없음"))
     return moved
 
 
-def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> int:
+def _backup(job_id: str, svc: str, proj: str) -> None:
+    """Before a link's first sync touches a project that already holds data,
+    keep a copy of it: data/_backups/sync-<svc>-<proj>-<time>.zip."""
+    from datetime import datetime
+    if not _has_files(svc, proj):
+        return
+    out = config.DATA_ROOT / "_backups" / f"sync-{svc}-{proj}-{datetime.now():%Y%m%d-%H%M%S}.zip"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(pr.export_project(svc, proj))
+    _log(job_id, f"  · 처음 맞추기 전에 이쪽 사본을 남김: _backups/{out.name}")
+
+
+def _seed(job_id: str, base: str, token: str, svc: str, proj: str) -> int:
+    """main has nothing for this project: send ours whole (main's /seed)."""
+    raw = pr.export_project(svc, proj)
+    _send("PUT", f"{base}/api/sync/{svc}/projects/{proj}/seed", token, raw, timeout=600)
+    _log(job_id, f"  ↑ {proj} — main 이 비어 있어 이쪽 데이터를 올림 ({len(raw) // 1024} KB)")
+    return len(raw)
+
+
+def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str, fresh: bool = False) -> int:
     """Bring ONE project in line with main, transferring only what differs.
     Returns the bytes moved. Compares main's manifest against a manifest of the
     local copy built the exact same way, so identical files cost nothing."""
     import json as _json
-    remote = _json.loads(_get(f"{base}/api/sync/{svc}/projects/{proj}/manifest", token))["files"]
+    try:
+        remote = _json.loads(_get(f"{base}/api/sync/{svc}/projects/{proj}/manifest", token))["files"]
+    except urllib.error.HTTPError as e:
+        if e.code != 404 or not fresh:
+            raise
+        remote = None                            # main has no such project
     try:
         localm = pr.project_manifest(svc, proj)["files"]
     except FileNotFoundError:
         localm = {}                              # not here yet → everything is new
+    # A link's first sync never costs this server its data: an empty main is
+    # given ours, and a main with data of its own replaces ours only after a
+    # copy is kept.
+    if fresh and localm and not remote:
+        return _seed(job_id, base, token, svc, proj)
+    if remote is None and not localm:
+        _log(job_id, f"  · {proj} 양쪽 다 비어 있음")
+        return 0
+    if remote is None:
+        raise RuntimeError("main 에 이 프로젝트가 없습니다")
 
     changed = [p for p, m in remote.items()
                if localm.get(p, {}).get("sha256") != m["sha256"]]
@@ -752,6 +835,8 @@ def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> in
     if not changed and not stale:
         _log(job_id, f"  · {proj} 변경 없음")
         return 0
+    if fresh and (stale or any(p in localm for p in changed)):
+        _backup(job_id, svc, proj)
 
     d = pr.project_dir(svc, proj)
     # A database has to be released before it is replaced. A service that keeps
@@ -767,7 +852,7 @@ def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> in
         raw = _get(f"{base}/api/sync/{svc}/projects/{proj}/file?path={urllib.parse.quote(rel)}",
                    token, timeout=600)
         dest = (d / rel).resolve()
-        if not str(dest).startswith(str(d.resolve())):
+        if dest == d.resolve() or not dest.is_relative_to(d.resolve()):
             continue                             # path-traversal guard
         dest.parent.mkdir(parents=True, exist_ok=True)
         tmp = dest.with_name(dest.name + ".sync-tmp")
@@ -776,7 +861,7 @@ def _pull_project(job_id: str, base: str, token: str, svc: str, proj: str) -> in
         moved += len(raw)
     for rel in stale:                            # file removed on main → remove here
         p = (d / rel).resolve()
-        if str(p).startswith(str(d.resolve())) and p.is_file():
+        if p.is_relative_to(d.resolve()) and p.is_file():
             p.unlink(missing_ok=True)
     # The snapshot folds the WAL in; leftover siblings would resurrect old pages.
     for w in list(d.rglob("*-wal")) + list(d.rglob("*-shm")):
@@ -820,7 +905,12 @@ def _run_pull(job_id: str, svc: str, only: Optional[dict] = None, key: str = "")
     _log(job_id, f"· main 프로젝트 {len(names)}개: {', '.join(names) or '(없음)'}")
     local = {p["name"] for p in pr.list_projects(svc)} - (set() if key else own)
     two_way = bool(cfg.get("two_way"))
-    if two_way and only is None and not key:
+    # The link's first sync: this server's data may start an empty main.
+    # (`settled` is written only once a round went through whole — a first try
+    # that failed, say main lacked the service, is still a first sync.)
+    # A link from before this flag that synced cleanly counts as settled.
+    fresh = only is None and not (cfg.get("settled") or (cfg.get("last_sync") and not cfg.get("last_error")))
+    if (two_way or fresh) and only is None and not key:
         names = sorted(set(names) | local)     # a project made here goes to main too
     picked = set(cfg.get("projects") or [])
     if picked:                                 # the operator chose which ones travel
@@ -829,9 +919,9 @@ def _run_pull(job_id: str, svc: str, only: Optional[dict] = None, key: str = "")
     for n in names:
         try:
             if two_way:
-                moved += _two_way_project(job_id, base, token, svc, n)
+                moved += _two_way_project(job_id, base, token, svc, n, fresh)
             else:
-                moved += _pull_project(job_id, base, token, svc, n)
+                moved += _pull_project(job_id, base, token, svc, n, fresh)
             ok += 1
             if only is not None and only[n] is not None:
                 _seen.setdefault(svc, {})[n] = only[n]
@@ -848,6 +938,8 @@ def _run_pull(job_id: str, svc: str, only: Optional[dict] = None, key: str = "")
     if cfg.get("role"):                         # not turned off meanwhile
         cfg["last_sync"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
         cfg["last_error"] = None if ok == len(names) else f"{len(names) - ok}개 실패"
+        if ok == len(names) and only is None:
+            cfg["settled"] = True
         sync.write(svc, cfg, key)
     _log(job_id, f"✓ 동기화 완료 — {ok}/{len(names)} 프로젝트, "
                  + (f"파일 {moved}개" if two_way else f"전송 {moved // 1024} KB"))
@@ -1063,3 +1155,117 @@ def sync_job(svc: str, job_id: str, _: models.User = Depends(require_portal_admi
         if not job:
             raise HTTPException(404, "job을 찾을 수 없습니다.")
         return {"status": job["status"], "error": job["error"], "log": job["log"][-60:]}
+
+
+# ── every service at once ─────────────────────────────────────────────────────
+# The per-service panel still does one service (or one project); these do the
+# same things for every service with projects, from one place (Settings → Sync).
+def _services() -> list[str]:
+    return [n for n in registry.list_service_names()
+            if registry.manifest_path(n).exists() and pr.list_projects(n)]
+
+
+def _holds_db(svc: str) -> bool:
+    """Two-way cannot merge a database, so such a service is asked one-way."""
+    root = pr.projects_root(svc)
+    return root.is_dir() and any(f.suffix in _DB_EXT for f in root.rglob("*") if f.is_file())
+
+
+def _link_row(svc: str, key: str = "") -> dict:
+    cfg = sync.read(svc, key)
+    return {"project": key, "role": cfg.get("role") or "", "main_url": cfg.get("main_url"),
+            "two_way": bool(cfg.get("two_way")), "accept_push": bool(cfg.get("accept_push")),
+            "live": bool(cfg.get("live")), "last_sync": cfg.get("last_sync"),
+            "last_error": cfg.get("last_error"), "busy": f"{svc}/{key}" in _busy}
+
+
+@router.get("/api/admin/sync-all")
+def all_status(_: models.User = Depends(require_portal_admin)):
+    out = []
+    for svc in _services():
+        pend = sync.read_list(svc, "sync-pending.json")
+        if any(p.get("status") == "pending" for p in pend):
+            pend = _check_pending(svc)           # ask main how it went
+        out.append({"svc": svc, "db": _holds_db(svc), **_link_row(svc),
+                    "links": [_link_row(svc, p) for p in sync.own_links(svc)],
+                    "pending": [p for p in pend if p.get("status") in ("pending", "failed")],
+                    "asked": sum(1 for r in sync.read_list(svc, "sync-requests.json")
+                                 if r.get("status") == "pending")})
+    return out
+
+
+class AllRequest(BaseModel):
+    url: str
+    live: bool = True
+    services: list[str] = []          # [] = every service not linked yet
+
+
+@router.post("/api/admin/sync-all/request")
+def all_request(body: AllRequest, user: models.User = Depends(require_portal_admin)):
+    """Ask one main for every service at once. One batch, one pin: main's admin
+    approves them together. Two-way wherever the data allows it."""
+    import secrets as _secrets
+    batch = _secrets.token_urlsafe(9)
+    want = set(body.services)
+    out = []
+    for svc in _services():
+        if (want and svc not in want) or (not want and sync.role(svc)):
+            continue
+        try:
+            r = _ask(svc, PairRequest(url=body.url, two_way=not _holds_db(svc), live=body.live),
+                     user.username, batch)
+            out.append({"svc": svc, "ok": True, "two_way": not _holds_db(svc)})
+        except HTTPException as e:
+            out.append({"svc": svc, "ok": False, "error": str(e.detail)})
+    return {"pin": sync.pin(batch), "results": out}
+
+
+@router.get("/api/admin/sync-all/requests")
+def all_asked(_: models.User = Depends(require_portal_admin)):
+    """What other servers asked of this one, one row per batch (or per lone request)."""
+    groups: dict = {}
+    for svc in registry.list_service_names():
+        for r in sync.read_list(svc, "sync-requests.json"):
+            if r.get("status") != "pending":
+                continue
+            k = r.get("batch") or f"{svc}:{r['id']}"
+            g = groups.setdefault(k, {"batch": k, "pin": sync.pin(r.get("batch") or r.get("claim", "")),
+                                      "from_url": r.get("from_url"), "from_name": r.get("from_name"),
+                                      "by": r.get("by"), "at": r.get("at"), "items": []})
+            g["items"].append({"svc": svc, "id": r["id"], "project": r.get("project") or "",
+                               "two_way": bool(r.get("two_way"))})
+    return sorted(groups.values(), key=lambda g: -(g["at"] or 0))
+
+
+class AllDecide(BaseModel):
+    batch: str
+    action: str                       # approve | reject
+    accept_push: bool = True          # approve: two-way where the asker asked for it
+
+
+@router.post("/api/admin/sync-all/requests/decide")
+def all_decide(body: AllDecide, _: models.User = Depends(require_portal_admin)):
+    out = []
+    for g in all_asked(_):
+        if g["batch"] != body.batch:
+            continue
+        for it in g["items"]:
+            try:
+                _decide(it["svc"], it["id"], PairDecide(action=body.action,
+                                                        accept_push=body.accept_push and it["two_way"]))
+                out.append({"svc": it["svc"], "ok": True})
+            except HTTPException as e:
+                out.append({"svc": it["svc"], "ok": False, "error": str(e.detail)})
+    return {"results": out}
+
+
+@router.post("/api/admin/sync-all/run")
+def all_run(_: models.User = Depends(require_portal_admin)):
+    """Sync now: every sub link — each service's, and each project linked on its own."""
+    out = []
+    for svc in _services():
+        for key in [""] + sync.own_links(svc):
+            if sync.read(svc, key).get("role") != "sub":
+                continue
+            out.append({"svc": svc, "project": key, "job_id": _start_pull(svc, key=key)})
+    return {"started": out}

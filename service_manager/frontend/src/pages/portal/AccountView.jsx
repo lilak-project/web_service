@@ -6,6 +6,7 @@ import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
 import { Field, FieldActions, Panel, Row, Pill, fieldGrid, fieldInput, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
 import SystemAdmin from './SystemAdmin'
+import SyncAll from './SyncAll'
 import { notify } from './settingsMsg'
 import FeedbackView from './FeedbackView'
 import GuideView from './GuideView'
@@ -61,6 +62,7 @@ export function settingsMenu(isManager, lang) {
       ['groups', 'tree', tr("p_groups")],
       ['invites', 'key', tr("p_invite_codes")],
       ['system', 'sliders', tr("p_system")],
+      ['sync', 'link', tr("p_sa_tab")],
       ['handshake', 'plug', tr("p_handshake")],
     ] : []),
   ]
@@ -70,6 +72,12 @@ export function settingsMenu(isManager, lang) {
 // the left sidebar (the header dropdown navigates instead) on narrow screens.
 export default function AccountView({ isManager, onChanged, onAccountGone, tab: tabProp, onTab, hideMenu = false }) {
   const { lang, setLang, langs } = useLang()
+  async function signOutEverywhere() {
+    try {
+      await launcher.post('/account/sign-out-everywhere')
+      window.dispatchEvent(new Event('portal:signed-out'))   // this one went too
+    } catch (e) { notify(e?.response?.data?.detail || tr('p_failed'), 'bad') }
+  }
   // The language is the account's: saved on it, so it follows the person.
   async function changeLang(v) {
     setLang(v)
@@ -121,7 +129,12 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
         : tr("p_granted", d.service, d.project ? '/' + d.project : '')
     })
   const changePw = () => (f.cur && f.npw) && run(launcher.post('/account/password', { current_password: f.cur, new_password: f.npw }),
-    () => { setF((s) => ({ ...s, cur: '', npw: '' })); return tr("p_password_changed") })
+    (r) => {
+      setF((s) => ({ ...s, cur: '', npw: '' }))
+      // Every other session ended; this one carries on with the new token.
+      if (r.data?.access_token) window.dispatchEvent(new CustomEvent('portal:token', { detail: r.data.access_token }))
+      return tr("p_password_changed")
+    })
   // Change only the display name (shown in the portal, nptoy, community). The login
   // id (username) is intentionally left fixed.
   const changeName = () => dname.trim() !== (me.display_name || me.username || '') && run(launcher.post('/account/profile', { display_name: dname.trim() || null }),
@@ -259,6 +272,14 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
         </Field>
         <FieldActions>
           <Button variant="secondary" disabled={!f.cur || !f.npw} onClick={changePw}>{tr("p_update")}</Button>
+        </FieldActions>
+
+        {/* Every session this account has, here and on any other machine. */}
+        <Field label={tr('p_sessions')}>
+          <span style={fieldMuted}>{tr('p_sessions_hint')}</span>
+        </Field>
+        <FieldActions>
+          <Button variant="dangerSoft" onClick={signOutEverywhere}>{tr('p_sign_out_everywhere')}</Button>
         </FieldActions>
       </Panel>
 
@@ -446,6 +467,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
     : tab === 'groups' ? <GroupsAdmin users={users} services={services} onChanged={load} />
     : tab === 'invites' ? <InvitesAdmin services={services} onChanged={load} />
     : tab === 'system' ? <SystemAdmin />
+    : tab === 'sync' ? <SyncAll />
     : tab === 'handshake' ? <GuideView onChanged={onChanged} />
     : MyAccount
 

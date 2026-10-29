@@ -360,6 +360,17 @@ def update_prefs(body: PrefsBody, user: models.User = Depends(require_portal_use
     return {"prefs": prefs.get(user)}
 
 
+@router.post("/api/account/sign-out-everywhere")
+def sign_out_everywhere(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    """End every session this account has — this browser's and any other's.
+    Tokens issued before now stop working (the API and the service proxies
+    both check); signing in again starts a new one."""
+    import time
+    prefs.put(user, sessions_after=time.time())
+    db.commit()
+    return {"ok": True}
+
+
 class PasswordBody(BaseModel):
     current_password: str
     new_password: str
@@ -372,8 +383,13 @@ def change_password(body: PasswordBody, user: models.User = Depends(require_port
     if len(body.new_password or "") < config.PASSWORD_MIN_LENGTH:
         raise HTTPException(400, f"새 비밀번호는 최소 {config.PASSWORD_MIN_LENGTH}자 이상이어야 합니다.")
     user.password_hash = security.hash_password(body.new_password)
+    # Whoever had the old password may still hold a session: end them all, and
+    # hand this browser a fresh token minted after the cut.
+    import time
+    from ..deps import portal_token
+    prefs.put(user, sessions_after=time.time())
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "access_token": portal_token(user)}
 
 
 class EmailBody(BaseModel):

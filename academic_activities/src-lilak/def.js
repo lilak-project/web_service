@@ -31,7 +31,7 @@ const noteTodos = async () => {
     if (!r.ok) return []
     const [{ todos = [] }, color] = await Promise.all([r.json(), serviceColor('note')])
     return todos.filter((t) => t.due).map((t) => ({
-      id: `todo:${t.id}:${t.line}`, feed: tr('aa_todos'), color: color || '#2f6f4f',
+      id: `todo:${t.id}:${t.line}`, feed: tr('aa_todos'), color: color || '#365944',
       title: untagged(t.text), start: t.due, location: t.title, done: t.done,
       toggle: (done) => fetch(`${NOTE}/api/todos`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },

@@ -46,6 +46,13 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   // volume (data/_portal/home.json), so it is a per-server choice, not a build.
   const [hidden, setHidden] = useState(!!service.hidden)
   const [liveHidden, setLiveHidden] = useState(!!service.live_hidden)
+  // On the live wall a visitor sees before signing in — its numbers only.
+  const [livePublic, setLivePublic] = useState(!!service.live_public)
+  async function toggleLivePublic() {
+    const next = !livePublic
+    try { await launcher.put('/admin/home-service', { name: svc.name, live_public: next }); setLivePublic(next); onChanged?.() }
+    catch (e) { setMsg(e?.response?.data?.detail || tr('p_failed'), 'bad') }
+  }
   const [admins, setAdmins] = useState(null)   // { managers:[names], scoped:[{username,project}] }
   const dirty = (icon !== startIcon) || (color !== startColor) || (label !== startLabel)
 
@@ -243,6 +250,18 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
                 {liveHidden ? tr("p_show_in_live") : tr("p_hide_from_live")}
               </Button>
             </FieldActions>
+            {service.live && (<>
+              <Field label={tr('p_live_public')}>
+                {livePublic ? <Pill tone="warn">{tr('p_live_public_on')}</Pill> : <Pill>{tr('p_live_public_off')}</Pill>}
+                <span style={{ color: 'var(--text-muted)' }}>{tr('p_live_public_hint')}</span>
+              </Field>
+              <FieldActions>
+                <Button variant={livePublic ? 'warning' : 'secondary'} onClick={toggleLivePublic}>
+                  <Icon name="broadcast" size={15} />
+                  {livePublic ? tr('p_live_public_stop') : tr('p_live_public_start')}
+                </Button>
+              </FieldActions>
+            </>)}
           </>
         )}
 

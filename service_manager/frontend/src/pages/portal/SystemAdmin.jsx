@@ -29,6 +29,17 @@ export default function SystemAdmin() {
     } catch (e) { flash(e?.response?.data?.detail || String(e), 'bad') }
   }
 
+  const [restarting, setRestarting] = useState(null)   // names being restarted
+  const [sure, setSure] = useState(false)              // two-step: no window.confirm in the portal frame
+  const restart = async () => {
+    setSure(false)
+    try {
+      const r = await launcher.post('/admin/system/restart')
+      setRestarting(r.data.restarting)
+      flash(tr('p_restart_started', r.data.restarting.length), 'ok')
+    } catch (e) { flash(e?.response?.data?.detail || String(e), 'bad') }
+  }
+
   if (!d) return <div className="set-msg">{msg || '…'}</div>
 
   const slots = (Number(end) - Number(start) + 1)
@@ -63,6 +74,19 @@ export default function SystemAdmin() {
         <Field label={tr("p_what_this_is")}>
           {tr("p_each_running_session_claims_one", d.portal_port)}
         </Field>
+      </Panel>
+
+      <Panel title={tr('p_restart_all')}>
+        <Field label={tr('p_what_this_is')}>{tr('p_restart_all_hint')}</Field>
+        <FieldActions>
+          {sure
+            ? <>
+                <Button variant="primary" onClick={restart}>{tr('p_restart_confirm')}</Button>
+                <Button variant="secondary" onClick={() => setSure(false)}>{tr('p_cancel')}</Button>
+              </>
+            : <Button variant="secondary" onClick={() => setSure(true)}>{tr('p_restart_all')}</Button>}
+          {restarting && <span style={fieldMuted}>{restarting.join(', ') || tr('p_restart_none')}</span>}
+        </FieldActions>
       </Panel>
     </>
   )

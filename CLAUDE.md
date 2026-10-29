@@ -35,11 +35,15 @@ Build a single frontend (all of them alias the kit via `LILAK_UI_PATH`):
 cd service_manager/frontend && LILAK_UI_PATH=~/web_service/lilak_ui npm run build
 ```
 
-Sanity-check the backend after edits (there is no test suite):
+Run every automated check before a commit (backend security tests on a throwaway
+data root, rack store tests, sync merge self-test, kit vitest, frontend build):
 
 ```bash
-service_manager/.venv/bin/python -c "from app import main"
+scripts/test-all.sh            # --quick skips the frontend build
 ```
+
+A fixed bug leaves a test behind (`service_manager/tests/`, `lilak_portal_auth/test_store_*.py`).
+Open maintenance work is tracked in `service_manager/MAINTENANCE.md`.
 
 Docker deploy lives in `service_manager/deploy/` (multi-stage `Dockerfile`,
 `docker-compose.yml` + `.dev.yml`, `stage.sh`, `make-mac-app.sh`).
@@ -89,7 +93,11 @@ grants are copied onto matching local accounts only when an admin asks. See
 `DEPLOYMENT.md` §9. Pairing is a handshake: a sub asks by address, main's admin
 approves (matching a pin) and the token is collected once — see
 `service_manager/HANDSHAKE.md`, the one convention for every first contact
-(elog ↔ device services, service → portal registration, portal ↔ portal).
+(elog ↔ device services, service → portal registration, portal ↔ portal). A link's
+first sync never costs the sub its data: where main's project is empty or missing
+the sub's copy is sent up whole (`PUT …/seed`, refused once main holds anything),
+and anything it would replace is zipped to `data/_backups/sync-*.zip` first.
+Settings → Sync does every service at once (one request + pin, approve all, sync all).
 
 **Permissions are per-project.** `ServicePermission.project` (`""` = whole-service
 grant covering all projects). Helpers in `app/permissions.py`. Invite codes
@@ -132,12 +140,22 @@ build; the elog/asset frontends are served by their own backends through the pro
   imported first by every file that shows text) and calls `tr('key', …args)` anywhere,
   `trx()` when the sentence holds markup. One choice (`lilak-ui-lang`) covers the portal
   and every service on the origin; a rack service reloads when it changes. The choice is
-  the account's (Settings → My account), applied on sign-in.
+  the account's (Settings → My account), applied on sign-in. Adding a language = one
+  dictionary file per module. Stored values stay as stored (activity kinds are Korean
+  in the data and translated only for display).
+- **A lost session drops the whole cover to signed-out**: a 401 from the launcher API
+  (`api.js` → `portal:signed-out`), or the portal's sign-in page loading inside a
+  service frame (it posts `lilak-portal-signed-out` to the parent and draws nothing).
+  While open, the cover renews its token (`POST /api/auth/refresh`, every 30 min).
+  Signed out, the cover shows only PUBLIC services, and a live wall of the services a
+  manager opened to visitors (`live_public`, `/api/public-live[/<svc>]`, numbers only).
 - **Per-account settings live on the account** (`users.preferences_json`, `app/prefs.py`):
   `lang`, and `entry` — the project a multi-project service's card opens straight away
-  ("open directly"; each account's own, falling back to the manifest's `entry_project`). Adding a
-  language = one dictionary file per module. Stored values stay as stored (activity
-  kinds are Korean in the data and translated only for display).
+  ("open directly"; each account's own, falling back to the manifest's `entry_project`).
+- **A rack service's data routes require a signed-in caller** (`lilak_portal_auth.signed_in`,
+  `manager` for host-touching ones); `identity` alone is for whoami. The portal proxy lets
+  some bearers through unchecked (service-to-service calls), so the service must check.
+  Rack services bind `127.0.0.1` — only the portal reaches them.
 - Adding a service = write `data/<name>/service.json` + a `Service` DB row (via the
   admin Services UI, the `/api/handshake` self-registration, or directly). Set
   `capabilities.multi_project` for elog-style services.

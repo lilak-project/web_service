@@ -210,7 +210,7 @@
       "repo": "",
       "label": "note",
       "icon": "pencil-line",
-      "color": "#2f6f4f",
+      "color": "#365944",
       "needs_kit": true,
       "ko": "노트 — 노트 하나가 마크다운 파일 하나, Obsidian으로 열림 (멀티프로젝트)",
       "en": "Notes — one markdown file each, opens in Obsidian (multi-project)"

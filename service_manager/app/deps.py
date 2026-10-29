@@ -6,15 +6,19 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
-from . import config, models, security
+from . import config, models, prefs, security
 from .db import get_db
 
 
 def portal_token(user: models.User) -> str:
     """Mint a portal token carrying `portal: true` + the account profile, so a
     service can link/provision a matching local user on entry."""
+    import time
     return security.create_access_token(user.id, user.username, user.role, extra={
         "portal": True,
+        # When it was issued, to the fraction of a second: an account can end
+        # every session it has, and a token from before that no longer counts.
+        "iat": time.time(),
         "email": user.email,
         "name": user.display_name,
         # admins always carry the reserved MANAGER_COLOR (elog applies the same rule);
@@ -43,7 +47,7 @@ def require_portal_user(
     if not payload or not payload.get("portal"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="로그인이 필요합니다.")
     user = db.query(models.User).filter(models.User.id == int(payload.get("sub", 0))).first()
-    if not user or not user.is_active:
+    if not user or not user.is_active or not prefs.session_ok(user, payload):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="로그인이 필요합니다.")
     return user
 

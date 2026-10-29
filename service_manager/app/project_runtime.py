@@ -37,6 +37,9 @@ def projects_root(svc: str) -> Path:
 
 
 def project_dir(svc: str, proj: str) -> Path:
+    if not registry.valid_name(str(proj)):
+        from fastapi import HTTPException
+        raise HTTPException(404, f"project '{proj}' not found")
     return projects_root(svc) / proj
 
 
@@ -180,9 +183,9 @@ def start_project(svc: str, proj: str) -> dict:
             "PORTAL_PORT": str(config.PORTAL_PORT),
             **{k: _sub(v) for k, v in (start.get("env") or {}).items()},
         }
-        # Child output → the project dir's service.log (truncated each start) instead
+        # Child output → the project dir's service.log (kept across starts) instead
         # of DEVNULL, so a start failure/crash is diagnosable.
-        logf = open(d / "service.log", "w")
+        logf = registry.open_service_log(d / "service.log")
         try:
             proc = subprocess.Popen(argv, cwd=cwd, env=env,
                                     stdout=logf, stderr=subprocess.STDOUT)
@@ -286,7 +289,7 @@ def _syncable_files(d: Path) -> list[Path]:
     for f in sorted(d.rglob("*")):
         # service.log is what THIS host's run printed: carried to another server
         # (sync, export) it would overwrite the log of the run that is there.
-        if not f.is_file() or f.name in (".port", ".pid", "service.log"):
+        if not f.is_file() or f.name in (".port", ".pid", "service.log", "service.log.1"):
             continue
         if f.name.endswith(("-wal", "-shm")):
             continue
@@ -342,7 +345,7 @@ def project_file(svc: str, proj: str, rel: str) -> bytes:
     """One file's transfer bytes. `rel` is confined to the project dir."""
     d = project_dir(svc, proj).resolve()
     p = (d / rel).resolve()
-    if not str(p).startswith(str(d)) or not p.is_file():
+    if not p.is_relative_to(d) or not p.is_file():
         raise FileNotFoundError(rel)
     return file_bytes(p)
 
@@ -358,26 +361,32 @@ def export_project(svc: str, proj: str) -> bytes:
     return buf.getvalue()
 
 
+_IMPORT_MAX = 10 * 1024 ** 3     # ponytail: one fixed cap on the unpacked size, against zip bombs
+
+
 def import_project(svc: str, raw: bytes, name: str, replace: bool = False) -> dict:
     if not registry.valid_name(name):
         raise ValueError("이름은 영문자·숫자·_·- 만 가능합니다 (1~64자)")
     d = project_dir(svc, name)
-    if d.exists():
-        # replace=True is the mirror path (sync): the sub's copy is authoritative
-        # only until the next pull, so it is discarded wholesale. Interactive
-        # imports keep refusing, so nobody clobbers a project by accident.
-        if not replace:
-            raise FileExistsError(name)
-        shutil.rmtree(d, ignore_errors=True)
+    if d.exists() and not replace:
+        raise FileExistsError(name)
+    # The zip is checked BEFORE anything is deleted: a bad one leaves the old copy.
     try:
         zf = zipfile.ZipFile(io.BytesIO(raw))
     except zipfile.BadZipFile:
         raise ValueError("올바른 .zip 파일이 아닙니다")
+    if sum(i.file_size for i in zf.infolist()) > _IMPORT_MAX:
+        raise ValueError("압축을 풀면 너무 큽니다")
+    if d.exists():
+        # replace=True is the mirror path (sync): the sub's copy is authoritative
+        # only until the next pull, so it is discarded wholesale. Interactive
+        # imports keep refusing, so nobody clobbers a project by accident.
+        shutil.rmtree(d, ignore_errors=True)
     d.mkdir(parents=True)
     root = d.resolve()
     for member in zf.namelist():
         dest = (d / member).resolve()
-        if not str(dest).startswith(str(root)):      # zip-slip guard
+        if not dest.is_relative_to(root):            # zip-slip guard
             continue
         if member.endswith("/"):
             dest.mkdir(parents=True, exist_ok=True)

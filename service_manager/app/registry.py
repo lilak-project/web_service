@@ -31,7 +31,8 @@ from typing import Optional
 
 from . import config
 
-NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# First character alphanumeric: `_portal`, `_archive`, … are the portal's own folders.
+NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -82,7 +83,30 @@ def valid_name(name: str) -> bool:
     return bool(NAME_RE.match(name))
 
 
+LOG_ROTATE_BYTES = 5 * 1024 * 1024
+
+
+def open_service_log(path: Path):
+    """A service's log, opened to APPEND — a restart keeps what the crash before
+    it printed. Past LOG_ROTATE_BYTES it moves to <log>.1 (one older copy kept)."""
+    try:
+        if path.stat().st_size > LOG_ROTATE_BYTES:
+            os.replace(path, path.with_name(path.name + ".1"))
+    except OSError:
+        pass
+    f = open(path, "a")
+    from datetime import datetime
+    f.write(f"\n===== start {datetime.now().isoformat(timespec='seconds')} =====\n")
+    f.flush()
+    return f
+
+
 def service_dir(name: str) -> Path:
+    # Every path under the data root goes through here, so a name from a URL or
+    # another server can never walk out of it (`..`) or into `_portal`.
+    if not valid_name(str(name)):
+        from fastapi import HTTPException
+        raise HTTPException(404, f"'{name}' not found")
     return config.DATA_ROOT / name
 
 

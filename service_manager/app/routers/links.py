@@ -19,7 +19,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from .. import config, models
+from .. import config, models, registry
 from ..deps import require_portal_admin, require_portal_user
 
 router = APIRouter(tags=["portal-links"])
@@ -99,5 +99,5 @@ def set_links(body: LinksBody, _: models.User = Depends(require_portal_admin)):
         raise HTTPException(400, f"링크는 최대 {MAX_LINKS}개까지입니다.")
     links = [_clean(i) for i in body.links]
     _FILE.parent.mkdir(parents=True, exist_ok=True)
-    _FILE.write_text(json.dumps({"links": links}, ensure_ascii=False, indent=2), encoding="utf-8")
+    registry._atomic_write_text(_FILE, json.dumps({"links": links}, ensure_ascii=False, indent=2))
     return {"ok": True, "links": links}

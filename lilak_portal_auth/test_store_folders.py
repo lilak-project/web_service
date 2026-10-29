@@ -33,7 +33,7 @@ def main():
     doc.write(d)
 
     app = FastAPI()
-    app.dependency_overrides[identity] = lambda: {"email": "t@t"}
+    app.dependency_overrides[identity] = lambda: {"email": "t@t", "authenticated": True}
     mount_folders(app, doc)
     c = TestClient(app)
 
@@ -93,7 +93,7 @@ def kinds_check():
     d["settings"] = {"folderRoots": [str(acad), str(prop)]}
     doc.write(d)
     app = FastAPI()
-    app.dependency_overrides[identity] = lambda: {}
+    app.dependency_overrides[identity] = lambda: {"authenticated": True}
     mount_folders(app, doc)
     c = TestClient(app)
     assert set(c.get("/api/folders").json()["dirs"]) == {"Academic_20240101_X", "Proposal_20240101_Y"}
@@ -115,7 +115,7 @@ def files_check():
     d["settings"] = {"pdfRoots": [str(root)]}
     doc.write(d)
     app = FastAPI()
-    app.dependency_overrides[identity] = lambda: {}
+    app.dependency_overrides[identity] = lambda: {"authenticated": True}
     mount_files(app, doc, setting="pdfRoots")
     c = TestClient(app)
     assert c.get("/api/scan").json()["files"]["JAlmeid_ApJ_1983"] == ["sub/JAlmeid_ApJ_1983.pdf"]

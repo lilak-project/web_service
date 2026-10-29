@@ -34,6 +34,14 @@ def put(user: models.User, **changes) -> dict:
     return d
 
 
+def session_ok(user: models.User, payload: dict) -> bool:
+    """False for a token issued before the account ended its sessions
+    (`sessions_after`, set by 'sign out everywhere'). A token from before
+    tokens carried `iat` counts as issued at 0."""
+    after = get(user).get("sessions_after")
+    return not after or float(payload.get("iat") or 0) >= float(after)
+
+
 def with_entries(user: models.User, cards: list[dict]) -> list[dict]:
     """Each multi-project card's `entry_project` as THIS account sees it."""
     for s in cards:

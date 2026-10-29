@@ -34,7 +34,7 @@ def local_only(rel: str) -> bool:
     # The single-file era: data.json and its side copies stay where they are.
     if len(parts) == 1 and (top.startswith("data.json") or top == "data.prev.json"):
         return True
-    return rel.endswith((".sync-tmp", "service.log"))
+    return rel.endswith((".sync-tmp", "service.log", "service.log.1"))
 
 
 def keeps_base(rel: str) -> bool:

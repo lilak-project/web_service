@@ -29,7 +29,7 @@ import { clipboard } from '@milkdown/kit/plugin/clipboard'
 import { cursor } from '@milkdown/kit/plugin/cursor'
 import { trailing } from '@milkdown/kit/plugin/trailing'
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
-import { imageSchema } from '@milkdown/kit/preset/commonmark'
+import { imageSchema, linkSchema } from '@milkdown/kit/preset/commonmark'
 import { math, mathBlockSchema, mathInlineSchema } from '@milkdown/plugin-math'
 import katex from 'katex'
 import { bulletListSchema, listItemSchema } from '@milkdown/kit/preset/commonmark'
@@ -120,6 +120,7 @@ const make = (root, value, onMarkdown, fileSrc, onFiles) => Editor.make()
     ctx.get(listenerCtx).markdownUpdated((_, md) => onMarkdown(tidy(md)))
   })
   .use(commonmark)      // headings, lists, emphasis, links, code
+  .use(linkEnds)        // …with a link that ends where it ends
   .use(gfm)             // tables, strikethrough, and the task list checkboxes
   .use(history)         // ⌘Z, on top of the browser's own editing
   .use(clipboard)       // paste markdown as markdown
@@ -252,6 +253,16 @@ const imageView = $view(imageSchema.node, () => (node) => {
     },
   }
 })
+
+/** A link stops at its own edge.
+ *
+ *  ProseMirror marks are inclusive by default: the caret at either end of a
+ *  link carries the link mark, so everything typed beside one joins it — and
+ *  at the start of a line the caret takes its marks from the text AFTER it,
+ *  which is how a whole sentence written before a URL turned blue. */
+const linkEnds = linkSchema.extendSchema((prev) => (ctx) => ({
+  ...prev(ctx), inclusive: false,
+}))
 
 /** A link you can follow without leaving the text.
  *

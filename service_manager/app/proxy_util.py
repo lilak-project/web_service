@@ -17,6 +17,7 @@ service is the one case we must buffer — it's small and needs `<base>` injecti
 from __future__ import annotations
 
 import json
+from html import escape as html_escape
 from typing import Optional
 from urllib.parse import quote
 
@@ -96,10 +97,12 @@ def inject_base(html: bytes, base_path: str, service: Optional[dict] = None) -> 
     cannot know about itself because the PORTAL owns them — the colour on its
     card, its label. A service that paints its own nameplate with it matches the
     icon the user just pressed, without the colour being written down twice."""
-    extra = (f'window.__PORTAL_SERVICE__={json.dumps(service, ensure_ascii=False)};'
-             if service else '')
-    inject = (f'<base href="{base_path}/">'
-              f'<script>window.__PORTAL_BASE__="{base_path}";{extra}</script>').encode()
+    # Escaped for where each lands: an attribute, and JSON inside <script>
+    # (where "</script>" in a label would end the script early).
+    js = lambda v: json.dumps(v, ensure_ascii=False).replace("<", "\\u003c")
+    extra = f'window.__PORTAL_SERVICE__={js(service)};' if service else ''
+    inject = (f'<base href="{html_escape(base_path, quote=True)}/">'
+              f'<script>window.__PORTAL_BASE__={js(base_path)};{extra}</script>').encode()
     low = html.lower()
     i = low.find(b"<head>")
     if i != -1:
@@ -126,6 +129,9 @@ def _copy_headers(upstream: httpx.Response, *, body_rewritten: bool):
         if kl in _HOP_BY_HOP or kl in ("content-length", "content-type"):
             continue
         if kl == "set-cookie":
+            # A service may set its own cookies, never the portal's session one.
+            if v.lstrip().lower().startswith("lilak_portal_token="):
+                continue
             set_cookies.append(v)
             continue
         if body_rewritten and kl == "content-encoding":
@@ -136,7 +142,7 @@ def _copy_headers(upstream: httpx.Response, *, body_rewritten: bool):
 
 def _error_response(exc: Exception) -> Response:
     return Response(
-        content=f'{{"detail":"proxy error: {exc}"}}'.encode(),
+        content=json.dumps({"detail": f"proxy error: {type(exc).__name__}"}).encode(),
         status_code=502,
         media_type="application/json",
     )

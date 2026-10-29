@@ -609,8 +609,11 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   const [n, setN] = useState(null)
   const [f, setF] = useState(null)
   const [open, setOpen] = useState(false)     // the fold beside the title
-  const [read, setRead] = useState(false)    // the note as it reads, in place
+  // edit · read (the note as it reads, in place) · raw (the file's own text)
+  const [view, setView] = useState('edit')
+  const read = view === 'read'
   const orig = useRef(null)                  // how the tab found it — revert
+  const nums = useRef(null)                  // the raw view's line numbers
   const live = useRef({})                    // the latest, for the last save
   const titleRef = useRef(null)
   live.current = { f, n }
@@ -696,7 +699,9 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
         onCancel={() => onClosed?.(id)}
         extra={<>
           <button type="button" className={`rl-btn${read ? ' on' : ''}`}
-            onClick={() => setRead(!read)}>{read ? tr("nt_edit") : tr("nt_preview")}</button>
+            onClick={() => setView(read ? 'edit' : 'read')}>{read ? tr("nt_edit") : tr("nt_preview")}</button>
+          <button type="button" className={`rl-btn${view === 'raw' ? ' on' : ''}`}
+            onClick={() => setView(view === 'raw' ? 'edit' : 'raw')}>{view === 'raw' ? tr("nt_edit") : tr("nt_raw")}</button>
           {read ? <button type="button" className="rl-btn" onClick={onPrint}>{tr("nt_print")}</button> : null}
         </>}
         onRevert={() => setF(orig.current)} revertTitle={tr("nt_revert_hint")}
@@ -737,6 +742,19 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
             <p className="nt-meta">{f.date}</p>
             <Rendered>{f.body}</Rendered>
           </article>
+        </div>
+      ) : view === 'raw' ? (
+        /* The file as it is on disk: nothing is parsed, nothing is drawn —
+           the note's own text, to read, to copy and to fix by hand. The lines
+           are numbered, so a line does not wrap: one line is one line, which
+           is the only way a number beside it stays true. */
+        <div className="nt-rawwrap">
+          <div className="nt-rawnum" ref={nums} aria-hidden="true">
+            {f.body.split('\n').map((_, i) => <div key={i}>{i + 1}</div>)}
+          </div>
+          <textarea className="nt-raw" value={f.body} spellCheck={false} wrap="off"
+            onScroll={(e) => { if (nums.current) nums.current.scrollTop = e.target.scrollTop }}
+            onChange={(e) => setF((s) => ({ ...s, body: e.target.value }))} />
         </div>
       ) : (
         <MarkdownArea value={f.body} fileSrc={fileSrc} placeholder={tr("nt_body_placeholder")}

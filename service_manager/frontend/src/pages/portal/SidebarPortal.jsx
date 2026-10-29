@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Avatar, Icon, MANAGER_COLOR, tr } from 'lilak-ui'
-import { launcher } from '../../api'
+import { launcher, errText, store } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { HOME_MODES } from './HomeModeMenu'
 import AccountView, { settingsMenu } from './AccountView'
-import { SettingsStatus } from './settingsMsg'
+import { SettingsStatus, notify } from './settingsMsg'
 import LiveWall from './LiveWall'
 import ServiceManagePanel from './ServiceManagePanel'
 import ServiceProjects from './ServiceProjects'
@@ -110,11 +110,11 @@ const WIDE = 900          // below this the bar collapses on its own
 const PHONE = 640
 
 const readSet = (key) => {
-  try { const a = JSON.parse(localStorage.getItem(key) || '[]'); return new Set(Array.isArray(a) ? a : []) }
+  try { const a = JSON.parse(store.get(key) || '[]'); return new Set(Array.isArray(a) ? a : []) }
   catch { return new Set() }
 }
 const writeSet = (key, set) => {
-  try { localStorage.setItem(key, JSON.stringify([...set])) } catch { /* private mode */ }
+  store.set(key, JSON.stringify([...set]))
 }
 
 /** Every tile is filled with its colour and carries a white glyph; the PICKED one
@@ -198,7 +198,7 @@ function useSlide(open) {
     const t = setTimeout(() => {
       if (phase === 'leave') setShown(false)
       setPhase(null)
-    }, 400)
+    }, 600)
     return () => clearTimeout(t)
   }, [phase])
   const onAnimEnd = (e) => {
@@ -228,8 +228,9 @@ function ProjectList({ svc, color, sel, onPick, open }) {
   const [rows, setRows] = useState(null)
 
   useEffect(() => {
-    if (!open || rows) return
-    launcher.get(`/services/${svc}/projects`).then((r) => setRows(r.data)).catch(() => setRows([]))
+    // Fetched on every open; the last rows stay up while it loads.
+    if (!open) return
+    launcher.get(`/services/${svc}/projects`).then((r) => setRows(r.data)).catch(() => setRows((old) => old || []))
   }, [open, svc])  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -258,7 +259,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
 
 export default function SidebarPortal({
   user, isManager, cards, groups, liveCards, links, iconFor, fullOrder,
-  onLogout, onRefresh, onSaveOrder, onRegroup, onCreateGroup,
+  onLogout, onRefresh, onSaveOrder, onRegroup, onCreateGroup, onSetMembers,
   settingsTab, onSettingsTab, authCard, info,
 }) {
   // Signed out: the bar is a list of names and the panel is the login card.
@@ -281,7 +282,7 @@ export default function SidebarPortal({
     // menu. Wider, the saved choice wins, and a first visit collapses only when
     // the window is too narrow to spare 260px.
     if (window.innerWidth < PHONE) return !!readSel()
-    const saved = localStorage.getItem(MINI_KEY)
+    const saved = store.get(MINI_KEY)
     return saved !== null ? saved === '1' : window.innerWidth < WIDE
   })
   // Command mode: the keyboard is talking to the BAR, not to the service that
@@ -293,9 +294,7 @@ export default function SidebarPortal({
   // so nothing that folds it as a side effect may fold it — opening a service,
   // picking a project, a narrower window. Only the switch (or the logo, which
   // is the same switch) puts it back.
-  const [pinned, setPinned] = useState(() => {
-    try { return localStorage.getItem(PIN_KEY) === '1' } catch { return false }
-  })
+  const [pinned, setPinned] = useState(() => store.get(PIN_KEY) === '1')
   const pinnedRef = useRef(pinned)
   pinnedRef.current = pinned
   /** Fold, unless the bar is pinned open. Every automatic fold goes through it. */
@@ -329,7 +328,7 @@ export default function SidebarPortal({
     const s0 = readSel()
     return new Set(s0?.svc && s0.proj ? [s0.svc] : [])
   })
-  const [flat, setFlat] = useState(() => localStorage.getItem(FLAT_KEY) === '1')
+  const [flat, setFlat] = useState(() => store.get(FLAT_KEY) === '1')
   const [shut, setShut] = useState(() => readSet(SHUT_KEY))
   // Manage mode: the bar becomes editable (drag to arrange, a button to make a
   // group) and picking a card shows its settings in the panel instead of running it.
@@ -345,6 +344,10 @@ export default function SidebarPortal({
   }, [])
   const [drag, setDrag] = useState(null)        // key being dragged
   const [dropAt, setDropAt] = useState(null)    // { key, after } | { gid } | { end: true }
+  // dragover fires many times a second: only a changed target re-renders.
+  const moveDrop = (v) => setDropAt((d) => (JSON.stringify(d) === JSON.stringify(v) ? d : v))
+  const [parked, setParked] = useState([])      // keys set down in the manage bar's tray
+  const [dragG, setDragG] = useState(null)      // `#g:<id>` of the band being dragged
   // Opening settings leaves the service bar as it is — the menu steps out beside
   // it, it does not take its room. Only a phone, where the menu is a drawer over
   // everything, still folds the bar; miniBefore is what it folded FROM.
@@ -375,15 +378,15 @@ export default function SidebarPortal({
   const endPeek = () => { stopPeekTimer(); peek.current = false }
   useEffect(() => stopPeekTimer, [])
 
-  useEffect(() => { localStorage.setItem(PIN_KEY, pinned ? '1' : '0') }, [pinned])
+  useEffect(() => { store.set(PIN_KEY, pinned ? '1' : '0') }, [pinned])
   useEffect(() => {
     if (peek.current) return                       // a look is not a preference
-    localStorage.setItem(MINI_KEY, mini ? '1' : '0')
+    store.set(MINI_KEY, mini ? '1' : '0')
     // Collapsing hides the project lists; close them too, so expanding again does
     // not reveal a list the user last saw minutes ago.
     if (mini) setOpenSvcs(new Set())
   }, [mini])
-  useEffect(() => { localStorage.setItem(FLAT_KEY, flat ? '1' : '0') }, [flat])
+  useEffect(() => { store.set(FLAT_KEY, flat ? '1' : '0') }, [flat])
   useEffect(() => { writeSet(SHUT_KEY, shut) }, [shut])
   useEffect(() => { writeSel(view === 'service' ? sel : null) }, [sel, view])
 
@@ -608,9 +611,12 @@ export default function SidebarPortal({
     }
     const gs = [...(groups || [])]
       .filter((g) => !g.hidden || (manage && isManager))
+      .filter((g) => !g.loose || !signedOut)
       .sort((a, b) => (a.name === SYSTEM_NAME ? -1 : b.name === SYSTEM_NAME ? 1 : (a.order ?? 1000) - (b.order ?? 1000)))
     const filed = new Set(gs.flatMap((g) => g.members || []))
+    let looseAt = -1
     for (const g of gs) {
+      if (g.loose) { looseAt = out.length; out.push(null); continue }
       const items = (g.members || []).map((k) => byKey.get(k)).filter((c) => c && !taken.has(cardKey(c)))
       // A builtin that did not exist when the System band was materialised is
       // still a system tool. Without this it lands in "No group", which no
@@ -628,8 +634,12 @@ export default function SidebarPortal({
     }
     // In group mode EVERY card is in a band, so the eye reads one kind of thing
     // down the bar instead of bands and then loose cards.
+    // Placed by its own stored order, like a group (or last, before it had one).
     const rest = list.filter((c) => !taken.has(cardKey(c)))
-    out.push({ g: { id: NOGROUP_ID, name: tr("p_no_group"), loose: true }, items: rest })
+    const lg = (groups || []).find((g) => g.loose)
+    const band = { g: { id: NOGROUP_ID, name: tr("p_no_group"), loose: true, hidden: !!lg?.hidden }, items: rest }
+    if (looseAt >= 0) out[looseAt] = band
+    else if (!lg) out.push(band)
     return out
   }, [cards, groups, flat, manage, isManager, signedOut, lang])
 
@@ -640,6 +650,7 @@ export default function SidebarPortal({
     const at = dropAt
     setDrag(null); setDropAt(null)
     if (!key || !at) return
+    setParked((p) => p.filter((k) => k !== key))
     if (at.gid === SYSTEM_ID) {
       const present = SYSTEM_KEYS.filter((k) => (cards || []).some((c) => cardKey(c) === k))
       try { await onCreateGroup?.(SYSTEM_NAME, [...present, key]) } catch { await onRefresh?.() }
@@ -656,6 +667,18 @@ export default function SidebarPortal({
     } else if (at.key) {
       if (at.key === key) return
       gid = gidOf(at.key)
+      // Within one stored group the band shows its members in their stored
+      // order, so the move is made on THAT list — as seen — not on the
+      // cover's overall order, which the band does not follow.
+      if (gid && gidOf(key) === gid) {
+        const shown = (bands.find((b) => b.g?.id === gid)?.items || []).map(cardKey).filter((k) => k !== key)
+        const i = shown.indexOf(at.key)
+        if (i >= 0) {
+          shown.splice(at.after ? i + 1 : i, 0, key)
+          try { await onSetMembers?.(gid, shown) } catch { await onRefresh?.() }
+          return
+        }
+      }
       keys = movedOrder(fullOrder, key, at.key, at.after)
     }
     try {
@@ -672,12 +695,12 @@ export default function SidebarPortal({
       if (!drag || drag === key) return
       e.preventDefault(); e.stopPropagation()
       const r = e.currentTarget.getBoundingClientRect()
-      setDropAt({ key, after: e.clientY > r.top + r.height / 2 })
+      moveDrop({ key, after: e.clientY > r.top + r.height / 2 })
     },
-    onDrop: (e) => { e.preventDefault(); e.stopPropagation(); onDrop() },
+    onDrop: (e) => { if (!drag) return; e.preventDefault(); e.stopPropagation(); onDrop() },
   })
   const bandProps = (gid) => (!manage || !isManager ? {} : {
-    onDragOver: (e) => { if (!drag) return; e.preventDefault(); setDropAt({ gid }) },
+    onDragOver: (e) => { if (!drag) return; e.preventDefault(); moveDrop({ gid }) },
     onDrop: (e) => { e.preventDefault(); onDrop() },
   })
   // Reordering moves the OTHER cards, and a card that teleports to its new row
@@ -718,16 +741,91 @@ export default function SidebarPortal({
     const card = (cards || []).find((c) => cardKey(c) === drag)
     setDrag(null); setDropAt(null)
     if (!card) return
+    setParked((p) => p.filter((k) => k !== cardKey(card)))
+    // A hidden card dropped here comes back: the target is the switch, both ways.
+    const hidden = !card.hidden
     try {
-      if (card.builtin) await launcher.put('/admin/home-builtin', { key: card.builtin, hidden: true })
-      else await launcher.put('/admin/home-service', { name: card.name, hidden: true })
-    } finally { await onRefresh?.() }
+      if (card.builtin) await launcher.put('/admin/home-builtin', { key: card.builtin, hidden })
+      else await launcher.put('/admin/home-service', { name: card.name, hidden })
+    } catch (e) { notify(errText(e, tr('p_failed')), 'bad') }
+    finally { await onRefresh?.() }
   }
+
+  /** Dropped on the tray: set down there while the bar scrolls to where it goes. */
+  const parkDropped = () => {
+    const key = drag
+    setDrag(null); setDropAt(null)
+    if (key) setParked((p) => (p.includes(key) ? p : [...p, key]))
+  }
+
+  // Holding a card near the bar's top or bottom edge scrolls it — slowly at
+  // the rim of the zone, faster toward the edge. The bar is taller than the window.
+  const dragging = drag || dragG
+  useEffect(() => {
+    if (!dragging) return
+    const nav = navRef.current
+    if (!nav) return
+    const E = 56
+    let v = 0
+    const over = (e) => {
+      const r = nav.getBoundingClientRect()
+      const top = e.clientY - r.top, bot = r.bottom - e.clientY
+      v = e.clientX < r.left || e.clientX > r.right ? 0
+        : top > -E && top < E ? -(E - Math.max(top, 0)) / E
+        : bot > -E && bot < E ? (E - Math.max(bot, 0)) / E : 0
+    }
+    const t = setInterval(() => { if (v) nav.scrollTop += v * 7 }, 16)
+    window.addEventListener('dragover', over)
+    return () => { window.removeEventListener('dragover', over); clearInterval(t) }
+  }, [dragging])
 
   /** Where a band's drop puts a card: a real group, or out of every group.
    *  The synthetic System band takes drops too — the first one turns it into a
    *  stored group holding the builtins plus what you dropped. */
-  const bandDrop = (g) => bandProps(g.fixed ? SYSTEM_ID : g.loose ? null : g.id)
+  const bandDrop0 = (g) => bandProps(g.fixed ? SYSTEM_ID : g.loose ? null : g.id)
+  // Bands move like cards: by their header, onto another band's upper or lower half.
+  // System stays first, so it neither moves nor takes a band above it.
+  const gkey = (g) => `#g:${g.loose ? 'none' : g.id}`
+  const movable = (g) => !g.fixed && g.name !== SYSTEM_NAME
+  const bandDrop = (g) => {
+    const p = bandDrop0(g)
+    if (!manage || !isManager) return p
+    return {
+      onDragOver: (e) => {
+        if (!dragG) { p.onDragOver?.(e); return }
+        if (!movable(g) || gkey(g) === dragG) return
+        e.preventDefault(); e.stopPropagation()
+        const r = e.currentTarget.closest('.pl-group').getBoundingClientRect()
+        moveDrop({ band: gkey(g), after: e.clientY > r.top + r.height / 2 })
+      },
+      onDrop: (e) => {
+        if (!dragG) { p.onDrop?.(e); return }
+        e.preventDefault(); e.stopPropagation(); onDropG()
+      },
+    }
+  }
+  const bandGrip = (g) => (!manage || !isManager || !movable(g) ? {} : {
+    draggable: true,
+    onDragStart: (e) => { e.stopPropagation(); setDragG(gkey(g)); e.dataTransfer.effectAllowed = 'move' },
+    onDragEnd: () => { setDragG(null); setDropAt(null) },
+  })
+  const onDropG = async () => {
+    const key = dragG, at = dropAt
+    setDragG(null); setDropAt(null)
+    if (!key || !at?.band || at.band === key) return
+    try { await onSaveOrder?.(movedOrder(fullOrder, key, at.band, at.after)) } catch { await onRefresh?.() }
+  }
+  const draggedGroup = dragG && (groups || []).find((x) => `#g:${x.id}` === dragG)
+  const dragHidden = !!(cards || []).find((c) => cardKey(c) === drag)?.hidden || !!draggedGroup?.hidden
+  /** A band dropped on the hide target: hidden, or shown again if it was. */
+  const hideDroppedG = async () => {
+    const g = draggedGroup
+    setDragG(null); setDropAt(null)
+    if (!g) return
+    try { await launcher.put(`/admin/service-groups/${g.id}`, { hidden: !g.hidden }) }
+    catch (e) { notify(errText(e, tr('p_failed')), 'bad') }
+    finally { await onRefresh?.() }
+  }
   /** The line drawn in the gap where a dragged card would land. */
   const dropLine = (key, after) =>
     (dropAt?.key === key && !!dropAt.after === after ? <div className="pl-dropline" /> : null)
@@ -749,6 +847,7 @@ export default function SidebarPortal({
    *  reader's own setting is put back on the way out. */
   const toggleManage = () => {
     leaveSettings()
+    setParked([])
     setManage((m) => {
       const next = !m
       setSel(null)
@@ -806,7 +905,7 @@ export default function SidebarPortal({
         {dropLine(key, false)}
         <div className={`pl-card${on ? ' on' : ''}${listOpen ? ' open' : ''}`
             + `${manage ? ' mg' : ''}${drag === key ? ' dragging' : ''}`
-            + `${s.hidden ? ' off' : ''}`}
+            + `${s.hidden ? ' off' : ''}${parked.includes(key) ? ' parked' : ''}`}
           data-key={key}
           {...dragProps(key)}>
           <button type="button" className="pl-row"
@@ -973,9 +1072,11 @@ export default function SidebarPortal({
                they had simply been indented under a heading. */
             <div key={g.id} className={`pl-group${g.fixed || g.loose ? ' auto' : ''}`
                 + `${sel?.svc === `#g:${g.id}` && view === 'manage' ? ' on' : ''}`
-                + `${dropAt?.gid === (g.fixed ? SYSTEM_ID : g.loose ? null : g.id) ? ' drop' : ''}`}
+                + `${dropAt?.gid === (g.fixed ? SYSTEM_ID : g.loose ? null : g.id) ? ' drop' : ''}`
+                + `${dropAt?.band === gkey(g) ? (dropAt.after ? ' gafter' : ' gbefore') : ''}`
+                + `${g.hidden ? ' off' : ''}${dragG === gkey(g) ? ' dragging' : ''}`}
               {...bandDrop(g)}>
-              <div className="pl-band">
+              <div className="pl-band" {...bandGrip(g)}>
                 <button type="button" className="pl-grp"
                   onClick={() => (manage && isManager ? openManageGroup(g) : toggleGroup(g.id))}>
                   {/* Manage mode forces every band open (you cannot drop into a
@@ -1008,6 +1109,20 @@ export default function SidebarPortal({
             bar, which is where the rest of "things about this portal" live.
             Not in manage mode: the account card is not something you manage,
             and one more card on the plinth is one more thing to mis-drag. */}
+        {/* Signed out, the foot offers the one thing a visitor may open: the
+            live wall, with what a manager opened to it. */}
+        {signedOut && (liveCards || []).length > 0 && (
+        <div className="pl-user">
+          <div className={`pl-card${view === 'live' ? ' on' : ''}`}>
+            <button type="button" className="pl-row" onClick={() => (view === 'live' ? setView('empty') : enterLive())}>
+              <span className="pl-av" style={{ background: 'var(--text-secondary)' }}>
+                <Icon name="broadcast" size={19} weight="fill" color="#fff" />
+              </span>
+              <span className="pl-txt">{tr("p_live_mode")}</span>
+            </button>
+          </div>
+        </div>
+        )}
         {!signedOut && !(manage && isManager) && (
         <div className="pl-user">
           <div className={`pl-card${view === 'settings' ? ' on' : ''}`}>
@@ -1080,12 +1195,31 @@ export default function SidebarPortal({
                 already holding something is a place you drop things wrong.
                 Dropping here is the Hide button, reached by the hand that is
                 already holding the card. */}
-            <div className={`pl-b2drop${drag ? ' live' : ''}${dropAt?.hide ? ' over' : ''}`}
-              onDragOver={(e) => { if (!drag) return; e.preventDefault(); setDropAt({ hide: true }) }}
+            {/* A tray to set a card down, scroll the bar, and pick it up again. */}
+            <div className={`pl-b2tray${drag ? ' live' : ''}${dropAt?.park ? ' over' : ''}`}
+              onDragOver={(e) => { if (!drag) return; e.preventDefault(); moveDrop({ park: true }) }}
+              onDragLeave={() => setDropAt((d) => (d?.park ? null : d))}
+              onDrop={(e) => { e.preventDefault(); parkDropped() }}>
+              {parked.length === 0 && (<><Icon name="stack" size={14} /><span>{tr("p_park_hint")}</span></>)}
+              {parked.map((k) => {
+                const c = (cards || []).find((x) => cardKey(x) === k)
+                if (!c) return null
+                return (
+                  <div key={k} className={`pl-b2chip${drag === k ? ' dragging' : ''}`} draggable
+                    onDragStart={(e) => { setDrag(k); e.dataTransfer.effectAllowed = 'move' }}
+                    onDragEnd={() => { setDrag(null); setDropAt(null) }}>
+                    <Tile icon={iconFor ? iconFor(c.name, c.icon) : (c.icon || 'circle')} color={c.color} />
+                    <span className="pl-txt">{c.label || c.name}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className={`pl-b2drop${dragging ? ' live' : ''}${dropAt?.hide ? ' over' : ''}`}
+              onDragOver={(e) => { if (!dragging) return; e.preventDefault(); moveDrop({ hide: true }) }}
               onDragLeave={() => setDropAt((d) => (d?.hide ? null : d))}
-              onDrop={(e) => { e.preventDefault(); hideDropped() }}>
-              <Icon name="eye-off" size={14} />
-              <span>{tr("p_drop_a_card_here_to")}</span>
+              onDrop={(e) => { e.preventDefault(); dragG ? hideDroppedG() : hideDropped() }}>
+              <Icon name={dragHidden ? 'eye' : 'eye-off'} size={14} />
+              <span>{tr(dragHidden ? "p_drop_to_show" : "p_drop_a_card_here_to")}</span>
             </div>
 
             {/* Last of all, like Log out in the settings bar: leaving is not
@@ -1137,10 +1271,10 @@ export default function SidebarPortal({
             {modes.map((m) => (
               <button key={m.id} type="button"
                 className={`pl-c2${(m.id === 'live' ? view === 'live' : manage) ? ' on' : ''}`}
-                title={lang === 'ko' ? m.ko_hint : m.en_hint}
+                title={tr(m.hint)}
                 onClick={() => (m.id === 'live' ? enterLive() : toggleManage())}>
                 <Icon name={m.icon} size={15} />
-                <span className="pl-txt">{lang === 'ko' ? m.ko : m.en}</span>
+                <span className="pl-txt">{tr(m.label)}</span>
               </button>
             ))}
             {/* Group mode reads like the other two: a fixed name that fills when
@@ -1166,7 +1300,7 @@ export default function SidebarPortal({
 
       <main className="pl-main">
         <div className="pl-panel">
-          {signedOut ? (
+          {signedOut && view !== 'live' ? (
             <div className="pl-scroll pl-authpage">{authCard}</div>
           ) : view === 'settings' ? (
             <>

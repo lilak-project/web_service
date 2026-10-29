@@ -23,7 +23,7 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Header, Request
+from fastapi import Depends, Header, HTTPException, Request
 from jose import jwt
 
 def _secret_key() -> str:
@@ -93,6 +93,12 @@ def introspect(token: Optional[str]) -> Optional[dict]:
             headers={"Authorization": f"Bearer {token}"})
         with urllib.request.urlopen(req, timeout=2) as r:
             fresh = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        # The portal refused the token: signed out everywhere, deactivated or
+        # deleted. That is an answer, not an outage — the caller is nobody.
+        if e.code not in (401, 403):
+            return None
+        fresh = {"revoked": True}
     except Exception:
         return None
     if len(_introspect_cache) > 512:            # bound the map (tokens rotate daily)
@@ -111,6 +117,8 @@ def fresh_payload(payload: dict, token: Optional[str] = None) -> dict:
     fresh = introspect(token)
     if not fresh:
         return out
+    if fresh.get("revoked"):
+        return {}
     role = fresh.get("role") or fresh.get("prole") or out.get("prole") or out.get("role") or "user"
     out.update({
         "username": fresh.get("username") or out.get("username"),
@@ -126,14 +134,24 @@ def fresh_payload(payload: dict, token: Optional[str] = None) -> dict:
 
 def identity(request: Request, authorization: Optional[str] = Header(default=None)) -> dict:
     """Soft identity dependency: a profile dict for the caller (anonymous when there's
-    no valid token) rather than raising — entry is already gated by the portal proxy.
+    no valid token) rather than raising. For whoami-style reads only — the portal
+    proxy passes some callers through unchecked (service-to-service bearers), so
+    anything that reads or writes data depends on `signed_in` or `manager`.
     Freshened via /api/introspect so role/avatar track the portal live."""
     token = bearer_from_request(authorization, request)
     payload = decode_token(token) if token else None
     if not payload:
+        # A stale header beside a good cookie (a service page left open across a
+        # new sign-in) is the cookie's session, not nobody's.
+        token = request.cookies.get("lilak_portal_token")
+        payload = decode_token(token) if token else None
+    if not payload:
         return {"authenticated": False, "email": None, "username": None,
                 "name": None, "role": None, "color": None, "shape": None}
-    payload = fresh_payload(payload, token)
+    payload = fresh_payload(payload, token) if payload else None
+    if not payload:
+        return {"authenticated": False, "email": None, "username": None,
+                "name": None, "role": None, "color": None, "shape": None}
     return {
         "authenticated": True,
         "email": payload.get("email"),
@@ -143,6 +161,25 @@ def identity(request: Request, authorization: Optional[str] = Header(default=Non
         "color": payload.get("color"),
         "shape": payload.get("shape"),
     }
+
+
+
+def signed_in(me: dict = Depends(identity)) -> dict:
+    """identity, refusing anyone without a valid, unrevoked portal token."""
+    if not me.get("authenticated"):
+        raise HTTPException(401, "로그인이 필요합니다.")
+    return me
+
+
+def is_manager(me: dict) -> bool:
+    return (me.get("role") or "").lower() in ("manager", "admin")
+
+
+def manager(me: dict = Depends(signed_in)) -> dict:
+    """signed_in, and a portal manager."""
+    if not is_manager(me):
+        raise HTTPException(403, "관리자만 할 수 있습니다.")
+    return me
 
 
 def _portal_db_path() -> Path:

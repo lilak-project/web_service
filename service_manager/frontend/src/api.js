@@ -5,11 +5,20 @@ import axios from 'axios'
 // prefix itself, so this works both in dev (Vite proxy) and in prod (served by
 // the portal). There is no elog workspace here, so no per-experiment `api`.
 
+// localStorage that never throws: where storage is blocked (SecurityError) it
+// reads as empty and writes are dropped, instead of blanking the page.
+export const store = {
+  get: (k) => { try { return localStorage.getItem(k) } catch { return null } },
+  set: (k, v) => { try { localStorage.setItem(k, v) } catch { /* blocked */ } },
+  remove: (k) => { try { localStorage.removeItem(k) } catch { /* blocked */ } },
+}
+export const PORTAL_TOKEN_KEY = 'lilak_portal_token'
+
 const EXPERIMENT_KEY = 'elog_experiment'
-export function getExperiment() { return localStorage.getItem(EXPERIMENT_KEY) || '' }
+export function getExperiment() { return store.get(EXPERIMENT_KEY) || '' }
 export function setExperiment(name) {
-  if (name) localStorage.setItem(EXPERIMENT_KEY, name)
-  else localStorage.removeItem(EXPERIMENT_KEY)
+  if (name) store.set(EXPERIMENT_KEY, name)
+  else store.remove(EXPERIMENT_KEY)
 }
 export function apiBaseFor(name) { return name ? `/launcher/p/${name}/api` : '/api' }
 
@@ -20,7 +29,7 @@ export function apiBaseFor(name) { return name ? `/launcher/p/${name}/api` : '/a
 // endpoint just 404s (handled by the caller).
 export function serviceApi(name) {
   const inst = axios.create({ baseURL: apiBaseFor(name), timeout: 30000 })
-  const t = localStorage.getItem('lilak_portal_token')
+  const t = store.get(PORTAL_TOKEN_KEY)
   if (t) inst.defaults.headers.common['Authorization'] = `Bearer ${t}`
   return inst
 }
@@ -31,9 +40,23 @@ export const launcher = axios.create({ baseURL: '/launcher/api', timeout: 30000 
 // Restore the portal bearer synchronously at module load so the first request
 // (the cover's /auth/me on mount) already carries it.
 {
-  const t = localStorage.getItem('lilak_portal_token')
+  const t = store.get(PORTAL_TOKEN_KEY)
   if (t) launcher.defaults.headers.common['Authorization'] = `Bearer ${t}`
 }
+
+// A request the server refused for want of a valid session (an expired or
+// revoked token) means the cover is signed out — say so once, so the page drops
+// to the signed-out view instead of going on showing an account it no longer
+// has (its profile, manage mode, the create panel …). The sign-in calls
+// themselves answer 401 for a wrong password, which is not that.
+launcher.interceptors.response.use((r) => r, (e) => {
+  const url = e?.config?.url || ''
+  if (e?.response?.status === 401 && !/^\/?auth\/(login|setup|register|verify)/.test(url)
+      && launcher.defaults.headers.common.Authorization) {
+    window.dispatchEvent(new Event('portal:signed-out'))
+  }
+  return Promise.reject(e)
+})
 
 export default launcher
 

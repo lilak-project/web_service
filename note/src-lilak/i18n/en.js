@@ -48,6 +48,7 @@ export default {
   nt_deleted_named: (a0) => `'${a0}' deleted`,
   nt_edit: "Edit",
   nt_preview: "Preview",
+  nt_raw: "Raw",
   nt_print: "Print · PDF",
   nt_revert_hint: "Back to how it was when this tab opened",
   nt_delete_warn: "The file is deleted. This cannot be undone.",

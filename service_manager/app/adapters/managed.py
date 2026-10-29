@@ -96,10 +96,10 @@ class ManagedAdapter(Adapter):
                 "PORTAL_PORT": str(config.PORTAL_PORT),
                 **{k: str(v) for k, v in extra_env.items()},
             }
-            # Child output → data/<name>/service.log (truncated each start) instead of
+            # Child output → data/<name>/service.log (kept across starts) instead of
             # DEVNULL, so a start failure or crash is diagnosable. The child keeps its
             # own dup of the fd, so closing our handle right after spawn is fine.
-            logf = open(sdir / "service.log", "w")
+            logf = registry.open_service_log(sdir / "service.log")
             try:
                 proc = subprocess.Popen(argv, cwd=cwd, env=env,
                                         stdout=logf, stderr=subprocess.STDOUT)

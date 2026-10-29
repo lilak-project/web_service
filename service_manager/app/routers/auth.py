@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 import secrets
+import threading
+import time
 from html import escape
 
 from fastapi import APIRouter, Depends, Form, HTTPException, status
@@ -24,6 +26,33 @@ router = APIRouter(tags=["portal-auth"])
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# Wrong guesses, per key, inside a sliding window. A password or a 6-digit code
+# can be guessed if guessing is free; this makes it slow.
+# ponytail: in memory, one process — a restart forgets, which is fine at this scale.
+_FAIL_WINDOW = 15 * 60
+_fails: dict = {}
+_fails_lock = threading.Lock()
+
+
+def _too_many(key: str, limit: int) -> bool:
+    now = time.time()
+    with _fails_lock:
+        recent = [t for t in _fails.get(key, []) if now - t < _FAIL_WINDOW]
+        _fails[key] = recent
+        return len(recent) >= limit
+
+
+def _failed(key: str) -> None:
+    with _fails_lock:
+        _fails.setdefault(key, []).append(time.time())
+        if len(_fails) > 10000:                  # bound the map
+            for k in [k for k, v in _fails.items() if not v or time.time() - v[-1] > _FAIL_WINDOW]:
+                _fails.pop(k, None)
+
+
+def _slow_down():
+    raise HTTPException(status_code=429, detail="시도가 너무 많습니다. 15분 뒤에 다시 해 보세요.")
+
 
 def _verify_url(token: str) -> str:
     return f"{config.BASE_URL}/api/auth/verify?token={token}"
@@ -31,12 +60,16 @@ def _verify_url(token: str) -> str:
 
 @router.post("/api/auth/login", response_model=schemas.TokenResponse)
 def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
+    key = f"login:{(payload.username or '').strip().lower()}"
+    if _too_many(key, 10):
+        _slow_down()
     user = (
         db.query(models.User)
         .filter(models.User.username == payload.username, models.User.is_active == True)  # noqa: E712
         .first()
     )
     if not user or not security.verify_password(payload.password, user.password_hash):
+        _failed(key)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="아이디 또는 비밀번호가 올바르지 않습니다.")
     # Transparently upgrade a legacy (sha256) hash to bcrypt now that we have the
@@ -177,6 +210,9 @@ def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
 @router.post("/api/auth/verify-code", response_model=schemas.TokenResponse)
 def verify_code(payload: schemas.VerifyCodeRequest, db: Session = Depends(get_db)):
     code = re.sub(r"\D", "", payload.code or "")
+    key = f"code:{(payload.username or '').strip().lower()}"
+    if _too_many(key, 5):
+        _slow_down()
     user = (
         db.query(models.User)
         .filter(
@@ -185,7 +221,8 @@ def verify_code(payload: schemas.VerifyCodeRequest, db: Session = Depends(get_db
         )
         .first()
     )
-    if not user or user.email_verified or not user.verify_token or user.verify_token != code:
+    if not user or user.email_verified or not user.verify_token or not secrets.compare_digest(user.verify_token, code):
+        _failed(key)
         raise HTTPException(status_code=400, detail="인증 코드가 올바르지 않습니다.")
     from datetime import datetime as _dt
     user.email_verified = True
@@ -250,8 +287,13 @@ def _verify_page(title: str, body: str, ok: bool, token: str | None = None) -> s
 
 
 def _verify_token(token: str, db: Session) -> HTMLResponse:
-    user = db.query(models.User).filter(models.User.verify_token == token).first()
+    # The link's token is looked up across every pending signup, so a guess
+    # anywhere counts against one shared budget.
+    if _too_many("verify-link", 30):
+        _slow_down()
+    user = db.query(models.User).filter(models.User.verify_token == token).first() if token else None
     if not user:
+        _failed("verify-link")
         return HTMLResponse(_verify_page("인증 링크가 유효하지 않습니다",
                                          "이미 인증되었거나 만료된 링크일 수 있습니다.", False),
                             status_code=400)
@@ -279,6 +321,15 @@ def verify_submit(token: str = Form(...), db: Session = Depends(get_db)):
 @router.get("/api/auth/me", response_model=schemas.UserOut)
 def me(current_user: models.User = Depends(require_portal_user)):
     return current_user
+
+
+@router.post("/api/auth/refresh", response_model=schemas.TokenResponse)
+def refresh(current_user: models.User = Depends(require_portal_user)):
+    """A fresh token for a session still in use. The cover asks every so often
+    while it is open, so someone working does not get signed out at the 24-hour
+    mark; a session left alone still expires."""
+    return schemas.TokenResponse(access_token=portal_token(current_user), user_id=current_user.id,
+                                 username=current_user.username, role=current_user.role)
 
 
 @router.post("/api/auth/logout")
