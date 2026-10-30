@@ -125,12 +125,15 @@ def ev_body(c: dict, aid: str) -> dict:
     b = {"summary": c["name"], "location": c["loc"],
          "description": (c["comment"] + (f"\n\n{LINK}{c['link']}" if c["link"] else "")).strip(),
          "extendedProperties": {"private": {"lilak": aid}}}
+    # A PATCH merges into what Google holds, so the kind of day not meant is
+    # cleared (null): an all-day event given a time would otherwise keep its
+    # `date` beside the new `dateTime`, and Google refuses it ("Invalid start time").
     if c["st"]:
-        b["start"] = {"dateTime": f"{c['start']}T{c['st']}:00", "timeZone": "Asia/Seoul"}
-        b["end"] = {"dateTime": f"{c['end']}T{c['et'] or _plus_hour(c['st'])}:00", "timeZone": "Asia/Seoul"}
+        b["start"] = {"dateTime": f"{c['start']}T{c['st']}:00", "timeZone": "Asia/Seoul", "date": None}
+        b["end"] = {"dateTime": f"{c['end']}T{c['et'] or _plus_hour(c['st'])}:00", "timeZone": "Asia/Seoul", "date": None}
     else:
-        b["start"] = {"date": c["start"]}
-        b["end"] = {"date": (_d(c["end"]) + timedelta(days=1)).isoformat()}
+        b["start"] = {"date": c["start"], "dateTime": None, "timeZone": None}
+        b["end"] = {"date": (_d(c["end"]) + timedelta(days=1)).isoformat(), "dateTime": None, "timeZone": None}
     if c["rule"]:
         rec = [f"RRULE:{c['rule']}"]
         if c["ex"]:

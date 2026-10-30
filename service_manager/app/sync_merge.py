@@ -20,8 +20,10 @@ import json
 from datetime import date
 from pathlib import PurePosixPath
 
-# What never leaves a server: its own bookkeeping, history and backups.
-_LOCAL_TOP = ("backups/",)
+# What never leaves a server: its own bookkeeping, history and backups — and
+# a link to an outside account (academic's Google Calendar: its token, its
+# timer, its state), which must run on ONE server or both write to Google.
+_LOCAL_TOP = ("backups/", "gcal/")
 
 
 def local_only(rel: str) -> bool:
