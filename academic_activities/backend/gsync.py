@@ -46,17 +46,33 @@ def _now() -> str:
 
 
 # ── one shape for both sides ─────────────────────────────────────────────
+def _trip(r: dict):
+    """The days the trip adds around the event, or None: Google shows the
+    whole time away. Joined online or not gone (absence): no trip."""
+    if r.get("online") or r.get("role") in ("online", "absence"):
+        return None
+    start = (r.get("start") or "")[:10]
+    end = ((r.get("end") or "")[:10]) or start
+    ts, te = (r.get("tripStart") or "")[:10], (r.get("tripEnd") or "")[:10]
+    a, b = min(start, ts or start), max(end, te or end)
+    return (a, b) if (a, b) != (start, end) else None
+
+
 def canon_act(r: dict, places: dict) -> dict:
     rep = r.get("repeat") or {}
     st = r.get("startTime") or ""
     start = (r.get("start") or "")[:10]
+    end = ((r.get("end") or "")[:10]) or start
+    trip = _trip(r)
+    if trip:                            # days away, all day: the event's hours aren't the trip's
+        (start, end), st = trip, ""
     p = r.get("place")
     return {
         "name": (r.get("name") or "").strip(),
         "start": start,
-        "end": ((r.get("end") or "")[:10]) or start,
+        "end": end,
         "st": st,
-        "et": (r.get("endTime") or (_plus_hour(st) if st else "")),
+        "et": "" if trip else (r.get("endTime") or (_plus_hour(st) if st else "")),
         "loc": (places.get(p, p) if isinstance(p, str) else "") or "",
         "comment": (r.get("comment") or "").strip(),
         "link": (r.get("link") or "").strip(),
@@ -156,8 +172,10 @@ def act_from(c: dict, kind: str, now: str) -> dict:
 
 
 def act_patch(r: dict, c: dict, now: str) -> dict:
-    return {**r, "name": c["name"], "start": c["start"], "end": c["end"] if c["end"] != c["start"] else "",
-            "startTime": c["st"], "endTime": c["et"], "place": c["loc"] or r.get("place") or "",
+    # Google shows the trip: its days moved there move the trip, not the event.
+    days = {"tripStart": c["start"], "tripEnd": c["end"]} if _trip(r) else \
+        {"start": c["start"], "end": c["end"] if c["end"] != c["start"] else "", "startTime": c["st"], "endTime": c["et"]}
+    return {**r, "name": c["name"], **days, "place": c["loc"] or r.get("place") or "",
             "comment": c["comment"], "link": c["link"],
             "repeat": ({"rule": c["rule"], "ex": c["ex"]} if c["rule"] else (None if not r.get("series") else r.get("repeat"))),
             "updatedAt": now}
