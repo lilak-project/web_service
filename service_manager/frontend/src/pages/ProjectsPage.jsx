@@ -25,7 +25,6 @@ import { notify } from './portal/settingsMsg'
 // everyone (and only once it has something in it); the rest are a manager's.
 const ICON_SERVICE = { name: 'lilak icon', kind: 'tool', builtin: 'iconlab', icon: 'images', can_enter: true }
 const CREATE_SERVICE = { name: 'new-service', kind: 'tool', builtin: 'newservice', icon: 'plus', can_enter: true }
-const STORE_SERVICE = { name: 'service manager', kind: 'tool', builtin: 'store', icon: 'download', can_enter: true }
 const LINKS_SERVICE = { name: 'links', kind: 'tool', builtin: 'links', icon: 'link', can_enter: true }
 const RACK_SERVICE = { name: 'rack', kind: 'tool', builtin: 'rack', icon: 'wall', can_enter: true }
 
@@ -409,7 +408,8 @@ export default function ProjectsPage() {
   const bi = homeCfg?.builtins || {}
   const iconCard = { ...ICON_SERVICE, label: bi.iconlab?.label || ICON_SERVICE.name, icon: bi.iconlab?.icon || ICON_SERVICE.icon, color: bi.iconlab?.color, hidden: !!bi.iconlab?.hidden }
   const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label || t('newsvc_title'), icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color, hidden: !!bi.newservice?.hidden }
-  const storeCard = { ...STORE_SERVICE, label: bi.store?.label || t('store_title'), icon: bi.store?.icon || STORE_SERVICE.icon, color: bi.store?.color, hidden: !!bi.store?.hidden }
+  // Service Manager is part of home now; home keeps the card's colour.
+  const homeIcon = { icon: 'home', color: bi.store?.color }
   const rackCard = { ...RACK_SERVICE, label: bi.rack?.label || t('rack_title'), icon: bi.rack?.icon || RACK_SERVICE.icon, color: bi.rack?.color, hidden: !!bi.rack?.hidden }
   const linkCfg = links?.card || {}
   const linksCard = { ...LINKS_SERVICE, label: linkCfg.label || t('links_title'), icon: linkCfg.icon || LINKS_SERVICE.icon, color: linkCfg.color, hidden: !!linkCfg.hidden, count: (links?.links || []).length }
@@ -417,8 +417,7 @@ export default function ProjectsPage() {
   // does its own hiding — filtering here meant a card hidden from the bar
   // vanished from manage mode too, with no way left to bring it back.
   const cardsAll = isManager
-    // Service Manager leads: it is where a portal gets its services.
-    ? sortByHome([storeCard, iconCard, linksCard, ...(projects || []), createCard, rackCard], homeCfg?.order || [])
+    ? sortByHome([iconCard, linksCard, ...(projects || []), createCard, rackCard], homeCfg?.order || [])
     : sortByHome([...(linksCard.hidden || !linksCard.count ? [] : [linksCard]), ...(projects || [])], homeCfg?.order || [])
   const cards = isManager ? cardsAll.filter((c) => !c.hidden) : cardsAll
 
@@ -503,7 +502,7 @@ export default function ProjectsPage() {
       fullOrder={fullOrder}
       onLogout={logout} onRefresh={refresh}
       onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup} onSetMembers={setMembers}
-      settingsTab={settingsTab} onSettingsTab={setSettingsTab} info={portalInfo}
+      settingsTab={settingsTab} onSettingsTab={setSettingsTab} info={portalInfo} homeIcon={homeIcon}
     />
   )
 }

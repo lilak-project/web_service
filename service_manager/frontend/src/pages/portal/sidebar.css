@@ -335,7 +335,60 @@
 }
 .pl-empty .path { font-family: var(--font-mono); font-size: var(--fs-tiny); color: var(--text-muted); }
 .pl-empty .big { font-size: var(--fs-large); font-weight: var(--rack-weight, 500); color: var(--text-emphasis); margin: 6px 0 4px; }
-.pl-scroll { flex: 1; min-width: 0; overflow: auto; }
+/* ── home: the panel with nothing open (HomeView) ───────────────────────── */
+.pl-home { display: flex; flex-direction: column; gap: 22px; padding-top: 40px; }
+.pl-home > * { width: 100%; max-width: 1040px; margin: 0 auto; flex: 0 0 auto; }
+.pl-hmanage { --plate: var(--plate-manage); display: flex; flex-direction: column; gap: 8px; }
+.pl-hfold {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; color: var(--text-secondary);
+}
+.pl-hfold:hover { color: var(--text-primary); }
+.pl-hfold svg { transition: transform var(--b2t) cubic-bezier(.2, .8, .2, 1); }
+.pl-hfold.open svg { transform: rotate(90deg); }
+.pl-homecard { margin-bottom: 6px; }
+.pl-hsearch { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.pl-hsearch label {
+  display: flex; align-items: center; gap: 12px; width: 100%; max-width: 640px;
+  height: 48px; padding: 0 14px; box-sizing: border-box;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--rack-radius, 0);
+}
+.pl-hsearch label:focus-within { border-color: var(--border-focus); }
+.pl-hsearch input {
+  flex: 1; min-width: 0; border: 0; outline: none; background: transparent;
+  font: inherit; font-size: var(--fs-large); color: var(--text-primary);
+}
+.pl-hsearch .hint { font-size: var(--fs-small); color: var(--text-secondary); }
+.pl-hrecent h2 { margin: 0 0 8px !important; color: var(--text-secondary); }
+.pl-hrecent .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.pl-hrc {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  min-height: 84px; padding: 0 0 10px; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--rack-radius, 0); font: inherit; color: var(--text-primary);
+}
+.pl-hrc:hover { border-color: var(--border-focus); }
+.pl-hrc .strip { align-self: stretch; height: 5px; margin-bottom: 8px; }
+.pl-hrc .name { padding: 0 12px; font-family: var(--font-mono); font-size: var(--fs-plate); }
+.pl-hrc .app { padding: 0 12px; color: var(--text-secondary); }
+.pl-hrow.cols { grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(80px, .7fr) 96px 64px; }
+.pl-hrow.head { color: var(--text-secondary); }
+.pl-hrow:not(.head):hover, .pl-hrow.at { background: var(--surface-2); }
+.pl-hrow.at { box-shadow: inset 3px 0 0 var(--border-focus); }
+.pl-hrow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-hrow .app { display: flex; align-items: center; gap: 8px; }
+.pl-hsw { width: 10px; height: 10px; flex: 0 0 auto; }
+@media (max-width: 640px) {
+  .pl-home { padding-top: 16px; }
+  .pl-hrow.cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 64px; }
+  .pl-hrow > :nth-child(3), .pl-hrow > :nth-child(4) { display: none; }
+}
+
+/* The gutter is kept even with nothing to scroll, so a page that grows (a
+   card opening) doesn't lose 15px of width when the scrollbar appears. */
+.pl-scroll { flex: 1; min-width: 0; overflow: auto; scrollbar-gutter: stable; }
 
 /* ── narrow ──────────────────────────────────────────────────────────────── */
 /* Under 640px the sidebar stops taking space and slides over the panel instead;

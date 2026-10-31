@@ -345,6 +345,8 @@ def update_profile(body: ProfileBody, user: models.User = Depends(require_portal
 
 class PrefsBody(BaseModel):
     lang: Optional[str] = None
+    # What the home screen lists first: "svc" or "svc/project", newest first.
+    recent: Optional[list[str]] = None
 
 
 @router.put("/api/account/prefs")
@@ -356,6 +358,11 @@ def update_prefs(body: PrefsBody, user: models.User = Depends(require_portal_use
         if lang and not re.fullmatch(r"[a-z]{2}(-[A-Za-z]{2})?", lang):
             raise HTTPException(400, "언어 코드가 올바르지 않습니다.")
         prefs.put(user, lang=lang or None)
+    if "recent" in data:
+        keys = [str(k).strip() for k in (data["recent"] or []) if str(k).strip()]
+        if any(len(k) > 200 for k in keys):
+            raise HTTPException(400, "최근 목록이 올바르지 않습니다.")
+        prefs.put(user, recent=list(dict.fromkeys(keys))[:8] or None)
     db.commit()
     return {"prefs": prefs.get(user)}
 

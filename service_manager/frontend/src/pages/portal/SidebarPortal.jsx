@@ -11,11 +11,11 @@ import ServiceProjects from './ServiceProjects'
 import ServiceSingle from './ServiceSingle'
 import GroupManagePanel, { FixedGroupPanel } from './GroupManagePanel'
 import LinksView from './LinksView'
-import StoreView from './StoreView'
 import NewServiceView from './NewServiceView'
 import IconLabView from './IconLabView'
 import RackView from './RackView'
 import ArchivePanel from './ArchivePanel'
+import HomeView from './HomeView'
 import './sidebar.css'
 
 /** A card's stable key — the same one the cover and the saved order use, so a
@@ -24,7 +24,7 @@ const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.name)
 
 /** The portal's own tools always band together: they are things you do TO the
  *  portal, not services it runs, and an admin should not have to file them. */
-const SYSTEM_KEYS = ['@iconlab', '@newservice', '@store', '@rack']
+const SYSTEM_KEYS = ['@iconlab', '@newservice', '@rack']
 const SYSTEM_ID = '@system'
 const NOGROUP_ID = '@none'
 // The name a materialised System band is stored under. Until something is
@@ -260,7 +260,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
 export default function SidebarPortal({
   user, isManager, cards, groups, liveCards, links, iconFor, fullOrder,
   onLogout, onRefresh, onSaveOrder, onRegroup, onCreateGroup, onSetMembers,
-  settingsTab, onSettingsTab, authCard, info,
+  settingsTab, onSettingsTab, authCard, info, homeIcon,
 }) {
   // Signed out: the bar is a list of names and the panel is the login card.
   // Nothing opens, nothing is managed, and the foot has no account to show.
@@ -299,8 +299,10 @@ export default function SidebarPortal({
   pinnedRef.current = pinned
   /** Fold, unless the bar is pinned open. Every automatic fold goes through it. */
   const fold = useCallback(() => { if (!pinnedRef.current) setMini(true) }, [])
-  const [sel, setSel] = useState(readSel)        // { svc, proj } — mirrored in the URL
-  const [view, setView] = useState(() => (readSel() ? 'service' : 'empty'))  // service|settings|live|empty
+  // The old Service Manager card (?s=@store) lives on home now, opened.
+  const storeLink = readSel()?.svc === '@store'
+  const [sel, setSel] = useState(() => (storeLink ? null : readSel()))        // { svc, proj } — mirrored in the URL
+  const [view, setView] = useState(() => (readSel() && !storeLink ? 'service' : 'empty'))  // service|settings|live|empty
   // A record another service asked to open here ({ svc, proj, id }): a link in
   // one service's panel (a paper on an activity) lands on that record in its
   // own. Only the services the portal itself frames may ask.
@@ -579,6 +581,23 @@ export default function SidebarPortal({
     setView('service')
     fold()
   }, [view, sel, leaveSettings, fold])
+
+  // Home's "recently opened": every service or project that got the panel,
+  // newest first, kept on the account so another browser shows the same.
+  const [recent, setRecent] = useState(() => {
+    try { return JSON.parse(user?.preferences_json || '{}').recent || [] } catch { return [] }
+  })
+  useEffect(() => {
+    if (signedOut || view !== 'service' || !sel?.svc) return
+    const c = (cards || []).find((k) => cardKey(k) === sel.svc)
+    if (!c || c.builtin || (c.multi_project && !sel.proj)) return
+    const key = sel.proj ? `${sel.svc}/${sel.proj}` : sel.svc
+    if (recent[0] === key) return
+    const next = [key, ...recent.filter((k) => k !== key)].slice(0, 8)
+    setRecent(next)
+    launcher.put('/account/prefs', { recent: next }).catch(() => {})
+  }, [signedOut, view, sel?.svc, sel?.proj, cards])  // eslint-disable-line react-hooks/exhaustive-deps
+  const goHome = () => { endPeek(); leaveSettings(); setManage(false); setSel(null); setView('empty') }
 
   const projOpen = (name) => openSvcs.has(name)
   const toggleProj = (name) => setOpenSvcs((o) => {
@@ -1029,7 +1048,6 @@ export default function SidebarPortal({
   const builtinView = (b) => (
     b === 'iconlab' ? <IconLabView />
       : b === 'links' ? <LinksView links={links || []} onChanged={onRefresh} />
-        : b === 'store' ? <StoreView onChanged={onRefresh} />
           : b === 'newservice' ? <NewServiceView onCreated={onRefresh} />
           : b === 'rack' ? <RackView />
             : null
@@ -1066,6 +1084,14 @@ export default function SidebarPortal({
         </div>
 
         <div className="pl-nav" ref={navRef}>
+          {!signedOut && !(manage && isManager) && (
+            <div className={`pl-card pl-homecard${view === 'empty' ? ' on' : ''}`}>
+              <button type="button" className="pl-row" onClick={goHome}>
+                <Tile icon={homeIcon?.icon || 'home'} color={homeIcon?.color || 'var(--text-emphasis)'} on={view === 'empty'} />
+                <span className="pl-txt">{tr('p_home')}</span>
+              </button>
+            </div>
+          )}
           {bands.map(({ g, items }) => (g ? (
             /* A group is one tinted REGION spanning the bar's full width, with its
                cards inside it — a tinted title alone left the members looking like
@@ -1380,12 +1406,9 @@ export default function SidebarPortal({
                 catch { /* another origin */ }
               }} />
           ) : (
-            <div className="pl-empty">
-              <div>
-                <div className="big">{tr("p_pick_a_service")}</div>
-                <div>{tr("p_it_opens_here")}</div>
-              </div>
-            </div>
+            <HomeView cards={cards} groups={groups} recent={recent} isManager={isManager}
+              storeOpen={storeLink} onRefresh={onRefresh}
+              onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
           )}
         </div>
       </main>

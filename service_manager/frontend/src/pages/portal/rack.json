@@ -76,6 +76,16 @@
   "handrolled": false
  },
  {
+  "path": "portal/HomeView.jsx",
+  "plate": "설정",
+  "parts": [
+   "모듈",
+   "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
   "path": "portal/IconLabView.jsx",
   "plate": "도구",
   "parts": [
@@ -167,6 +177,16 @@
    "모듈",
    "표",
    "채널",
+   "표시등"
+  ],
+  "handrolled": false
+ },
+ {
+  "path": "portal/SyncAll.jsx",
+  "plate": "설정",
+  "parts": [
+   "모듈",
+   "표",
    "표시등"
   ],
   "handrolled": false

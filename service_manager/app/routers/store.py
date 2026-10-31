@@ -283,9 +283,15 @@ def _run_build_portal(job_id: str, pull: bool) -> None:
         if not git:
             return _set(job_id, status="error", error="git을 찾을 수 없습니다.")
         # ff-only so local (uncommitted or diverged) work is never rewritten.
-        if _stream(job_id, [git, "-C", str(SERVICES_ROOT), "pull", "--ff-only"]) != 0:
+        clean = _clean_submodules(git)
+        if _stream(job_id, [git, "-C", str(SERVICES_ROOT), "pull", "--ff-only"], env_extra=NO_PROMPT) != 0:
             return _set(job_id, status="error",
                         error="git pull 실패 (로컬 변경/분기 확인 — 수동으로 정리 후 다시 시도)")
+        # Submodules follow the new commit only where nobody was working in
+        # them: one checked out at another commit is someone's work, left alone.
+        if clean and _stream(job_id, [git, "-C", str(SERVICES_ROOT), "submodule", "update", "--", *clean],
+                             env_extra=NO_PROMPT) != 0:
+            return _set(job_id, status="error", error="서브모듈 업데이트 실패")
     # The portal's own frontend is built against the kit source too.
     if not _ensure_kit(job_id):
         return _set(job_id, status="error", error="lilak_ui (공용 UI 킷) 준비 실패")
@@ -303,6 +309,29 @@ def _run_build_portal(job_id: str, pull: bool) -> None:
     # backend code changes are picked up by uvicorn --reload.
     _log(job_id, "✓ 포털 빌드 완료 — 새로고침하면 반영됩니다")
     _set(job_id, status="done")
+
+
+def _clean_submodules(git: str) -> list[str]:
+    """Submodules (listed in .gitmodules, checked out) sitting exactly at the
+    recorded commit with nothing edited in them. Path by path: `git submodule status` stops at the first
+    gitlink .gitmodules does not know."""
+    def run(*a, cwd=SERVICES_ROOT):
+        try:
+            r = subprocess.run([git, "-C", str(cwd), *a], capture_output=True, text=True, timeout=30)
+            return r.stdout if r.returncode == 0 else ""
+        except Exception:                        # noqa: BLE001
+            return ""
+    known = {ln.split()[1] for ln in run("config", "-f", ".gitmodules", "--get-regexp", r"\.path$").splitlines()
+             if len(ln.split()) == 2}
+    out = []
+    for ln in run("ls-files", "--stage").splitlines():
+        meta, _, path = ln.partition("\t")
+        mode, sha = meta.split()[:2]
+        if mode == "160000" and path in known and (SERVICES_ROOT / path / ".git").exists() \
+                and run("rev-parse", "HEAD", cwd=SERVICES_ROOT / path).strip() == sha \
+                and not run("status", "--porcelain", "--untracked-files=no", cwd=SERVICES_ROOT / path).strip():
+            out.append(path)
+    return out
 
 
 def _spawn(target, *args, name: str) -> str:

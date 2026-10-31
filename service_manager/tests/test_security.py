@@ -91,6 +91,12 @@ class Accounts(unittest.TestCase):
         names = {s["name"] for s in c.get("/api/projects", headers=bearer(self.admin)).json()}
         self.assertIn("adminsvc", names)
 
+    def test_recent_is_deduped_and_capped(self):
+        tok = self.register("recent")
+        keys = ["a/1", "b", "a/1"] + [f"x{i}" for i in range(10)]
+        r = c.put("/api/account/prefs", headers=bearer(tok), json={"recent": keys})
+        self.assertEqual(r.json()["prefs"]["recent"], ["a/1", "b"] + [f"x{i}" for i in range(6)])
+
     def test_handshake_cannot_turn_a_managed_service_external(self):
         registry.service_dir("runsvc").mkdir(parents=True, exist_ok=True)
         registry.write_manifest("runsvc", registry.default_manifest("service", "managed"))

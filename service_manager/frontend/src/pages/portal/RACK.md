@@ -80,6 +80,7 @@
 | `portal/GroupsAdmin.jsx` | 설정 | 모듈·표·채널 |
 | `portal/GuideView.jsx` | 설정 | 모듈 |
 | `portal/HandshakeRegister.jsx` | — | 모듈 |
+| `portal/HomeView.jsx` | 설정 | 모듈·채널·표시등 |
 | `portal/IconLabView.jsx` | 도구 | 모듈·표·채널 |
 | `portal/InvitesAdmin.jsx` | 설정 | 모듈·표·채널·표시등 |
 | `portal/LinksView.jsx` | 도구 | 모듈·채널 |
@@ -89,6 +90,7 @@
 | `portal/ServiceProjects.jsx` | 관리 | 모듈·표·채널·표시등 |
 | `portal/ServiceSingle.jsx` | 관리 | 모듈·표·표시등 |
 | `portal/StoreView.jsx` | 도구 | 모듈·표·채널·표시등 |
+| `portal/SyncAll.jsx` | 설정 | 모듈·표·표시등 |
 | `portal/SystemAdmin.jsx` | 설정 | 모듈·표·표시등 |
 
 <!-- rack:end -->

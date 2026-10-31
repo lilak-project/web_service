@@ -26,7 +26,6 @@ export default function StoreView({ onChanged }) {
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [items, setItems] = useState(null)      // null = loading
   const [job, setJob] = useState(null)          // {id, name, status, log, error}
-  const [pull, setPull] = useState(false)       // build-portal: git pull first
   const setErr = (m) => m && notify(m, 'bad')
   const poll = useRef(null)
   const logBox = useRef(null)
@@ -65,7 +64,7 @@ export default function StoreView({ onChanged }) {
   const install = (name) => run('install', name, tr("p_failed_to_start_install"))
   const update = (name) => run('update', name, tr("p_failed_to_start_update"))
 
-  async function buildPortal() {
+  async function buildPortal(pull) {
     setErr('')
     try {
       const { data } = await launcher.post('/admin/store/build-portal', { pull })
@@ -130,11 +129,9 @@ export default function StoreView({ onChanged }) {
           {tr("p_refresh_once_it_finishes_and")}
         </Field>
         <FieldActions>
-          <Button variant="primary" disabled={running} onClick={buildPortal}>{tr("p_build_portal")}</Button>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
-            <input type="checkbox" checked={pull} onChange={(e) => setPull(e.target.checked)} />
-            {tr("p_git_pull_first_ff_only")}
-          </label>
+          <Button variant="primary" disabled={running} onClick={() => buildPortal(true)}
+            title={tr("p_git_update_hint")}>{tr("p_git_update")}</Button>
+          <Button variant="secondary" disabled={running} onClick={() => buildPortal(false)}>{tr("p_build_portal")}</Button>
         </FieldActions>
       </Panel>
 
