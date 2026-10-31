@@ -60,9 +60,14 @@ def raw_service(name: str) -> dict:
             if caps.get("multi_project") and (config.DATA_ROOT / name / "projects").is_dir()
             else None),
         "import_export": bool(caps.get("import_export")),
-        # Shares its tags (GET /api/tags on its entry project): the rack services
-        # and note offer each other's tags as you type one.
+        # Shares its tags (GET /api/tags on `tags_project`): the rack services
+        # and note offer each other's tags as you type one. The project is the
+        # manifest's entrance, else the first there is — not an account's
+        # choice, which a service nobody picked one for would not have.
         "tags": bool(caps.get("tags")),
+        "tags_project": (manifest.get("entry_project") or next(iter(sorted(
+            d.name for d in (config.DATA_ROOT / name / "projects").iterdir() if d.is_dir())), "")
+            if caps.get("tags") and (config.DATA_ROOT / name / "projects").is_dir() else ""),
         "order": manifest.get("order", 1000),      # admin-set display order (manage mode)
         "autostart": bool(manifest.get("autostart")),   # portal brings it up on ITS start
         # Answers GET /api/live with a few compact numbers for the cover's live mode.
