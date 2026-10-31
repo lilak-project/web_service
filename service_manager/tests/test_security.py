@@ -148,6 +148,23 @@ class Proxy(unittest.TestCase):
         self.assertNotIn("</script><img>", out)
         self.assertIn('&quot;', out)
 
+    def test_image_request_carries_the_session_on(self):
+        """An <img> sends no Authorization header — only the cookie. A service
+        that accepts the portal token gets that same token as a bearer, so a
+        picture on a page the user is signed in to is not a 401."""
+        class Req:
+            def __init__(self, headers, cookies):
+                self.headers, self.cookies = headers, cookies
+        tok = "abc.def.ghi"
+        img = Req({}, {"lilak_portal_token": tok})
+        self.assertEqual(proxy_util.cookie_bearer(img, True), f"Bearer {tok}")
+        # Not to a service that does not accept the portal token, and not over
+        # a header the caller already sent.
+        self.assertIsNone(proxy_util.cookie_bearer(img, False))
+        withhdr = Req({"authorization": "Bearer other"}, {"lilak_portal_token": tok})
+        self.assertIsNone(proxy_util.cookie_bearer(withhdr, True))
+        self.assertIsNone(proxy_util.cookie_bearer(Req({}, {}), True))
+
     def test_service_cannot_set_the_portal_cookie(self):
         up = httpx.Response(200, headers=[("set-cookie", "lilak_portal_token=evil; Path=/"),
                                           ("set-cookie", "theirs=1; Path=/")])

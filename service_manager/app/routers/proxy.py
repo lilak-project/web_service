@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from .. import permissions, registry, security
 from ..adapters import get_adapter
 from ..db import SessionLocal
-from ..proxy_util import login_redirect_or_401, service_facts, stream_proxy
+from ..proxy_util import cookie_bearer, login_redirect_or_401, service_facts, stream_proxy
 
 router = APIRouter()
 
@@ -118,6 +118,10 @@ async def service_proxy(name: str, path: str, request: Request):
     if accepts_portal:
         if "authorization" in request.headers:
             fwd["authorization"] = request.headers["authorization"]
+        else:
+            carried = cookie_bearer(request, accepts_portal)
+            if carried:
+                fwd["authorization"] = carried
     else:
         fwd.update(adapter.proxy_headers(manifest))
 

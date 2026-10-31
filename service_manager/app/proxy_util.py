@@ -207,3 +207,19 @@ async def stream_proxy(
     for c in set_cookies:
         resp.headers.append("set-cookie", c)
     return resp
+
+
+def cookie_bearer(request, accepts_portal: bool):
+    """The credential a service sees when the browser sent no Authorization.
+
+    A page the portal serves calls its own API with the header, but an `<img>`,
+    an `<a download>` and a top-level navigation carry nothing except the
+    `lilak_portal_token` cookie — so a service that already accepts the portal
+    token (SSO) gets that same token handed on as a bearer, and nothing else of
+    the cookie jar travels with it. Without this an embedded picture is a 401
+    on a page the user is plainly signed in to.
+    """
+    if not accepts_portal or request.headers.get("authorization"):
+        return None
+    token = request.cookies.get("lilak_portal_token")
+    return f"Bearer {token}" if token else None
