@@ -16,20 +16,22 @@ import {
 } from './paper.js'
 import { citedBy, papersOf, authorStats, NameWith } from './widgets.jsx'
 import { tr } from 'lilak-ui'
+import { tagKey } from 'lilak-ui/racklist'
 
 /** Every paper wearing one of `gone` wears `to` instead — once — and its main
  *  tag follows. A key is filed under the main tag, so one left naming a tag
  *  that has gone would quietly move to whichever tag happens to be first.
  *  `to` empty takes the tag off. */
 function foldTag(r, gone, to) {
-  const drop = new Set(gone)
+  // A tag is the same tag in any case: every spelling of one goes.
+  const drop = { has: (t) => gone.some((g) => tagKey(g) === tagKey(t)) }
   if (!(r.tags || []).some((t) => drop.has(t))) return r
   const next = []
   for (const t of r.tags) {
     const v = drop.has(t) ? to : t
     if (v && !next.includes(v)) next.push(v)
   }
-  const main = drop.has(r.mainTag) ? (to || '') : r.mainTag
+  const main = r.mainTag && drop.has(r.mainTag) ? (to || '') : r.mainTag
   return { ...r, tags: next, ...(main === r.mainTag ? {} : { mainTag: main }) }
 }
 

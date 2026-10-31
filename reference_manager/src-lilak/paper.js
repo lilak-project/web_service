@@ -1,6 +1,6 @@
 import './strings.js'
 import { tr } from 'lilak-ui'
-import { FAV } from 'lilak-ui/racklist'
+import { FAV, tagKey } from 'lilak-ui/racklist'
 /**
  * What makes a reference a REFERENCE — the parts of reference_manager that are
  * about papers rather than about lists: how a name is spelled three ways, the
@@ -125,7 +125,7 @@ export const shortRef = (doc, r) => [
 // at first, but nothing distinguished them from a tag: same many-to-many, no
 // fields of their own, nothing to edit. They are tags.
 export const tagsOf = (r) => (r.tags || []).filter(Boolean)
-export const inTag = (r, t) => tagsOf(r).includes(t)
+export const inTag = (r, t) => tagsOf(r).some((x) => tagKey(x) === tagKey(t))
 
 /** Papers this one lists, and papers that list it — one is stored, the other
  *  is counted, because storing both is two places to disagree. */
@@ -147,12 +147,12 @@ export const slug = (v) => deburr(v).replace(/[^A-Za-z0-9-]+/g, '_').replace(/_+
  *  when nobody has chosen. */
 // Never the favorite tag (the kit's ★): a key filed under it would move each
 // time a paper is starred.
-export const mainTag = (r) => (tagsOf(r).includes(r.mainTag) ? r.mainTag : tagsOf(r).find((t) => t !== FAV) || '')
+export const mainTag = (r) => (tagsOf(r).includes(r.mainTag) ? r.mainTag : tagsOf(r).find((t) => tagKey(t) !== FAV) || '')
 /** Every paper wearing one of `from` wears `to` instead — once, and its main
  *  tag follows. A key is filed under the main tag, so one left naming a tag
  *  that has gone would quietly move to whichever tag happens to be first. */
 export const foldTags = (doc, from, to) => {
-  const drop = new Set(from)
+  const drop = { has: (t) => from.some((g) => tagKey(g) === tagKey(t)) }
   return (doc.references || []).map((r) => {
     if (!(r.tags || []).some((t) => drop.has(t))) return r
     const next = []

@@ -119,6 +119,7 @@ const make = (root, value, onMarkdown, fileSrc, onFiles) => Editor.make()
     ctx.update(remarkStringifyOptionsCtx, (prev) => ({ ...prev, bullet: '-', rule: '-' }))
     ctx.get(listenerCtx).markdownUpdated((_, md) => onMarkdown(tidy(md)))
   })
+  .use(tagSuggest)      // first: its Enter/Tab beat the list's while it is open
   .use(commonmark)      // headings, lists, emphasis, links, code
   .use(linkEnds)        // …with a link that ends where it ends
   .use(gfm)             // tables, strikethrough, and the task list checkboxes
@@ -634,6 +635,86 @@ const duePick = $prose(() => new Plugin({
 /** `#태그` — Obsidian's spelling, and markdown keeps it apart from a heading
  *  (`# ` has a space after the hash). */
 export const TAG_RE = /(^|[\s(])#([^\s#.,;:!?()[\]{}'"]+)/g
+
+/** `#` and the start of a tag: the tags in use — here and in every service
+ *  that shares them (the rack services: lilak-ui/racklist tags.js) — offered
+ *  under the caret, the spelling already in use winning whatever the case.
+ *  ↑↓ choose, Enter or Tab take one, Esc puts the list away. The choices are
+ *  the page's (setTagChoices), most worn first. */
+let CHOICES = []
+export const setTagChoices = (names) => { CHOICES = names || [] }
+const tagSugKey = new PluginKey('nt-tag-suggest')
+const TAG_HEAD = /(^|[\s(])#([^\s#.,;:!?()[\]{}'"]*)$/
+const lower = (t) => String(t).toLowerCase()
+const choicesFor = (q) => {
+  const k = lower(q)
+  const starts = CHOICES.filter((t) => lower(t).startsWith(k))
+  const inside = k ? CHOICES.filter((t) => !lower(t).startsWith(k) && lower(t).includes(k)) : []
+  // A tag typed whole in its own spelling needs nothing offered.
+  return [...starts, ...inside].filter((t) => t !== q).slice(0, 8)
+}
+const tagSuggest = $prose(() => new Plugin({
+  key: tagSugKey,
+  state: {
+    init: () => null,
+    apply(tr, prev, _, state) {
+      const meta = tr.getMeta(tagSugKey)
+      const { selection } = state
+      if (!selection.empty) return null
+      const $p = selection.$from
+      if (!$p.parent.isTextblock) return null
+      const before = $p.parent.textBetween(0, $p.parentOffset, undefined, '\ufffc')
+      const m = before.match(TAG_HEAD)
+      if (!m) return null
+      const from = selection.from - m[2].length - 1
+      if (meta === 'off' || (prev?.off && prev.from === from)) return { from, off: true }
+      const list = choicesFor(m[2])
+      if (!list.length) return null
+      const i = typeof meta === 'number' ? meta : (prev?.from === from ? Math.min(prev.i || 0, list.length - 1) : 0)
+      return { from, to: selection.from, q: m[2], list, i }
+    },
+  },
+  props: {
+    decorations(state) {
+      const s = tagSugKey.getState(state)
+      if (!s || s.off) return null
+      return DecorationSet.create(state.doc, [Decoration.widget(s.from, (view) => {
+        const box = document.createElement('span')
+        box.className = 'nt-tagsug-at'
+        box.contentEditable = 'false'
+        const ul = document.createElement('span')
+        ul.className = 'nt-tagsug'
+        s.list.forEach((t, i) => {
+          const li = document.createElement('span')
+          li.className = `nt-tagsug-i${i === s.i ? ' on' : ''}`
+          li.textContent = `#${t}`
+          li.addEventListener('mousedown', (e) => { e.preventDefault(); take(view, t) })
+          ul.appendChild(li)
+        })
+        box.appendChild(ul)
+        return box
+      }, { side: -1, key: `tagsug:${s.from}:${s.i}:${s.list.join('|')}` })])
+    },
+    handleKeyDown(view, e) {
+      const s = tagSugKey.getState(view.state)
+      if (!s || s.off) return false
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const n = s.list.length
+        view.dispatch(view.state.tr.setMeta(tagSugKey, (s.i + (e.key === 'ArrowDown' ? 1 : n - 1)) % n))
+        return true
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') { take(view, s.list[s.i]); return true }
+      if (e.key === 'Escape') { view.dispatch(view.state.tr.setMeta(tagSugKey, 'off')); return true }
+      return false
+    },
+  },
+}))
+const take = (view, t) => {
+  const s = tagSugKey.getState(view.state)
+  if (!s || s.off) return
+  view.dispatch(view.state.tr.insertText(`#${t} `, s.from, s.to))
+  view.focus()
+}
 
 /** The due date drawn as a label: the tag's shape mirrored — a tag hangs by
  *  its point on the left, a date points forward on the right — in the amber

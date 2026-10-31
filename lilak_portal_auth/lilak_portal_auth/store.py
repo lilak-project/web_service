@@ -634,6 +634,24 @@ class Document:
                 return doc_.write({**cur, k: [rec] + list(cur.get(k) or [])},
                                   me.get("email") or me.get("username") or "", replaces=cur)
 
+        @app.get("/api/tags")
+        def get_tags(_: dict = Depends(signed_in)) -> dict:
+            """The tags the records wear (their `tags`), with how many wear
+            each — what the other rack services and note offer as you type
+            one, so a tag means the same thing everywhere."""
+            with doc_.lock:
+                cur = doc_.read()
+            n: dict = {}
+            for k in doc_.keys:
+                if k == "settings":
+                    continue
+                for r in cur.get(k) or []:
+                    tags = r.get("tags") if isinstance(r, dict) else None
+                    for t in (tags if isinstance(tags, list) else []):
+                        if isinstance(t, str) and t.strip():
+                            n[t.strip()] = n.get(t.strip(), 0) + 1
+            return {"tags": n}
+
         @app.get("/api/data/version")
         def get_version(_: dict = Depends(signed_in)) -> dict:
             # Cheap poll target: ask for the version, fetch the document only

@@ -60,6 +60,9 @@ def raw_service(name: str) -> dict:
             if caps.get("multi_project") and (config.DATA_ROOT / name / "projects").is_dir()
             else None),
         "import_export": bool(caps.get("import_export")),
+        # Shares its tags (GET /api/tags on its entry project): the rack services
+        # and note offer each other's tags as you type one.
+        "tags": bool(caps.get("tags")),
         "order": manifest.get("order", 1000),      # admin-set display order (manage mode)
         "autostart": bool(manifest.get("autostart")),   # portal brings it up on ITS start
         # Answers GET /api/live with a few compact numbers for the cover's live mode.

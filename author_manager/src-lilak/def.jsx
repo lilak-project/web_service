@@ -128,6 +128,9 @@ export default {
         { k: 'endDate', label: tr("am_end"), type: 'text', mono: true, width: 120, placeholder: '2026-11-18', group: tr("am_period"),
           hint: tr("am_end_hint") },
         { k: 'links', label: tr("am_links"), type: 'list', link: true, placeholder: 'https://…' },
+        // A group is an author list; its tags (shared with every service) say
+        // which project it belongs to.
+        { k: 'tags', label: tr('rk_tags'), type: 'tags', col: { w: 160, min: 60, label: 'tags' } },
       ] },
     { k: 'affiliations', label: 'affiliation', noun: tr("am_affiliation"), ...classHooks('affiliations', { rows: 'affiliations', by: 'tag' }, 'affiliation'),
       fields: [

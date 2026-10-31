@@ -472,3 +472,16 @@ body.nt-paper #root { height: auto; min-height: 100%; }
 /* ?solo: the editor alone, filling the frame another service shows it in. */
 .nt-solo { height: 100vh; display: flex; flex-direction: column; background: var(--rk-panel); }
 .nt-solo-note { padding: 4px 11px; border-top: 1px solid var(--rk-line); }
+
+/* `#` and a tag begun: the tags in use, under the caret (MarkdownArea's
+   tagSuggest). A zero-width anchor where the `#` is, and the list hangs from it. */
+.nt-tagsug-at { position: relative; display: inline-block; width: 0; height: 0; }
+.nt-tagsug {
+  position: absolute; left: 0; top: 1.5em; z-index: 30;
+  display: flex; flex-direction: column; min-width: 160px; max-width: 320px; padding: 3px 0;
+  background: var(--rk-panel, #fff); border: 1px solid var(--rk-edge, #cbd5e1);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .12);
+  font-size: var(--fs-small); line-height: 1.6; white-space: nowrap;
+}
+.nt-tagsug-i { padding: 0 10px; color: var(--rk-cite-t, #1d4ed8); cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
+.nt-tagsug-i.on, .nt-tagsug-i:hover { background: var(--rk-cite, #dbeafe); }

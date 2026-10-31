@@ -14,7 +14,7 @@
  */
 import './strings.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { registerType, newId } from 'lilak-ui/racklist'
+import { registerType, newId, useSharedTags, spellTag, tagKey, uniqueTags } from 'lilak-ui/racklist'
 import {
   authorRows, autRoles, handleFor, refLabel, linkedCites, citesOf, mainTag, tagsOf,
   ruleFor, citeKeyFor, parseCitation, splitAuthors, authorList, ROLE_LABEL,
@@ -203,10 +203,11 @@ function CitedBy({ refs, mine, onOpen }) {
  *  nothing to create first. */
 function TagRows({ value = [], onChange, options, main, onMain }) {
   const [add, setAdd] = useState('')
+  // A tag typed takes the spelling already in use, whatever its case.
   const put = () => {
-    const t = add.trim()
+    const t = spellTag(add, options)
     if (!t) return
-    if (!value.includes(t)) onChange([...value, t])
+    if (!value.some((x) => tagKey(x) === tagKey(t))) onChange([...value, t])
     setAdd('')
   }
   return (
@@ -342,7 +343,10 @@ registerType('maintags', {
   empty: () => [],
   text: (v) => list(v).filter(Boolean).join(' '),
   Edit: ({ value, onChange, ctx, rec, patch }) => {
-    const options = [...new Set((ctx.doc?.references || []).flatMap(tagsOf))].sort()
+    // This service's tags and every other's (note, activities, …), one per tag
+    // whatever its case.
+    const shared = useSharedTags()
+    const options = uniqueTags([...[...new Set((ctx.doc?.references || []).flatMap(tagsOf))].sort(), ...shared])
     return (
       <TagRows value={value || []} options={options} main={mainTag(rec)}
         onMain={(t) => patch({ mainTag: t })} onChange={onChange} />

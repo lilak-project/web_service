@@ -292,6 +292,17 @@ def delete_note(note_id: str, _: dict = Depends(signed_in)) -> dict:
     return {"ok": True, "id": note_id}
 
 
+@app.get("/api/tags")
+def tags(_: dict = Depends(signed_in)) -> dict:
+    """The tags the notes wear, with how many notes wear each — what the rack
+    services offer as you type one (they answer the same here, and note asks them)."""
+    n: dict = {}
+    for note in _all(NOTES):
+        for t in note["tags"]:
+            n[t] = n.get(t, 0) + 1
+    return {"tags": n}
+
+
 @app.get("/api/todos")
 def todos(_: dict = Depends(signed_in)) -> dict:
     """Every GFM checkbox in every note. Collected, never stored — the line in

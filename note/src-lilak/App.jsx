@@ -24,6 +24,7 @@ import {
   RackEditClass,
   bySome, asSorts, bumpSort, byKeys, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders, RackBar, takeOpenRequest,
+  tagKey, mergeTags as tagCounts, useTagSources, sharedTagRows, whereText, uniqueTags, PORTAL_SERVICE,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
 // and one newline means one line break, because a note is typed, not typeset.
@@ -32,7 +33,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { remarkSoftBreaks } from 'lilak-ui/log/Markdown.jsx'
-import MarkdownArea, { TAG_RE, EMBED_RE, embedSpec } from './MarkdownArea.jsx'
+import MarkdownArea, { TAG_RE, EMBED_RE, embedSpec, setTagChoices } from './MarkdownArea.jsx'
 import 'katex/dist/katex.min.css'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
@@ -72,14 +73,16 @@ export function bodyTags(body) {
   }
   return out
 }
-const inTag = (n, t) => tagsOf(n).includes(t)
+// A tag is the same tag whatever its case (`#spirit` is `#SpiRIT`), here and
+// in every service that shares tags.
+const inTag = (n, t) => tagsOf(n).some((x) => tagKey(x) === tagKey(t))
 /** A tag lives in the body and nowhere else, so renaming one is an edit to the
  *  text: `#old` becomes `#new` wherever the tag rule says a tag starts. The
  *  character in front is kept — it is what made it a tag rather than part of a
  *  word, and `#oldish` is a different tag entirely. */
 export function renameBodyTag(body, from, to) {
   return String(body || '').replace(TAG_RE, (m, lead, name) =>
-    (name === from ? `${lead}#${to}` : m))
+    (tagKey(name) === tagKey(from) ? `${lead}#${to}` : m))
 }
 
 /** The todo without its tags: they have a column of their own, and a list of a
@@ -104,6 +107,8 @@ const CLS_COLS = [
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
   { k: 'name', w: 220, min: 80, label: 'tag' },
   { k: 'count', w: 70, min: 46, label: 'notes', num: true },
+  // The same tag in the other services, and how many wear it there.
+  { k: 'where', w: 320, min: 80, label: tr('rk_tags_elsewhere') },
 ]
 const TODO_COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
@@ -159,6 +164,11 @@ export default function App() {
   const [bodyHits, setBodyHits] = useState(null)   // ids whose BODY matched
 
   const notes = index?.notes || []
+  // What `#` offers in the editor: every service's tags, then this list's own
+  // (one written since the page opened is here before the others know it).
+  const tagSources = useTagSources()
+  const shared = useMemo(() => tagCounts(tagSources.map((x) => x.tags)).map((x) => x.name), [tagSources])
+  useEffect(() => { setTagChoices(uniqueTags([...shared, ...notes.flatMap(tagsOf)])) }, [shared, notes])
   // The list carries a first line, not the body, so a local miss asks the
   // server to look inside; either way it is one search.
   const search = useCallback((n, q) => [n.title, n.date, n.excerpt, ...tagsOf(n)]
@@ -248,10 +258,17 @@ export default function App() {
 
   const classes = useMemo(() => {
     if (tab?.kind !== 'classes') return []
-    const names = [...new Set(notes.flatMap(tagsOf))]
-    return names.map((name) => ({ name, count: notes.filter((n) => inTag(n, name)).length }))
+    // One row per tag whatever its case — every sharing service's tags, the
+    // ones here with how many notes wear them, the rest with none; named by
+    // the spelling written most, and where else each is worn.
+    const spelt = {}
+    for (const t of notes.flatMap(tagsOf)) spelt[t] = (spelt[t] || 0) + 1
+    const own = PORTAL_SERVICE.name || 'note'
+    return sharedTagRows(tagSources, { svc: own, tags: spelt })
+      .map((t) => ({ name: t.name, count: notes.filter((n) => inTag(n, t.name)).length, where: whereText(t.by, own) }))
       .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
-  }, [notes, tab, clsSort])
+      .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
+  }, [notes, tab, clsSort, tagSources])
 
   // Tags drift here too — the same merge as the other racks, except the fold
   // is one PUT per note, because a tag is text inside the file.
@@ -510,7 +527,7 @@ export default function App() {
                     cell={{
                       ...(merge.mode ? { chk: <input type="checkbox" checked={chosen} tabIndex={-1}
                         readOnly aria-label={tr("nt_select_x", r.name)} /> } : {}),
-                      num: i + 1, name: r.name, count: r.count }} />
+                      num: i + 1, name: r.name, count: r.count || '·', where: r.where || '·' }} />
                   )
                 })}
                 {classes.length === 0 && <p className="rl-msg">{tr("nt_no_tags")}</p>}
