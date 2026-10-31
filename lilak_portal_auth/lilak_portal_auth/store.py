@@ -681,12 +681,13 @@ class Document:
         def rename_tags(body: dict = Body(...), me: dict = Depends(signed_in)) -> dict:
             """Every record wearing one of `from` (any case) wears `to` instead —
             once. Renaming one tag, or merging several into one; project_manager
-            asks every service in turn. A record's `mainTag` (reference's) follows."""
+            asks every service in turn. A record's `mainTag` (reference's) follows.
+            An empty `to` deletes the tag."""
             import copy
             gone = {str(t).strip().lower() for t in body.get("from") or [] if str(t).strip()}
             to = str(body.get("to") or "").strip()
-            if not gone or not to:
-                raise HTTPException(400, "바꿀 태그와 새 이름이 필요합니다.")
+            if not gone:
+                raise HTTPException(400, "바꿀 태그가 필요합니다.")
             with doc_.lock:
                 cur = doc_.read()
                 new = copy.deepcopy(cur)          # write() diffs against cur: never edit it in place
@@ -701,7 +702,7 @@ class Document:
                         out = []
                         for t in tags:
                             v = to if isinstance(t, str) and t.strip().lower() in gone else t
-                            if v not in out:
+                            if v and v not in out:
                                 out.append(v)
                         r["tags"] = out
                         if isinstance(r.get("mainTag"), str) and r["mainTag"].strip().lower() in gone:
@@ -712,9 +713,10 @@ class Document:
             return {"changed": n}
 
         @app.get("/api/tagged")
-        def get_tagged(tag: str, _: dict = Depends(signed_in)) -> dict:
+        def get_tagged(tag: str = "", project: str = "", _: dict = Depends(signed_in)) -> dict:
             """The records wearing `tag` (any case), each with the list it is
-            in — what project_manager gathers from every service."""
+            in — what project_manager gathers from every service. A record
+            here names no project (`project`: only note's text does)."""
             want = tag.strip().lower()
             with doc_.lock:
                 cur = doc_.read()

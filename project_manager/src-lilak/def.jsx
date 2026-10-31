@@ -6,7 +6,7 @@
  */
 import './strings.js'
 import { tr } from 'lilak-ui'
-import { isManager } from 'lilak-ui/racklist'
+import { isManager, loadTagSources, showFilteredInCalendar, tagKey } from 'lilak-ui/racklist'
 import { InboxActions, MakesField } from './inbox.jsx'
 
 // The kinds an activity is stored with (Korean in the data) — as academic_activities/src-lilak/def.js GROUPS has them.
@@ -14,17 +14,32 @@ const KINDS = ['학회', '워크샵', '학술미팅', '연구출장', '미팅', 
 const isAct = (r) => r.target === 'activity'
 const isNote = (r) => r.target === 'note'
 const fromMail = () => true                       // the mail's own facts: shown, not edited
+// A project's events: activity's calendar, filtered by it (`+name`, as its filter keeps one).
+const CAL = 'academic_activities'
+const showInCalendar = async (name) => {
+  const proj = (await loadTagSources()).find((s) => s.svc === CAL)?.proj || 'activities'
+  showFilteredInCalendar(CAL, proj, [`+${tagKey(name)}`])
+}
 
 export default {
   name: 'project_manager', title: tr('pm_title'), unit: tr('pm_unit'), key: 'pm',
   item: {
     key: 'projects', noun: tr('pm_project'), allLabel: tr('pm_projects'), label: 'name',
+    // A project's row opens its own tab: everything its tags gather, in every
+    // service — all of them, or any (match).
+    tagged: { tags: 'tags', match: 'match' },
+    // A saved project's editor bar: its events on activity's calendar.
+    actions: (f) => (f.id && f.name ? <button type="button" className="rl-btn"
+      onClick={() => showInCalendar(f.name)}>{tr('pm_show_in_calendar')}</button> : null),
+    // In text a project is one word (`+STARK`, as a tag is `#STARK`): its name
+    // can hold no space, nor what ends a word there.
+    check: (r) => (/[\s#+.,;:!?()[\]{}'"]/.test(r.name || '') ? tr('pm_name_one_word') : ''),
     columns: ['name', 'tags', 'match', 'start', 'end', 'folder'],
     fields: [
-      { k: 'name', label: tr('pm_name'), type: 'text', col: 240, required: true },
+      { k: 'name', label: tr('pm_name'), type: 'text', col: 240, required: true, hint: tr('pm_name_hint') },
       { k: 'tags', label: tr('pm_tags'), type: 'tags', col: 220 },
-      { k: 'match', label: tr('pm_match'), type: 'select', col: 70, default: 'and', hint: tr('pm_match_hint'),
-        options: [['and', tr('pm_and')], ['or', tr('pm_or')]] },
+      { k: 'match', label: tr('pm_match'), type: 'select', col: 70, default: 'or', hint: tr('pm_match_hint'),
+        options: [['or', tr('pm_or')], ['and', tr('pm_and')]] },
       { k: 'start', label: tr('pm_start'), type: 'date', col: 96 },
       { k: 'end', label: tr('pm_end'), type: 'date', col: 96 },
       { k: 'description', label: tr('pm_description'), type: 'longtext' },
@@ -33,7 +48,8 @@ export default {
     ],
   },
   classes: [
-    { k: 'tags', label: tr('pm_tags'), field: 'tags', shared: true },
+    // Every service's tags; picked in manage mode, they make a new project matching any of them, or all (bundle).
+    { k: 'tags', label: tr('pm_tags'), field: 'tags', shared: true, bundle: { match: 'match' } },
     // 받은편지함 — the candidates the Claude mail task proposed (backend/main.py
     // takes them in), a manager's to approve: one list, waiting first, the
     // buttons in its last column (inbox.jsx).

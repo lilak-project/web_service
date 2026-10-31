@@ -54,6 +54,14 @@ class Tags(unittest.TestCase):
         self.assertEqual(by["g"]["tags"], ["S-TPC"])
         self.assertEqual(by["c"]["tags"], ["EOS"])
 
+    def test_empty_name_deletes_the_tag(self):
+        r = self.c.post("/api/tags/rename", json={"from": ["SPIRIT"], "to": ""}, headers=H).json()
+        self.assertEqual(r["changed"], 3)
+        d = self.doc.read()
+        by = {x["id"]: x for x in d["items"] + d["groups"]}
+        self.assertEqual((by["a"]["tags"], by["a"]["mainTag"]), (["TPC"], ""))
+        self.assertEqual((by["b"]["tags"], by["g"]["tags"], by["c"]["tags"]), ([], [], ["EOS"]))
+
 
 class Records(Tags):
     def test_add_record_gets_an_id_and_goes_on_top(self):

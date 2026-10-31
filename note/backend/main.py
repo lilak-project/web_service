@@ -53,7 +53,12 @@ TODO_RE = re.compile(r"^(\s*[-*]\s+\[)([ xX])(\]\s*)(.*)$")
 # `#태그` written in the body, the way Obsidian spells one. A heading is `# `
 # WITH a space after the hash, so the two cannot be confused — which is why the
 # tag needs no field of its own.
-TAG_RE = re.compile(r"(?:^|[\s(])#([^\s#.,;:!?()\[\]{}'\"]+)")
+TAG_RE = re.compile(r"(?:^|[\s(])#(?![0-9]+(?![^\s#.,;:!?()\[\]{}'\"]))([^\s#.,;:!?()\[\]{}'\"]+)")
+# `+name` names a project (project_manager's), by the same rule as a tag.
+# A project's name may have spaces ("STARK + CRIB"); in text it is called with
+# them, and anything else a name cannot hold, run into one `_`: `+STARK_CRIB`.
+_proj_key = lambda s: re.sub(r"[\s#+.,;:!?()\[\]{}'\"_]+", "_", str(s).strip().lower()).strip("_")  # noqa: E731
+PROJ_RE = re.compile(r"(?:^|[\s(])\+(?![0-9]+(?![^\s#+.,;:!?()\[\]{}'\"]))([^\s#+.,;:!?()\[\]{}'\"]+)")
 # The day a box was ticked: `✓ 2026-08-04`. The vault these notes came from
 # used Obsidian Tasks' `✅`, so that is still read — only what this app WRITES
 # changed, to a mark that is a line rather than a picture.
@@ -309,18 +314,19 @@ def tags(_: dict = Depends(signed_in)) -> dict:
 def rename_tags(body: dict, _: dict = Depends(signed_in)) -> dict:
     """Every `#tag` in `from` (any case) becomes `#to`, in every note — the
     text is the only place a tag lives. Renaming one tag, or merging several;
-    project_manager asks every service in turn."""
+    project_manager asks every service in turn. An empty `to` deletes the
+    tag: its `#` goes, the word stays (the sentence still reads)."""
     gone = {str(t).strip().lower() for t in body.get("from") or [] if str(t).strip()}
     to = str(body.get("to") or "").strip()
-    if not gone or not to or re.search(r"[\s#]", to):
+    if not gone or re.search(r"[\s#]", to):
         raise HTTPException(400, "바꿀 태그와 새 이름(띄어쓰기 없이)이 필요합니다.")
-    lead = re.compile(r"(^|[\s(])#([^\s#.,;:!?()\[\]{}'\"]+)")
+    lead = re.compile(r"(^|[\s(])#(?![0-9]+(?![^\s#.,;:!?()\[\]{}'\"]))([^\s#.,;:!?()\[\]{}'\"]+)")
     n = 0
     for p in sorted(NOTES.glob("*.md")):
         text = p.read_text(encoding="utf-8")
         m = re.match(r"---\n.*?\n---\n", text, re.S)
         head, rest = (text[:m.end()], text[m.end():]) if m else ("", text)
-        new = lead.sub(lambda x: f"{x.group(1)}#{to}" if x.group(2).lower() in gone else x.group(0), rest)
+        new = lead.sub(lambda x: f"{x.group(1)}{'#' + to if to else x.group(2)}" if x.group(2).lower() in gone else x.group(0), rest)
         if new != rest:
             _atomic_write(p, head + new)
             n += 1
@@ -328,20 +334,23 @@ def rename_tags(body: dict, _: dict = Depends(signed_in)) -> dict:
 
 
 @app.get("/api/tagged")
-def tagged(tag: str, _: dict = Depends(signed_in)) -> dict:
+def tagged(tag: str = "", project: str = "", _: dict = Depends(signed_in)) -> dict:
     """The notes wearing `tag` (any case), and the todos written with it — what
-    project_manager gathers from every service."""
-    want = tag.strip().lower()
+    project_manager gathers from every service. With `project` instead, the
+    ones that name it (`+STARK`)."""
+    rule, want = (PROJ_RE, _proj_key(project)) if project.strip() else (TAG_RE, tag.strip().lower())
+    hit = (lambda m: _proj_key(m.group(1)) == want) if rule is PROJ_RE else (lambda m: m.group(1).lower() == want)
     out = []
     for note in _all(NOTES):
-        if want and any(t.lower() == want for t in note["tags"]):
+        if want and (any(t.lower() == want for t in note["tags"]) if rule is TAG_RE
+                     else any(hit(m) for m in PROJ_RE.finditer(note["body"]))):
             out.append({"key": "notes", "rec": {"id": note["id"], "title": note["title"], "date": note["date"]}})
         for i, ln in enumerate(note["body"].splitlines()):
             m = _todo(ln)
             if not m:
                 continue
             text, due, at = _todo_text(m.group(4))
-            if want and any(t.group(1).lower() == want for t in TAG_RE.finditer(text)):
+            if want and any(hit(t) for t in rule.finditer(text)):
                 out.append({"key": "todos", "rec": {"id": note["id"], "title": note["title"], "line": i,
                                                     "text": text, "done": m.group(2) != " ", "due": due}})
     return {"items": out}
