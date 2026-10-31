@@ -1,4 +1,5 @@
 import './strings.js'
+import { useEffect, useState } from 'react'
 import { tr } from 'lilak-ui'
 import { authHeaders, loadTagSources } from 'lilak-ui/racklist'
 
@@ -9,10 +10,15 @@ import { authHeaders, loadTagSources } from 'lilak-ui/racklist'
  * through academic_activities' POST /api/records, a note through note's own
  * POST and PUT — then saves the candidate approved, with where it went; [열기]
  * opens that in a pane here.
+ *
+ * A candidate with `match` ({id}) is about a record that already exists in
+ * that service. `mode: 'update'` lays its filled fields over the activity (or
+ * adds its body to the end of the note) — [업데이트]; `mode: 'checked'` means the
+ * mail brought nothing new — [확인]. Either way [열기] opens the record.
  */
 const ACTIVITY = ['name', 'kind', 'start', 'startTime', 'end', 'endTime', 'place', 'link', 'comment']
 const SVC = { activity: 'academic_activities', note: 'note' }
-const RANK = { waiting: 0, approved: 1, discarded: 2 }
+const RANK = { waiting: 0, approved: 1, checked: 1, discarded: 2 }
 const now = () => new Date().toISOString()
 const words = (v) => String(v || '').split(/\s+/).map((t) => t.replace(/^#/, '')).filter(Boolean)
 
@@ -30,6 +36,26 @@ const projOf = async (svc) => (await loadTagSources()).find((s) => s.svc === svc
 /** The tags the candidate's project brings (its `project` is a link to one). */
 const projectTags = (r, doc) => (doc?.projects || []).find((p) => p.id === (r.project?.id ?? r.project))?.tags || []
 
+const today = () => new Date().toLocaleDateString('sv')   // YYYY-MM-DD
+const fromLine = (r) => [r.from, r.date].filter(Boolean).join(', ') + (r.subject ? `, 「${r.subject}」` : '')
+
+/** What an update lays over: the activity's filled fields, or the note's added part. */
+function changes(r) {
+  if (r.target === 'activity') return Object.fromEntries(ACTIVITY.filter((k) => String(r[k] || '')).map((k) => [k, String(r[k])]))
+  const from = fromLine(r)
+  return { add: `\n\n## ${tr('pm_ib_update_head', today())}\n\n${String(r.body || '').trim()}\n${from ? `\n출처: ${from}\n` : ''}` }
+}
+
+/** The record a match points at, as its service has it now. */
+async function current(r) {
+  const svc = SVC[r.target], p = await projOf(svc)
+  if (r.target === 'note') return call(`/pp/${svc}/${p}/api/notes/${encodeURIComponent(r.match.id)}`)
+  const d = await call(`/pp/${svc}/${p}/api/data`)
+  const rec = (d.activities || []).find((x) => String(x.id) === String(r.match.id))
+  if (!rec) throw new Error(tr('pm_ib_gone'))
+  return rec
+}
+
 /** What approving makes: { record } for an activity, { title, text } for a note. */
 export function makes(r, doc) {
   const tags = projectTags(r, doc)
@@ -37,17 +63,20 @@ export function makes(r, doc) {
     const rec = Object.fromEntries(ACTIVITY.map((k) => [k, String(r[k] || '')]))
     return { record: { ...rec, repeat: null, ...(tags.length ? { tags } : {}) } }
   }
-  const from = [r.from, r.date].filter(Boolean).join(', ') + (r.subject ? `, 「${r.subject}」` : '')
+  const from = fromLine(r)
   const all = [...new Set([...words(r.noteTags), ...tags])].map((t) => `#${t}`).join(' ')
   return { title: String(r.title || '').trim(),
     text: `${all}\n\n${String(r.body || '').trim()}\n${from ? `\n출처: ${from}\n` : ''}` }
 }
-const missing = (r, out) => (r.target === 'activity'
+const missing = (r, out) => (r.mode === 'update'
+  ? (r.target === 'activity' ? (Object.keys(changes(r)).length ? '' : tr('pm_ib_need_change')) : (String(r.body || '').trim() ? '' : tr('pm_ib_need_change')))
+  : r.target === 'activity'
   ? (!out.record.name || !/^\d{4}-\d{2}-\d{2}$/.test(out.record.start) ? tr('pm_ib_need_activity') : '')
   : (!out.title ? tr('pm_ib_need_note') : ''))
 
 /** The editor's read-only field: exactly what approving will make. */
 export function MakesField({ rec: r, ctx }) {
+  if (r.mode === 'update' && r.match?.id) return <UpdateField r={r} />
   const out = makes(r, ctx.doc)
   const bad = missing(r, out)
   if (bad) return <span className="rl-warn">{bad}</span>
@@ -56,6 +85,19 @@ export function MakesField({ rec: r, ctx }) {
       ? Object.entries(out.record).filter(([, v]) => v && v.length !== 0).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')
       : `${out.title}\n\n${out.text}`}</div>
   )
+}
+
+/** An update's preview: each field old → new, or the note's added part. */
+function UpdateField({ r }) {
+  const [cur, setCur] = useState(null)
+  useEffect(() => { current(r).then(setCur, (e) => setCur({ error: String(e.message || e) })) }, [r.match?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+  const bad = missing(r)
+  if (bad) return <span className="rl-warn">{bad}</span>
+  if (!cur) return <span className="rl-dim">…</span>
+  if (cur.error) return <span className="rl-warn">{cur.error}</span>
+  if (r.target === 'note') return <div className="rl-mono" style={{ whiteSpace: 'pre-wrap' }}>{`${cur.title}\n…${changes(r).add}`}</div>
+  const rows = Object.entries(changes(r)).map(([k, v]) => (String(cur[k] || '') === v ? `${k}: ${v}` : `${k}: ${cur[k] || '—'} → ${v}`))
+  return <div className="rl-mono" style={{ whiteSpace: 'pre-wrap' }}>{`${cur.name}\n${rows.join('\n')}`}</div>
 }
 
 /** The candidate saved with what changed, the inbox kept waiting first. */
@@ -68,7 +110,16 @@ async function approve(r, ctx) {
   const out = makes(r, ctx.doc)
   const svc = SVC[r.target], p = await projOf(svc)
   let id
-  if (r.target === 'activity') {
+  if (r.mode === 'update') {
+    id = r.match.id
+    if (r.target === 'activity') {
+      await post(`/pp/${svc}/${p}/api/records/update`, { key: 'activities', id, fields: changes(r) })
+    } else {
+      const n = await current(r)
+      await call(`/pp/${svc}/${p}/api/notes/${encodeURIComponent(id)}`,
+        { method: 'PUT', body: JSON.stringify({ baseVersion: n.version, body: n.body.trimEnd() + changes(r).add }) })
+    }
+  } else if (r.target === 'activity') {
     id = (await post(`/pp/${svc}/${p}/api/records`, { key: 'activities', record: out.record })).record.id
   } else {
     const n = await post(`/pp/${svc}/${p}/api/notes`, { title: out.title })
@@ -81,12 +132,16 @@ async function approve(r, ctx) {
   return change
 }
 
-const openMade = (r, ctx) => ctx.openRecord?.({ ...r.made, label: r.target === 'note' ? r.title : r.name })
+const openMade = async (r, ctx) => ctx.openRecord?.({
+  ...(r.made || { svc: SVC[r.target], proj: await projOf(SVC[r.target]), id: r.match?.id }),
+  label: r.target === 'note' ? r.title : r.name })
 
 /** The buttons a candidate has where it stands: waiting [승인][버림],
  *  approved [열기], discarded [되살리기]. `after` hears what changed (the
- *  editor keeps its form in step). */
-export function InboxActions({ r, ctx, after }) {
+ *  editor keeps its form in step). A waiting update's [열기] (the record it
+ *  would change) is the editor's only: its row has no room, and the editor
+ *  shows the change beside it. */
+export function InboxActions({ r, ctx, after, row }) {
   if (!r?.id) return null
   const stop = (e) => e.stopPropagation()
   const run = (fn) => async (e) => {
@@ -95,9 +150,9 @@ export function InboxActions({ r, ctx, after }) {
   }
   const out = makes(r, ctx.doc)
   const bad = missing(r, out)
-  if (r.status === 'approved') {
-    return r.made ? <button type="button" className="rl-btn" onClick={(e) => { stop(e); openMade(r, ctx) }}>{tr('pm_ib_open')}</button> : null
-  }
+  const open = (r.made || r.match?.id)
+    ? <button type="button" className="rl-btn" onClick={(e) => { stop(e); openMade(r, ctx) }}>{tr('pm_ib_open')}</button> : null
+  if (r.status === 'approved' || r.status === 'checked') return open
   if (r.status === 'discarded') {
     return (
       <button type="button" className="rl-btn" onClick={run(async () => {
@@ -109,13 +164,20 @@ export function InboxActions({ r, ctx, after }) {
   }
   return (
     <span style={{ display: 'inline-flex', gap: 4 }} onClick={stop}>
-      <button type="button" className="rl-btn rl-go" disabled={!!bad} title={bad || undefined}
-        onClick={run(() => approve(r, ctx))}>{tr('pm_ib_approve')}</button>
+      {r.mode === 'checked'
+        ? <button type="button" className="rl-btn rl-go" onClick={run(async () => {
+            const ch = { status: 'checked', decidedAt: now() }
+            await save(ctx, r, ch, tr('pm_ib_checked'))
+            return ch
+          })}>{tr('pm_ib_check')}</button>
+        : <button type="button" className="rl-btn rl-go" disabled={!!bad} title={bad || undefined}
+            onClick={run(() => approve(r, ctx))}>{tr(r.mode === 'update' ? 'pm_ib_update' : 'pm_ib_approve')}</button>}
       <button type="button" className="rl-btn rl-danger" onClick={run(async () => {
         const ch = { status: 'discarded', decidedAt: now() }
         await save(ctx, r, ch, tr('pm_ib_discarded'))
         return ch
       })}>{tr('pm_ib_discard')}</button>
+      {r.match?.id && !row && open}
     </span>
   )
 }

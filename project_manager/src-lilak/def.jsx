@@ -61,8 +61,11 @@ export default {
           options: [['activity', tr('pm_ib_activity')], ['note', tr('pm_ib_note')]] },
         { k: 'what', label: tr('pm_ib_title'), col: 280, get: (r) => (isNote(r) ? r.title : r.name) || '' },
         { k: 'status', label: tr('pm_ib_status'), type: 'select', col: 80, disabled: fromMail,
-          options: [['waiting', tr('pm_ib_waiting_s')], ['approved', tr('pm_ib_approved_s')], ['discarded', tr('pm_ib_discarded_s')]] },
-        { k: 'act', label: '', col: 166, edit: false, cell: (r, ctx) => <InboxActions r={r} ctx={ctx} /> },
+          options: [['waiting', tr('pm_ib_waiting_s')], ['approved', tr('pm_ib_approved_s')], ['checked', tr('pm_ib_checked_s')], ['discarded', tr('pm_ib_discarded_s')]] },
+        // new, or about a record that exists (`match`): update it, or seen — nothing new
+        { k: 'mode', label: tr('pm_ib_mode'), type: 'select', col: 70, disabled: fromMail, default: '',
+          options: [['', tr('pm_ib_mode_new')], ['update', tr('pm_ib_mode_update')], ['checked', tr('pm_ib_mode_checked')]] },
+        { k: 'act', label: '', col: 236, edit: false, cell: (r, ctx) => <InboxActions r={r} ctx={ctx} row /> },
         { k: 'from', label: tr('pm_ib_from'), type: 'text', col: 180, tone: 'dim', disabled: fromMail },
         { k: 'date', label: tr('pm_ib_date'), type: 'text', col: 92, tone: 'dim', disabled: fromMail },
         { k: 'subject', label: tr('pm_ib_mail'), type: 'text', disabled: fromMail },
@@ -83,7 +86,7 @@ export default {
         { k: 'body', label: 'body', type: 'longtext', when: isNote },
         // where it goes, and what it will be
         { k: 'project', label: tr('pm_ib_project'), type: 'ref', to: 'projects', col: 120, hint: tr('pm_ib_project_hint') },
-        { k: 'makes', label: tr('pm_ib_makes'), type: 'text', when: (r) => r.status === 'waiting', edit: (p) => <MakesField {...p} /> },
+        { k: 'makes', label: tr('pm_ib_makes'), type: 'text', when: (r) => r.status === 'waiting' && r.mode !== 'checked', edit: (p) => <MakesField {...p} /> },
       ] },
   ],
 }

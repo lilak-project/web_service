@@ -677,6 +677,28 @@ class Document:
                 doc_.write(new, me.get("email") or me.get("username") or "", replaces=cur)
             return {"record": next(x for x in doc_.read()[k] if str(x.get("id")) == str(r["id"]))}
 
+        @app.post("/api/records/update")
+        def update_record(body: dict = Body(...), me: dict = Depends(signed_in)) -> dict:
+            """`fields` laid over the record `id` of `key` — what another service
+            changes here (an inbox update approved in project_manager). id and
+            createdAt stay; updatedAt moves."""
+            import copy
+            k, rid, fields = str(body.get("key") or ""), str(body.get("id") or ""), body.get("fields")
+            if k not in doc_.keys or k == "settings" or not rid or not isinstance(fields, dict):
+                raise HTTPException(400, "고칠 목록, id, 필드가 필요합니다.")
+            fields = {f: v for f, v in fields.items() if f not in ("id", "createdAt", "updatedAt")}
+            now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            with doc_.lock:
+                cur = doc_.read()
+                new = copy.deepcopy(cur)
+                hit = next((x for x in new.get(k) or [] if isinstance(x, dict) and str(x.get("id")) == rid), None)
+                if hit is None:
+                    raise HTTPException(404, "그 기록이 없습니다.")
+                hit.update(fields, updatedAt=now)
+                doc_.to_ids(new)
+                doc_.write(new, me.get("email") or me.get("username") or "", replaces=cur)
+            return {"record": next(x for x in doc_.read()[k] if str(x.get("id")) == rid)}
+
         @app.post("/api/tags/rename")
         def rename_tags(body: dict = Body(...), me: dict = Depends(signed_in)) -> dict:
             """Every record wearing one of `from` (any case) wears `to` instead —

@@ -71,6 +71,12 @@ class Records(Tags):
         self.assertEqual(self.c.post("/api/records", json={"key": "settings", "record": {}}, headers=H).status_code, 400)
         self.assertEqual(self.c.post("/api/records", json={"key": "items", "record": {"id": "a"}}, headers=H).status_code, 409)
 
+    def test_update_record_lays_fields_over_one(self):
+        r = self.c.post("/api/records/update", json={"key": "items", "id": "b", "fields": {"place": "Zoom", "id": "x"}}, headers=H).json()["record"]
+        self.assertEqual((r["id"], r["place"], r["tags"]), ("b", "Zoom", ["spirit"]))
+        self.assertTrue(r["updatedAt"])
+        self.assertEqual(self.c.post("/api/records/update", json={"key": "items", "id": "zz", "fields": {}}, headers=H).status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -63,7 +63,7 @@ def _flat(c: dict) -> dict:
     return out
 
 
-_RANK = {"waiting": 0, "approved": 1, "discarded": 2}
+_RANK = {"waiting": 0, "approved": 1, "checked": 1, "discarded": 2}
 
 
 def _order(inbox: list) -> list:
