@@ -194,6 +194,17 @@
       "en": "Academic activities — events, talks, roles, linked to references and authors (multi-project)"
     },
     {
+      "name": "project_manager",
+      "dir": "project_manager",
+      "repo": "",
+      "label": "프로젝트",
+      "icon": "folder",
+      "color": "#0f766e",
+      "needs_kit": true,
+      "ko": "프로젝트 — 서비스를 가로지르는 +이름 태그, 메일 받은편지함으로 기록 추가·업데이트 (멀티프로젝트)",
+      "en": "Projects — +name tags across services, an inbox that adds or updates records from mail (multi-project)"
+    },
+    {
       "name": "asset_manager2",
       "dir": "asset_manager2",
       "repo": "",
