@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Button, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
@@ -94,7 +94,7 @@ export default function SyncAll() {
       <Panel title={tr('p_sa_requests')} hint={asked.length ? String(asked.length) : ''}>
         {asked.length === 0 && <Field label="">{<span style={fieldMuted}>{tr('p_sa_no_requests')}</span>}</Field>}
         {asked.map((g) => (
-          <div key={g.batch}>
+          <Fragment key={g.batch}>
             <Field label={tr('p_pin')}>
               <b style={mono}>{g.pin}</b>
               <span style={fieldMuted}>{g.from_name || '?'} ({g.from_url || '?'}) · {g.by || '?'}</span>
@@ -112,7 +112,7 @@ export default function SyncAll() {
               <Button variant="primary" onClick={() => decide(g, 'approve')}>{tr('p_sa_approve_all', g.items.length)}</Button>
               <Button variant="dangerSoft" onClick={() => decide(g, 'reject')}>{tr('p_reject')}</Button>
             </FieldActions>
-          </div>
+          </Fragment>
         ))}
       </Panel>
 
