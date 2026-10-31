@@ -24,7 +24,7 @@ import {
   RackEditClass,
   bySome, asSorts, bumpSort, byKeys, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders, RackBar, takeOpenRequest,
-  tagKey, mergeTags as tagCounts, useTagSources, sharedTagRows, whereText, uniqueTags, PORTAL_SERVICE,
+  tagKey, mergeTags as tagCounts, useTagSources, sharedTagRows, uniqueTags, PORTAL_SERVICE,
   useFavTags, RackStar,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
@@ -115,8 +115,7 @@ const CLS_COLS = [
   { k: 'fav', w: 26, min: 26, fix: true },      // the account's starred tags, on top
   { k: 'name', w: 220, min: 80, label: 'tag' },
   { k: 'count', w: 70, min: 46, label: 'notes', num: true },
-  // The same tag in the other services, and how many wear it there.
-  { k: 'where', w: 320, min: 80, label: tr('rk_tags_elsewhere') },
+  // …then a column per other service that shares tags (added in App).
 ]
 const TODO_COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
@@ -205,7 +204,11 @@ export default function App() {
   const { picked, setPicked, hit, all: allPicked, some: somePicked, toggleAll, clear: clearPicked } = L
   const { drag } = L
   const cols = L.colsOf('')
-  const clsCols = L.colsOf('c:')
+  // The tags tab: after the notes' count, how many wear each tag in every other service.
+  const own = PORTAL_SERVICE.name || 'note'
+  const perCols = useMemo(() => tagSources.filter((s) => s.svc !== own)
+    .map((s) => ({ k: `svc:${s.svc}`, w: 96, min: 46, label: s.label, num: true })), [tagSources, own])
+  const clsCols = L.colsOf('c:', [...CLS_COLS, ...perCols])
   const todoCols = L.colsOf('t:')
 
   const reload = useCallback(async () => {
@@ -272,11 +275,11 @@ export default function App() {
     // and the ones this account starred on top.
     const spelt = {}
     for (const t of notes.flatMap(tagsOf)) spelt[t] = (spelt[t] || 0) + 1
-    const own = PORTAL_SERVICE.name || 'note'
     const rows = sharedTagRows(tagSources, { svc: own, tags: spelt })
-      .map((t) => ({ name: t.name, count: notes.filter((n) => inTag(n, t.name)).length, where: whereText(t.by, own) }))
+      .map((t) => ({ name: t.name, count: notes.filter((n) => inTag(n, t.name)).length,
+        per: Object.fromEntries(t.by.filter((b) => b.svc !== own).map((b) => [`svc:${b.svc}`, b.n])) }))
       .filter((r) => r.count)
-      .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
+      .sort(bySome(CLS_SORTERS[clsSort.k] || (clsSort.k.includes(':') ? (r) => r.per[clsSort.k] ?? null : CLS_SORTERS.name), clsSort.dir))
     return [...rows.filter((r) => isFavTag(r.name)), ...rows.filter((r) => !isFavTag(r.name))]
   }, [notes, tab, clsSort, tagSources, isFavTag])
 
@@ -537,7 +540,8 @@ export default function App() {
                     cell={{
                       ...(merge.mode ? { chk: <input type="checkbox" checked={chosen} tabIndex={-1}
                         readOnly aria-label={tr("nt_select_x", r.name)} /> } : {}),
-                      num: i + 1, name: r.name, count: r.count || '·', where: r.where || '·',
+                      num: i + 1, name: r.name, count: r.count || '·',
+                      ...Object.fromEntries(perCols.map((p) => [p.k, r.per[p.k] || '·'])),
                       fav: <RackStar on={isFavTag(r.name)} onToggle={() => toggleFavTag(r.name)} /> }} />
                   )
                 })}

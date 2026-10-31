@@ -652,6 +652,82 @@ class Document:
                             n[t.strip()] = n.get(t.strip(), 0) + 1
             return {"tags": n}
 
+        @app.post("/api/records")
+        def add_record(body: dict = Body(...), me: dict = Depends(signed_in)) -> dict:
+            """One record added to the top of `key` — what another service makes
+            here (an inbox candidate approved in project_manager). It gets an
+            id and its times when it has none; a name for a class record is
+            stored as that record's id, as a PUT's is."""
+            import copy
+            import uuid
+            k, rec = str(body.get("key") or ""), body.get("record")
+            if k not in doc_.keys or k == "settings" or not isinstance(rec, dict):
+                raise HTTPException(400, "추가할 목록과 기록이 필요합니다.")
+            now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            r = {**rec, "updatedAt": now}
+            r.setdefault("id", str(uuid.uuid4()))
+            r.setdefault("createdAt", now)
+            with doc_.lock:
+                cur = doc_.read()
+                if any(isinstance(x, dict) and str(x.get("id")) == str(r["id"]) for x in cur.get(k) or []):
+                    raise HTTPException(409, "같은 id의 기록이 이미 있습니다.")
+                new = copy.deepcopy(cur)
+                new[k] = [r] + list(new.get(k) or [])
+                doc_.to_ids(new)
+                doc_.write(new, me.get("email") or me.get("username") or "", replaces=cur)
+            return {"record": next(x for x in doc_.read()[k] if str(x.get("id")) == str(r["id"]))}
+
+        @app.post("/api/tags/rename")
+        def rename_tags(body: dict = Body(...), me: dict = Depends(signed_in)) -> dict:
+            """Every record wearing one of `from` (any case) wears `to` instead —
+            once. Renaming one tag, or merging several into one; project_manager
+            asks every service in turn. A record's `mainTag` (reference's) follows."""
+            import copy
+            gone = {str(t).strip().lower() for t in body.get("from") or [] if str(t).strip()}
+            to = str(body.get("to") or "").strip()
+            if not gone or not to:
+                raise HTTPException(400, "바꿀 태그와 새 이름이 필요합니다.")
+            with doc_.lock:
+                cur = doc_.read()
+                new = copy.deepcopy(cur)          # write() diffs against cur: never edit it in place
+                n = 0
+                for k in doc_.keys:
+                    if k == "settings":
+                        continue
+                    for r in new.get(k) or []:
+                        tags = r.get("tags") if isinstance(r, dict) else None
+                        if not isinstance(tags, list) or not any(isinstance(t, str) and t.strip().lower() in gone for t in tags):
+                            continue
+                        out = []
+                        for t in tags:
+                            v = to if isinstance(t, str) and t.strip().lower() in gone else t
+                            if v not in out:
+                                out.append(v)
+                        r["tags"] = out
+                        if isinstance(r.get("mainTag"), str) and r["mainTag"].strip().lower() in gone:
+                            r["mainTag"] = to
+                        n += 1
+                if n:
+                    doc_.write(new, me.get("email") or me.get("username") or "", replaces=cur)
+            return {"changed": n}
+
+        @app.get("/api/tagged")
+        def get_tagged(tag: str, _: dict = Depends(signed_in)) -> dict:
+            """The records wearing `tag` (any case), each with the list it is
+            in — what project_manager gathers from every service."""
+            want = tag.strip().lower()
+            with doc_.lock:
+                cur = doc_.read()
+            out = []
+            for k in doc_.keys:
+                if k == "settings" or not want:
+                    continue
+                for r in cur.get(k) or []:
+                    tags = r.get("tags") if isinstance(r, dict) else None
+                    if isinstance(tags, list) and any(isinstance(t, str) and t.strip().lower() == want for t in tags):
+                        out.append({"key": k, "rec": r})
+            return {"items": out}
+
         @app.get("/api/data/version")
         def get_version(_: dict = Depends(signed_in)) -> dict:
             # Cheap poll target: ask for the version, fetch the document only

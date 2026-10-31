@@ -6,6 +6,7 @@ so they follow the person to any browser:
     entry   {service: project} — the project pressing that service opens
             straight away ('' = none: show the list, even if the service has
             a default entrance)
+    favTags [tag, …] — the tags starred, first in every tags tab
     recent  ["svc" | "svc/project", …] — last opened, newest first (home)
 """
 from __future__ import annotations

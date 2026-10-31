@@ -37,7 +37,7 @@ const noteTodos = async () => {
         method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ id: t.id, line: t.line, done, text: t.text }),
       }).then((x) => x.ok),
-      open: (ctx) => ctx?.openFrame?.({ id: `note:${t.id}`, label: t.title, color, src: `${NOTE}/?solo=${encodeURIComponent(t.id)}` }),
+      open: (ctx) => ctx?.openRecord?.({ svc: 'note', proj: 'note', id: t.id, label: t.title }),
     }))
   } catch { return [] }
 }
