@@ -220,8 +220,9 @@ body.nt-paper #root { height: auto; min-height: 100%; }
      attendees, and squeezing that into a column squeezes the date too. */
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px;
   padding: 2px 11px 6px;
-  max-height: 5.5em; overflow-y: auto;
 }
+/* The folder a note's files live in: a long path, said whole. */
+.nt-path { word-break: break-all; }
 .nt-meta-open .rl-hint { flex: 0 1 auto; min-width: 0; }
 /* The body takes everything that is left — to the right edge, to the bottom.
    The editor is a page: one family, sizes that step, nothing bold that is not
@@ -242,7 +243,11 @@ body.nt-paper #root { height: auto; min-height: 100%; }
    still the note — typing in it saves like anywhere else. */
 /* The source views are a CodeMirror editor; its own theme (RawArea.jsx) carries
    the type, the gutter and the colours. This is only the box it stands in. */
-.nt-raw { flex: 1; min-height: 0; display: flex; }
+.nt-raw {
+  flex: 1; min-height: 0; display: flex;
+  /* The line between what the note IS and what it says. */
+  border-top: 1px solid var(--rk-line);
+}
 .nt-raw .cm-editor { flex: 1; min-width: 0; }
 
 /* ── 라이브: the markdown drawn over the text that is still the file ──────
@@ -261,6 +266,8 @@ body.nt-paper #root { height: auto; min-height: 100%; }
 .nt-cm-em { font-style: italic; }
 .nt-cm-del { text-decoration: line-through; color: var(--rk-mute); }
 .nt-cm-link, .nt-cm-wiki { color: var(--rk-cite-t); text-decoration: underline; text-underline-offset: 2px; }
+/* Drawn as a link, so it opens like one — except on the line being edited. */
+.nt-cm-link { cursor: pointer; }
 .nt-cm-quote { border-left: 2px solid var(--rk-edge); color: var(--rk-dim); }
 /* The dashes of a `---` are the rule itself: the line is drawn, they are not
    (the highlighter colours them, so the span has to be told too). */
@@ -274,11 +281,28 @@ body.nt-paper #root { height: auto; min-height: 100%; }
 }
 /* A table's row: the pipes only line up in a fixed-width face, and the file is
    not touched to make them. */
-.nt-cm-row { font-family: var(--rk-mono); font-size: .92em; }
+.nt-cm-row {
+  font-family: var(--rk-mono); font-size: .92em;
+  /* and it does NOT wrap: a wrapped row puts its pipes under the wrong
+     column, which is the one thing the fixed-width face was for. A wide
+     table scrolls sideways instead. */
+  white-space: pre;
+}
 /* An item under another one: one step smaller than the line above it, and only
    one — a list five deep is not five sizes smaller. The step in is drawn, not
    written, so the spaces in the file stay as they were. */
 .nt-cm-sub { font-size: calc(var(--rk-fs) - 2px); }
+/* A table, drawn as a table — while the caret is somewhere else. The lines it
+   covers are still in the file, and pressing it puts the caret back in them. */
+.nt-cm-table {
+  border-collapse: collapse; margin: 2px 0 6px;
+  font-size: calc(var(--rk-fs) - 1px);
+}
+.nt-cm-table :where(th, td) {
+  border: 1px solid var(--rk-mute); padding: 3px 8px; vertical-align: middle;
+}
+.nt-cm-table th { background: var(--rk-gut); font-weight: 600; }
+.nt-cm-table tr { cursor: text; }
 /* A task's box, drawn where `[ ]` stands in the text. */
 .nt-cm-box {
   display: inline-block; vertical-align: -3px;
@@ -310,7 +334,9 @@ body.nt-paper #root { height: auto; min-height: 100%; }
 .rl-btn.nt-send:hover { background: var(--rk-head); color: var(--rk-ink); }
 
 /* ?solo: the editor alone, filling the frame another service shows it in. */
-.nt-solo { height: 100vh; display: flex; flex-direction: column; background: var(--rk-panel); }
+/* No .rl padding: the frame it is shown in is already the pane, so the
+   editor sits exactly as it does in note's own pane. */
+.nt-solo { height: 100vh; display: flex; flex-direction: column; background: var(--rk-panel); padding: 0; }
 .nt-solo-note { padding: 4px 11px; border-top: 1px solid var(--rk-line); }
 
 /* `#` and a tag begun: the tags in use, under the caret (MarkdownArea's

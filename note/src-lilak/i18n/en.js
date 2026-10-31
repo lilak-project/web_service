@@ -50,6 +50,7 @@ export default {
   nt_folder_open: "Open folder",
   nt_folder_opened: "Opened the files folder.",
   nt_folder_no: "This server cannot open a folder.",
+  nt_no_note: (a0) => `No note called ${a0}`,
   nt_mode: "View",
   nt_live: "Live",
   nt_raw: "Raw",

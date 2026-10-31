@@ -5,7 +5,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 import { markdown, markdownLanguage, markdownKeymap } from '@codemirror/lang-markdown'
 import { livePreview, liveLook } from './livemd.js'
-import { tagComplete, dueKeys, takeFiles } from './liveedit.js'
+import { tagComplete, dueKeys, takeFiles, tableKeys, tableInput } from './liveedit.js'
 
 /** The note as the file has it, in a real text editor — plain (`원문`) or with
  *  the markdown drawn over it (`라이브`).
@@ -45,7 +45,7 @@ const look = EditorView.theme({
   '.cm-selectionBackground, ::selection': { background: 'var(--rk-cite) !important' },
 })
 
-export default function RawArea({ value, onChange, live = false, fileSrc, onFiles }) {
+export default function RawArea({ value, onChange, live = false, fileSrc, onFiles, onOpenNote }) {
   const host = useRef(null)
   const view = useRef(null)
   const cb = useRef(onChange)
@@ -60,15 +60,20 @@ export default function RawArea({ value, onChange, live = false, fileSrc, onFile
       state: EditorState.create({
         doc: value,
         extensions: [
-          ...(live ? [livePreview(fileSrc), ...liveLook]
-            : [lineNumbers(), highlightActiveLineGutter()]),
+          lineNumbers(),
+          highlightActiveLineGutter(),
+          ...(live ? [livePreview(fileSrc, onOpenNote), ...liveLook] : []),
           highlightActiveLine(),
           drawSelection(),
           history(),
+          // A table's own Tab and Enter go first: the general keymap's Tab
+          // indents the line, which is not what a cell wants.
+          tableKeys,
           keymap.of([...markdownKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown({ base: markdownLanguage }),
           tagComplete,
           ...dueKeys,
+          tableInput,
           ...(onFiles ? [takeFiles(onFiles)] : []),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           look,

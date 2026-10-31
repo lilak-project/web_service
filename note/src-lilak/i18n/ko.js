@@ -50,6 +50,7 @@ export default {
   nt_folder_open: "폴더 열기",
   nt_folder_opened: "파일 폴더를 열었습니다.",
   nt_folder_no: "이 서버에서는 폴더를 열 수 없습니다.",
+  nt_no_note: (a0) => `그런 노트가 없습니다: ${a0}`,
   nt_mode: "보기 방식",
   nt_live: "라이브",
   nt_raw: "원문",

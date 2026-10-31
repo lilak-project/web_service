@@ -579,6 +579,14 @@ export default function App() {
                     onCancel={() => panes.close(cur.id)} />
                 ) : (
                 <Editor id={cur.id} say={setNote} onSaved={reload}
+                  onOpenNote={(name) => {
+                    // `[[…]]` names a note by its file name or by its title.
+                    const k = name.toLowerCase()
+                    const n = notes.find((x) => x.id.toLowerCase() === k)
+                      || notes.find((x) => (x.title || '').toLowerCase() === k)
+                    if (n) openEdit(n.id, n.title)
+                    else setNote(tr("nt_no_note", name))
+                  }}
                   takeCaret={cur.id === fresh} onCaret={() => setFresh(null)}
                   onPrint={() => preview([cur.id])}
                   onClosed={(cid) => { panes.close(cid); reload() }} />
@@ -633,7 +641,7 @@ export function SoloNote({ id }) {
   )
 }
 
-function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
+function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpenNote }) {
   const [n, setN] = useState(null)
   const [f, setF] = useState(null)
   const [open, setOpen] = useState(false)     // the fold beside the title
@@ -791,7 +799,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
            text with its line numbers; `라이브` paints the markdown over it and
            keeps the marks on the line the caret is in. Either way what is
            saved is what is typed, character for character. */
-        <SourceArea key={view} live={view === 'live'} fileSrc={fileSrc}
+        <SourceArea key={view} live={view === 'live'} fileSrc={fileSrc} onOpenNote={onOpenNote}
           onFiles={(file) => putFile(file).catch((e) => { say(String(e.message || e)); return null })}
           value={f.body} onChange={(v) => setF((s) => ({ ...s, body: v }))} />
       )}
