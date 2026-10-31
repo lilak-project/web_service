@@ -95,9 +95,25 @@ function UpdateField({ r }) {
   if (bad) return <span className="rl-warn">{bad}</span>
   if (!cur) return <span className="rl-dim">…</span>
   if (cur.error) return <span className="rl-warn">{cur.error}</span>
-  if (r.target === 'note') return <div className="rl-mono" style={{ whiteSpace: 'pre-wrap' }}>{`${cur.title}\n…${changes(r).add}`}</div>
-  const rows = Object.entries(changes(r)).map(([k, v]) => (String(cur[k] || '') === v ? `${k}: ${v}` : `${k}: ${cur[k] || '—'} → ${v}`))
-  return <div className="rl-mono" style={{ whiteSpace: 'pre-wrap' }}>{`${cur.name}\n${rows.join('\n')}`}</div>
+  const hl = { background: 'var(--rk-cite)', color: 'var(--rk-cite-t)' }
+  if (r.target === 'note') return (
+    <div className="rl-mono" style={{ whiteSpace: 'pre-wrap' }}>
+      <div className="rl-dim">{`${cur.title}\n…`}</div>
+      <div style={{ ...hl, padding: '2px 6px', borderLeft: '3px solid var(--rk-cite-t)' }}>{changes(r).add.trim()}</div>
+    </div>)
+  const ch = changes(r)
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr 1fr', gap: '1px 10px', alignItems: 'baseline' }}>
+      <b style={{ gridColumn: '1 / -1' }}>{cur.name}</b>
+      {ACTIVITY.filter((k) => k !== 'name' || k in ch).map((k) => {
+        const old = String(cur[k] || ''), neu = k in ch ? ch[k] : old, diff = neu !== old
+        return [
+          <span key={k} className="rl-dim">{k}</span>,
+          <span key={`${k}o`} className={diff ? 'rl-dim' : ''} style={diff ? { textDecoration: 'line-through' } : null}>{old || '—'}</span>,
+          <span key={`${k}n`} style={diff ? { ...hl, padding: '0 4px', fontWeight: 600 } : { color: 'var(--rk-dim)' }}>{diff ? neu : '='}</span>,
+        ]
+      })}
+    </div>)
 }
 
 /** The candidate saved with what changed, the inbox kept waiting first. */
