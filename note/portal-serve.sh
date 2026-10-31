@@ -16,6 +16,14 @@ set -u
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PORT="${1:-${PORT:-8042}}"
 
+# The build below needs `npm`, and a tex note needs `tectonic` (and `gs` for
+# its PostScript pictures) — all three are looked up on PATH. The portal
+# spawns this service with a bare PATH (/usr/bin:/bin:/usr/sbin:/sbin), which
+# on a Mac holds none of them, so the two places a package manager puts them
+# are added here: the service's own entry point, where its environment belongs.
+PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+export PATH
+
 # Build only when the app's sources — or the kit's — are newer than the last
 # build: a start with nothing changed skips Vite's ~2 s (the portal starts
 # several of these at once, and each waited on its own build).

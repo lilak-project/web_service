@@ -17,8 +17,10 @@ current note, rather than overwriting someone's paragraph.
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import unicodedata
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -42,6 +44,12 @@ TEMPLATES = DATA / "templates"
 FILES = DATA / "files"
 # A note holds a picture or a scan, not a disk image.
 MAX_FILE = 32 << 20
+# A tex note's PDF is made from the note, not kept by it: it lives outside the
+# project folder so it never syncs, never exports and never has to be excluded
+# from either. A lost one costs one recompile.
+BUILD = Path(tempfile.gettempdir()) / "note-build" / (PROJECT or "_")
+TECTONIC = os.environ.get("NOTE_TECTONIC", "tectonic")
+COMPILE_SECONDS = 180
 
 app = FastAPI(title="note")
 
@@ -248,7 +256,10 @@ def get_note(note_id: str, _: dict = Depends(signed_in)) -> dict:
     p = _path(note_id)
     if not p.is_file():
         raise HTTPException(404, "그 노트가 없습니다.")
-    return _read(p)
+    # When this note's PDF was made, if it has one — so the editor can offer
+    # to show it, and can tell whether it is still the note (its stamp is
+    # later than the note's own `version`, which is the file's).
+    return {**_read(p), "pdf_at": _pdf_at(note_id)}
 
 
 @app.post("/api/notes", status_code=201)
@@ -420,58 +431,184 @@ def search(q: str = "", _: dict = Depends(signed_in)) -> dict:
     return {"hits": hits}
 
 
+def _files(note: str = "") -> Path:
+    """Where a note's files live.
+
+    A markdown note shares the project's files folder: that folder is a vault,
+    `![[a.png]]` names one file in it, and two notes showing the same picture
+    should be showing the same file.
+
+    A tex note gets a folder of its own (`files/<note>/`), because LaTeX names
+    a file by a plain name that the compile copies next to `main.tex` — two
+    papers that each have a `fig1.pdf` must not be one file.
+    """
+    if not note:
+        return FILES
+    if "/" in note or "\\" in note or note.startswith("."):
+        raise HTTPException(400, "잘못된 노트 이름입니다.")
+    return FILES / note
+
+
 @app.get("/api/file/{name}")
-def get_file(name: str, _: dict = Depends(signed_in)):
+def get_file(name: str, note: str = "", _: dict = Depends(signed_in)):
     """A file a note embeds — `![[name.png]]`, which is Obsidian's spelling and
-    names the file alone. It never leaves the project's files folder."""
+    names the file alone. It never leaves the project's files folder.
+
+    `note` asks that note's own folder first (a tex note), and the shared
+    folder after it, so a picture already in the vault still shows."""
     if not name or "/" in name or "\\" in name or name.startswith("."):
         raise HTTPException(400, "잘못된 파일 이름입니다.")
-    p = (FILES / name).resolve()
-    if not str(p).startswith(str(FILES.resolve())) or not p.is_file():
-        raise HTTPException(404, "그 파일이 없습니다.")
-    return FileResponse(p)
+    for base in ([_files(note), FILES] if note else [FILES]):
+        p = (base / name).resolve()
+        if str(p).startswith(str(FILES.resolve())) and p.is_file():
+            return FileResponse(p)
+    raise HTTPException(404, "그 파일이 없습니다.")
+
+
+def _pdf_at(note_id: str) -> str:
+    """When this note's PDF was last written, as a string of nanoseconds — the
+    same clock and the same shape as a note's `version`, so the two compare.
+    Empty when there is no PDF."""
+    p = BUILD / f"{note_id}.pdf"
+    return str(p.stat().st_mtime_ns) if p.is_file() else ""
+
+
+def _tex_body(note_id: str) -> str:
+    """The note as LaTeX. The front matter is NOT part of the document — the
+    body alone is `main.tex`, which is also why an error's line number is the
+    line the editor shows."""
+    p = _path(note_id)
+    if not p.is_file():
+        raise HTTPException(404, "그런 노트가 없습니다.")
+    meta, body = _split(p.read_text(encoding="utf-8"))
+    if str(meta.get("format", "")).lower() != "tex":
+        raise HTTPException(400, "LaTeX 노트가 아닙니다 (앞머리에 format: tex).")
+    return body
+
+
+# `error: main.tex:12: …` — the line of the note the engine stopped on.
+TEX_AT = re.compile(r"\bmain\.tex:(\d+):\s*(.*)")
+
+
+@app.post("/api/compile/{note_id}")
+def compile_note(note_id: str, _: dict = Depends(signed_in)) -> dict:
+    r"""The note, typeset. Its body is written out as `main.tex` and its files
+    land beside it — which is why a tex note has a folder of its own, and why
+    `\includegraphics{fig1.pdf}` means the plain name it says.
+
+    `--untrusted` is the point: no shell-escape, nothing read from outside the
+    folder we just made. The document is text from a browser."""
+    body = _tex_body(note_id)
+    exe = shutil.which(TECTONIC)
+    if not exe:
+        raise HTTPException(501, "이 서버에는 tectonic이 없습니다.")
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        (work / "main.tex").write_text(body, encoding="utf-8")
+        src = _files(note_id)
+        if src.is_dir():
+            for f in src.iterdir():
+                if f.is_file():
+                    shutil.copy(f, work / f.name)
+        try:
+            r = subprocess.run([exe, "--untrusted", "main.tex"], cwd=work,
+                               capture_output=True, text=True,
+                               timeout=COMPILE_SECONDS)
+            log, code = (r.stderr or "") + (r.stdout or ""), r.returncode
+        except subprocess.TimeoutExpired:
+            log, code = f"{COMPILE_SECONDS}초 안에 끝나지 않았습니다.", 1
+        pdf = work / "main.pdf"
+        ok = code == 0 and pdf.is_file()
+        if ok:
+            BUILD.mkdir(parents=True, exist_ok=True)
+            shutil.copy(pdf, BUILD / f"{note_id}.pdf")
+    # Only what went wrong: a LaTeX run says thousands of words about boxes
+    # being a little too wide, and none of them is why the PDF is missing.
+    bad = [ln for ln in log.splitlines() if ln.startswith("error:")]
+    errors = []
+    for ln in bad:
+        m = TEX_AT.search(ln)
+        errors.append({"line": int(m.group(1)), "text": m.group(2)} if m
+                      else {"line": 0, "text": ln[len("error:"):].strip()})
+    return {"ok": ok, "errors": errors, "log": log[-8000:], "pdf_at": _pdf_at(note_id)}
+
+
+@app.get("/api/pdf/{note_id}")
+def get_pdf(note_id: str, _: dict = Depends(signed_in)):
+    """The PDF the last compile left. It is not the note — a note whose PDF is
+    gone is a note that has not been compiled on this server yet."""
+    _path(note_id)                      # the name is a note's, not a path
+    p = BUILD / f"{note_id}.pdf"
+    if not p.is_file():
+        raise HTTPException(404, "아직 컴파일하지 않았습니다.")
+    return FileResponse(p, media_type="application/pdf")
 
 
 @app.get("/api/where")
-def where(_: dict = Depends(signed_in)) -> dict:
+def where(note: str = "", _: dict = Depends(signed_in)) -> dict:
     """Where this project keeps what it is made of — the folders behind the
     notes and their files, so the app can say it rather than make you guess."""
-    return {"project": PROJECT, "notes": str(NOTES), "files": str(FILES)}
+    return {"project": PROJECT, "notes": str(NOTES), "files": str(_files(note))}
 
 
 @app.post("/api/reveal")
-def reveal(_: dict = Depends(manager)) -> dict:
+def reveal(note: str = "", _: dict = Depends(manager)) -> dict:
     """Show the files folder in the host's own file manager. The portal spawns
     this service on the machine it runs on, so 'the host' is that machine — in
     a container, or behind a portal somewhere else, there is nothing to open
     and the caller is told so rather than left waiting."""
-    FILES.mkdir(parents=True, exist_ok=True)
+    folder = _files(note)
+    folder.mkdir(parents=True, exist_ok=True)
     opener = {"darwin": "open", "win32": "explorer"}.get(sys.platform, "xdg-open")
     try:
-        subprocess.Popen([opener, str(FILES)],
+        subprocess.Popen([opener, str(folder)],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         raise HTTPException(501, "이 서버에서는 폴더를 열 수 없습니다.")
-    return {"path": str(FILES)}
+    return {"path": str(folder)}
 
 
 @app.post("/api/file")
-async def put_file(f: UploadFile = File(...), _: dict = Depends(signed_in)):
+async def put_file(f: UploadFile = File(...), note: str = "",
+                   _: dict = Depends(signed_in)):
     """A file dropped into a note. It lands beside the notes under its own
     name, the way a vault keeps it; a name already taken grows a number rather
-    than overwriting someone else's picture."""
+    than overwriting someone else's picture. `note` puts it in that note's own
+    folder instead (a tex note — see `_files`)."""
     raw = await f.read(MAX_FILE + 1)
     if len(raw) > MAX_FILE:
         raise HTTPException(413, f"파일이 너무 큽니다 ({MAX_FILE // (1 << 20)}MB까지).")
     name = _slug(Path(f.filename or "file").name) or "file"
     stem, ext = os.path.splitext(name)
-    FILES.mkdir(parents=True, exist_ok=True)
+    folder = _files(note)
+    folder.mkdir(parents=True, exist_ok=True)
     n = 1
-    while (FILES / name).exists():
+    while (folder / name).exists():
         name = f"{stem}-{n}{ext}"
         n += 1
-    (FILES / name).write_bytes(raw)
-    return {"name": name}
+    (folder / name).write_bytes(raw)
+    return {"name": _pdfify(folder / name) or name}
+
+
+def _pdfify(p: Path) -> str:
+    """PostScript, turned into a PDF beside itself — and the PDF's name, which
+    is the one a document should point at.
+
+    Tectonic cannot place an EPS at all: not a shell-escape rule, the PDF
+    writer simply has no PostScript in it. So the conversion happens once, when
+    the file arrives, rather than on every compile. The original is kept — it
+    is what was handed to us. No ghostscript on this host means the file stays
+    as it is and the compile says which picture it could not read."""
+    if p.suffix.lower() not in (".eps", ".ps"):
+        return ""
+    gs = shutil.which("gs")
+    if not gs:
+        return ""
+    out = p.with_suffix(".pdf")
+    r = subprocess.run([gs, "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dEPSCrop",
+                        "-sDEVICE=pdfwrite", f"-sOutputFile={out}", str(p)],
+                       capture_output=True, timeout=120)
+    return out.name if r.returncode == 0 and out.is_file() else ""
 
 
 @app.get("/api/whoami")

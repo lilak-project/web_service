@@ -73,6 +73,22 @@
   background: var(--rk-panel, #fff);
 }
 
+/* A project — `+STARK` — drawn as RACK's project nameplate (kit .rl-proj):
+   no fill but a dark head cut on a slant, a screw at each end. */
+.nt-proj-in, .nt-proj {
+  display: inline-block; position: relative;
+  padding: 0 calc(.35em + 7px) 0 calc(.35em + 9px);
+  border: 1px solid var(--rk-proj, #0f766e); color: var(--rk-proj, #0f766e);
+  font-weight: 700; font-size: .92em;
+  background: linear-gradient(105deg, var(--rk-proj, #0f766e) 0 12px, transparent 12px);
+}
+.nt-proj-in::before, .nt-proj::before, .nt-proj-in::after, .nt-proj::after {
+  content: ''; position: absolute; top: 50%; width: 3px; height: 3px; margin-top: -1.5px;
+  border-radius: 50%; background: var(--rk-proj, #0f766e);
+}
+.nt-proj-in::before, .nt-proj::before { left: 4px; background: #fff; }
+.nt-proj-in::after, .nt-proj::after { right: 4px; }
+
 /* A tag, where a note is read: the same blue the rest of RACK cites with. */
 .nt-sheet .nt-tag { background: #3730a3; color: #3730a3; }
 .nt-sheet .nt-tag::after { background: #eef2ff; }
@@ -113,7 +129,7 @@
 
 /* Every chip stands a touch shorter than the line it sits on — one rule, so
    they cannot drift apart again. */
-.nt-tag-in, .nt-tag, .nt-due-in, .nt-done-in { line-height: 1.6; }
+.nt-tag-in, .nt-tag, .nt-proj-in, .nt-proj, .nt-due-in, .nt-done-in { line-height: 1.6; }
 
 /* The calendar `>> ` opens: it stands in the line, in the field's own clothes.
    Picking a day writes the 📅 mark and the field goes away. */
@@ -249,6 +265,31 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   border-top: 1px solid var(--rk-line);
 }
 .nt-raw .cm-editor { flex: 1; min-width: 0; }
+
+/* ── tex: the PDF, in a tab of its own ───────────────────────────────────
+   The viewer is the browser's (its bar is turned off in the src); what this
+   adds is the two things that bar was worth: open it properly, or save it. */
+.nt-pdfpane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.nt-pdfbar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px; border-top: 1px solid var(--rk-line); background: var(--rk-gut);
+}
+.nt-ref { width: 130px; margin-left: 4px; }
+.nt-ref-no { color: #b91c1c; }
+.nt-pdfbar .rl-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-pdfbar a.rl-btn { text-decoration: none; display: inline-flex; align-items: center; }
+.nt-pdf { flex: 1; min-height: 0; width: 100%; border: 0; border-top: 1px solid var(--rk-line); background: var(--rk-gut); }
+
+/* What stopped it, and nothing else: a LaTeX log is thousands of words long
+   and the three lines that matter are these. */
+.nt-texerr {
+  flex: 0 0 auto; max-height: 20vh; overflow: auto;
+  padding: 4px 10px; border-top: 1px solid var(--rk-line);
+  background: var(--rk-gut); font-family: var(--rk-mono); font-size: var(--fs-small);
+  /* The rack's own red, the one delete wears. */
+  color: #b91c1c;
+}
+.nt-texerr b { font-weight: 600; margin-right: 6px; }
 
 /* ── 라이브: the markdown drawn over the text that is still the file ──────
    Only paint — every rule here is a decoration over characters that stay

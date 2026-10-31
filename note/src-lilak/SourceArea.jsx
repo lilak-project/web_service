@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
+import { syntaxHighlighting, defaultHighlightStyle, StreamLanguage } from '@codemirror/language'
 import { markdown, markdownLanguage, markdownKeymap } from '@codemirror/lang-markdown'
+import { stex } from '@codemirror/legacy-modes/mode/stex'
 import { livePreview, liveLook } from './livemd.js'
 import { tagComplete, dueKeys, takeFiles, tableKeys, tableInput } from './liveedit.js'
 
@@ -45,7 +46,7 @@ const look = EditorView.theme({
   '.cm-selectionBackground, ::selection': { background: 'var(--rk-cite) !important' },
 })
 
-export default function RawArea({ value, onChange, live = false, fileSrc, onFiles, onOpenNote }) {
+export default function RawArea({ value, onChange, live = false, tex = false, fileSrc, onFiles, onOpenNote }) {
   const host = useRef(null)
   const view = useRef(null)
   const cb = useRef(onChange)
@@ -62,18 +63,27 @@ export default function RawArea({ value, onChange, live = false, fileSrc, onFile
         extensions: [
           lineNumbers(),
           highlightActiveLineGutter(),
-          ...(live ? [livePreview(fileSrc, onOpenNote), ...liveLook] : []),
+          ...(live && !tex ? [livePreview(fileSrc, onOpenNote), ...liveLook] : []),
           highlightActiveLine(),
           drawSelection(),
           history(),
-          // A table's own Tab and Enter go first: the general keymap's Tab
-          // indents the line, which is not what a cell wants.
-          tableKeys,
-          keymap.of([...markdownKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
-          markdown({ base: markdownLanguage }),
-          tagComplete,
-          ...dueKeys,
-          tableInput,
+          // A tex note is LaTeX, not markdown: the language changes and every
+          // markdown helper below it goes away. `|` is a column of a matrix,
+          // `#` is a macro argument, `>>` is a shift — none of them wants the
+          // table skeleton, the tag menu or the calendar.
+          ...(tex ? [
+            keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+            StreamLanguage.define(stex),
+          ] : [
+            // A table's own Tab and Enter go first: the general keymap's Tab
+            // indents the line, which is not what a cell wants.
+            tableKeys,
+            keymap.of([...markdownKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+            markdown({ base: markdownLanguage }),
+            tagComplete,
+            ...dueKeys,
+            tableInput,
+          ]),
           ...(onFiles ? [takeFiles(onFiles)] : []),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           look,

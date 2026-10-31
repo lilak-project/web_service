@@ -20,12 +20,12 @@ import { Children, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import {
   RackTable, RackRow, RackTabs, RackActions,
   useRackList, useRackKeys,
-  RackPaneStrip, useMergeMode, RackMergeButtons, RackMerge,
+  RackPaneStrip, paneLayout, paneStyles, FULL, useMergeMode, RackMergeButtons, RackMerge,
   RackEditClass,
   bySome, asSorts, bumpSort, byKeys, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders, RackBar, takeOpenRequest,
   tagKey, mergeTags as tagCounts, useTagSources, sharedTagRows, uniqueTags, PORTAL_SERVICE,
-  useFavTags, RackStar,
+  useFavTags, RackStar, useProjects, useReferences, openInService,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
 // and one newline means one line break, because a note is typed, not typeset.
@@ -34,7 +34,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { remarkSoftBreaks } from 'lilak-ui/log/Markdown.jsx'
-import { TAG_RE, EMBED_RE, embedSpec, isImage, setTagChoices } from './marks.js'
+import { TAG_RE, PROJ_RE, EMBED_RE, embedSpec, isImage, setTagChoices, setProjChoices, isProject } from './marks.js'
 import SourceArea from './SourceArea.jsx'
 import 'katex/dist/katex.min.css'
 import 'lilak-ui/racklist/rack.css'
@@ -42,14 +42,17 @@ import './note.css'
 import { tr } from 'lilak-ui'
 
 const VIEW_KEY = projectKey('nt', 'view')
-/** Where a file a note embeds is served from. */
-const fileSrc = (name) => `${PORTAL_BASE}/api/file/${encodeURIComponent(name)}`
+/** Where a file a note embeds is served from. `note` is the tex note whose
+ *  own folder to look in first (see the backend's `_files`); a markdown note
+ *  passes nothing and reads the project's shared files folder. */
+const noteQ = (note) => (note ? `?note=${encodeURIComponent(note)}` : '')
+const fileSrc = (name, note) => `${PORTAL_BASE}/api/file/${encodeURIComponent(name)}${noteQ(note)}`
 /** A file dropped into a note: stored beside the notes, named back. Not `api`
  *  — a multipart body writes its own content type, boundary and all. */
-async function putFile(file) {
+async function putFile(file, note) {
   const form = new FormData()
   form.append('f', file)
-  const r = await fetch(`${PORTAL_BASE}/api/file`, { method: 'POST', headers: authHeaders(), body: form })
+  const r = await fetch(`${PORTAL_BASE}/api/file${noteQ(note)}`, { method: 'POST', headers: authHeaders(), body: form })
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || tr("nt_upload_failed", r.status))
   return (await r.json()).name
 }
@@ -65,8 +68,9 @@ async function ask(p, o) {
 
 /** Where this project keeps its notes and their files — asked once, since it
  *  is the same answer for every tab. */
-let whereAsked = null
-const whereIs = () => (whereAsked ||= ask('/where').then((r) => r.body).catch(() => null))
+const whereAsked = {}
+const whereIs = (note = '') => (whereAsked[note] ||=
+  ask(`/where${noteQ(note)}`).then((r) => r.body).catch(() => null))
 
 const D = '·'
 const tagsOf = (n) => (n.tags || []).filter(Boolean)
@@ -95,6 +99,17 @@ export function renameBodyTag(body, from, to) {
 /** The todo without its tags: they have a column of their own, and a list of a
  *  hundred reads better when the sentence is the sentence. The note keeps them
  *  — this is what the table shows, not what is saved. */
+/** A day as this app writes one. The browser's own, not UTC: a note saved at
+ *  half past midnight was saved today. */
+const day = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+/** When the FILE last changed. The list already carries it: `version` is the
+ *  file's modification time in nanoseconds, which is what a save compares
+ *  against — the date beside it is the one the note itself claims. */
+const updatedOn = (n) => {
+  const ms = Number(n.version) / 1e6
+  return ms > 0 ? day(new Date(ms)) : ''
+}
+
 const untagged = (text) => String(text || '')
   .replace(TAG_RE, (m, lead) => lead)
   .replace(/\s{2,}/g, ' ')
@@ -103,7 +118,10 @@ const untagged = (text) => String(text || '')
 const COLS = [
   { k: 'chk', w: 26, min: 26, fix: true },
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
-  { k: 'date', w: 100, min: 84, label: 'date' },   // a whole 2026-08-04 at 15px
+  // A whole 2026-08-04 at 15px is 90px wide, and the cell keeps 6 either side.
+  { k: 'date', w: 106, min: 84, label: 'date' },
+  // When the FILE last changed, beside the date the note gives itself.
+  { k: 'updated', w: 106, min: 84, label: 'updated' },
   { k: 'title', w: 260, min: 100, label: 'title' },
   { k: 'tags', w: 170, min: 60, label: 'tags' },
   { k: 'todo', w: 52, min: 40, label: tr("nt_todo"), num: true },
@@ -127,10 +145,11 @@ const TODO_COLS = [
   { k: 'due', w: 100, min: 84, label: tr("nt_due") },
   { k: 'done', w: 100, min: 84, label: tr("nt_done") },
 ]
-const TONE = { title: 'ink', text: 'ink', date: 'dim', tags: 'dim', excerpt: 'dim' }
+const TONE = { title: 'ink', text: 'ink', date: 'dim', updated: 'dim', tags: 'dim', excerpt: 'dim' }
 
 const SORTERS = {
   date: (n) => n.date || '',
+  updated: (n) => Number(n.version) || 0,
   title: (n) => n.title || '',
   tags: (n) => tagsOf(n).join(' '),
   todo: (n) => n.todo || null,
@@ -162,6 +181,36 @@ const FIXED = [
   { id: 'tags', kind: 'classes', label: 'tags' },
 ]
 
+/** project_manager's projects, handed to what `+` offers and draws — while
+ *  rendering, not after: the page drawn in this same pass asks it. */
+function useProjectChoices() {
+  const projects = useProjects()
+  useMemo(() => setProjChoices(projects.map((p) => p.name)), [projects])
+}
+
+/** The tags `#` offers: every service's that shares them (note's own among
+ *  them, by its entry project) and, where the caller has them, this list's —
+ *  one written since the page opened is here before the others know it.
+ *  A solo note has no list, so it offers the shared ones alone. */
+function useTagChoices(own) {
+  const tagSources = useTagSources()
+  const shared = useMemo(() => tagCounts(tagSources.map((x) => x.tags)).map((x) => x.name), [tagSources])
+  // A solo note is one note of THIS project, which the shared list may not
+  // cover (it asks each service for its entry project). One request, and the
+  // tags of the project the note is actually in.
+  const [mine, setMine] = useState([])
+  useEffect(() => {
+    if (own) return undefined
+    let alive = true
+    ask('/tags')
+      .then(({ body }) => { if (alive) setMine(tagCounts([body.tags]).map((x) => x.name)) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [own])
+  useEffect(() => { setTagChoices(uniqueTags([...shared, ...(own || mine)])) }, [shared, own, mine])
+  return tagSources
+}
+
 export default function App() {
   const [index, setIndex] = useState(null)       // { notes, templates }
   const [todos, setTodos] = useState([])
@@ -173,10 +222,12 @@ export default function App() {
   const notes = index?.notes || []
   // What `#` offers in the editor: every service's tags, then this list's own
   // (one written since the page opened is here before the others know it).
-  const tagSources = useTagSources()
   const { isFavTag, toggleFavTag } = useFavTags()
-  const shared = useMemo(() => tagCounts(tagSources.map((x) => x.tags)).map((x) => x.name), [tagSources])
-  useEffect(() => { setTagChoices(uniqueTags([...shared, ...notes.flatMap(tagsOf)])) }, [shared, notes])
+  const ownTags = useMemo(() => notes.flatMap(tagsOf), [notes])
+  const tagSources = useTagChoices(ownTags)
+  // And what `+` offers: project_manager's projects, which is where a project
+  // is a record rather than a word someone typed.
+  useProjectChoices()
   // The list carries a first line, not the body, so a local miss asks the
   // server to look inside; either way it is one search.
   const search = useCallback((n, q) => [n.title, n.date, n.excerpt, ...tagsOf(n)]
@@ -279,9 +330,11 @@ export default function App() {
       .map((t) => ({ name: t.name, count: notes.filter((n) => inTag(n, t.name)).length,
         per: Object.fromEntries(t.by.filter((b) => b.svc !== own).map((b) => [`svc:${b.svc}`, b.n])) }))
       .filter((r) => r.count)
+      // The search box, on this tab, finds tags by name (any case).
+      .filter((r) => !query.trim() || tagKey(r.name).includes(tagKey(query)))
       .sort(bySome(CLS_SORTERS[clsSort.k] || (clsSort.k.includes(':') ? (r) => r.per[clsSort.k] ?? null : CLS_SORTERS.name), clsSort.dir))
     return [...rows.filter((r) => isFavTag(r.name)), ...rows.filter((r) => !isFavTag(r.name))]
-  }, [notes, tab, clsSort, tagSources, isFavTag])
+  }, [notes, tab, clsSort, tagSources, isFavTag, query])
 
   // Tags drift here too — the same merge as the other racks, except the fold
   // is one PUT per note, because a tag is text inside the file.
@@ -337,9 +390,7 @@ export default function App() {
    *  already there this opens it instead of making a second one, and a
    *  template called `daily` is used when there is one. */
   async function openDaily() {
-    const d = new Date()
-    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    const title = `Daily ${day}`
+    const title = `Daily ${day(new Date())}`
     const had = notes.find((n) => n.title === title)
     if (had) { openEdit(had.id, had.title); setNote(tr("nt_opened", title)); return }
     try {
@@ -399,6 +450,81 @@ export default function App() {
 
   const { chosen } = L
 
+  // The editors: docked left of the list, right of it, or FULL (the kit's panes.jsx).
+  const lay = paneLayout(panes, showList && showEdit)
+  const ps = paneStyles(lay, split, L.sides)
+  const notePane = (c, style) => {
+    const cur = panes.current(c)
+    return (
+      <div key={c} className="rl-pane rl-epane" onMouseDown={() => { if (c !== FULL) panes.setCol(c) }} style={style}>
+        <RackPaneStrip panes={panes} col={c} />
+        {cur.kind === 'pdf' ? (
+          /* The browser's own PDF viewer with its bar turned off — the pane is
+             too small to give half of it to a toolbar. The two things it was
+             worth keeping are links, not a viewer: save it, or open it in a
+             browser tab where the whole viewer is. */
+          <div className="nt-pdfpane">
+            <div className="nt-pdfbar">
+              <span className="rl-hint">{cur.label}</span>
+              <span className="rl-sp" />
+              <a className="rl-btn" href={cur.src} target="_blank" rel="noreferrer">{tr("nt_tex_btab")}</a>
+              <a className="rl-btn" href={cur.src} download={`${cur.who}.pdf`}>{tr("nt_tex_save")}</a>
+            </div>
+            <iframe className="nt-pdf" src={`${cur.src}#toolbar=0&navpanes=0`} title={cur.label} />
+          </div>
+        ) : cur.kind === 'mergetags' ? (() => {
+          const all = [...new Set(notes.flatMap(tagsOf))]
+          const live = (cur.names || []).filter((t) => all.includes(t))
+          const users = notes.filter((n) => live.some((t) => inTag(n, t)))
+          return (
+            <RackMerge names={cur.names || []} noun={tr("nt_tag")} exists={all}
+              count={(t) => notes.filter((n) => inTag(n, t)).length}
+              users={users.map((n) => n.title || n.id)}
+              onMerge={(gone, to) => mergeTags(gone, to, users)}
+              onCancel={() => panes.close(cur.id)} />
+          )
+        })() : cur.kind === 'edittag' ? (
+          /* The same editor every rack-list service gives a class.
+             What is ours is the save: a tag is text in the notes, so
+             renaming one rewrites every note that wears it. */
+          <RackEditClass name={cur.who} noun={tr("nt_tag")} wears={tr("nt_notes_using")} unit={tr("nt_unit")}
+            exists={[...new Set(notes.flatMap(tagsOf))].sort()}
+            wearing={tagUsers}
+            onOpen={(id) => openEdit(id, (notes.find((n) => n.id === id) || {}).title)}
+            onSave={async (gone, to, said) => {
+              const users = notes.filter((n) => gone.some((t) => inTag(n, t)))
+              await mergeTags(gone.filter((t) => t !== to), to, users, said)
+              panes.close(cur.id)
+            }}
+            onCancel={() => panes.close(cur.id)} />
+        ) : (
+        <Editor id={cur.id} say={setNote} onSaved={reload}
+          onOpenNote={(name) => {
+            // `[[…]]` names a note by its file name or by its title.
+            const k = name.toLowerCase()
+            const n = notes.find((x) => x.id.toLowerCase() === k)
+              || notes.find((x) => (x.title || '').toLowerCase() === k)
+            if (n) openEdit(n.id, n.title)
+            else setNote(tr("nt_no_note", name))
+          }}
+          takeCaret={cur.id === fresh} onCaret={() => setFresh(null)}
+          onPdf={(nid, title, v) => {
+            // A tab that is already open keeps what it was opened with
+            // (panes.open), and the PDF behind it has just changed — so the
+            // old one goes and the new one takes its place.
+            panes.close(`pdf:${nid}`)
+            panes.open({
+              id: `pdf:${nid}`, kind: 'pdf', who: nid, label: `${title || nid}.pdf`,
+              src: `${PORTAL_BASE}/api/pdf/${encodeURIComponent(nid)}?v=${v}`,
+            })
+          }}
+          onPrint={() => preview([cur.id])}
+          onClosed={(cid) => { panes.close(cid); reload() }} />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="rl" style={brandStyle()}>
       <section className="rl-mod">
@@ -452,7 +578,9 @@ export default function App() {
         </div>
 
         <div className="rl-body">
-          {showList && (<div className="rl-pane" style={showEdit ? split.leftStyle : undefined}>
+          {showEdit && lay.left.map((c) => notePane(c, ps.left))}
+          {ps.before && <div {...ps.before} />}
+          {showList && (<div className="rl-pane" style={ps.list}>
             <RackTabs tabs={tabs} active={L.active} fixed={FIXED}
               onPick={L.setActive} onClose={closeTab} />
 
@@ -479,6 +607,7 @@ export default function App() {
                           aria-label={tr("nt_select_x", n.title)} />,
                         num: i + 1,
                         date: n.date || D,
+                        updated: updatedOn(n) || D,
                         title: n.title,
                         tags: tagsOf(n).join(' ') || D,
                         todo: n.todo ? `${n.todo}` : (n.done ? '✓' : D),
@@ -550,54 +679,8 @@ export default function App() {
             )}
           </div>)}
 
-          {showList && showEdit && <div {...split.handleProps} />}
-          {showEdit && panes.cols.map((c) => {
-            const cur = panes.current(c)
-            return (
-              <div key={c} className="rl-pane rl-epane" onMouseDown={() => panes.setCol(c)}>
-                <RackPaneStrip panes={panes} col={c} />
-                {cur.kind === 'mergetags' ? (() => {
-                  const all = [...new Set(notes.flatMap(tagsOf))]
-                  const live = (cur.names || []).filter((t) => all.includes(t))
-                  const users = notes.filter((n) => live.some((t) => inTag(n, t)))
-                  return (
-                    <RackMerge names={cur.names || []} noun={tr("nt_tag")} exists={all}
-                      count={(t) => notes.filter((n) => inTag(n, t)).length}
-                      users={users.map((n) => n.title || n.id)}
-                      onMerge={(gone, to) => mergeTags(gone, to, users)}
-                      onCancel={() => panes.close(cur.id)} />
-                  )
-                })() : cur.kind === 'edittag' ? (
-                  /* The same editor every rack-list service gives a class.
-                     What is ours is the save: a tag is text in the notes, so
-                     renaming one rewrites every note that wears it. */
-                  <RackEditClass name={cur.who} noun={tr("nt_tag")} wears={tr("nt_notes_using")} unit={tr("nt_unit")}
-                    exists={[...new Set(notes.flatMap(tagsOf))].sort()}
-                    wearing={tagUsers}
-                    onOpen={(id) => openEdit(id, (notes.find((n) => n.id === id) || {}).title)}
-                    onSave={async (gone, to, said) => {
-                      const users = notes.filter((n) => gone.some((t) => inTag(n, t)))
-                      await mergeTags(gone.filter((t) => t !== to), to, users, said)
-                      panes.close(cur.id)
-                    }}
-                    onCancel={() => panes.close(cur.id)} />
-                ) : (
-                <Editor id={cur.id} say={setNote} onSaved={reload}
-                  onOpenNote={(name) => {
-                    // `[[…]]` names a note by its file name or by its title.
-                    const k = name.toLowerCase()
-                    const n = notes.find((x) => x.id.toLowerCase() === k)
-                      || notes.find((x) => (x.title || '').toLowerCase() === k)
-                    if (n) openEdit(n.id, n.title)
-                    else setNote(tr("nt_no_note", name))
-                  }}
-                  takeCaret={cur.id === fresh} onCaret={() => setFresh(null)}
-                  onPrint={() => preview([cur.id])}
-                  onClosed={(cid) => { panes.close(cid); reload() }} />
-                )}
-              </div>
-            )
-          })}
+          {ps.after && <div {...ps.after} />}
+          {showEdit && lay.right.map((c) => notePane(c, ps.right))}
         </div>
 
         <footer className="rl-foot">
@@ -619,10 +702,12 @@ export default function App() {
  *  version, the date) comes back from the server on every save and would read
  *  as one. */
 const sameNote = (a, b) => a.title === b.title && (a.date || '') === (b.date || '')
+  && JSON.stringify(a.fields || {}) === JSON.stringify(b.fields || {})
   && String(a.body || '').trimEnd() === String(b.body || '').trimEnd()
 const putNote = (id, baseVersion, v) => ask(`/notes/${encodeURIComponent(id)}`, {
   method: 'PUT',
-  body: JSON.stringify({ baseVersion, title: v.title, date: v.date, body: v.body }),
+  body: JSON.stringify({ baseVersion, title: v.title, date: v.date, body: v.body,
+    fields: v.fields }),
 })
 
 /** The note is read when the tab opens, not from the list — the list carries a
@@ -631,6 +716,10 @@ const putNote = (id, baseVersion, v) => ask(`/notes/${encodeURIComponent(id)}`, 
  *  opens as a tab of its own (an activity's note, beside the activity). Its
  *  cancel has no list to go back to; a note deleted here says so. */
 export function SoloNote({ id }) {
+  // Opened inside another service, this window is the whole app: what `#` and
+  // `+` offer has to be asked for here too, since there is no list to do it.
+  useTagChoices()
+  useProjectChoices()
   const [said, say] = useState('')
   const [gone, setGone] = useState(false)
   const closed = () => { ask(`/notes/${encodeURIComponent(id)}`).catch(() => setGone(true)) }
@@ -645,7 +734,7 @@ export function SoloNote({ id }) {
   )
 }
 
-function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpenNote }) {
+function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpenNote, onPdf }) {
   const [n, setN] = useState(null)
   const [f, setF] = useState(null)
   const [open, setOpen] = useState(false)     // the fold beside the title
@@ -655,7 +744,32 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpe
   const [view, setView] = useState('live')
   const read = view === 'read'
   const orig = useRef(null)                  // how the tab found it — revert
-  useEffect(() => { if (open && !where) whereIs().then(setWhere) }, [open])   // eslint-disable-line react-hooks/exhaustive-deps
+  // `format: tex` in the front matter: this note is a LaTeX document, not
+  // markdown. The backend keeps unknown front-matter keys as they are, so the
+  // flag costs nothing there — the editor reads it and changes language, and
+  // the note's files get a folder of their own (`files/<id>/`), because LaTeX
+  // names a plain `fig1.pdf` that the compile copies next to main.tex.
+  const tex = String(f?.fields?.format || '').toLowerCase() === 'tex'
+  const [errs, setErrs] = useState(null)      // what stopped the last compile
+  const [busy, setBusy] = useState(false)
+  // When this note's PDF was made (nanoseconds, the backend's `_pdf_at`), or
+  // '' for none. It says both things worth knowing: whether there is a PDF to
+  // open, and whether it is still this note — its stamp against the note
+  // file's own (`version`). It comes from the SERVER rather than from what
+  // this tab remembers, because opening the PDF beside the text replaces this
+  // editor in its pane: coming back builds a new one, which remembers nothing.
+  const [pdfAt, setPdfAt] = useState('')
+  // Which paper this document IS — reference_manager's record, named by the
+  // cite key, which is both what `\cite{…}` writes and what reads as a word
+  // in the file. The key is stored; the record behind it is looked up, so a
+  // key that names nothing simply has nothing to open.
+  const references = useReferences()
+  const pdfUrl = (frame) => `${PORTAL_BASE}/api/pdf/${encodeURIComponent(id)}?v=${pdfAt}`
+    // No toolbar inside our own tab — the pane is small and the browser's bar
+    // is half of it. A browser tab gets the whole viewer, which is the point
+    // of opening one.
+    + (frame ? '#toolbar=0&navpanes=0' : '')
+  useEffect(() => { if (open && !where) whereIs(tex ? id : '').then(setWhere) }, [open, tex])   // eslint-disable-line react-hooks/exhaustive-deps
   const live = useRef({})                    // the latest, for the last save
   const titleRef = useRef(null)
   live.current = { f, n }
@@ -666,6 +780,8 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpe
       .then(({ body }) => {
         if (!alive) return
         setN(body); setF(body); orig.current = body
+        // A note compiled in an earlier sitting still has its PDF.
+        setPdfAt(body.pdf_at || '')
       })
       .catch((e) => say(String(e.message || e)))
     return () => { alive = false }
@@ -709,9 +825,15 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpe
 
   if (!f || !n) return <p className="rl-msg">{tr("nt_loading")}</p>
   const dirty = !sameNote(f, n)
+  // Nothing has changed since the PDF was made: compiling again would spend
+  // ten seconds writing the same file. Both stamps are nanoseconds, past what
+  // a number holds exactly.
+  const asPdf = !dirty && !!pdfAt && BigInt(pdfAt) > BigInt(n.version || 0)
   // Tags live in the BODY now (#태그), so this is what the note will carry the
   // moment it is saved — shown rather than edited.
   const tags = bodyTags(f.body)
+  const refKey = String(f.fields?.reference || '').trim()
+  const ref = refKey ? references.find((r) => r.citeKey === refKey) : null
   async function saveNote() {
     const { conflict, body } = await putNote(id, n.version, f)
     if (conflict) {
@@ -723,6 +845,23 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpe
     // mid-sentence must not take the caret back with it.
     setN(body)
     onSaved?.()
+  }
+  /** The note, typeset. It compiles what is ON DISK, so what is being typed
+   *  is saved first — otherwise the PDF is of the note as it was. */
+  async function compile() {
+    setBusy(true)
+    try {
+      if (dirty) await saveNote()
+      const { body } = await ask(`/compile/${encodeURIComponent(id)}`, { method: 'POST' })
+      setErrs(body.ok ? null : (body.errors || []))
+      if (!body.ok) return
+      setPdfAt(body.pdf_at || '')
+      onPdf?.(id, f.title, body.pdf_at || '')
+    } catch (e) {
+      say(String(e.message || e))
+    } finally {
+      setBusy(false)
+    }
   }
   async function remove() {
     await ask(`/notes/${encodeURIComponent(id)}`, { method: 'DELETE' })
@@ -742,12 +881,27 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpe
         extra={<>
           {/* Three ways to look at the same text, which is one choice, not
               three buttons that have to agree with each other. */}
-          <select className="rl-in nt-mode" value={view} aria-label={tr("nt_mode")}
-            onChange={(e) => setView(e.target.value)}>
-            <option value="live">{tr("nt_live")}</option>
-            <option value="raw">{tr("nt_raw")}</option>
-            <option value="read">{tr("nt_preview")}</option>
-          </select>
+          {tex ? <span className="rl-hint rl-mono">LaTeX</span> : (
+            <select className="rl-in nt-mode" value={view} aria-label={tr("nt_mode")}
+              onChange={(e) => setView(e.target.value)}>
+              <option value="live">{tr("nt_live")}</option>
+              <option value="raw">{tr("nt_raw")}</option>
+              <option value="read">{tr("nt_preview")}</option>
+            </select>
+          )}
+          {tex ? <button type="button" className="rl-btn" onClick={compile}
+            disabled={busy || asPdf} title={asPdf ? tr("nt_tex_fresh") : undefined}>
+            {busy ? tr("nt_tex_running") : tr("nt_tex_compile")}</button> : null}
+          {/* Two ways to read what came out: a tab of this app's own, beside
+              the text, or a browser tab with the whole PDF viewer in it. */}
+          {tex && pdfAt ? (<>
+            {/* Solo — one note inside another service — has no tab strip of
+                its own to open one in. */}
+            {onPdf ? <button type="button" className="rl-btn" title={tr("nt_tex_rtab_hint")}
+              onClick={() => onPdf(id, f.title, pdfAt)}>rtab</button> : null}
+            <button type="button" className="rl-btn" title={tr("nt_tex_btab_hint")}
+              onClick={() => window.open(pdfUrl(false), `pdf-${id}`)}>btab</button>
+          </>) : null}
           {read ? <button type="button" className="rl-btn" onClick={onPrint}>{tr("nt_print")}</button> : null}
         </>}
         onRevert={() => setF(orig.current)} revertTitle={tr("nt_revert_hint")}
@@ -775,12 +929,42 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpe
             <>
               <span className="rl-hint rl-mono nt-path" title={where.files}>{where.files}</span>
               <button type="button" className="rl-btn" title={where.files}
-                onClick={() => ask('/reveal', { method: 'POST' })
+                onClick={() => ask(`/reveal${noteQ(tex ? id : '')}`, { method: 'POST' })
                   .then(() => say(tr("nt_folder_opened")))
                   .catch(() => say(tr("nt_folder_no")))}>{tr("nt_folder_open")}</button>
             </>
           )}
-          {Object.entries(f.fields || {}).map(([k, v]) => (
+          <label className="rl-hint" title={tr("nt_tex")}>
+            <input type="checkbox" checked={tex} onChange={(e) => setF((s) => {
+              const fields = { ...(s.fields || {}) }
+              if (e.target.checked) fields.format = 'tex'
+              else delete fields.format
+              return { ...s, fields }
+            })} /> LaTeX
+          </label>
+          {/* The paper this document is. Typed rather than picked from a list:
+              reference_manager holds hundreds, and the browser's own datalist
+              finds one as you type the key. */}
+          {tex ? (<>
+            <label className="rl-hint" title={tr("nt_ref_hint")}>cite
+              <input className="rl-in nt-ref" list="nt-refs" value={refKey} placeholder={tr("nt_ref_none")}
+                onChange={(e) => setF((s) => {
+                  const fields = { ...(s.fields || {}) }
+                  const v = e.target.value.trim()
+                  if (v) fields.reference = v
+                  else delete fields.reference
+                  return { ...s, fields }
+                })} />
+            </label>
+            <datalist id="nt-refs">
+              {references.map((r) => <option key={r.id} value={r.citeKey}>{r.title}</option>)}
+            </datalist>
+            {ref ? (
+              <button type="button" className="rl-btn" title={ref.title}
+                onClick={() => openInService(ref.svc, ref.proj, ref.id)}>{tr("nt_ref_open")}</button>
+            ) : refKey ? <span className="rl-hint nt-ref-no">{tr("nt_ref_unknown")}</span> : null}
+          </>) : null}
+          {Object.entries(f.fields || {}).filter(([k]) => k !== 'format' && k !== 'reference').map(([k, v]) => (
             <span key={k} className="rl-hint"><b className="rl-mono">{k}</b> {String(v ?? '')}</span>
           ))}
           <span className="rl-sp" />
@@ -803,9 +987,19 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpe
            text with its line numbers; `라이브` paints the markdown over it and
            keeps the marks on the line the caret is in. Either way what is
            saved is what is typed, character for character. */
-        <SourceArea key={view} live={view === 'live'} fileSrc={fileSrc} onOpenNote={onOpenNote}
-          onFiles={(file) => putFile(file).catch((e) => { say(String(e.message || e)); return null })}
-          value={f.body} onChange={(v) => setF((s) => ({ ...s, body: v }))} />
+        <>
+          <SourceArea key={`${view}${tex}`} live={view === 'live'} tex={tex}
+            fileSrc={(name) => fileSrc(name, tex ? id : '')} onOpenNote={onOpenNote}
+            onFiles={(file) => putFile(file, tex ? id : '').catch((e) => { say(String(e.message || e)); return null })}
+            value={f.body} onChange={(v) => setF((s) => ({ ...s, body: v }))} />
+          {tex && errs?.length ? (
+            <div className="nt-texerr">
+              {errs.map((e, i) => (
+                <div key={i}>{e.line ? <b>{tr("nt_tex_line", e.line)}</b> : null}{e.text}</div>
+              ))}
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   )
@@ -816,7 +1010,7 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret, onOpe
  *  calendar label the editor draws, rather than left as the text they are in
  *  the file. react-markdown hands text through as strings, so both are picked
  *  out of those on the way to the page. */
-const CHIP_RE = new RegExp(`${TAG_RE.source}|(»|📅|✓|✅)\\s*(\\d{4}-\\d{2}-\\d{2})`, 'g')
+const CHIP_RE = new RegExp(`${TAG_RE.source}|(»|📅|✓|✅)\\s*(\\d{4}-\\d{2}-\\d{2})|${PROJ_RE.source}`, 'g')
 
 function tagify(children) {
   return Children.map(children, (child) => {
@@ -824,14 +1018,16 @@ function tagify(children) {
     const out = []
     let last = 0
     for (const m of child.matchAll(CHIP_RE)) {
-      // A tag (lead + #name) or a date (mark + day) — one of the two matched.
-      const tag = m[2] !== undefined
-      const at = m.index + (tag ? m[1].length : 0)
+      // A tag (lead + #name), a date (mark + day) or a project (lead + +name) —
+      // one project_manager has; any other `+word` stays text.
+      const tag = m[2] !== undefined, proj = m[6] !== undefined
+      if (proj && !isProject(m[6])) continue
+      const at = m.index + (tag ? m[1].length : proj ? m[5].length : 0)
       if (at > last) out.push(child.slice(last, at))
-      out.push(tag
-        ? <span className="nt-tag" key={at}>{m[2]}</span>
-        : <span className={'»📅'.includes(m[3]) ? 'nt-due-in' : 'nt-done-in'} key={at}>{m[4]}</span>)
-      last = at + (tag ? 1 + m[2].length : m[0].length)
+      out.push(tag ? <span className="nt-tag" key={at}>{m[2]}</span>
+        : proj ? <span className="nt-proj" key={at}>{m[6]}</span>
+          : <span className={'»📅'.includes(m[3]) ? 'nt-due-in' : 'nt-done-in'} key={at}>{m[4]}</span>)
+      last = at + (tag ? 1 + m[2].length : proj ? 1 + m[6].length : m[0].length)
     }
     out.push(child.slice(last))
     return out

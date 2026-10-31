@@ -2,7 +2,7 @@ import { EditorView, Decoration, WidgetType } from '@codemirror/view'
 import { StateEffect, StateField } from '@codemirror/state'
 import { autocompletion } from '@codemirror/autocomplete'
 import { keymap } from '@codemirror/view'
-import { choicesFor } from './marks.js'
+import { choicesFor, projectsFor, projText } from './marks.js'
 
 /** What typing does in the source editor.
  *
@@ -12,20 +12,32 @@ import { choicesFor } from './marks.js'
  *  none of them rewrites anything the author did not type.
  */
 
-// ── `#태그` while you type ───────────────────────────────────────────────────
+// ── `#태그` and `+프로젝트` while you type ──────────────────────────────────
 const TAG_HEAD = /(?:^|[\s(])#[^\s#.,;:!?()[\]{}'"]*$/
+const PROJ_HEAD = /(?:^|[\s(])\+[^\s#+.,;:!?()[\]{}'"]*$/
+
+/** `#` offers its tags the moment it is typed — a `#` on its own means a tag
+ *  is coming. `+` waits for one letter: a plus between two numbers is a plus,
+ *  and a menu open over it would take the next Enter for a choice.
+ */
+const names = (ctx, head, mark, pick, atOnce, write = (t) => t) => {
+  const before = ctx.matchBefore(head)
+  if (!before) return null
+  const where = before.text.indexOf(mark)
+  const typed = before.text.slice(where + 1)
+  if (!typed && !atOnce && !ctx.explicit) return null
+  const options = pick(typed).map((label) => ({ label, apply: write(label), type: 'keyword' }))
+  return options.length
+    ? { from: before.from + where + 1, options, validFor: /^[^\s#+]*$/ }
+    : null
+}
 
 export const tagComplete = autocompletion({
-  override: [(ctx) => {
-    const before = ctx.matchBefore(TAG_HEAD)
-    if (!before) return null
-    const hash = before.text.indexOf('#')
-    const from = before.from + hash + 1
-    const typed = before.text.slice(hash + 1)
-    if (!typed && !ctx.explicit) return null
-    const options = choicesFor(typed).map((label) => ({ label, type: 'keyword' }))
-    return options.length ? { from, options, validFor: /^[^\s#]*$/ } : null
-  }],
+  override: [
+    (ctx) => names(ctx, TAG_HEAD, '#', choicesFor, true),
+    // a project is offered by its name and written as one word (projText)
+    (ctx) => names(ctx, PROJ_HEAD, '+', projectsFor, false, projText),
+  ],
   icons: false,
 })
 

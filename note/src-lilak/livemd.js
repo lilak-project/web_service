@@ -2,7 +2,7 @@ import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import { ViewPlugin } from '@codemirror/view'
 import { StateField } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
-import { isImage, embedSpec } from './marks.js'
+import { isImage, embedSpec, isProject, onProjChoices } from './marks.js'
 
 /** Markdown drawn on top of the text that IS the file.
  *
@@ -26,7 +26,8 @@ const PAINT = {
 const MARKS = new Set(['HeaderMark', 'EmphasisMark', 'StrikethroughMark', 'CodeMark',
   'QuoteMark', 'LinkMark', 'URL'])
 
-const TAG = /(^|[\s(])#([^\s#.,;:!?()[\]{}'"]+)/g
+const TAG = /(^|[\s(])#(?![0-9]+(?![^\s#.,;:!?()[\]{}'"]))([^\s#.,;:!?()[\]{}'"]+)/g
+const PROJ = /(^|[\s(])\+(?![0-9]+(?![^\s#+.,;:!?()[\]{}'"]))([^\s#+.,;:!?()[\]{}'"]+)/g
 const DATE = /(»|📅|✓|✅)\s*(\d{4}-\d{2}-\d{2})/g
 const EMBED = /!\[\[([^\]]+)\]\]/g
 const WIKI = /(?<!!)\[\[([^\]]+)\]\]/g
@@ -179,6 +180,11 @@ function build(view, fileSrc) {
         }
         if (/^ATXHeading(\d)$/.test(name)) {
           const line = view.state.doc.lineAt(node.from)
+          // A `#` with nothing after it is an empty heading by the spec, and
+          // that is what a `#태그` looks like for the one keystroke before
+          // its name arrives — so the line waits for the space that makes it
+          // a heading rather than jumping to heading size and back.
+          if (!/^#{1,6}[ \t]/.test(line.text)) return
           marks.push(Decoration.line({ class: `nt-cm-h${name.slice(-1)}` }).range(line.from))
           return
         }
@@ -253,6 +259,12 @@ function build(view, fileSrc) {
     for (const m of text.matchAll(TAG)) {
       const start = at(m.index + m[1].length)
       marks.push(Decoration.mark({ class: 'nt-tag-in' }).range(start, start + 1 + m[2].length))
+      if (!shown(start)) hide(start, start + 1)
+    }
+    for (const m of text.matchAll(PROJ)) {
+      if (!isProject(m[2])) continue
+      const start = at(m.index + m[1].length)
+      marks.push(Decoration.mark({ class: 'nt-proj-in' }).range(start, start + 1 + m[2].length))
       if (!shown(start)) hide(start, start + 1)
     }
     const today = new Date().toISOString().slice(0, 10)
@@ -330,12 +342,18 @@ const tableBlocks = StateField.define({
 })
 
 const paint = (fileSrc, onOpenNote) => ViewPlugin.fromClass(class {
-  constructor(view) { this.decorations = build(view, fileSrc) }
+  constructor(view) {
+    this.decorations = build(view, fileSrc)
+    // The projects come after the first paint: draw again when they do.
+    this.off = onProjChoices(() => setTimeout(() => { if (this.off) { this.again = true; view.dispatch({}) } }))
+  }
   update(u) {
-    if (u.docChanged || u.selectionSet || u.viewportChanged) {
+    if (u.docChanged || u.selectionSet || u.viewportChanged || this.again) {
+      this.again = false
       this.decorations = build(u.view, fileSrc)
     }
   }
+  destroy() { this.off(); this.off = null }
 }, {
   decorations: (v) => v.decorations,
   eventHandlers: {
