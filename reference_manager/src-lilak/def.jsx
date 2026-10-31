@@ -81,7 +81,9 @@ export default {
       { k: 'pac', label: 'PAC', type: 'text', mono: true, width: 90, placeholder: '27',
         when: (r) => r.type === 'proposal',
         hint: tr("rm_pac_hint") },
-      { k: 'journal', label: tr("rm_journal"), type: 'class', of: 'journals' },
+      // The chip wears the short name: 'Nuclear Instruments and Methods in
+      // Physics Research Section A: …' wrapped onto three lines in the editor.
+      { k: 'journal', label: tr("rm_journal"), type: 'class', of: 'journals', show: 'shortName' },
       { k: 'volume', label: tr("rm_volume"), type: 'text', width: 80, placeholder: 'volume' },
       { k: 'pages', label: tr("rm_pages"), type: 'text', width: 110, placeholder: 'pages' },
       { k: 'year', label: tr("rm_year"), type: 'text', width: 70, placeholder: 'year',
