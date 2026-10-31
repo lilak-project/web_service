@@ -5,6 +5,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 import { markdown, markdownLanguage, markdownKeymap } from '@codemirror/lang-markdown'
 import { livePreview, liveLook } from './livemd.js'
+import { tagComplete, dueKeys, takeFiles } from './liveedit.js'
 
 /** The note as the file has it, in a real text editor — plain (`원문`) or with
  *  the markdown drawn over it (`라이브`).
@@ -44,7 +45,7 @@ const look = EditorView.theme({
   '.cm-selectionBackground, ::selection': { background: 'var(--rk-cite) !important' },
 })
 
-export default function RawArea({ value, onChange, live = false, fileSrc }) {
+export default function RawArea({ value, onChange, live = false, fileSrc, onFiles }) {
   const host = useRef(null)
   const view = useRef(null)
   const cb = useRef(onChange)
@@ -66,6 +67,9 @@ export default function RawArea({ value, onChange, live = false, fileSrc }) {
           history(),
           keymap.of([...markdownKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown({ base: markdownLanguage }),
+          tagComplete,
+          ...dueKeys,
+          ...(onFiles ? [takeFiles(onFiles)] : []),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           look,
           EditorView.updateListener.of((u) => {

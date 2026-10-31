@@ -54,14 +54,14 @@ TODO_RE = re.compile(r"^(\s*[-*]\s+\[)([ xX])(\]\s*)(.*)$")
 # WITH a space after the hash, so the two cannot be confused — which is why the
 # tag needs no field of its own.
 TAG_RE = re.compile(r"(?:^|[\s(])#([^\s#.,;:!?()\[\]{}'\"]+)")
-# Obsidian Tasks writes the day a box was ticked as `✅ 2026-08-04`, and the
-# vault these notes came from is full of them: the same mark is what this app
-# stamps, so a todo finished here reads as finished there.
-DONE_RE = re.compile(r"\s*✅\s*(\d{4}-\d{2}-\d{2})")
+# The day a box was ticked: `✓ 2026-08-04`. The vault these notes came from
+# used Obsidian Tasks' `✅`, so that is still read — only what this app WRITES
+# changed, to a mark that is a line rather than a picture.
+DONE_RE = re.compile(r"\s*[✓✅]\s*(\d{4}-\d{2}-\d{2})")
 # The day it is due, the same way. `>>2026-10-20` is the typing-friendly
 # spelling of it — the editor turns one into the other as you write, and a
 # file written elsewhere is read either way.
-DUE_RE = re.compile(r"\s*(?:📅|>>)\s*(\d{4}-\d{2}-\d{2})")
+DUE_RE = re.compile(r"\s*(?:»|📅|>>)\s*(\d{4}-\d{2}-\d{2})")
 # An empty line inside a checklist is written out as `- [ ] <br />`: a box with
 # nothing in it, which is a blank line the person is still typing on, not a job.
 BLANK_RE = re.compile(r"(?:\s|<br\s*/?>|&nbsp;)*$")
@@ -83,7 +83,7 @@ def _todo_text(raw: str) -> tuple[str, str, str]:
 
 def _todo_line(text: str, due: str, done_at: str) -> str:
     """…and back again, with the marks in the order Obsidian writes them."""
-    return text + (f" 📅 {due}" if due else "") + (f" ✅ {done_at}" if done_at else "")
+    return text + (f" » {due}" if due else "") + (f" ✓ {done_at}" if done_at else "")
 
 
 def _now() -> str:

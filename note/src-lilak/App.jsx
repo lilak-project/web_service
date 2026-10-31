@@ -34,8 +34,8 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { remarkSoftBreaks } from 'lilak-ui/log/Markdown.jsx'
-import MarkdownArea, { TAG_RE, EMBED_RE, embedSpec, isImage, setTagChoices } from './MarkdownArea.jsx'
-import RawArea from './RawArea.jsx'
+import { TAG_RE, EMBED_RE, embedSpec, isImage, setTagChoices } from './marks.js'
+import SourceArea from './SourceArea.jsx'
 import 'katex/dist/katex.min.css'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
@@ -638,8 +638,9 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   const [f, setF] = useState(null)
   const [open, setOpen] = useState(false)     // the fold beside the title
   const [where, setWhere] = useState(null)   // the folders, once the fold asks
-  // edit · read (the note as it reads, in place) · raw (the file's own text)
-  const [view, setView] = useState('edit')
+  // live (the text with the markdown drawn over it) · raw (the text alone) ·
+  // read (the note as it reads, the sheet the printer gets)
+  const [view, setView] = useState('live')
   const read = view === 'read'
   const orig = useRef(null)                  // how the tab found it — revert
   useEffect(() => { if (open && !where) whereIs().then(setWhere) }, [open])   // eslint-disable-line react-hooks/exhaustive-deps
@@ -727,12 +728,14 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
         onSave={() => saveNote()} saveDisabled={!dirty} pending={dirty}
         onCancel={() => onClosed?.(id)}
         extra={<>
-          <button type="button" className={`rl-btn${read ? ' on' : ''}`}
-            onClick={() => setView(read ? 'edit' : 'read')}>{read ? tr("nt_edit") : tr("nt_preview")}</button>
-          <button type="button" className={`rl-btn${view === 'live' ? ' on' : ''}`}
-            onClick={() => setView(view === 'live' ? 'edit' : 'live')}>{view === 'live' ? tr("nt_edit") : tr("nt_live")}</button>
-          <button type="button" className={`rl-btn${view === 'raw' ? ' on' : ''}`}
-            onClick={() => setView(view === 'raw' ? 'edit' : 'raw')}>{view === 'raw' ? tr("nt_edit") : tr("nt_raw")}</button>
+          {/* Three ways to look at the same text, which is one choice, not
+              three buttons that have to agree with each other. */}
+          <select className="rl-in nt-mode" value={view} aria-label={tr("nt_mode")}
+            onChange={(e) => setView(e.target.value)}>
+            <option value="live">{tr("nt_live")}</option>
+            <option value="raw">{tr("nt_raw")}</option>
+            <option value="read">{tr("nt_preview")}</option>
+          </select>
           {read ? <button type="button" className="rl-btn" onClick={onPrint}>{tr("nt_print")}</button> : null}
         </>}
         onRevert={() => setF(orig.current)} revertTitle={tr("nt_revert_hint")}
@@ -783,28 +786,25 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
             <Rendered>{f.body}</Rendered>
           </article>
         </div>
-      ) : view === 'raw' || view === 'live' ? (
+      ) : (
         /* The file as it is on disk: nothing is written back. `원문` shows the
            text with its line numbers; `라이브` paints the markdown over it and
            keeps the marks on the line the caret is in. Either way what is
            saved is what is typed, character for character. */
-        <RawArea key={view} live={view === 'live'} fileSrc={fileSrc}
-          value={f.body} onChange={(v) => setF((s) => ({ ...s, body: v }))} />
-      ) : (
-        <MarkdownArea value={f.body} fileSrc={fileSrc} placeholder={tr("nt_body_placeholder")}
+        <SourceArea key={view} live={view === 'live'} fileSrc={fileSrc}
           onFiles={(file) => putFile(file).catch((e) => { say(String(e.message || e)); return null })}
-          onChange={(v) => setF((s) => ({ ...s, body: v }))} />
+          value={f.body} onChange={(v) => setF((s) => ({ ...s, body: v }))} />
       )}
     </div>
   )
 }
 
 // ─── Reading ────────────────────────────────────────────────────────────────
-/** The body, rendered — with `#태그` drawn as a tag and `📅 2026-12-24` as the
+/** The body, rendered — with `#태그` drawn as a tag and `» 2026-12-24` as the
  *  calendar label the editor draws, rather than left as the text they are in
  *  the file. react-markdown hands text through as strings, so both are picked
  *  out of those on the way to the page. */
-const CHIP_RE = new RegExp(`${TAG_RE.source}|(📅|✅)\\s*(\\d{4}-\\d{2}-\\d{2})`, 'g')
+const CHIP_RE = new RegExp(`${TAG_RE.source}|(»|📅|✓|✅)\\s*(\\d{4}-\\d{2}-\\d{2})`, 'g')
 
 function tagify(children) {
   return Children.map(children, (child) => {
@@ -818,7 +818,7 @@ function tagify(children) {
       if (at > last) out.push(child.slice(last, at))
       out.push(tag
         ? <span className="nt-tag" key={at}>{m[2]}</span>
-        : <span className={m[3] === '📅' ? 'nt-due-in' : 'nt-done-in'} key={at}>{m[4]}</span>)
+        : <span className={'»📅'.includes(m[3]) ? 'nt-due-in' : 'nt-done-in'} key={at}>{m[4]}</span>)
       last = at + (tag ? 1 + m[2].length : m[0].length)
     }
     out.push(child.slice(last))

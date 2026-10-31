@@ -16,7 +16,6 @@
    it; one that should be a different size says so for itself,
    `![[file|400]]`, and that width still has the height to answer to. */
 .nt-embed,
-.nt-prose img:not(.ProseMirror-separator),
 .nt-sheet img {
   display: block;
   max-width: 100%;
@@ -25,25 +24,17 @@
   height: auto;
   object-fit: contain;
 }
-.nt-embed,
-.nt-prose img:not(.ProseMirror-separator) {
+.nt-embed {
   margin: 6px 0;
   border: 1px solid var(--rk-line);
   border-radius: 2px;
 }
 .nt-sheet img { margin: 3mm 0; }
 
-/* The `![[file]]` that put it there: hidden until the caret is on that line,
-   so a note reads as pictures and shows its wiring where you are editing. */
-.nt-embed-src { display: none; }
-.nt-at .nt-embed-src { display: inline; color: var(--rk-mute); }
-
 /* A tag, drawn as a tag: a label with its point to the left and the hole it
    hangs by. The shape is one clip-path, so changing it to a plain pill is one
    line. Used in the editor (a decoration over the text, which stays `#태그`)
    and where a note is read. */
-/* The `#` is how the text says it is a tag; the chip says it by its shape. */
-.nt-tag-hash { display: none; }
 .nt-tag-in, .nt-tag {
   --nt-point: 9px;
   display: inline-block;
@@ -90,24 +81,10 @@
 /* ── the print page ──────────────────────────────────────────────────────
    Not a RACK screen: a sheet of paper. The browser's own printer writes the
    PDF, so the system's Korean fonts are already there. */
-/* The way out of a link that is still text: shown where the caret put it. */
-.nt-open {
-  margin-left: 6px; padding: 0 6px;
-  border: 1px solid var(--rk-cite-t); border-radius: 2px;
-  background: var(--rk-cite); color: var(--rk-cite-t);
-  font-size: .85em; text-decoration: none; white-space: nowrap;
-  user-select: none;
-}
-
 /* The due date as a label: the tag's silhouette mirrored — a tag hangs by its
    point on the left, a date points forward on the right — and the hole sits by
    the point as it does on a tag. The calendar glyph beside it is hidden: the
    shape says what it is. */
-.nt-due-cal { display: none; }
-/* The date a calendar field is changing, while the field stands in its place. */
-.nt-due-hide { display: none; }
-/* A 📅 with no whole date after it: a chip that asks for one. */
-.nt-due-in.nt-due-bad { background: var(--rk-panel); border: 1px dashed var(--rk-tab-t); border-left-width: 6px; border-left-style: solid; cursor: pointer; }
 /* A calendar, not a tag: square, with the dark strip a calendar wears at its
    head. Nothing is borrowed from the tag's silhouette — side by side they are
    two different things, at one height. */
@@ -147,36 +124,6 @@
   font: inherit; font-size: .9em; color: var(--rk-text);
   vertical-align: baseline;
 }
-
-/* A file is over the note: where it would land, said plainly. */
-.nt-wy { position: relative; }
-.nt-wy.nt-over::after {
-  content: '놓으면 그림이 들어갑니다';
-  position: absolute; inset: 3px; z-index: 3;
-  display: flex; align-items: flex-start; justify-content: center;
-  padding-top: 12px;
-  border: 2px dashed var(--rk-cite-t);
-  background: color-mix(in srgb, var(--rk-cite) 55%, transparent);
-  color: var(--rk-cite-t);
-  pointer-events: none;
-}
-
-/* Maths. `$x$` and `$$…$$` are nodes in the editor (so the backslashes
-   survive a save) and KaTeX draws them in both places; a block stands on its
-   own line, the way it does on paper. */
-.nt-prose [data-type='math_block'] {
-  display: block; margin: 8px 0; padding: 2px 0;
-  text-align: center; font-size: 1.1em;
-}
-.nt-prose [data-type='math_block'].ProseMirror-selectednode { background: var(--rk-sel, #eef2ff); }
-/* A formula being written is its LaTeX, in a field the width of the line. */
-.nt-math-src {
-  width: 100%; border: 1px solid var(--rk-dim); border-radius: 2px;
-  padding: 2px 5px; background: var(--rk-panel);
-  font: 12px/1.5 var(--rk-mono, ui-monospace, monospace); color: var(--rk-text);
-  resize: vertical;
-}
-.nt-math-in .nt-math-src { width: auto; min-width: 8em; text-align: left; resize: none; }
 
 /* The note read inside its own pane: the print sheet, scrolling. */
 .nt-read { flex: 1; min-height: 0; overflow: auto; background: #fff; color: #111; }
@@ -279,158 +226,18 @@ body.nt-paper #root { height: auto; min-height: 100%; }
 /* The body takes everything that is left — to the right edge, to the bottom.
    The editor is a page: one family, sizes that step, nothing bold that is not
    bold in the text. No active-line tint, no visible markup. */
-.nt-wy { flex: 1; min-height: 0; border-top: 1px solid var(--rk-line); overflow: auto; background: var(--rk-panel); }
-.nt-wy .milkdown { height: 100%; }
-.nt-prose {
-  /* The whole area is the note, so clicking anywhere in it lands in the text.
-     No tail of empty space below: 40vh of padding made a short note scroll,
-     which says there is more to read when there is not. */
-  min-height: 100%;
-  padding: 12px 16px 24px;
-  outline: none;
-  /* The note reads at the size the list reads at: this pane is the one place
-     where the text IS the work, so it is never the smaller of the two. */
-  font-size: var(--rk-fs);
-  line-height: 1.75;
-  color: var(--rk-text);
-  caret-color: var(--rk-ink);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.nt-prose > :first-child { margin-top: 0; }
-/* THE RAIL (레일) — one line down the left margin that every block stands on.
-   A paragraph, a list, a table each take a SEGMENT of it; the segment the
-   caret is in is LIT (as is each of them while a selection spans several).
-   One rail, one x: nothing is ever drawn at a second depth, however far the
-   line itself is indented.
-
-   The rail stands in real space: .nt-prose is padded by it, so nothing is
-   written over it. */
-.nt-prose { padding-left: 26px; }
-.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote) { position: relative; }
-.nt-prose :where(p, h1, h2, h3, h4, h5, h6, pre, blockquote)::before {
-  content: '';
-  position: absolute;
-  left: -18px; top: .18em; bottom: .18em;
-  width: 3px;
-  border-radius: 1px;
-  background: var(--rk-line);
-}
-/* A LIST is ONE segment, not one per line: where it starts is where the list
-   starts, where it stops is where the list stops, and two lists running into
-   each other are two segments with a gap — the thing markdown gives you no
-   other sign of. A TABLE is one segment the same way. */
-.nt-prose :where(ul, ol, table) { position: relative; }
-.nt-prose :where(ul, ol, table)::before {
-  content: '';
-  position: absolute;
-  left: -18px; top: .18em; bottom: .18em;
-  width: 3px;
-  border-radius: 1px;
-  background: var(--rk-line);
-}
-/* …and a list inside a list draws none of its own: the outer segment already
-   runs the whole height of everything nested under it, so one list is one
-   piece of rail however deep it goes. The same for anything in a table cell —
-   the table's own segment covers all of it. */
-.nt-prose li :where(ul, ol) { position: static; }
-.nt-prose li :where(ul, ol)::before { content: none; }
-.nt-prose :where(th, td) p { position: static; margin: 0; }
-.nt-prose :where(th, td) p::before { content: none; }
-/* So the lines inside them draw nothing of their own — until the caret is on
-   one, which lights its own piece of the rail. */
-.nt-prose li > p::before { content: none; }
-.nt-prose li::before { content: none; }
-/* The lit piece, for a line inside a list or a table, on the one rail: the
-   line's own box is NOT positioned, so `left` is measured from the outermost
-   list (or the table), while `top: auto` leaves it beside the line it belongs
-   to. For a list item it is the ITEM's pseudo-element, never the paragraph's
-   — the paragraph is holding the checkbox — and one line tall, because an item
-   that holds a nested list is as tall as everything under it. */
-.nt-prose li:has(> .nt-at)::before {
-  content: '';
-  position: absolute;
-  left: -18px; top: auto; margin-top: .18em; height: 1.1em;
-  width: 3px; border-radius: 1px;
-  background: var(--rk-cite-t);
-}
-/* A table lights whole. Its cells are not lines — a row is not a box the rail
-   can measure from (generated content on a `tr` becomes an anonymous CELL and
-   pushes the real ones along), and a cell's own line has no static position to
-   trust inside table layout. The table is one block, so it is one lit piece. */
-.nt-prose table:has(.nt-at)::before { background: var(--rk-cite-t); }
-.nt-prose blockquote > p::before { content: none; }
-/* The lit one, everywhere else. */
-.nt-prose .nt-at::before { background: var(--rk-cite-t); }
-.nt-prose :where(h1, h2, h3, h4, h5, h6) {
-  margin: 1.1em 0 .35em; font-weight: 600; color: var(--rk-ink); line-height: 1.35;
-}
-.nt-prose h1 { font-size: 1.45em; }
-.nt-prose h2 { font-size: 1.22em; }
-.nt-prose h3 { font-size: 1.07em; }
-.nt-prose :where(h4, h5, h6) { font-size: 1em; color: var(--rk-dim); }
-.nt-prose p { margin: 0 0 .55em; }
-.nt-prose :where(ul, ol) { margin: 0 0 .55em; padding-left: 1.5em; }
-.nt-prose li { margin: .1em 0; }
-.nt-prose li p { margin: 0; }
-/* A task item wears its box, drawn from the node's own state. Clicking it flips
-   the node (see MarkdownArea), so nothing is stored twice. The box is drawn on
-   the PARAGRAPH inside the item, which leaves the item's own ::before for the
-   bar in the gutter — one pseudo-element each, and the two do not fight. */
-.nt-prose li[data-item-type="task"] { list-style: none; }
-.nt-prose li[data-item-type="task"] > p::before {
-  content: '';
-  position: absolute; left: -17px; top: .42em;
-  width: 12px; height: 12px;
-  border: 1px solid var(--rk-dim); border-radius: 2px;
-  background: var(--rk-panel);
-  cursor: pointer;
-}
-.nt-prose li[data-item-type="task"][data-checked="true"] > p::before {
-  border-color: var(--rk-cite-t); background: var(--rk-cite-t);
-}
-.nt-prose li[data-item-type="task"][data-checked="true"] > p::after {
-  content: '';
-  position: absolute; left: -14px; top: .62em;
-  width: 6px; height: 3px;
-  border-left: 1.6px solid #fff; border-bottom: 1.6px solid #fff;
-  transform: rotate(-45deg);
-  pointer-events: none;
-}
-.nt-prose li[data-item-type="task"][data-checked="true"] > p { color: var(--rk-mute); }
-.nt-prose input[type="checkbox"] { width: 13px; height: 13px; accent-color: var(--rk-cite-t); }
-.nt-prose blockquote {
-  margin: 0 0 .55em; padding: 0 0 0 11px;
-  border-left: 2px solid var(--rk-edge); color: var(--rk-dim);
-}
 /* `code`, written in a line: the same size as the words around it (monospace
-   reads smaller at the same px), on ink-and-paper — no colour of its own, so
-   it adds nothing to the blue a tag or a link already means. The edge is what
-   makes it a chip, so it is drawn a step stronger than a row divider. */
-.nt-prose code, .nt-sheet code {
+   reads smaller at the same px), on ink-and-paper — no colour of its own. The
+   edge is what makes it a chip, so it is drawn a step stronger than a row
+   divider. The live view draws the same chip (.nt-code). */
+.nt-sheet code {
   font-family: var(--rk-mono); font-size: .95em;
   background: var(--rk-gut, #f1f5f9); border: 1px solid var(--rk-mute, #94a3b8);
   color: var(--rk-ink, #0f172a);
   padding: 2px 6px; margin: 0 3px; border-radius: 2px;
 }
-.nt-prose pre code, .nt-sheet pre code { font-size: 1em; }
-.nt-prose pre {
-  margin: 0 0 .55em; padding: 9px 11px;
-  background: var(--rk-gut); border: 1px solid var(--rk-line);
-  font-family: var(--rk-mono); font-size: 12.5px; overflow-x: auto;
-}
-.nt-prose pre code, .nt-sheet pre code { background: none; border: 0; padding: 0; color: inherit; }
-.nt-prose a { color: var(--rk-cite-t); text-decoration: underline; text-underline-offset: 2px; }
-.nt-prose hr { margin: 1em 0; border: 0; border-top: 1px solid var(--rk-edge); }
-.nt-prose table { border-collapse: collapse; margin: 0 0 .55em; }
-/* The row is as tall as its tallest cell, so a cell's line sits in the MIDDLE
-   of it — and a paragraph in a cell drops the margin it would end a line with,
-   which is what pushed the text to the top. (Markdown has no way to say this;
-   it is the table's own style, here.) */
-.nt-prose :where(th, td) { border: 1px solid var(--rk-mute); padding: 2px 8px; vertical-align: middle; }
-.nt-prose :where(th, td) > p { margin: 0; }
-.nt-prose th { background: var(--rk-gut); font-weight: 600; }
-.nt-prose img { max-width: 100%; }
+.nt-sheet pre code { background: none; border: 0; padding: 0; margin: 0; font-size: 1em; color: inherit; }
+
 /* The file itself, as text: no markdown is parsed and none is drawn, but it is
    still the note — typing in it saves like anywhere else. */
 /* The source views are a CodeMirror editor; its own theme (RawArea.jsx) carries
@@ -465,23 +272,28 @@ body.nt-paper #root { height: auto; min-height: 100%; }
   background: var(--rk-gut); border: 1px solid var(--rk-mute); color: var(--rk-ink);
   padding: 2px 6px; border-radius: 2px;
 }
+/* A table's row: the pipes only line up in a fixed-width face, and the file is
+   not touched to make them. */
+.nt-cm-row { font-family: var(--rk-mono); font-size: .92em; }
+/* An item under another one: one step smaller than the line above it, and only
+   one — a list five deep is not five sizes smaller. The step in is drawn, not
+   written, so the spaces in the file stay as they were. */
+.nt-cm-sub { font-size: calc(var(--rk-fs) - 2px); }
 /* A task's box, drawn where `[ ]` stands in the text. */
 .nt-cm-box {
-  display: inline-block; vertical-align: -2px;
-  width: 12px; height: 12px; margin-right: 2px;
+  display: inline-block; vertical-align: -3px;
+  width: 15px; height: 15px; margin-right: 3px;
   border: 1px solid var(--rk-dim); border-radius: 2px;
   background: var(--rk-panel); cursor: pointer;
 }
 .nt-cm-box.on { border-color: var(--rk-cite-t); background: var(--rk-cite-t); }
 .nt-cm-box.on::after {
   content: ''; display: block;
-  margin: 2px 0 0 2px; width: 6px; height: 3px;
-  border-left: 1.6px solid #fff; border-bottom: 1.6px solid #fff;
+  margin: 3px 0 0 3px; width: 7px; height: 4px;
+  border-left: 1.8px solid #fff; border-bottom: 1.8px solid #fff;
   transform: rotate(-45deg);
 }
 
-/* ProseMirror's own: the gap cursor and a selected node. */
-.nt-prose .ProseMirror-selectednode { outline: 2px solid var(--rk-cite-t); }
 
 /* An editor column: its tabs, and the one button that moves a note to the
    other column. Two columns is two notes side by side, which is what a split
