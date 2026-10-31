@@ -17,6 +17,8 @@ current note, rather than overwriting someone's paragraph.
 """
 import os
 import re
+import subprocess
+import sys
 import unicodedata
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -28,7 +30,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from lilak_portal_auth import identity, signed_in
+from lilak_portal_auth import identity, manager, signed_in
 
 DATA = Path(os.environ.get("NOTE_DATA_DIR", "./data"))
 PROJECT = os.environ.get("PORTAL_PROJECT", "")
@@ -303,6 +305,48 @@ def tags(_: dict = Depends(signed_in)) -> dict:
     return {"tags": n}
 
 
+@app.post("/api/tags/rename")
+def rename_tags(body: dict, _: dict = Depends(signed_in)) -> dict:
+    """Every `#tag` in `from` (any case) becomes `#to`, in every note — the
+    text is the only place a tag lives. Renaming one tag, or merging several;
+    project_manager asks every service in turn."""
+    gone = {str(t).strip().lower() for t in body.get("from") or [] if str(t).strip()}
+    to = str(body.get("to") or "").strip()
+    if not gone or not to or re.search(r"[\s#]", to):
+        raise HTTPException(400, "바꿀 태그와 새 이름(띄어쓰기 없이)이 필요합니다.")
+    lead = re.compile(r"(^|[\s(])#([^\s#.,;:!?()\[\]{}'\"]+)")
+    n = 0
+    for p in sorted(NOTES.glob("*.md")):
+        text = p.read_text(encoding="utf-8")
+        m = re.match(r"---\n.*?\n---\n", text, re.S)
+        head, rest = (text[:m.end()], text[m.end():]) if m else ("", text)
+        new = lead.sub(lambda x: f"{x.group(1)}#{to}" if x.group(2).lower() in gone else x.group(0), rest)
+        if new != rest:
+            _atomic_write(p, head + new)
+            n += 1
+    return {"changed": n}
+
+
+@app.get("/api/tagged")
+def tagged(tag: str, _: dict = Depends(signed_in)) -> dict:
+    """The notes wearing `tag` (any case), and the todos written with it — what
+    project_manager gathers from every service."""
+    want = tag.strip().lower()
+    out = []
+    for note in _all(NOTES):
+        if want and any(t.lower() == want for t in note["tags"]):
+            out.append({"key": "notes", "rec": {"id": note["id"], "title": note["title"], "date": note["date"]}})
+        for i, ln in enumerate(note["body"].splitlines()):
+            m = _todo(ln)
+            if not m:
+                continue
+            text, due, at = _todo_text(m.group(4))
+            if want and any(t.group(1).lower() == want for t in TAG_RE.finditer(text)):
+                out.append({"key": "todos", "rec": {"id": note["id"], "title": note["title"], "line": i,
+                                                    "text": text, "done": m.group(2) != " ", "due": due}})
+    return {"items": out}
+
+
 @app.get("/api/todos")
 def todos(_: dict = Depends(signed_in)) -> dict:
     """Every GFM checkbox in every note. Collected, never stored — the line in
@@ -377,6 +421,29 @@ def get_file(name: str, _: dict = Depends(signed_in)):
     if not str(p).startswith(str(FILES.resolve())) or not p.is_file():
         raise HTTPException(404, "그 파일이 없습니다.")
     return FileResponse(p)
+
+
+@app.get("/api/where")
+def where(_: dict = Depends(signed_in)) -> dict:
+    """Where this project keeps what it is made of — the folders behind the
+    notes and their files, so the app can say it rather than make you guess."""
+    return {"project": PROJECT, "notes": str(NOTES), "files": str(FILES)}
+
+
+@app.post("/api/reveal")
+def reveal(_: dict = Depends(manager)) -> dict:
+    """Show the files folder in the host's own file manager. The portal spawns
+    this service on the machine it runs on, so 'the host' is that machine — in
+    a container, or behind a portal somewhere else, there is nothing to open
+    and the caller is told so rather than left waiting."""
+    FILES.mkdir(parents=True, exist_ok=True)
+    opener = {"darwin": "open", "win32": "explorer"}.get(sys.platform, "xdg-open")
+    try:
+        subprocess.Popen([opener, str(FILES)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        raise HTTPException(501, "이 서버에서는 폴더를 열 수 없습니다.")
+    return {"path": str(FILES)}
 
 
 @app.post("/api/file")

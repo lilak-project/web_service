@@ -40,6 +40,7 @@ import { $prose } from '@milkdown/kit/utils'
 import { Plugin, PluginKey } from '@milkdown/kit/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
 import { tr } from 'lilak-ui'
+import { noteText, noteHtml } from './mdtext.js'
 
 /** A bar in the margin beside every line, lit on the one the caret is in —
  *  and on all of them when a selection spans several. The bar itself is CSS on
@@ -96,28 +97,29 @@ const checkRule = $inputRule((ctx) => new InputRule(/^\[([ xX]?)\]\s$/, (state, 
   return tr
 }))
 
-/** What comes back out of the editor is markdown again, and it is the FILE.
- *  Two corrections on the way:
+/** What comes back out of the editor is markdown again, and it IS the file:
+ *  remark writes it from the document on every save. Two corrections on the
+ *  way, both of them where remark makes the decision rather than after it:
  *   - `-` bullets, because that is what the file was written with and a
  *     serializer's default should not restyle someone's notes.
- *   - `\#` → `#`. remark escapes a hash that starts a line in case it is a
- *     heading; CommonMark needs `# ` with a space, so `#태그` never was one —
- *     and escaped, it stops being a tag. */
-/** What remark escapes on the way out and this app means literally: a `#tag`
- *  at the start of a line, and the `![[file]]` embeds, whose brackets remark
- *  would hand back as `!\[\[file]]` — unreadable to Obsidian and to us. Only
- *  those two shapes, so an escape someone wrote stays an escape. */
-const tidy = (md) => md
-  .replace(/\\#/g, '#')
-  .replace(/!\\\[\\\[([^\]]+)\]\]/g, '![[$1]]')
-
+ *   - this app's own `text` handler, so `#태그`, `[[노트]]`, `AT&T` and `2*3`
+ *     are written as themselves instead of growing a hedge of backslashes.
+ *     See mdtext.js, checked by tidy.check.mjs. */
 const make = (root, value, onMarkdown, fileSrc, onFiles) => Editor.make()
   .config((ctx) => {
     ctx.set(rootCtx, root)
     ctx.set(defaultValueCtx, value)
     ctx.update(editorViewOptionsCtx, (prev) => ({ ...prev, attributes: { class: 'nt-prose' } }))
-    ctx.update(remarkStringifyOptionsCtx, (prev) => ({ ...prev, bullet: '-', rule: '-' }))
-    ctx.get(listenerCtx).markdownUpdated((_, md) => onMarkdown(tidy(md)))
+    // How the file is written: `-` bullets, because that is what it was
+    // written with, and this app's own `text` handler, which does not escape
+    // what a vault means literally (see mdtext.js).
+    ctx.update(remarkStringifyOptionsCtx, (prev) => ({
+      ...prev,
+      bullet: '-',
+      rule: '-',
+      handlers: { ...prev.handlers, text: noteText, html: noteHtml },
+    }))
+    ctx.get(listenerCtx).markdownUpdated((_, md) => onMarkdown(md))
   })
   .use(tagSuggest)      // first: its Enter/Tab beat the list's while it is open
   .use(commonmark)      // headings, lists, emphasis, links, code
@@ -462,6 +464,11 @@ export const EMBED_RE = /!\[\[([^\]]+)\]\]/g
 /** `name|400` — Obsidian's way of saying how wide this one picture should be.
  *  Everything else is left to the stylesheet, which keeps a picture inside the
  *  pane and under two thirds of the screen. */
+/** A name a browser can draw. Anything else — a pdf, a sheet, a document — is
+ *  a file you open, not a picture to put on the page. */
+export const isImage = (name) =>
+  /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i.test(String(name || ''))
+
 export function embedSpec(spec) {
   const text = String(spec || '')
   const bar = text.lastIndexOf('|')
@@ -480,6 +487,21 @@ const embedInDoc = (src) => $prose(() => new Plugin({
           const at = pos + m.index + m[0].length
           marks.push(Decoration.widget(at, () => {
             const [name, w] = embedSpec(m[1])
+            if (!isImage(name)) {
+              // A file, not a picture: a chip that hands it over. The click is
+              // ours because a link inside a contenteditable only moves the
+              // caret.
+              const a = document.createElement('a')
+              a.className = 'nt-file'
+              a.href = src(name)
+              a.textContent = name
+              a.contentEditable = 'false'
+              a.addEventListener('mousedown', (e) => {
+                e.preventDefault()
+                window.open(a.href, '_blank', 'noopener')
+              })
+              return a
+            }
             const img = document.createElement('img')
             img.className = 'nt-embed'
             img.src = src(name)

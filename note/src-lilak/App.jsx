@@ -25,6 +25,7 @@ import {
   bySome, asSorts, bumpSort, byKeys, FilterBar, FacetRows,
   PORTAL_BASE, PORTAL_PROJECT, brandStyle, projectKey, load, authHeaders, RackBar, takeOpenRequest,
   tagKey, mergeTags as tagCounts, useTagSources, sharedTagRows, whereText, uniqueTags, PORTAL_SERVICE,
+  useFavTags, RackStar,
 } from 'lilak-ui/racklist'
 // The same renderer elog writes its logs with: GFM (so `- [ ]` is a checkbox)
 // and one newline means one line break, because a note is typed, not typeset.
@@ -33,7 +34,8 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { remarkSoftBreaks } from 'lilak-ui/log/Markdown.jsx'
-import MarkdownArea, { TAG_RE, EMBED_RE, embedSpec, setTagChoices } from './MarkdownArea.jsx'
+import MarkdownArea, { TAG_RE, EMBED_RE, embedSpec, isImage, setTagChoices } from './MarkdownArea.jsx'
+import RawArea from './RawArea.jsx'
 import 'katex/dist/katex.min.css'
 import 'lilak-ui/racklist/rack.css'
 import './note.css'
@@ -60,6 +62,11 @@ async function ask(p, o) {
   if (!r.ok) throw new Error(`${o?.method || 'GET'} ${p} → ${r.status}`)
   return { body: await r.json() }
 }
+
+/** Where this project keeps its notes and their files — asked once, since it
+ *  is the same answer for every tab. */
+let whereAsked = null
+const whereIs = () => (whereAsked ||= ask('/where').then((r) => r.body).catch(() => null))
 
 const D = '·'
 const tagsOf = (n) => (n.tags || []).filter(Boolean)
@@ -105,6 +112,7 @@ const COLS = [
 ]
 const CLS_COLS = [
   { k: 'num', w: 40, min: 30, fix: true, label: '#' },
+  { k: 'fav', w: 26, min: 26, fix: true },      // the account's starred tags, on top
   { k: 'name', w: 220, min: 80, label: 'tag' },
   { k: 'count', w: 70, min: 46, label: 'notes', num: true },
   // The same tag in the other services, and how many wear it there.
@@ -167,6 +175,7 @@ export default function App() {
   // What `#` offers in the editor: every service's tags, then this list's own
   // (one written since the page opened is here before the others know it).
   const tagSources = useTagSources()
+  const { isFavTag, toggleFavTag } = useFavTags()
   const shared = useMemo(() => tagCounts(tagSources.map((x) => x.tags)).map((x) => x.name), [tagSources])
   useEffect(() => { setTagChoices(uniqueTags([...shared, ...notes.flatMap(tagsOf)])) }, [shared, notes])
   // The list carries a first line, not the body, so a local miss asks the
@@ -258,17 +267,18 @@ export default function App() {
 
   const classes = useMemo(() => {
     if (tab?.kind !== 'classes') return []
-    // One row per tag whatever its case — every sharing service's tags, the
-    // ones here with how many notes wear them, the rest with none; named by
-    // the spelling written most, and where else each is worn.
+    // One row per tag the notes wear, whatever its case — named by the
+    // spelling used most across the services, with where else it is worn —
+    // and the ones this account starred on top.
     const spelt = {}
     for (const t of notes.flatMap(tagsOf)) spelt[t] = (spelt[t] || 0) + 1
     const own = PORTAL_SERVICE.name || 'note'
-    return sharedTagRows(tagSources, { svc: own, tags: spelt })
+    const rows = sharedTagRows(tagSources, { svc: own, tags: spelt })
       .map((t) => ({ name: t.name, count: notes.filter((n) => inTag(n, t.name)).length, where: whereText(t.by, own) }))
+      .filter((r) => r.count)
       .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
-      .sort(bySome(CLS_SORTERS[clsSort.k] || CLS_SORTERS.name, clsSort.dir))
-  }, [notes, tab, clsSort, tagSources])
+    return [...rows.filter((r) => isFavTag(r.name)), ...rows.filter((r) => !isFavTag(r.name))]
+  }, [notes, tab, clsSort, tagSources, isFavTag])
 
   // Tags drift here too — the same merge as the other racks, except the fold
   // is one PUT per note, because a tag is text inside the file.
@@ -527,7 +537,8 @@ export default function App() {
                     cell={{
                       ...(merge.mode ? { chk: <input type="checkbox" checked={chosen} tabIndex={-1}
                         readOnly aria-label={tr("nt_select_x", r.name)} /> } : {}),
-                      num: i + 1, name: r.name, count: r.count || '·', where: r.where || '·' }} />
+                      num: i + 1, name: r.name, count: r.count || '·', where: r.where || '·',
+                      fav: <RackStar on={isFavTag(r.name)} onToggle={() => toggleFavTag(r.name)} /> }} />
                   )
                 })}
                 {classes.length === 0 && <p className="rl-msg">{tr("nt_no_tags")}</p>}
@@ -626,11 +637,12 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
   const [n, setN] = useState(null)
   const [f, setF] = useState(null)
   const [open, setOpen] = useState(false)     // the fold beside the title
+  const [where, setWhere] = useState(null)   // the folders, once the fold asks
   // edit · read (the note as it reads, in place) · raw (the file's own text)
   const [view, setView] = useState('edit')
   const read = view === 'read'
   const orig = useRef(null)                  // how the tab found it — revert
-  const nums = useRef(null)                  // the raw view's line numbers
+  useEffect(() => { if (open && !where) whereIs().then(setWhere) }, [open])   // eslint-disable-line react-hooks/exhaustive-deps
   const live = useRef({})                    // the latest, for the last save
   const titleRef = useRef(null)
   live.current = { f, n }
@@ -717,6 +729,8 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
         extra={<>
           <button type="button" className={`rl-btn${read ? ' on' : ''}`}
             onClick={() => setView(read ? 'edit' : 'read')}>{read ? tr("nt_edit") : tr("nt_preview")}</button>
+          <button type="button" className={`rl-btn${view === 'live' ? ' on' : ''}`}
+            onClick={() => setView(view === 'live' ? 'edit' : 'live')}>{view === 'live' ? tr("nt_edit") : tr("nt_live")}</button>
           <button type="button" className={`rl-btn${view === 'raw' ? ' on' : ''}`}
             onClick={() => setView(view === 'raw' ? 'edit' : 'raw')}>{view === 'raw' ? tr("nt_edit") : tr("nt_raw")}</button>
           {read ? <button type="button" className="rl-btn" onClick={onPrint}>{tr("nt_print")}</button> : null}
@@ -742,6 +756,15 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
               onChange={(e) => setF((s) => ({ ...s, date: e.target.value }))} />
           </label>
           <span className="rl-hint rl-mono">{f.id}.md</span>
+          {where && (
+            <>
+              <span className="rl-hint rl-mono nt-path" title={where.files}>{where.files}</span>
+              <button type="button" className="rl-btn" title={where.files}
+                onClick={() => ask('/reveal', { method: 'POST' })
+                  .then(() => say(tr("nt_folder_opened")))
+                  .catch(() => say(tr("nt_folder_no")))}>{tr("nt_folder_open")}</button>
+            </>
+          )}
           {Object.entries(f.fields || {}).map(([k, v]) => (
             <span key={k} className="rl-hint"><b className="rl-mono">{k}</b> {String(v ?? '')}</span>
           ))}
@@ -760,19 +783,13 @@ function Editor({ id, say, onSaved, onClosed, onPrint, takeCaret, onCaret }) {
             <Rendered>{f.body}</Rendered>
           </article>
         </div>
-      ) : view === 'raw' ? (
-        /* The file as it is on disk: nothing is parsed, nothing is drawn —
-           the note's own text, to read, to copy and to fix by hand. The lines
-           are numbered, so a line does not wrap: one line is one line, which
-           is the only way a number beside it stays true. */
-        <div className="nt-rawwrap">
-          <div className="nt-rawnum" ref={nums} aria-hidden="true">
-            {f.body.split('\n').map((_, i) => <div key={i}>{i + 1}</div>)}
-          </div>
-          <textarea className="nt-raw" value={f.body} spellCheck={false} wrap="off"
-            onScroll={(e) => { if (nums.current) nums.current.scrollTop = e.target.scrollTop }}
-            onChange={(e) => setF((s) => ({ ...s, body: e.target.value }))} />
-        </div>
+      ) : view === 'raw' || view === 'live' ? (
+        /* The file as it is on disk: nothing is written back. `원문` shows the
+           text with its line numbers; `라이브` paints the markdown over it and
+           keeps the marks on the line the caret is in. Either way what is
+           saved is what is typed, character for character. */
+        <RawArea key={view} live={view === 'live'} fileSrc={fileSrc}
+          value={f.body} onChange={(v) => setF((s) => ({ ...s, body: v }))} />
       ) : (
         <MarkdownArea value={f.body} fileSrc={fileSrc} placeholder={tr("nt_body_placeholder")}
           onFiles={(file) => putFile(file).catch((e) => { say(String(e.message || e)); return null })}
@@ -815,6 +832,11 @@ const tagged = (Tag) => function Tagged({ node, children, ...rest }) {
  *  editor and in Obsidian. */
 function Img({ node, alt, ...rest }) {
   const [text, w] = embedSpec(alt || '')
+  // An embed that is not a picture — a pdf, a sheet, a document — is handed
+  // over as a file rather than drawn as a broken image.
+  if (!isImage(text)) {
+    return <a className="nt-file" href={rest.src} target="_blank" rel="noreferrer">{text}</a>
+  }
   return <img alt={text} {...rest} style={w ? { width: `${w}px` } : undefined} />
 }
 /** A link out of the note opens a tab of its own: this page is inside the
