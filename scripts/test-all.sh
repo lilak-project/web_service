@@ -21,12 +21,13 @@ step() {
 cd /tmp
 step "backend imports"            $PY -c "import sys; sys.path.insert(0, '$ROOT/service_manager'); from app import main"
 step "portal security tests"      $PY -W ignore $ROOT/service_manager/tests/test_security.py
-step "rack store security tests"  $PY -W ignore $ROOT/lilak_portal_auth/test_store_security.py
-step "rack store folder tests"    $PY -W ignore $ROOT/lilak_portal_auth/test_store_folders.py
-step "rack store tag tests"       $PY -W ignore $ROOT/lilak_portal_auth/test_store_tags.py
-step "project inbox tests"       $PY -W ignore $ROOT/project_manager/backend/test_inbox.py
+step "rack store security tests"  $PY -W ignore $ROOT/lilak_rack/tests/test_store_security.py
+step "rack store folder tests"    $PY -W ignore $ROOT/lilak_rack/tests/test_store_folders.py
+step "rack store tag tests"       $PY -W ignore $ROOT/lilak_rack/tests/test_store_tags.py
+step "project inbox tests"       $PY -W ignore $ROOT/lilak_rack/project_manager/backend/test_inbox.py
 step "sync merge self-test"       $PY $ROOT/service_manager/app/sync_merge.py
 step "ui kit tests (vitest)"      zsh -c "cd $ROOT/lilak_ui && npx vitest run --reporter=dot"
+step "racklist tests (vitest)"    zsh -c "cd $ROOT/lilak_rack && npx vitest run --reporter=dot"
 if [[ ${1:-} != --quick ]]; then
   step "portal frontend builds"   zsh -c "cd $ROOT/service_manager/frontend && LILAK_UI_PATH=$ROOT/lilak_ui npm run build --silent >/dev/null"
 fi

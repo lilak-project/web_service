@@ -1,5 +1,5 @@
 {
-  "_comment": "Installable-service catalog for the Service Manager card. `name` = registered service name (matches deploy/seed/<name>/service.json); `dir` = checkout directory under the stack root; `repo` = public clone URL; `branch` (optional) = clone this branch instead of the repo default. `needs_kit` = frontend build aliases lilak_ui via LILAK_UI_PATH. Install jobs skip missing frontend/requirements gracefully, so entries stay small.",
+  "_comment": "Installable-service catalog for the Service Manager card. `name` = registered service name (matches deploy/seed/<name>/service.json); `dir` = checkout directory under the stack root; `repo` = public clone URL; `branch` (optional) = clone this branch instead of the repo default. `needs_kit` = frontend build aliases lilak_ui via LILAK_UI_PATH. Install jobs skip missing frontend/requirements gracefully, so entries stay small. `bundle` = one checkout holding several services that install together (each a folder of it, seeds in its seed/<name>/); `pip` = its own Python packages, installed in place.",
   "kit": {
     "dir": "lilak_ui",
     "repo": "https://github.com/lilak-project/lilak_ui.git"
@@ -161,70 +161,26 @@
       "en": "Stand-in DAQ rig — exercise the elog chain without a beam"
     },
     {
-      "name": "author_manager",
-      "dir": "author_manager",
-      "repo": "",
-      "label": "author manager",
-      "icon": "users",
-      "color": "#3d5a80",
-      "needs_kit": true,
-      "ko": "저자 목록 — 소속·그룹·논문 저자 블록 (멀티프로젝트)",
-      "en": "Author list — affiliations, groups, paper author blocks (multi-project)"
-    },
-    {
-      "name": "reference_manager",
-      "dir": "reference_manager",
-      "repo": "",
-      "label": "reference manager",
-      "icon": "books",
-      "color": "#7c5295",
-      "needs_kit": true,
-      "ko": "레퍼런스 목록 — 저널·태그·저자·인용 연결 (멀티프로젝트)",
-      "en": "Reference list — journals, tags, authors, linked citations (multi-project)"
-    },
-    {
-      "name": "academic_activities",
-      "dir": "academic_activities",
-      "repo": "",
-      "label": "activity manager",
-      "icon": "calendar",
+      "name": "rack",
+      "dir": "lilak_rack",
+      "repo": "https://github.com/lilak-project/lilak_rack.git",
+      "label": "rack services",
+      "icon": "rows",
       "color": "#3f4651",
       "needs_kit": true,
-      "ko": "학술 활동 목록 — 행사·발표·역할, 레퍼런스·저자와 연결 (멀티프로젝트)",
-      "en": "Academic activities — events, talks, roles, linked to references and authors (multi-project)"
-    },
-    {
-      "name": "project_manager",
-      "dir": "project_manager",
-      "repo": "",
-      "label": "프로젝트",
-      "icon": "folder",
-      "color": "#0f766e",
-      "needs_kit": true,
-      "ko": "프로젝트 — 서비스를 가로지르는 +이름 태그, 메일 받은편지함으로 기록 추가·업데이트 (멀티프로젝트)",
-      "en": "Projects — +name tags across services, an inbox that adds or updates records from mail (multi-project)"
-    },
-    {
-      "name": "asset_manager2",
-      "dir": "asset_manager2",
-      "repo": "",
-      "label": "asset manager",
-      "icon": "scroll",
-      "color": "#8a5cf6",
-      "needs_kit": true,
-      "ko": "장비·자산 목록 — 랙 표 화면 (멀티프로젝트)",
-      "en": "Lab asset list on the rack table (multi-project)"
-    },
-    {
-      "name": "note",
-      "dir": "note",
-      "repo": "",
-      "label": "note",
-      "icon": "pencil-line",
-      "color": "#365944",
-      "needs_kit": true,
-      "ko": "노트 — 노트 하나가 마크다운 파일 하나, Obsidian으로 열림 (멀티프로젝트)",
-      "en": "Notes — one markdown file each, opens in Obsidian (multi-project)"
+      "bundle": [
+        "academic_activities",
+        "author_manager",
+        "reference_manager",
+        "asset_manager2",
+        "note",
+        "project_manager"
+      ],
+      "pip": [
+        "rackstore"
+      ],
+      "ko": "연구 기록 묶음 — activity · author · reference · asset · note · project (한 번에 설치)",
+      "en": "Research records, installed together — activity · author · reference · asset · note · project"
     }
   ]
 }

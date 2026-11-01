@@ -15,6 +15,10 @@ can share a build/deploy context and the shared UI kit:
 - **`asset_manager/`** — a managed multi-project static PWA service.
 - **`lilak_ui/`** — the shared React component kit. **Source-aliased** (not npm
   published) by every frontend via Vite. Editing it affects all of them.
+- **`lilak_rack/`** — the rack services (activity, author, reference, asset2, note,
+  project) in ONE repo with the `racklist/` frame they are drawn with and their shared
+  backend `rackstore/`. Installed together (Service Manager → "rack services");
+  services alias it as `racklist`. Its tests: `npx vitest run` + `tests/test_store_*.py`.
 - **`data/`** — all runtime data, kept **outside** the code repos (see below).
 
 Each sub-repo may have its own `CLAUDE.md`; this file is the cross-cutting map.
@@ -42,7 +46,7 @@ data root, rack store tests, sync merge self-test, kit vitest, frontend build):
 scripts/test-all.sh            # --quick skips the frontend build
 ```
 
-A fixed bug leaves a test behind (`service_manager/tests/`, `lilak_portal_auth/test_store_*.py`).
+A fixed bug leaves a test behind (`service_manager/tests/`, `lilak_rack/tests/test_store_*.py`).
 Open maintenance work is tracked in `service_manager/MAINTENANCE.md`.
 
 Docker deploy lives in `service_manager/deploy/` (multi-stage `Dockerfile`,
@@ -87,7 +91,7 @@ SQLite travels as a backup-API snapshot. A sub is served read-only (the proxy re
 non-GET), because the next pull overwrites local edits — unless it is two-way (rack
 services and note only, main must `accept_push`): then the sub also pushes, and
 `app/sync_merge.py` merges a file changed on both sides against the last agreed copy.
-The rack store (`lilak_portal_auth/store.py`) keeps one file per record and adopts
+The rack store (`lilak_rack/rackstore/rackstore/store.py`) keeps one file per record and adopts
 records a sync changed underneath it. Accounts never sync — main's
 grants are copied onto matching local accounts only when an admin asks. See
 `DEPLOYMENT.md` §9. Pairing is a handshake: a sub asks by address, main's admin

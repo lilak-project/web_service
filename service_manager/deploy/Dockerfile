@@ -44,6 +44,18 @@ RUN set -e; mkdir -p /out; \
       find "/out/$name" -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true; \
     done
 
+# The rack services (lilak_rack: one checkout, installed together): each built
+# against the kit, the checkout kept whole at /app/lilak_rack — its services sit
+# beside racklist/, the frame they are built on (their seeds say /app/lilak_rack/<name>).
+RUN set -e; \
+    for d in lilak_rack/*/; do \
+      [ -f "$d/package.json" ] && [ -d "$d/src-lilak" ] || continue; \
+      echo "→ rack service: $d"; \
+      (cd "$d" && npm install --no-audit --no-fund && npm run build); \
+    done; \
+    cp -a lilak_rack /out/lilak_rack; \
+    find /out/lilak_rack -name node_modules -type d -prune -exec rm -rf {} +
+
 # Live scaffolding also runs in the RUNTIME container, so prebuild a shared
 # node_modules every generated service can reuse (identical deps → offline, fast).
 RUN node scripts/new-service.mjs --name svctmpl --out /tmp/tmpl --data-service --lilak-ui /src/lilak_ui \
@@ -80,6 +92,8 @@ COPY --from=frontend /src/asset_manager/dist            /app/asset_manager/dist
 # Scaffolded services (uniform layout): backend + built dist, assembled in stage 1.
 # cwd in each seed manifest points at /app/<name>/backend.
 COPY --from=frontend /out /app
+# The rack services' shared backend (`rackstore`, in lilak_rack).
+RUN pip install --no-cache-dir /app/lilak_rack/rackstore
 # The rack services' portal-serve.sh run their backend on the host install's
 # shared venv (service_manager/.venv). The image's one env IS that venv, so
 # point the path at it — otherwise they fall back to a bare static server.

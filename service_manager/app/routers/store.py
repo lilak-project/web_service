@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from .. import config, models, registry
+from .. import project_runtime as pr
 from ..db import SessionLocal
 from ..deps import require_portal_admin
 from .scaffold import LILAK_UI_PATH, SEED_ROOT, SERVICES_ROOT, ensure_kit
@@ -136,20 +137,43 @@ def _build_frontend(job_id: str, repo_dir: Path, needs_kit: bool) -> bool:
     return _stream(job_id, [npm, "run", "build"], cwd=fe, env_extra=env) == 0
 
 
-def _pip_install(job_id: str, repo_dir: Path) -> bool:
+def _pip_install(job_id: str, repo_dir: Path, entry: dict) -> bool:
     """pip install the first requirements file found into the SHARED portal venv
     (the venv that spawns managed backends). Missing file = nothing to do."""
     req = next((p for p in (repo_dir / "requirements.txt", repo_dir / "backend" / "requirements.txt")
                 if p.exists()), None)
+    # A bundle's own Python packages (lilak_rack's `rackstore`), installed in place.
+    for pkg in entry.get("pip", []):
+        if _stream(job_id, [sys.executable, "-m", "pip", "install", "-q", "-e", str(repo_dir / pkg)]) != 0:
+            return False
     if req is None:
         _log(job_id, "· requirements 없음 — pip 생략")
         return True
     return _stream(job_id, [sys.executable, "-m", "pip", "install", "-q", "-r", str(req)]) == 0
 
 
+def _members(entry: dict) -> list[tuple[str, Path]]:
+    """(service name, its code dir) for every service the entry installs: one, or —
+    for a bundle (lilak_rack: the rack services and the racklist frame they are all
+    built on, which need one another) — each `bundle` name, a folder of the checkout."""
+    repo_dir = SERVICES_ROOT / entry["dir"]
+    return [(n, repo_dir / n) for n in entry["bundle"]] if entry.get("bundle") else [(entry["name"], repo_dir)]
+
+
+def _registered(entry: dict) -> bool:
+    return all(registry.manifest_path(n).exists() for n, _ in _members(entry))
+
+
 def _register(job_id: str, name: str, entry: dict) -> bool:
-    """Write the manifest (seed re-rooted at the local stack) + the DB row."""
-    seed = SEED_ROOT / name / "service.json"
+    """Write the manifest (seed re-rooted at the local stack) + the DB row. A bundle
+    carries its seeds (`seed/<name>/`); a service already registered keeps its own
+    manifest (it may hold an admin's edits), and a missing entry project is made."""
+    if entry.get("bundle") and registry.manifest_path(name).exists():
+        _log(job_id, f"· '{name}' 이미 등록됨 — 그대로 둡니다")
+        return True
+    seed = SERVICES_ROOT / entry["dir"] / "seed" / name / "service.json"
+    if not seed.exists():
+        seed = SEED_ROOT / name / "service.json"
     if not seed.exists():
         _log(job_id, f"! seed 매니페스트 없음: {seed}")
         return False
@@ -172,6 +196,10 @@ def _register(job_id: str, name: str, entry: dict) -> bool:
     if not m.get("color"):
         m["color"] = entry.get("color")
     registry.write_manifest(name, m)
+    # The project its card opens (and other services ask for its tags) must exist.
+    proj = m.get("entry_project")
+    if proj and not pr.project_dir(name, proj).exists():
+        pr.create_project(name, proj)
     db = SessionLocal()
     try:
         get_or_create_service(db, name, m.get("kind") or "generic")
@@ -202,10 +230,11 @@ def _run_install(job_id: str, entry: dict) -> None:
     # `docker compose up --build` while the manifest in /app/data survived — leaving a
     # registered service whose code is gone. Register-only needs no git, no network,
     # and writes solely to the volume, so it survives a rebuild.
-    if _is_vendored(repo_dir) and _prebuilt(repo_dir):
+    members = _members(entry)
+    if _is_vendored(repo_dir) and all(_prebuilt(d) for _, d in members):
         _set(job_id, status="running")
         _log(job_id, f"· 코드가 이미 있습니다 ({repo_dir}) — 내려받기/빌드 없이 등록만 합니다")
-        if not _register(job_id, entry["name"], entry):
+        if not all(_register(job_id, n, entry) for n, _ in members):
             return _set(job_id, status="error", error="서비스 등록 실패")
         return _set(job_id, status="done")
 
@@ -243,11 +272,11 @@ def _run_install(job_id: str, entry: dict) -> None:
             _rollback(job_id, repo_dir)
         return _set(job_id, status="error", error=msg)
 
-    if not _build_frontend(job_id, repo_dir, bool(entry.get("needs_kit"))):
+    if not all(_build_frontend(job_id, d, bool(entry.get("needs_kit"))) for _, d in members):
         return fail("프론트엔드 빌드 실패")
-    if not _pip_install(job_id, repo_dir):
+    if not _pip_install(job_id, repo_dir, entry):
         return fail("백엔드 의존성 설치 실패")
-    if not _register(job_id, entry["name"], entry):
+    if not all(_register(job_id, n, entry) for n, _ in members):
         return fail("서비스 등록 실패")
     _set(job_id, status="done")
 
@@ -268,9 +297,9 @@ def _run_update(job_id: str, entry: dict) -> None:
     if _stream(job_id, [git, "-C", str(repo_dir), "pull", "--ff-only"], env_extra=NO_PROMPT) != 0:
         return _set(job_id, status="error",
                     error="git pull 실패 — 로컬 변경/분기 여부를 확인하세요 (ff-only).")
-    if not _build_frontend(job_id, repo_dir, bool(entry.get("needs_kit"))):
+    if not all(_build_frontend(job_id, d, bool(entry.get("needs_kit"))) for _, d in _members(entry)):
         return _set(job_id, status="error", error="프론트엔드 빌드 실패")
-    if not _pip_install(job_id, repo_dir):
+    if not _pip_install(job_id, repo_dir, entry):
         return _set(job_id, status="error", error="백엔드 의존성 설치 실패")
     _log(job_id, "✓ 업데이트 완료 — 실행 중이면 서비스를 재시작하세요")
     _set(job_id, status="done")
@@ -352,7 +381,8 @@ def store_list(_: models.User = Depends(require_portal_admin)):
             "icon": e.get("icon"), "color": e.get("color"), "ko": e.get("ko"), "en": e.get("en"),
             "private": bool(e.get("private")),
             "code_present": (SERVICES_ROOT / e["dir"]).exists(),
-            "registered": registry.manifest_path(e["name"]).exists(),
+            "registered": _registered(e),
+            "bundle": e.get("bundle") or [],
         })
     return {"services": out, "stack_root": str(SERVICES_ROOT)}
 
@@ -366,7 +396,7 @@ def store_install(body: InstallBody, _: models.User = Depends(require_portal_adm
     entry = _entry((body.name or "").strip())
     if not entry:
         raise HTTPException(404, "카탈로그에 없는 서비스입니다.")
-    if (config.DATA_ROOT / entry["name"] / "service.json").exists():
+    if _registered(entry):
         raise HTTPException(409, f"'{entry['name']}' 이(가) 이미 등록되어 있습니다.")
     job_id = _spawn(_run_install, entry, name=entry["name"])
     return {"job_id": job_id, "name": entry["name"]}

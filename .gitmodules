@@ -58,3 +58,7 @@
 	path = vacuum_monitoring
 	url = git@github.com:lilak-project/vacuum_monitoring.git
 	branch = main
+[submodule "lilak_rack"]
+	path = lilak_rack
+	url = git@github.com:lilak-project/lilak_rack.git
+	branch = main

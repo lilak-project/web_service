@@ -8,7 +8,7 @@
 - 고치기 전후로 `~/web_service/scripts/test-all.sh`를 돌린다. 전부 통과해야 커밋한다.
 - 버그를 고치면 그 버그를 잡는 테스트를 하나 남긴다.
   - 포털: `service_manager/tests/test_security.py`
-  - rack 저장소: `lilak_portal_auth/test_store_*.py`
+  - rack 저장소: `lilak_rack/tests/test_store_*.py`
   - UI 키트: `lilak_ui/src/__tests__/`
 - `lilak_portal_auth`를 고친 뒤에는 rack 서비스(note, author, reference, academic, asset)를 재시작해야 반영된다. 설정 → 시스템 → "실행 중인 서비스 모두 재시작" 버튼으로 한 번에.
 
