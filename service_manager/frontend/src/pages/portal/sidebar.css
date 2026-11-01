@@ -379,7 +379,7 @@
 .pl-hrow.at { box-shadow: inset 3px 0 0 var(--border-focus); }
 .pl-hrow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-hrow .app { display: flex; align-items: center; gap: 8px; }
-.pl-hsw { width: 10px; height: 10px; flex: 0 0 auto; }
+.pl-hrow .app > svg { flex: 0 0 auto; }
 @media (max-width: 640px) {
   .pl-home { padding-top: 16px; }
   .pl-hrow.cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 64px; }

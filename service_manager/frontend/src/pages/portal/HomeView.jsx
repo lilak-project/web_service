@@ -15,7 +15,7 @@ const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.name)
  * multi-project service's own list, so the per-project grants are the ones
  * the bar already uses.
  */
-export default function HomeView({ cards, groups, recent, onOpen, isManager, storeOpen, onRefresh }) {
+export default function HomeView({ cards, groups, recent, onOpen, isManager, storeOpen, onRefresh, iconFor }) {
   const [store, setStore] = useState(!!storeOpen)
   const apps = useMemo(() => (cards || []).filter((c) => !c.builtin && !c.hidden), [cards])
   const groupOf = useMemo(() => {
@@ -78,7 +78,8 @@ export default function HomeView({ cards, groups, recent, onOpen, isManager, sto
 
   const state = (r) => (!r.enter ? <Pill tone="warn">{tr('p_home_locked')}</Pill>
     : r.running ? <Pill tone="ok">{tr('p_home_on')}</Pill> : <Pill>{tr('p_home_off')}</Pill>)
-  const swatch = (c) => <span className="pl-hsw" style={{ background: c.color || 'var(--text-secondary)' }} />
+  const swatch = (c) => <Icon name={iconFor ? iconFor(c.name, c.icon) : (c.icon || 'circle')} size={18} weight="fill"
+    color={c.color || 'var(--text-primary)'} />
 
   return (
     <div className="pl-scroll pl-mgpage pl-home">

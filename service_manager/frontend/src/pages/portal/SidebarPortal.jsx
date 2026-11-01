@@ -1407,7 +1407,7 @@ export default function SidebarPortal({
               }} />
           ) : (
             <HomeView cards={cards} groups={groups} recent={recent} isManager={isManager}
-              storeOpen={storeLink} onRefresh={onRefresh}
+              storeOpen={storeLink} onRefresh={onRefresh} iconFor={iconFor}
               onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
           )}
         </div>
