@@ -199,6 +199,25 @@ class Runtime(unittest.TestCase):
         finally:
             live.kill(); live.wait()
 
+    def test_stale_pid_naming_the_portal_is_not_running(self):
+        # After a container restart a kept `.pid` can name the portal's own PID.
+        d = TMP / "stalepid"
+        d.mkdir(exist_ok=True)
+        pf = d / ".port"
+        for pid in (os.getpid(), os.getppid()):
+            pf.write_text("8259")
+            base.write_pid(pf, pid)
+            self.assertIsNone(base.read_running_port(pf))
+            self.assertFalse(pf.exists() or (d / ".pid").exists())
+        # A live service that has not bound yet stays claimed (no duplicate spawns).
+        live = subprocess.Popen(["sleep", "5"], env={**os.environ, "PORTAL_SERVICE_PORT": "8259"})
+        try:
+            pf.write_text("8259")
+            base.write_pid(pf, live.pid)
+            self.assertEqual(base.read_running_port(pf), 8259)
+        finally:
+            live.kill(); live.wait()
+
     def test_restart_running_brings_services_back(self):
         from app.adapters import get_adapter
         from app.adapters.managed import _port_file

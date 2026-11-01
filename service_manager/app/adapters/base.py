@@ -126,6 +126,29 @@ def _pid_alive(pid: int) -> bool:
     return False
 
 
+def _not_the_service(pid: int, port: int) -> bool:
+    """True when a LIVE recorded PID provably is not the service on `port`.
+
+    `.pid` files outlive a container: after `docker compose up -d`/`restart` the
+    data volume keeps the old container's PIDs while the new one counts from 1
+    again, so a stale `.pid` can name the portal's own uvicorn (seen: PID 15) or a
+    service spawned for some OTHER project. Both pass _pid_alive.
+
+    Both spawn paths export PORTAL_SERVICE_PORT=<port> to the child, so a process
+    whose environment lacks it for this port is someone else. That works for any
+    start command (a manifest's cmd is arbitrary, so matching the command line
+    could not). No procfs (macOS) or an unreadable environ → trust the PID;
+    the portal-itself check still applies there.
+    """
+    if pid in (os.getpid(), os.getppid()):
+        return True
+    try:
+        env = pathlib.Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except OSError:
+        return False
+    return f"PORTAL_SERVICE_PORT={port}".encode() not in env
+
+
 def write_pid(port_file: Path, pid: int) -> None:
     (port_file.parent / ".pid").write_text(str(pid))
 
@@ -159,6 +182,10 @@ def read_running_port(port_file: Path) -> Optional[int]:
     answers "whose port is this". A process that is alive but never binds stays
     claimed until someone stops it, which is the recoverable failure -- the old
     behaviour silently multiplied processes instead.
+
+    "Live" means live AND that service's process: a PID reused by the portal
+    itself or by another process (stale `.pid` after a container restart) is
+    stale, see _not_the_service.
     """
     if not port_file.exists():
         return None
@@ -175,7 +202,8 @@ def read_running_port(port_file: Path) -> Optional[int]:
         return None
     if pid_file.exists():
         try:
-            if not _pid_alive(int(pid_file.read_text().strip())):
+            pid = int(pid_file.read_text().strip())
+            if not _pid_alive(pid) or _not_the_service(pid, port):
                 _clear()
                 return None
         except Exception:
