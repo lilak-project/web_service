@@ -321,6 +321,11 @@ export default function SidebarPortal({
     window.addEventListener('message', on)
     return () => window.removeEventListener('message', on)
   }, [])
+  // Asked once: leaving that panel drops the ask, or every return to it (a new
+  // frame) would ask again — a filter the user has since cleared coming back.
+  useEffect(() => {
+    if (deep && (view !== 'service' || deep.svc !== sel?.svc || deep.proj !== (sel?.proj || ''))) setDeep(null)
+  }, [deep, view, sel])
   // A Set, not one name: opening a service must not close another. Several
   // project lists can stand open at once.
   const [openSvcs, setOpenSvcs] = useState(() => {
