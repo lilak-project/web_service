@@ -43,6 +43,11 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   // entrance before someone else (or another tab) moved it must stop saying so.
   const [entry, setEntry] = useState(service.entry_project || '')
   useEffect(() => { setEntry(service.entry_project || '') }, [service.entry_project])
+  // The one project the other services see (registry.link_project), "" for a
+  // service with none; and the move a manager is being told about before it is made.
+  const [rep, setRep] = useState(service.link_project || '')
+  useEffect(() => { setRep(service.link_project || '') }, [service.link_project])
+  const [repAsk, setRepAsk] = useState(null)        // { to, links_in, links_out, notes_by_title }
 
   async function load() {
     try { setProjects((await launcher.get(`/services/${svc}/projects`)).data) }
@@ -94,6 +99,21 @@ export default function ServiceProjects({ service, canManage, manage = false, on
       setEntry(want)
       onChanged?.()
     } catch (e) { setErr(e?.response?.data?.detail || t('portal_entry_fail')) }
+    finally { setBusy('') }
+  }
+  async function askRep(proj) {
+    setBusy(proj); setErr('')
+    try { setRepAsk({ to: proj, ...(await launcher.get(`/services/${svc}/link-project/impact`)).data }) }
+    catch (e) { setErr(errText(e, t('p_failed'))) }
+    finally { setBusy('') }
+  }
+  async function moveRep() {
+    const proj = repAsk.to
+    setBusy(proj); setErr('')
+    try {
+      await launcher.put(`/services/${svc}/link-project`, { project: proj })
+      setRep(proj); setRepAsk(null); onChanged?.()
+    } catch (e) { setErr(errText(e, t('p_failed'))) }
     finally { setBusy('') }
   }
   /** The whole project as a .zip — what Import on another portal takes back. */
@@ -176,6 +196,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
             {/* The project the service's card opens straight into stands out. */}
             <Row className={entry === p.name ? 'entry' : undefined}>
               <span className="mono">{p.label || p.name}</span>
+              {rep === p.name && <span title={t('portal_rep_hint')}><Pill tone="ok">{t('portal_rep')}</Pill></span>}
               {viewOnly ? <Pill>{t('portal_proj_view_only')}</Pill>
                 : p.can_enter ? (p.running
                     ? <Pill tone="ok">{t('projects_running', p.port)}</Pill>
@@ -204,6 +225,10 @@ export default function ServiceProjects({ service, canManage, manage = false, on
                   {entry === p.name ? `${t('portal_entry_on')} · ${t('portal_entry_clear')}` : t('portal_entry_set')}
                 </Button>
               )}
+              {canManage && manage && rep && rep !== p.name && (
+                <Button variant="secondary" disabled={busy === p.name} title={t('portal_rep_hint')}
+                  onClick={() => askRep(p.name)}>{t('portal_rep_set')}</Button>
+              )}
               {canManage && manage && canIE && (
                 <Button variant="secondary" disabled={busy === p.name} title={t('portal_proj_export_hint')}
                   onClick={() => exportProject(p.name)}>{t('portal_proj_export')}</Button>
@@ -224,10 +249,24 @@ export default function ServiceProjects({ service, canManage, manage = false, on
                 </Button>
               )}
               {canManage && manage && (
-                <Button variant="dangerSoft" disabled={busy === p.name} title={t('portal_proj_delete')}
+                <Button variant="dangerSoft" disabled={busy === p.name || rep === p.name}
+                  title={rep === p.name ? t('portal_rep_no_delete') : t('portal_proj_delete')}
                   onClick={() => remove(p.name)}><Icon name="trash" size={15} /></Button>
               )}
             </Row>
+            {repAsk?.to === p.name && (
+              <Row className="empty">
+                <span>
+                  {t('portal_rep_ask', repAsk.project, p.label || p.name)}
+                  {repAsk.links_in > 0 && <>{' '}{t('portal_rep_in', repAsk.links_in)}</>}
+                  {repAsk.links_out > 0 && <>{' '}{t('portal_rep_out', repAsk.links_out)}</>}
+                  {repAsk.notes_by_title > 0 && <>{' '}{t('portal_rep_notes', repAsk.notes_by_title)}</>}
+                </span>
+                <span className="sp" />
+                <Button variant="primary" disabled={busy === p.name} onClick={moveRep}>{t('portal_rep_set')}</Button>
+                <Button variant="secondary" onClick={() => setRepAsk(null)}>{t('portal_proj_close')}</Button>
+              </Row>
+            )}
             {logOf === p.name && <LogBox url={`/services/${svc}/projects/${p.name}/log`} />}
             {syncOf === p.name && (
               <div style={{ padding: '0 14px 12px' }}>

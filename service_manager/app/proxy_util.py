@@ -25,6 +25,8 @@ import httpx
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
+from . import registry
+
 
 def login_redirect_or_401(request: Request) -> HTTPException:
     """Unauthenticated request hit a gated proxy. A browser *navigating* to a page
@@ -182,7 +184,9 @@ async def stream_proxy(
             return _error_response(exc)
         finally:
             await upstream.aclose()
-        body = inject_base(body, html_base, service)
+        # Only here: this reads every manifest, and most responses are not a page.
+        links = registry.link_projects() if service and service.get("project") else {}
+        body = inject_base(body, html_base, {**service, "links": links} if service and service.get("name") in links else service)
         headers, set_cookies = _copy_headers(upstream, body_rewritten=True)
         resp = Response(content=body, status_code=upstream.status_code,
                         headers=headers, media_type=ctype)

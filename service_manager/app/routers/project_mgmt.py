@@ -8,6 +8,7 @@ through `/pp/{svc}/{proj}/…` (the per-project reverse proxy). A service must b
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
@@ -177,6 +178,81 @@ def set_entry_project(svc: str, body: EntryProject,
     return {"service": svc, "entry_project": want}
 
 
+class LinkProject(BaseModel):
+    project: str
+
+
+def _project_names(svc: str) -> list[str]:
+    root = registry.service_dir(svc) / "projects"
+    return sorted(d.name for d in root.iterdir() if d.is_dir()) if root.is_dir() else []
+
+
+def _dicts_in(svc: str, proj: str):
+    """Every {…} inside the records stored in a project."""
+    root = pr.project_dir(svc, proj) / "data"
+    def inside(v):
+        if isinstance(v, dict):
+            yield v
+            v = list(v.values())
+        if isinstance(v, list):
+            for x in v:
+                yield from inside(x)
+    for f in root.rglob("*.json"):
+        if any(part.startswith(".") for part in f.relative_to(root).parts):
+            continue                     # .trash, .history: not what a link is read from
+        try:
+            yield from inside(json.loads(f.read_text("utf-8")))
+        except (OSError, ValueError):
+            continue
+
+
+@router.get("/api/services/{svc}/link-project/impact")
+def link_project_impact(svc: str, _: models.User = Depends(require_portal_admin)):
+    """What moving this service's link project leaves behind, to say before it is
+    moved. Links are not rewritten: an id means nothing in another project.
+
+      links_in   links elsewhere addressed to it: still open it, but their names
+                 are looked up in the new one
+      links_out  its own links to other services: the reverse lists there stop
+                 showing them
+      notes_by_title  (note) a note field holds only {id, title}: it finds a note
+                 of that title in the new project, or offers to make one
+    """
+    _require_multi(svc)
+    old = registry.link_project(svc)
+    if not old:
+        raise HTTPException(404, f"'{svc}' 는 다른 서비스와 연동하지 않습니다")
+    links_in = links_out = by_title = 0
+    for other in registry.link_projects():
+        if other == svc:
+            continue
+        for proj in _project_names(other):
+            for d in _dicts_in(other, proj):
+                if d.get("svc") == svc and d.get("proj") == old and d.get("id"):
+                    links_in += 1
+                elif svc == "note" and set(d) == {"id", "title"}:
+                    by_title += 1
+    for d in _dicts_in(svc, old):
+        if d.get("svc") not in (None, svc) and d.get("proj") and d.get("id"):
+            links_out += 1
+    return {"project": old, "links_in": links_in, "links_out": links_out, "notes_by_title": by_title}
+
+
+@router.put("/api/services/{svc}/link-project")
+def set_link_project(svc: str, body: LinkProject, _: models.User = Depends(require_portal_admin)):
+    """Choose the one project the other services see. The whole service's, so a
+    manager's — and it is `entry_project`, what an account with no entrance of
+    its own opens too."""
+    manifest = _require_multi(svc)
+    if not registry.link_project(svc, manifest):
+        raise HTTPException(400, f"'{svc}' 는 다른 서비스와 연동하지 않습니다")
+    if body.project not in _project_names(svc):
+        raise HTTPException(404, f"'{body.project}' 없음")
+    manifest["entry_project"] = body.project
+    registry.write_manifest(svc, manifest)
+    return {"service": svc, "link_project": body.project}
+
+
 @router.post("/api/services/{svc}/projects/{proj}/start")
 def start_project(svc: str, proj: str, user: models.User = Depends(require_portal_user),
                  db: Session = Depends(get_db)):
@@ -202,6 +278,9 @@ def stop_project(svc: str, proj: str, user: models.User = Depends(require_portal
 def delete_project(svc: str, proj: str, _: models.User = Depends(require_portal_admin),
                    db: Session = Depends(get_db)):
     _require_multi(svc)
+    # The other services read this one: every link and tag to it would go dark.
+    if proj == registry.link_project(svc):
+        raise HTTPException(409, f"'{proj}' 는 대표 프로젝트입니다. 다른 프로젝트를 대표로 지정한 뒤 지우세요.")
     try:
         result = pr.delete_project(svc, proj)
     except FileNotFoundError:

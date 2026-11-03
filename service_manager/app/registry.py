@@ -231,3 +231,23 @@ def list_service_names() -> list[str]:
         d.name for d in config.DATA_ROOT.iterdir()
         if d.is_dir() and not d.name.startswith("_")
     )
+
+
+def link_project(name: str, manifest: Optional[dict] = None) -> str:
+    """The one project of a rack service the OTHER services see — its tags, its
+    records to link to. The manifest's `entry_project`, else the first there is;
+    "" for a service that takes no part in this. Not an account's own entrance
+    (prefs.entry), or two people's links would point at different places."""
+    m = manifest or read_manifest(name)
+    caps = m.get("capabilities") or {}
+    if not caps.get("multi_project") or not (caps.get("tags") or m.get("kind") == "rack"):
+        return ""
+    if m.get("entry_project"):
+        return m["entry_project"]
+    root = service_dir(name) / "projects"
+    return next(iter(sorted(d.name for d in root.iterdir() if d.is_dir())), "") if root.is_dir() else ""
+
+
+def link_projects() -> dict[str, str]:
+    """{ service: its link project } for every service that has one."""
+    return {n: p for n in list_service_names() if (p := link_project(n))}

@@ -160,6 +160,13 @@ build; the elog/asset frontends are served by their own backends through the pro
   `manager` for host-touching ones); `identity` alone is for whoami. The portal proxy lets
   some bearers through unchecked (service-to-service calls), so the service must check.
   Rack services bind `127.0.0.1` — only the portal reaches them.
+- **Rack services link through one project each.** The manifest's `entry_project`
+  (`registry.link_project`, chosen by a manager in the project list as "대표") is the only
+  project the others see: tags, tagged search, tag renames, links, reverse lists. It rides
+  to the page as `__PORTAL_SERVICE__.links`; racklist reads it with `linkProject(svc)`, and a
+  def never names a project. Another project reads their main projects, they do not read it;
+  its footer says so. A stored link keeps its `{svc, proj, id}`, so moving the main project
+  does not rewrite links (the panel says how many stay behind), and the main one cannot be deleted.
 - Adding a service = write `data/<name>/service.json` + a `Service` DB row (via the
   admin Services UI, the `/api/handshake` self-registration, or directly). Set
   `capabilities.multi_project` for elog-style services.

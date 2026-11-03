@@ -91,6 +91,40 @@ class Accounts(unittest.TestCase):
         names = {s["name"] for s in c.get("/api/projects", headers=bearer(self.admin)).json()}
         self.assertIn("adminsvc", names)
 
+    def test_link_project_is_one_managers_choice(self):
+        for name, projects in (("racka", ("one", "two")), ("rackb", ("main",))):
+            for proj in projects:
+                (registry.service_dir(name) / "projects" / proj).mkdir(parents=True, exist_ok=True)
+            registry.write_manifest(name, {**registry.default_manifest("rack", "managed"),
+                "capabilities": {"multi_project": True, "tags": True}, "entry_project": projects[0]})
+            db = SessionLocal()
+            from app.routers.services import get_or_create_service
+            get_or_create_service(db, name, "rack")
+            db.commit(); db.close()
+        rec = registry.service_dir("rackb") / "projects" / "main" / "data" / "items" / "r.json"
+        rec.parent.mkdir(parents=True)
+        rec.write_text('{"id": "r", "refs": [{"svc": "racka", "proj": "one", "id": "x"}]}')
+        admin = bearer(self.admin)
+        self.assertEqual(registry.link_projects()["racka"], "one")
+
+        user = self.register("linker")
+        r = c.put("/api/services/racka/link-project", json={"project": "two"}, headers=bearer(user))
+        self.assertEqual(r.status_code, 403)
+        # An account's own entrance moves nothing the other services see.
+        c.put("/api/services/racka/entry", json={"project": "two"}, headers=bearer(user))
+        self.assertEqual(registry.link_project("racka"), "one")
+
+        got = c.get("/api/services/racka/link-project/impact", headers=admin).json()
+        self.assertEqual((got["links_in"], got["links_out"]), (1, 0))
+        got = c.get("/api/services/rackb/link-project/impact", headers=admin).json()
+        self.assertEqual((got["links_in"], got["links_out"]), (0, 1))
+
+        self.assertEqual(c.delete("/api/services/racka/projects/one", headers=admin).status_code, 409)
+        self.assertEqual(c.put("/api/services/racka/link-project", json={"project": "nope"}, headers=admin).status_code, 404)
+        self.assertEqual(c.put("/api/services/racka/link-project", json={"project": "two"}, headers=admin).status_code, 200)
+        self.assertEqual(registry.link_project("racka"), "two")
+        self.assertEqual(c.delete("/api/services/racka/projects/one", headers=admin).status_code, 200)
+
     def test_recent_is_deduped_and_capped(self):
         tok = self.register("recent")
         keys = ["a/1", "b", "a/1"] + [f"x{i}" for i in range(10)]
