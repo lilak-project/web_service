@@ -293,7 +293,11 @@ async def project_proxy(svc: str, proj: str, path: str, request: Request):
     qs = request.url.query
     target = f"{base}/{path}" + (f"?{qs}" if qs else "")
     fwd = {}
-    for h in ("authorization", "content-type", "accept"):
+    for h in ("authorization", "content-type", "accept",
+              # Cache validators and ranges, so a build the browser already holds
+              # is answered 304 instead of sent again (2.6 MB of script, 2 MB of
+              # fonts, on every opening of a service).
+              "if-none-match", "if-modified-since", "if-range", "range"):
         if h in request.headers:
             fwd[h] = request.headers[h]
     manifest = registry.read_manifest(svc)
