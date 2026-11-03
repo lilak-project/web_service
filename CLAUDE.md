@@ -135,7 +135,7 @@ build; the elog/asset frontends are served by their own backends through the pro
   count; `needs_setup` rides along on `/api/health`). Later signups are ordinary
   users.
 - **Type is decided in one place:** `lilak_ui/src/fonts/fonts.css` — the font files
-  (NanumSquare Neo, IBM Plex Sans, D2 coding, kept in the kit, no CDN), `--font-sans` /
+  (Pretendard, IBM Plex Sans, D2 coding, kept in the kit, no CDN), `--font-sans` /
   `--font-mono`, and the `--fs-*` size scale (+ `--fs-plate` 15px, RACK's nameplate rank,
   which rack lists use as `--rk-fs`). Use the variables, not px numbers.
 - **Every UI string goes through a dictionary** (kit `i18n.jsx`, elog's `t()` model):
