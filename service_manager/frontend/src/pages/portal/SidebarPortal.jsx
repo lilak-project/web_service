@@ -169,7 +169,9 @@ function useSlide(open) {
   const [shown, setShown] = useState(open)
   const [phase, setPhase] = useState(null)
   useLayoutEffect(() => {
-    if (open && !shown) { setShown(true); setPhase('enter') }
+    // Reopened mid-fold counts as opening: left in 'leave', the fold would end
+    // and unmount the list while the caret already says open.
+    if (open && (!shown || phase === 'leave')) { setShown(true); setPhase('enter') }
     else if (!open && shown) { setPhase('leave') }
   }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
   // --h is the height to grow to. A project list is fetched, so the first open
