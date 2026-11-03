@@ -195,3 +195,19 @@ class Report(Base):
     reply = Column(Text, nullable=True)                            # admin's answer
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
+class McpToken(Base):
+    """A token Claude uses at /mcp and nowhere else. Only its hash is kept; the
+    owner's grants still decide what it reaches. See app/mcp_tokens.py."""
+    __tablename__ = "portal_mcp_tokens"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(64), nullable=False)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    can_write = Column(Boolean, nullable=False, default=False)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+    last_used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_now)

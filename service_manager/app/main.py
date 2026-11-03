@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from . import config
 from . import autostart
 from .routers import service_groups  # noqa: E402
-from .routers import accounts, auth, home, iconlab, links, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
+from .routers import accounts, auth, home, iconlab, links, mcp, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
 
 config.ensure_dirs()
 
@@ -96,6 +96,7 @@ app.include_router(system.router)          # /api/admin/system/ports (managed-se
 app.include_router(project_mgmt.router)   # /api/services/{svc}/projects… + /pp/…
 app.include_router(projects.router)
 app.include_router(proxy.router)
+app.include_router(mcp.router)              # /mcp (Claude's tools, its own tokens)
 
 
 @app.on_event("startup")

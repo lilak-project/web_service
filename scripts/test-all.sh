@@ -21,6 +21,7 @@ step() {
 cd /tmp
 step "backend imports"            $PY -c "import sys; sys.path.insert(0, '$ROOT/service_manager'); from app import main"
 step "portal security tests"      $PY -W ignore $ROOT/service_manager/tests/test_security.py
+step "portal mcp tests"           $PY -W ignore $ROOT/service_manager/tests/test_mcp.py
 step "rack store security tests"  $PY -W ignore $ROOT/lilak_rack/tests/test_store_security.py
 step "rack store folder tests"    $PY -W ignore $ROOT/lilak_rack/tests/test_store_folders.py
 step "rack store tag tests"       $PY -W ignore $ROOT/lilak_rack/tests/test_store_tags.py
