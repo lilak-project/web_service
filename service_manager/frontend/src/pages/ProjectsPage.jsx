@@ -23,7 +23,7 @@ import { notify } from './portal/settingsMsg'
 
 // Builtins: portal tools listed like services. Only the links card is for
 // everyone (and only once it has something in it); the rest are a manager's.
-const ICON_SERVICE = { name: 'lilak icon', kind: 'tool', builtin: 'iconlab', icon: 'images', can_enter: true }
+const ICON_SERVICE = { name: 'lilak icon', kind: 'tool', builtin: 'iconlab', icon: 'lilak', can_enter: true }
 const CREATE_SERVICE = { name: 'new-service', kind: 'tool', builtin: 'newservice', icon: 'plus', can_enter: true }
 const LINKS_SERVICE = { name: 'links', kind: 'tool', builtin: 'links', icon: 'link', can_enter: true }
 const RACK_SERVICE = { name: 'rack', kind: 'tool', builtin: 'rack', icon: 'wall', can_enter: true }

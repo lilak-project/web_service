@@ -19,6 +19,6 @@
     "multi_project": true,
     "import_export": true
   },
-  "icon": null,
-  "color": null
+  "icon": "scroll",
+  "color": "#00b3a7"
 }

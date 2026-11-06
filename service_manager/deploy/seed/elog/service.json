@@ -19,7 +19,7 @@
     "multi_project": true,
     "import_export": true
   },
-  "icon": null,
-  "color": null,
+  "icon": "pen",
+  "color": "#00a3cc",
   "live": true
 }
