@@ -1,6 +1,6 @@
 """Tokens for /mcp, issued from the machine's own shell until there is a screen.
 
-    python -m app.mcp_tokens new laptop --user admin [--read-only] [--days 180]
+    python -m app.mcp_tokens new laptop --user admin [--read-only] [--days 180] [--scope note,author_manager/authors]
     python -m app.mcp_tokens list
     python -m app.mcp_tokens revoke 3
 
@@ -26,10 +26,20 @@ def digest(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def issue(db, name: str, user: models.User, can_write: bool, days: int) -> str:
+def allowed(scope: str, svc: str, proj: str = "") -> bool:
+    """Is this service (and project, when one is named) inside a token's scope?
+    Empty scope: all of it. `svc` covers its every project, `svc/proj` that one.
+    With no project named, any grant within the service will do."""
+    parts = [p.strip() for p in (scope or "").split(",") if p.strip()]
+    if not parts or svc in parts:
+        return True
+    return f"{svc}/{proj}" in parts if proj else any(p.startswith(f"{svc}/") for p in parts)
+
+
+def issue(db, name: str, user: models.User, can_write: bool, days: int, scope: str = "") -> str:
     token = "lpm_" + secrets.token_urlsafe(32)
     db.add(models.McpToken(name=name, token_hash=digest(token), user_id=user.id, can_write=can_write,
-                           expires_at=_now() + timedelta(days=days)))
+                           scope=scope, expires_at=_now() + timedelta(days=days)))
     db.commit()
     return token
 
@@ -55,6 +65,7 @@ def main(argv=None) -> int:
     new.add_argument("--user", required=True)
     new.add_argument("--read-only", action="store_true")
     new.add_argument("--days", type=int, default=180)
+    new.add_argument("--scope", default="")
     sub.add_parser("list")
     sub.add_parser("revoke").add_argument("id", type=int)
     a = ap.parse_args(argv)
@@ -65,11 +76,11 @@ def main(argv=None) -> int:
             if not user:
                 print(f"no account named {a.user}", file=sys.stderr)
                 return 1
-            print(issue(db, a.name, user, not a.read_only, a.days))
+            print(issue(db, a.name, user, not a.read_only, a.days, a.scope))
         elif a.cmd == "list":
             for r in db.query(models.McpToken).order_by(models.McpToken.id):
                 state = "revoked" if r.revoked_at else f"until {r.expires_at:%Y-%m-%d}"
-                print(r.id, r.name, f"user#{r.user_id}", "write" if r.can_write else "read", state,
+                print(r.id, r.name, f"user#{r.user_id}", "write" if r.can_write else "read", r.scope or "all", state,
                       f"last used {r.last_used_at:%Y-%m-%d %H:%M}" if r.last_used_at else "never used")
         else:
             row = db.get(models.McpToken, a.id)

@@ -207,6 +207,8 @@ class McpToken(Base):
     token_hash = Column(String(64), nullable=False, unique=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
     can_write = Column(Boolean, nullable=False, default=False)
+    # Commas of `service` or `service/project`; empty is everything the owner reaches.
+    scope = Column(String(512), nullable=False, default="")
     expires_at = Column(DateTime, nullable=False)
     revoked_at = Column(DateTime, nullable=True)
     last_used_at = Column(DateTime, nullable=True)

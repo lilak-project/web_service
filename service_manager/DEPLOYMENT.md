@@ -368,3 +368,25 @@ on a sub, create an empty project of the same name there first, then link it fro
 its row. The read-only lock is per project too; `off` hands it back to the
 service's link. **Services on a database (elog) cannot go two-way** — their
 projects are skipped.
+
+## 10. MCP tokens / MCP 토큰
+
+**한국어** — `/mcp`는 Claude와 Codex 같은 에이전트가 노트와 랙 서비스를 도구로 쓰는 입구입니다. 토큰은 **설정 → 시스템 → MCP 토큰**에서 발급하고 끊습니다. 관리자만 볼 수 있습니다. 쉘에서는 `python -m app.mcp_tokens new|list|revoke`로 같은 일을 합니다.
+
+- **저장:** 해시만 저장합니다. 토큰 원문은 발급할 때 한 번만 보이고, 관리자도 다시 볼 수 없습니다. 잃어버리면 끊고 새로 발급합니다.
+- **권한:** 주인 계정이 들어갈 수 있는 곳 안에서만 동작합니다. 범위(`note`, `author_manager/authors`처럼 쉼표로 구분)를 주면 그 안으로 더 좁혀집니다. 비우면 주인 계정의 권한 전체입니다.
+- **쓰기:** 읽기 토큰은 조회와 받은편지함 제안만 합니다. 쓰기 토큰은 노트에 바로 씁니다. 랙 기록을 바로 고치는 도구는 없고, 일정은 제안만 할 수 있습니다.
+- **통하는 곳:** `/mcp`에서만 통합니다. `/api`와 `/pp`에서는 인증되지 않습니다.
+- **멈추는 경우:** 끊거나, 만료되거나(기본 180일), 주인 계정이 비활성화되면 멈춥니다. **"모든 기기에서 로그아웃"과 비밀번호 변경은 토큰을 끊지 않으니**, 계정이 샜다고 의심되면 토큰도 따로 끊으세요.
+- **서버마다 따로:** 토큰은 동기화되지 않습니다.
+- **공개 서버:** `/mcp`도 포털과 같은 주소로 열립니다. 토큰은 비밀번호처럼 다루고 HTTPS로만 쓰세요. 도구의 쓰기 호출은 토큰 이름과 대상 id로 포털 로그에 남고, 토큰 원문은 남지 않습니다.
+
+**English** — `/mcp` is where agents such as Claude and Codex use the notes and rack services as tools. Issue and revoke tokens under **Settings → System → MCP tokens** (managers only), or from a shell with `python -m app.mcp_tokens new|list|revoke`.
+
+- **Storage:** only a hash is kept. The token is shown once when issued and nobody can read it back; if it is lost, revoke it and issue another.
+- **Reach:** a token reaches only what its owner's account can. A scope (comma-separated, such as `note,author_manager/authors`) narrows that further; empty means all of the owner's access.
+- **Writing:** a read token can look things up and leave proposals in the inbox. A write token also writes notes directly. No tool changes rack records directly, and activities can only be proposed.
+- **Where it works:** at `/mcp` only. `/api` and `/pp` do not accept it.
+- **What stops it:** revoking, expiry (180 days by default), or the owner being deactivated. **"Sign out everywhere" and a password change do not revoke tokens**, so revoke them too if an account may be compromised.
+- **Per server:** tokens do not sync.
+- **Public servers:** `/mcp` is served at the portal's address. Treat tokens like passwords and use HTTPS only. Write calls are logged with the token's name and the target id, never the token itself.

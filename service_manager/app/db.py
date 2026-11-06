@@ -82,6 +82,11 @@ def _migrate() -> None:
         })
     # Backfill: existing verified accounts get a verified_at so they aren't
     # instantly treated as "expired" by the annual check.
+    if "portal_mcp_tokens" in names:
+        add_missing("portal_mcp_tokens", {
+            "scope": "ALTER TABLE portal_mcp_tokens ADD COLUMN scope VARCHAR(512) NOT NULL DEFAULT ''",
+        })
+
     with engine.begin() as conn:
         conn.execute(text(
             "UPDATE users SET email_verified_at = COALESCE(email_verified_at, created_at) "

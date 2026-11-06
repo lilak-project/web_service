@@ -7,6 +7,80 @@ import { notify } from './settingsMsg'
 
 const input = { ...fieldInput, width: 100 }
 
+// Manager-only: the tokens Claude and Codex use at /mcp. A new one is shown once,
+// here, and cannot be read back; only its hash is kept.
+function McpTokens() {
+  const [rows, setRows] = useState(null)
+  const [form, setForm] = useState({ name: '', can_write: false, days: 180, scope: '' })
+  const [made, setMade] = useState(null)
+  const [sure, setSure] = useState(null)
+  const fail = (e) => notify(e?.response?.data?.detail || String(e), 'bad')
+  const load = () => launcher.get('/admin/mcp-tokens').then((r) => setRows(r.data)).catch(fail)
+  useEffect(() => { load() }, [])
+
+  const issue = async () => {
+    try {
+      const r = await launcher.post('/admin/mcp-tokens', { ...form, days: Number(form.days) })
+      setMade({ name: form.name.trim(), token: r.data.token })
+      setForm({ name: '', can_write: false, days: 180, scope: '' })
+      load()
+    } catch (e) { fail(e) }
+  }
+  const revoke = async (id) => {
+    setSure(null)
+    try { await launcher.delete(`/admin/mcp-tokens/${id}`); load() } catch (e) { fail(e) }
+  }
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(made.token); notify(tr('p_mcp_copied'), 'ok') }
+    catch { notify(tr('p_mcp_copy_failed'), 'bad') }
+  }
+  const state = (t) => (t.revoked ? <Pill tone="bad">{tr('p_mcp_revoked')}</Pill>
+    : t.expired ? <Pill tone="warn">{tr('p_mcp_expired')}</Pill> : <Pill tone="ok">{tr('p_mcp_active')}</Pill>)
+  // Stored in UTC without saying so.
+  const day = (iso) => (iso ? new Date(`${iso}Z`).toLocaleString('sv').slice(0, 16) : tr('p_mcp_never'))
+
+  return (
+    <Panel title={tr('p_mcp_tokens')} right={<Button variant="secondary" onClick={load}>{tr('p_refresh')}</Button>}>
+      <Field label={tr('p_what_this_is')}>{tr('p_mcp_hint')}</Field>
+      <Field label={tr('p_mcp_new')}>
+        <input style={{ ...fieldInput, width: 140 }} placeholder={tr('p_mcp_name')} aria-label={tr('p_mcp_name')} value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input style={{ ...fieldInput, width: 240 }} placeholder={tr('p_mcp_scope')} aria-label={tr('p_mcp_scope')} value={form.scope}
+          onChange={(e) => setForm({ ...form, scope: e.target.value })} />
+        <input style={input} type="number" min="1" max="3650" aria-label={tr('p_mcp_days')} value={form.days}
+          onChange={(e) => setForm({ ...form, days: e.target.value })} />
+        <span style={fieldMuted}>{tr('p_mcp_days')}</span>
+        <label style={fieldMuted}>
+          <input type="checkbox" checked={form.can_write} onChange={(e) => setForm({ ...form, can_write: e.target.checked })} /> {tr('p_mcp_write')}
+        </label>
+        <Button variant="primary" disabled={!form.name.trim()} onClick={issue}>{tr('p_mcp_issue')}</Button>
+      </Field>
+      {made && (
+        <Field label={made.name}>
+          <input style={{ ...fieldInput, flex: 1, minWidth: 200, fontFamily: 'var(--font-mono)' }} readOnly value={made.token}
+            aria-label={tr('p_mcp_tokens')} onFocus={(e) => e.target.select()} />
+          <Button variant="primary" onClick={copy}>{tr('p_mcp_copy')}</Button>
+          <Button variant="secondary" onClick={() => setMade(null)}>{tr('p_mcp_done')}</Button>
+          <span style={fieldMuted}>{tr('p_mcp_once')}</span>
+        </Field>
+      )}
+      {(rows || []).map((t) => (
+        <Field key={t.id} label={t.name}>
+          {state(t)}
+          <Pill>{t.can_write ? tr('p_mcp_write') : tr('p_mcp_read')}</Pill>
+          <span style={fieldMuted}>{t.scope || tr('p_mcp_all')} · {t.owner} · {tr('p_mcp_until')} {t.expires_at.slice(0, 10)} · {tr('p_mcp_used')} {day(t.last_used_at)}</span>
+          {!t.revoked && (sure === t.id
+            ? <>
+                <Button variant="primary" onClick={() => revoke(t.id)}>{tr('p_mcp_revoke_confirm')}</Button>
+                <Button variant="secondary" onClick={() => setSure(null)}>{tr('p_cancel')}</Button>
+              </>
+            : <Button variant="secondary" onClick={() => setSure(t.id)}>{tr('p_mcp_revoke')}</Button>)}
+        </Field>
+      ))}
+    </Panel>
+  )
+}
+
 // Manager-only: the managed-service port window. Widening it lets more sessions
 // run at once (each launched service claims one loopback port from this range).
 export default function SystemAdmin() {
@@ -75,6 +149,8 @@ export default function SystemAdmin() {
           {tr("p_each_running_session_claims_one", d.portal_port)}
         </Field>
       </Panel>
+
+      <McpTokens />
 
       <Panel title={tr('p_restart_all')}>
         <Field label={tr('p_what_this_is')}>{tr('p_restart_all_hint')}</Field>
