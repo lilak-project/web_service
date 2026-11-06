@@ -87,10 +87,8 @@ function movedOrder(base, key, target, after) {
  *   'panel'  — an iframe inside the panel. Same origin (the portal serves /p/
  *              itself), so the session cookie and the proxy's base-href
  *              injection work exactly as in a tab.
- *   'window' — its own tab. Multi-project services default to this: they bring
- *              their own top bar, command bar and drawer, which read as a second
- *              set of chrome once framed. It describes the SERVICE, so it holds
- *              for its projects too.
+ *   'window' — its own tab, only when the manifest asks for it. It describes
+ *              the SERVICE, so it holds for its projects too.
  *
  * Groups are the portal's EXISTING ones (data/_portal/service_groups.json, made in
  * manage mode) rather than a per-manifest field, so a band can hold builtins too

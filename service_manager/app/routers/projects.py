@@ -48,11 +48,9 @@ def raw_service(name: str) -> dict:
         # which one a press means, not that the others are gone.
         "entry_project": manifest.get("entry_project") or "",
         # How the cover opens it: "panel" (inside the portal, in an iframe) or
-        # "window" (its own tab). A multi-project service brings its own top bar,
-        # command bar and drawer, which read as a second set of chrome inside a
-        # panel — so those default to a window unless the manifest says otherwise.
-        "open": (manifest.get("open")
-                 or ("window" if caps.get("multi_project") else "panel")),
+        # "window" (its own tab). Panel unless the manifest asks for a window:
+        # every service here, one project or many, sits in the panel well.
+        "open": manifest.get("open") or "panel",
         # Shown on the sidebar card as `(4)`. A directory count, not list_projects():
         # that also probes each project's port, which is far too much for a label.
         "projects_count": (
