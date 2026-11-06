@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What changed on one day, for the daily digest note. Reads data/ only.
+"""What changed on one day, for the daily Summary note. Reads data/ only.
 
     scripts/today_changes.py [YYYY-MM-DD]    # default: today, local time
     scripts/today_changes.py --check         # self-check on a throwaway folder
@@ -22,7 +22,7 @@ DATA = Path(__file__).resolve().parents[1] / "data"
 ITEMS = {"academic_activities": "activities", "author_manager": "authors", "reference_manager": "references",
          "asset_manager2": "assets", "project_manager": "projects"}
 NAME_KEYS = ("name", "title", "citeKey", "engName", "assetId", "id")
-CAP = 30   # a bulk edit touches hundreds; the digest wants the count, not the list
+CAP = 30   # a bulk edit touches hundreds; the Summary wants the count, not the list
 
 
 def local_day(stamp):
@@ -41,7 +41,7 @@ def notes(root, day):
         text = p.read_text(encoding="utf-8", errors="replace")
         m = re.match(r"---\n(.*?)\n---\n", text, re.S)
         head, body = (m.group(1), text[m.end():]) if m else ("", text)
-        if re.search(r"(^|\s)#digest(\s|$)", body):
+        if re.search(r"(^|\s)#summary(\s|$)", body):
             continue
         title = re.search(r"^title:\s*(.+)$", head, re.M)
         made = re.search(r"^date:\s*(\S+)$", head, re.M)
@@ -83,7 +83,7 @@ def check():
         n.mkdir(parents=True)
         (n / "a.md").write_text("---\ntitle: 에이전트\ndate: 2000-01-01\n---\n\n#x #agent/rack\n\n본문\n", encoding="utf-8")
         (n / "b.md").write_text("---\ntitle: 내 것\ndate: 2000-01-01\n---\n\n둘째\n", encoding="utf-8")
-        (n / "c.md").write_text("---\ntitle: Digest\ndate: 2000-01-01\n---\n\n#digest\n", encoding="utf-8")
+        (n / "c.md").write_text("---\ntitle: Summary\ndate: 2000-01-01\n---\n\n#summary\n", encoding="utf-8")
         today = date.today().isoformat()
         r = t / "project_manager/projects/p/data/projects"
         r.mkdir(parents=True)

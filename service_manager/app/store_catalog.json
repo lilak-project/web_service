@@ -174,13 +174,14 @@
         "reference_manager",
         "asset_manager2",
         "note",
-        "project_manager"
+        "project_manager",
+        "logbook"
       ],
       "pip": [
         "rackstore"
       ],
-      "ko": "연구 기록 묶음 — activity · author · reference · asset · note · project (한 번에 설치)",
-      "en": "Research records, installed together — activity · author · reference · asset · note · project"
+      "ko": "연구 기록 묶음 — activity · author · reference · asset · note · project · log (한 번에 설치)",
+      "en": "Research records, installed together — activity · author · reference · asset · note · project · log"
     }
   ]
 }
