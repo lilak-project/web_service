@@ -49,7 +49,7 @@ ACTIVITY = ("name", "kind", "start", "startTime", "end", "endTime", "place", "li
 UPDATABLE = ACTIVITY + ("tripKind", "tripStart", "tripEnd", "role", "title", "host", "talkDate", "talkTime")
 KINDS = ("학회", "워크샵", "학술미팅", "연구출장", "미팅", "세미나", "강연", "교육", "실험", "보고서", "제안서", "기타", "행사")
 # ponytail: named by hand; a rack service added later needs a line here.
-RACK = ("academic_activities", "author_manager", "reference_manager", "asset_manager2", "project_manager", "logbook")
+RACK = ("academic_activities", "author_manager", "reference_manager", "asset_manager2", "project_manager", "logbook", "parameters")
 SKIP_LISTS = ("settings", "inbox")           # not records; the inbox is unread mail
 DATES = {"start", "end", "tripStart", "tripEnd", "talkDate"}
 TIMES = {"startTime", "endTime", "talkTime"}
@@ -93,6 +93,13 @@ TOOLS = [
                     "(42), a range (1-5) or several (1,3,7). tags are words without #. Returns its id.",
      "inputSchema": _schema(["title"], title=_STR, body=_STR, run=_STR, category=_STR, date=_STR, time=_STR,
                             tags={"type": "array", "items": _STR}, project=_STR)},
+    {"name": "add_params", "write": True,
+     "description": "Register a parameter set in the parameters service: the text of a parameter file (format "
+                    "lilak-par for LILAK .par/.mac/.conf, get-xcfg for GET DAQ .xcfg; others are kept as text). A set "
+                    "with the same values (comments, spacing and line order aside) is answered instead of a new one "
+                    "(existing: true). name = the file's name (kept as a file; needed above 64 KB). log = a logbook "
+                    "log id that used this set: the set is added to its params. Returns the set's id and value count.",
+     "inputSchema": _schema(["text"], text=_STR, format=_STR, title=_STR, name=_STR, log=_STR, project=_STR)},
     {"name": "append_log", "write": True,
      "description": "Add text to the end of a log's body, by the id add_log or search returned.",
      "inputSchema": _schema(["id", "text"], id=_STR, text=_STR, project=_STR)},
@@ -301,6 +308,33 @@ async def _add_log(request, grant, args):
     return {"id": got["id"], "title": got["title"], "date": got["date"], "time": got["time"]}
 
 
+async def _add_params(request, grant, args):
+    text = str(args.get("text") or "")
+    if not text.strip():
+        raise ToolError("text 가 비어 있습니다.")
+    q = {"format": args.get("format") or "lilak-par", "title": args.get("title") or "", "origin": "auto"}
+    if args.get("name"):
+        q["name"] = args["name"]
+    proj = args.get("project") or registry.link_project("parameters")
+    got = _ok(await _portal(request, grant, "parameters", "POST", "register", proj,
+                            params=q, content=text.encode("utf-8")))
+    rec = got["record"]
+    out = {"id": rec["id"], "title": rec.get("title"), "format": rec.get("format"), "count": rec.get("count"),
+           "value_hash": rec.get("value_hash"), "existing": got.get("existing", False)}
+    if args.get("log"):
+        lproj, recs = await _records(request, grant, "logbook", None)
+        log = next((r for k, r in recs if k == "logs" and str(r["id"]) == args["log"]), None)
+        if log is None:
+            raise ToolError("그 로그가 없습니다.")
+        params = [x for x in log.get("params") or [] if isinstance(x, dict)]
+        if not any(x.get("id") == rec["id"] for x in params):
+            params.append({"svc": "parameters", "proj": proj, "id": rec["id"]})
+            _ok(await _portal(request, grant, "logbook", "POST", "records/update", lproj,
+                              json={"key": "logs", "id": log["id"], "fields": {"params": params}}))
+        out["log"] = log["id"]
+    return out
+
+
 async def _append_log(request, grant, args):
     text = str(args.get("text") or "").strip()
     if not text:
@@ -412,7 +446,8 @@ async def _by_tag(request, grant, args):
 
 HANDLERS = {"list_services": _list_services, "search": _search_rack, "get_record": _get_record, "by_tag": _by_tag,
             "search_notes": _search, "get_note": _get, "add_note": _add, "update_note": _update,
-            "append_note": _append, "add_log": _add_log, "append_log": _append_log}
+            "append_note": _append, "add_log": _add_log, "append_log": _append_log,
+            "add_params": _add_params}
 PROPOSERS = {"propose_note": _propose_note, "propose_activity": _propose_activity}
 
 
@@ -479,7 +514,7 @@ async def mcp(request: Request, authorization: str = Header(default="")):
         asked = params.get("protocolVersion")
         return reply(rid, {"protocolVersion": asked if asked in VERSIONS else VERSIONS[0],
                            "capabilities": {"tools": {}},
-                           "serverInfo": {"name": "lilak-portal", "version": "1"}})
+                           "serverInfo": {"name": "lilak-rack", "version": "1"}})
     if method == "ping":
         return reply(rid, {})
     if method == "tools/list":

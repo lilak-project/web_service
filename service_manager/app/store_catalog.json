@@ -174,14 +174,31 @@
         "reference_manager",
         "asset_manager2",
         "note",
-        "project_manager",
-        "logbook"
+        "project_manager"
       ],
       "pip": [
         "rackstore"
       ],
-      "ko": "연구 기록 묶음 — activity · author · reference · asset · note · project · log (한 번에 설치)",
-      "en": "Research records, installed together — activity · author · reference · asset · note · project · log"
+      "ko": "연구 기록 묶음 — activity · author · reference · asset · note · project (한 번에 설치)",
+      "en": "Research records, installed together — activity · author · reference · asset · note · project"
+    },
+    {
+      "name": "log",
+      "dir": "lilak_log",
+      "repo": "https://github.com/lilak-project/lilak_log.git",
+      "label": "log services",
+      "icon": "notebook",
+      "color": "#2563eb",
+      "needs_kit": true,
+      "bundle": [
+        "logbook",
+        "parameters"
+      ],
+      "pip": [
+        "parlib"
+      ],
+      "ko": "기록 묶음 — logbook · parameters (rack 화면으로 그리므로 rack services를 먼저 설치)",
+      "en": "Log records — logbook · parameters (drawn with the rack frame: install rack services first)"
     }
   ]
 }

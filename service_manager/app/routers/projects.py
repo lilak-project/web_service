@@ -58,9 +58,10 @@ def raw_service(name: str) -> dict:
             if caps.get("multi_project") and (config.DATA_ROOT / name / "projects").is_dir()
             else None),
         "import_export": bool(caps.get("import_export")),
-        # Shares its tags (GET /api/tags on `link_project`): the rack services
-        # and note offer each other's tags as you type one.
-        "tags": bool(caps.get("tags")),
+        # Shares its tags (GET /api/tags on `link_project`) with the services of
+        # its group: true = the manager bundle (rack services, note), a name
+        # ("log") = that bundle's own set.
+        "tags": caps.get("tags") or False,
         # The one project the other services see of it (registry.link_project).
         "link_project": registry.link_project(name, manifest),
         "order": manifest.get("order", 1000),      # admin-set display order (manage mode)

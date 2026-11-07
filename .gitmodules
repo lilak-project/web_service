@@ -62,3 +62,6 @@
 	path = lilak_rack
 	url = git@github.com:lilak-project/lilak_rack.git
 	branch = main
+[submodule "lilak_log"]
+	path = lilak_log
+	url = git@github.com:lilak-project/lilak_log.git

@@ -56,6 +56,17 @@ RUN set -e; \
     cp -a lilak_rack /out/lilak_rack; \
     find /out/lilak_rack -name node_modules -type d -prune -exec rm -rf {} +
 
+# The log services (lilak_log): drawn with lilak_rack's racklist (../../lilak_rack),
+# built and installed on their own, kept whole at /app/lilak_log.
+RUN set -e; \
+    for d in lilak_log/*/; do \
+      [ -f "$d/package.json" ] && [ -d "$d/src-lilak" ] || continue; \
+      echo "→ log service: $d"; \
+      (cd "$d" && npm install --no-audit --no-fund && npm run build); \
+    done; \
+    cp -a lilak_log /out/lilak_log; \
+    find /out/lilak_log -name node_modules -type d -prune -exec rm -rf {} +
+
 # Live scaffolding also runs in the RUNTIME container, so prebuild a shared
 # node_modules every generated service can reuse (identical deps → offline, fast).
 RUN node scripts/new-service.mjs --name svctmpl --out /tmp/tmpl --data-service --lilak-ui /src/lilak_ui \
@@ -94,6 +105,8 @@ COPY --from=frontend /src/asset_manager/dist            /app/asset_manager/dist
 COPY --from=frontend /out /app
 # The rack services' shared backend (`rackstore`, in lilak_rack).
 RUN pip install --no-cache-dir /app/lilak_rack/rackstore
+# The log services' parsers (`parlib`, in lilak_log).
+RUN pip install --no-cache-dir /app/lilak_log/parlib
 # The rack services' portal-serve.sh run their backend on the host install's
 # shared venv (service_manager/.venv). The image's one env IS that venv, so
 # point the path at it — otherwise they fall back to a bare static server.

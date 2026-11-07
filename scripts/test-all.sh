@@ -27,6 +27,8 @@ step "rack store folder tests"    $PY -W ignore $ROOT/lilak_rack/tests/test_stor
 step "rack store tag tests"       $PY -W ignore $ROOT/lilak_rack/tests/test_store_tags.py
 step "rack store upload tests"    $PY -W ignore $ROOT/lilak_rack/tests/test_store_uploads.py
 step "project inbox tests"       $PY -W ignore $ROOT/lilak_rack/project_manager/backend/test_inbox.py
+step "parlib tests"               $PY -W ignore $ROOT/lilak_log/parlib/tests/test_lilak_par.py
+step "parameters backend tests"   $PY -W ignore $ROOT/lilak_log/parameters/backend/test_parameters.py
 step "sync merge self-test"       $PY $ROOT/service_manager/app/sync_merge.py
 step "ui kit tests (vitest)"      zsh -c "cd $ROOT/lilak_ui && npx vitest run --reporter=dot"
 step "racklist tests (vitest)"    zsh -c "cd $ROOT/lilak_rack && npx vitest run --reporter=dot"
