@@ -65,3 +65,6 @@
 [submodule "lilak_log"]
 	path = lilak_log
 	url = git@github.com:lilak-project/lilak_log.git
+[submodule "lilak_analysis"]
+	path = lilak_analysis
+	url = git@github.com:lilak-project/lilak_analysis.git

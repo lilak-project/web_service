@@ -217,7 +217,7 @@
     {
       "name": "analysis-v2",
       "dir": "lilak_analysis",
-      "repo": "",
+      "repo": "https://github.com/lilak-project/lilak_analysis.git",
       "label": "analysis-v2",
       "icon": "flow",
       "color": "#003180",
