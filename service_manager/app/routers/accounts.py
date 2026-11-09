@@ -350,6 +350,8 @@ class PrefsBody(BaseModel):
     favTags: Optional[list[str]] = None
     # What the home screen lists first: "svc" or "svc/project", newest first.
     recent: Optional[list[str]] = None
+    # The service bar's width and spacing: "wide" (the default) or "compact".
+    density: Optional[str] = None
 
 
 @router.get("/api/account/prefs")
@@ -377,6 +379,10 @@ def update_prefs(body: PrefsBody, user: models.User = Depends(require_portal_use
         if any(len(k) > 200 for k in keys):
             raise HTTPException(400, "최근 목록이 올바르지 않습니다.")
         prefs.put(user, recent=list(dict.fromkeys(keys))[:8] or None)
+    if "density" in data:
+        if data["density"] not in ("wide", "compact", None):
+            raise HTTPException(400, "화면 밀도 값이 올바르지 않습니다.")
+        prefs.put(user, density=None if data["density"] == "wide" else data["density"])
     db.commit()
     return {"prefs": prefs.get(user)}
 

@@ -34,6 +34,7 @@ def raw_service(name: str) -> dict:
     return {
         "name": name,
         "label": manifest.get("label"),     # optional display name (id stays the URL key)
+        "labels": manifest.get("labels"),   # {lang: name}, where a language has its own
         "kind": manifest.get("kind"),
         "mode": manifest.get("mode"),
         "running": st.get("running", False),
@@ -124,7 +125,7 @@ def api_public_services(db: Session = Depends(get_db)):
               .filter(models.Service.visibility == models.VIS_PUBLIC).all()}
     if not public:
         return []
-    return [{k: s.get(k) for k in ("name", "label", "icon", "color", "kind",
+    return [{k: s.get(k) for k in ("name", "label", "labels", "icon", "color", "kind",
                                    "multi_project", "open", "order")}
             for s in list_raw_services() if s["name"] in public]
 

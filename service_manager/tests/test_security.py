@@ -131,6 +131,15 @@ class Accounts(unittest.TestCase):
         r = c.put("/api/account/prefs", headers=bearer(tok), json={"recent": keys})
         self.assertEqual(r.json()["prefs"]["recent"], ["a/1", "b"] + [f"x{i}" for i in range(6)])
 
+    def test_density_is_compact_or_nothing(self):
+        tok = self.register("density")
+        r = c.put("/api/account/prefs", headers=bearer(tok), json={"density": "compact"})
+        self.assertEqual(r.json()["prefs"]["density"], "compact")
+        r = c.put("/api/account/prefs", headers=bearer(tok), json={"density": "wide"})
+        self.assertNotIn("density", r.json()["prefs"])
+        r = c.put("/api/account/prefs", headers=bearer(tok), json={"density": "tiny"})
+        self.assertEqual(r.status_code, 400)
+
     def test_handshake_cannot_turn_a_managed_service_external(self):
         registry.service_dir("runsvc").mkdir(parents=True, exist_ok=True)
         registry.write_manifest("runsvc", registry.default_manifest("service", "managed"))

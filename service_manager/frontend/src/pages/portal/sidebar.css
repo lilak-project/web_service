@@ -731,3 +731,15 @@
 .pl-group.gafter { box-shadow: 0 3px 0 #7c3aed; }
 .pl-group.off, .pl-group.dragging { opacity: .5; }
 .pl-root.managing .pl-band[draggable="true"] { cursor: grab; }
+
+/* The account's "compact" service bar (data-portal-bar on <html>, set from its
+   preferences): narrower, tighter cards, the host over the build in place of
+   the name. The 6px left of a row and the nav's 10px gutters stay: they are what
+   puts the folded icons on x=32. */
+:root[data-portal-bar="compact"] .pl-root:not(.mini) .pl-side { width: 174px; }
+:root[data-portal-bar="compact"] .pl-row { gap: 7px; padding: 3px 6px; }
+:root[data-portal-bar="compact"] .pl-root.mini .pl-row { padding: 3px 6px; }
+:root[data-portal-bar="compact"] .pl-nav { gap: 3px; }
+:root[data-portal-bar="compact"] .pl-brand b { display: none; }
+:root[data-portal-bar="compact"] .pl-brand .sub { display: flex; flex-direction: column; line-height: 1.25; }
+:root[data-portal-bar="compact"] .pl-brand .sub i { margin-left: 0; font-size: var(--fs-tiny); overflow: hidden; text-overflow: ellipsis; }

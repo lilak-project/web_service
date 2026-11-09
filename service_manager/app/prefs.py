@@ -8,6 +8,7 @@ so they follow the person to any browser:
             a default entrance)
     favTags [tag, …] — the tags starred, first in every tags tab
     recent  ["svc" | "svc/project", …] — last opened, newest first (home)
+    density 'compact' — the narrower service bar; absent means the wide one
 """
 from __future__ import annotations
 

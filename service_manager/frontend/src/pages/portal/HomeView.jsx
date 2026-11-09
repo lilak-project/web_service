@@ -40,7 +40,7 @@ export default function HomeView({ cards, groups, recent, onOpen, isManager, sto
 
   const rows = []
   for (const c of shown) {
-    const base = { svc: c, app: c.label || c.name, group: groupOf[cardKey(c)]?.name || '' }
+    const base = { svc: c, app: c.label || c.name, group: groupOf[cardKey(c)]?.label || groupOf[cardKey(c)]?.name || '' }
     if (!c.multi_project) rows.push({ ...base, key: c.name, proj: '', running: !!c.running, enter: c.can_enter !== false })
     else for (const p of projs[c.name] || []) {
       rows.push({ ...base, key: `${c.name}/${p.name}`, proj: p.name, label: p.label, running: !!p.running, enter: !!p.can_enter })

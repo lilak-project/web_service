@@ -240,6 +240,7 @@ def admin_set_appearance(
         manifest["color"] = color or None
     if body.label is not None:
         manifest["label"] = body.label.strip() or None
+        manifest.pop("labels", None)     # the name just typed is the name, in every language
     registry.write_manifest(name, manifest)
     return {"name": name, "icon": manifest.get("icon"),
             "color": manifest.get("color"), "label": manifest.get("label")}

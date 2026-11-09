@@ -1003,7 +1003,7 @@ export default function SidebarPortal({
         .map((k) => (cards || []).find((c) => cardKey(c) === k)).filter(Boolean)
       return (
         <>
-          <h1 className="pl-mgtitle">{selGroup.name || tr("p_group")}</h1>
+          <h1 className="pl-mgtitle">{selGroup.label || selGroup.name || tr("p_group")}</h1>
           <GroupManagePanel group={selGroup} members={mem} onChanged={onRefresh} />
         </>
       )
@@ -1011,7 +1011,7 @@ export default function SidebarPortal({
     if (selBand) {
       return (
         <>
-          <h1 className="pl-mgtitle">{selBand.g.name}</h1>
+          <h1 className="pl-mgtitle">{selBand.g.label || selBand.g.name}</h1>
           <FixedGroupPanel band={selBand} onChanged={onRefresh} />
         </>
       )
@@ -1115,7 +1115,7 @@ export default function SidebarPortal({
                   <span className={`pl-gchev${groupOpen(g.id) || (manage && isManager) ? ' open' : ''}`}>
                     <Icon name="caret-right" size={14} weight="bold" color="var(--text-secondary)" />
                   </span>
-                  <span className="pl-txt">{g.name || tr("p_group")}</span>
+                  <span className="pl-txt">{g.label || g.name || tr("p_group")}</span>
                   <span className="pl-gcount">{items.length}</span>
                 </button>
               </div>

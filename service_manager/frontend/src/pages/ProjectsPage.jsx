@@ -260,6 +260,13 @@ export default function ProjectsPage() {
     try { want = JSON.parse(user?.preferences_json || '{}').lang || '' } catch { /* none */ }
     if (want && want !== lang) setLang(want)
   }, [user?.id, user?.preferences_json])  // eslint-disable-line react-hooks/exhaustive-deps
+  // The service bar's density is the account's too; signed out, the wide one.
+  useEffect(() => {
+    let d = ''
+    try { d = JSON.parse(user?.preferences_json || '{}').density || '' } catch { /* none */ }
+    if (d) document.documentElement.dataset.portalBar = d
+    else delete document.documentElement.dataset.portalBar
+  }, [user?.id, user?.preferences_json])
   const [authReady, setAuthReady] = useState(false)
   const isManager = user?.role === 'manager'
   const [settingsTab, setSettingsTab] = useState('me')
@@ -413,12 +420,15 @@ export default function ProjectsPage() {
   const rackCard = { ...RACK_SERVICE, label: bi.rack?.label || t('rack_title'), icon: bi.rack?.icon || RACK_SERVICE.icon, color: bi.rack?.color, hidden: !!bi.rack?.hidden }
   const linkCfg = links?.card || {}
   const linksCard = { ...LINKS_SERVICE, label: linkCfg.label || t('links_title'), icon: linkCfg.icon || LINKS_SERVICE.icon, color: linkCfg.color, hidden: !!linkCfg.hidden, count: (links?.links || []).length }
+  // A service may carry a name per language (manifest `labels`); `label` otherwise.
+  const inLang = (s) => (s.labels?.[lang] ? { ...s, label: s.labels[lang] } : s)
   // Every card, hidden ones included: the sidebar has its own manage mode and
   // does its own hiding — filtering here meant a card hidden from the bar
   // vanished from manage mode too, with no way left to bring it back.
+  const named = (projects || []).map(inLang)
   const cardsAll = isManager
-    ? sortByHome([iconCard, linksCard, ...(projects || []), createCard, rackCard], homeCfg?.order || [])
-    : sortByHome([...(linksCard.hidden || !linksCard.count ? [] : [linksCard]), ...(projects || [])], homeCfg?.order || [])
+    ? sortByHome([iconCard, linksCard, ...named, createCard, rackCard], homeCfg?.order || [])
+    : sortByHome([...(linksCard.hidden || !linksCard.count ? [] : [linksCard]), ...named], homeCfg?.order || [])
   const cards = isManager ? cardsAll.filter((c) => !c.hidden) : cardsAll
 
   const groupKey = (g) => `#g:${g.id}`
@@ -483,7 +493,7 @@ export default function ProjectsPage() {
   if (!user) {
     return (
       <SidebarPortal
-        user={null} isManager={false} cards={publicCards} iconFor={iconFor}
+        user={null} isManager={false} cards={publicCards.map(inLang)} iconFor={iconFor}
         groups={[]} liveCards={publicLive} links={[]} fullOrder={publicCards.map(cardKey)} info={portalInfo}
         authCard={<AuthCard t={t} info={portalInfo} needsSetup={!!portalInfo?.needs_setup}
           onAuthed={(u) => setUser(u)} />}
@@ -498,7 +508,7 @@ export default function ProjectsPage() {
   return (
     <SidebarPortal
       user={user} isManager={isManager} cards={sideCards} iconFor={iconFor}
-      groups={groups} liveCards={liveCards} links={links?.links || []}
+      groups={groups.map(inLang)} liveCards={liveCards} links={links?.links || []}
       fullOrder={fullOrder}
       onLogout={logout} onRefresh={refresh}
       onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup} onSetMembers={setMembers}

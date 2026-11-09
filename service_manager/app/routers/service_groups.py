@@ -114,7 +114,7 @@ def list_groups(user: models.User = Depends(require_portal_user)):
     for g in all_groups():
         if g.get("hidden") and not admin:
             continue
-        out.append({"id": g["id"], "name": g.get("name") or "", "icon": g.get("icon"), "color": g.get("color"),
+        out.append({"id": g["id"], "name": g.get("name") or "", "labels": g.get("labels"), "icon": g.get("icon"), "color": g.get("color"),
                     "members": list(g.get("members", [])), "collapsed": bool(g.get("collapsed")),
                     "hidden": bool(g.get("hidden")), "order": g.get("order", 1000)})
     lo = loose()
@@ -138,6 +138,7 @@ class GroupBody(BaseModel):
 def _apply(g: dict, body: GroupBody, d: dict) -> None:
     if body.name is not None:
         g["name"] = body.name.strip()[:80]
+        g.pop("labels", None)            # the name just typed is the name, in every language
     if body.icon is not None:
         g["icon"] = re.sub(r"[^a-z0-9_-]", "", body.icon.strip().lower()) or None
     if body.color is not None:

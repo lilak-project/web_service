@@ -84,6 +84,15 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
     try { await launcher.put('/account/prefs', { lang: v }); notify(tr('p_language_saved'), 'ok') }
     catch (e) { notify(e?.response?.data?.detail || tr('p_failed'), 'bad') }
   }
+  // On <html>, so the bar beside this page changes the moment it is picked.
+  const [density, setDensity] = useState(document.documentElement.dataset.portalBar || 'wide')
+  async function changeDensity(v) {
+    setDensity(v)
+    if (v === 'wide') delete document.documentElement.dataset.portalBar
+    else document.documentElement.dataset.portalBar = v
+    try { await launcher.put('/account/prefs', { density: v }); notify(tr('p_density_saved'), 'ok') }
+    catch (e) { notify(e?.response?.data?.detail || tr('p_failed'), 'bad') }
+  }
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [me, setMe] = useState(null)
   const [users, setUsers] = useState([])
@@ -233,6 +242,14 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
             {(langs || ['ko', 'en']).map((l) => <option key={l} value={l}>{LANG_NAMES[l] || l}</option>)}
           </select>
           <span style={fieldMuted}>{tr('p_language_hint')}</span>
+        </Field>
+
+        <Field label={tr('p_density')}>
+          <select value={density} onChange={(e) => changeDensity(e.target.value)} style={{ ...input, flex: 'none', minWidth: 160 }}>
+            <option value="wide">{tr('p_density_wide')}</option>
+            <option value="compact">{tr('p_density_compact')}</option>
+          </select>
+          <span style={fieldMuted}>{tr('p_density_hint')}</span>
         </Field>
       </Panel>
 
