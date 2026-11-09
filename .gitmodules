@@ -68,3 +68,7 @@
 [submodule "lilak_analysis"]
 	path = lilak_analysis
 	url = git@github.com:lilak-project/lilak_analysis.git
+[submodule "lilak_pipeline"]
+	path = lilak_pipeline
+	url = git@github.com:lilak-project/lilak_pipeline.git
+	branch = main
