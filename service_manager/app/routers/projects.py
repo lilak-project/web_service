@@ -63,6 +63,8 @@ def raw_service(name: str) -> dict:
         # its group: true = the manager bundle (rack services, note), a name
         # ("log") = that bundle's own set.
         "tags": caps.get("tags") or False,
+        # Has a number for its icon (GET /api/badge on `link_project`).
+        "badge": caps.get("badge") or False,
         # The one project the other services see of it (registry.link_project).
         "link_project": registry.link_project(name, manifest),
         "order": manifest.get("order", 1000),      # admin-set display order (manage mode)

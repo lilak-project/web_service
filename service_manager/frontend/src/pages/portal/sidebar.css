@@ -183,6 +183,14 @@
   font-size: var(--fs-medium); font-weight: var(--rack-weight, 500);
 }
 
+/* A number the service wants on its icon: what is waiting for you there. */
+.pl-badge {
+  position: absolute; top: -5px; right: -6px;
+  min-width: 15px; height: 15px; padding: 0 3px; box-sizing: border-box;
+  border-radius: 8px; background: #dc2626; color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 15px; text-align: center;
+}
+
 /* Run state — see RunDot. */
 .pl-run { flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; }
 /* Stopped: a 5px grey dot — the smallest mark that still reads as deliberate. */

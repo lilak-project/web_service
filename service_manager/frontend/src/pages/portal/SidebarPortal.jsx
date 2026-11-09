@@ -135,13 +135,48 @@ function RunDot({ on }) {
   )
 }
 
-function Tile({ icon, color, on }) {
+function Tile({ icon, color, on, badge }) {
   const c = color || 'var(--text-secondary)'
   return (
     <span className={`pl-av${on ? ' round' : ''}`} style={{ background: c }}>
       <Icon name={icon} size={19} weight="fill" color="#fff" />
+      {badge > 0 && <b className="pl-badge">{badge > 99 ? '99+' : badge}</b>}
     </span>
   )
+}
+
+/** The numbers services want on their icons, by name: those whose manifest says
+ *  `capabilities.badge` answer GET /api/badge on their link project. Asked every
+ *  minute while the page is in sight, and at once when a framed page saves. A
+ *  caller the service refuses (it is a manager's number) simply sees none. */
+function useBadges(cards) {
+  const [counts, setCounts] = useState({})
+  const asked = cards.filter((c) => c.badge && c.link_project).map((c) => `${c.name}/${c.link_project}`).join(' ')
+  useEffect(() => {
+    if (!asked) return undefined
+    let live = true
+    const read = () => {
+      if (document.visibilityState !== 'visible') return
+      for (const at of asked.split(' ')) {
+        fetch(`/pp/${at}/api/badge`, { headers: { Authorization: `Bearer ${localStorage.getItem('lilak_portal_token') || ''}` } })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => { if (live) setCounts((m) => ({ ...m, [at.split('/')[0]]: d?.count || 0 })) })
+          .catch(() => {})
+      }
+    }
+    const saved = (e) => { if (e.origin === window.location.origin && e.data?.type === 'lilak:saved') read() }
+    read()
+    const timer = setInterval(read, 60 * 1000)
+    document.addEventListener('visibilitychange', read)
+    window.addEventListener('message', saved)
+    return () => {
+      live = false
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', read)
+      window.removeEventListener('message', saved)
+    }
+  }, [asked])
+  return counts
 }
 
 /** Selection ⇄ URL. Without this the address bar never moves: a reload would land
@@ -265,6 +300,7 @@ export default function SidebarPortal({
   // Signed out: the bar is a list of names and the panel is the login card.
   // Nothing opens, nothing is managed, and the foot has no account to show.
   const signedOut = !!authCard
+  const badges = useBadges(cards || [])
 
   // Logging out takes the settings bar with it — it belongs to an account, and
   // the cover would otherwise keep showing yesterday's menu beside the sign-in
@@ -966,7 +1002,7 @@ export default function SidebarPortal({
               </span>
             )}
             <Tile icon={iconFor ? iconFor(s.name, s.icon) : (s.icon || 'circle')}
-              color={s.color} on={on} />
+              color={s.color} on={on} badge={badges[s.name]} />
             <span className="pl-txt">
               {s.label || s.name}
               {multi && s.projects_count != null && <small>({s.projects_count})</small>}
