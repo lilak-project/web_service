@@ -259,6 +259,30 @@ class Gates(unittest.TestCase):
         finally:
             mcp._portal = real
 
+    def test_a_parameter_set_is_registered_and_tied_to_a_log(self):
+        sent = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            sent.append((svc, path, kw))
+            if path == "register":
+                return httpx.Response(200, json={"existing": False, "record": {
+                    "id": "P1", "title": kw["params"]["title"], "format": kw["params"]["format"], "count": 2, "value_hash": "h"}})
+            if path == "data":
+                return httpx.Response(200, json={"logs": [{"id": "L1", "title": "run", "params": [{"svc": "parameters", "proj": "sets", "id": "P0"}]}]})
+            return httpx.Response(200, json={"record": {"id": "L1", **kw["json"]["fields"]}})
+        real, mcp._portal = mcp._portal, fake
+        try:
+            tok = self.issue()
+            got = json.loads(call(tok, "add_params", text="a 1\nb 2\n", title="reco", log="L1")["content"][0]["text"])
+            self.assertEqual((got["id"], got["format"], got["existing"], got["log"]), ("P1", "lilak-par", False, "L1"))
+            self.assertEqual(sent[0][2]["content"], b"a 1\nb 2\n")
+            self.assertEqual([x["id"] for x in sent[-1][2]["json"]["fields"]["params"]], ["P0", "P1"])
+            self.assertTrue(call(tok, "add_params", text=" ").get("isError"))
+            self.assertTrue(call(tok, "add_params", text="a 1", log="nope").get("isError"))
+            self.assertTrue(call(self.issue(write=False), "add_params", text="a 1").get("isError"))
+        finally:
+            mcp._portal = real
+
     def test_records_leave_out_settings_and_the_inbox(self):
         async def fake(request, grant, svc, method, path, proj="", **kw):
             self.assertEqual((svc, path), ("author_manager", "data"))
