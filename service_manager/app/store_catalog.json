@@ -201,6 +201,20 @@
       "en": "Log records — logbook · parameters (drawn with the rack frame: install rack services first)"
     },
     {
+      "name": "pipeline",
+      "dir": "lilak_pipeline",
+      "repo": "https://github.com/lilak-project/lilak_pipeline.git",
+      "label": "pipeline services",
+      "icon": "list",
+      "color": "#0f766e",
+      "needs_kit": true,
+      "bundle": [
+        "jobbook"
+      ],
+      "ko": "분석 파이프라인 묶음 — jobbook (rack 화면으로 그리므로 rack services를 먼저 설치, 파라미터·로그 연결은 log services 필요)",
+      "en": "Analysis pipeline — jobbook (drawn with the rack frame: install rack services first; log services for parameter and log links)"
+    },
+    {
       "name": "analysis-v2",
       "dir": "lilak_analysis",
       "repo": "",
