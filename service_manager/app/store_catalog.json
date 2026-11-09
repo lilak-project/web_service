@@ -199,6 +199,20 @@
       ],
       "ko": "기록 묶음 — logbook · parameters (rack 화면으로 그리므로 rack services를 먼저 설치)",
       "en": "Log records — logbook · parameters (drawn with the rack frame: install rack services first)"
+    },
+    {
+      "name": "analysis-v2",
+      "dir": "lilak_analysis",
+      "repo": "",
+      "label": "analysis-v2",
+      "icon": "flow",
+      "color": "#003180",
+      "needs_kit": true,
+      "bundle": [
+        "analysis-v2"
+      ],
+      "ko": "LILAK 소프트웨어 묶음 — 매크로를 flow map으로 (rack 화면으로 그리므로 rack services를 먼저 설치, LILAK과 ROOT가 있는 곳에서)",
+      "en": "LILAK software — macros as flow maps (drawn with the rack frame: install rack services first; needs LILAK and ROOT on the host)"
     }
   ]
 }
