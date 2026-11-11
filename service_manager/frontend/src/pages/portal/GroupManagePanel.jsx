@@ -1,3 +1,4 @@
+import Select from 'lilak-ui/components/Select.jsx'
 import { useEffect, useState } from 'react'
 import { Button, Icon, tr } from 'lilak-ui'
 import { launcher, errText } from '../../api'
@@ -30,7 +31,7 @@ async function setCardHidden(card, hidden, L, onChanged) {
 function MemberRow({ card, L, onChanged }) {
   return (
     <Row>
-      <Icon name={card.icon || 'circle'} size={16} color={card.color || 'var(--text-secondary)'} weight="fill" />
+      <Icon name={card.icon || 'circle'} size={16} color={card.color || 'var(--dock-text-secondary)'} weight="fill" />
       <span>{card.label || card.name}</span>
       {card.hidden ? <Pill tone="warn">{tr("p_hidden")}</Pill> : <Pill tone="ok">{tr("p_shown")}</Pill>}
       <span className="sp" />
@@ -115,7 +116,7 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
         {members.length === 0 && (
           <Row className="empty">{tr("p_none_yet_drag_a_card")}</Row>
         )}
-        {members.map((c) => <MemberRow key={c.name} card={c} L={L} onChanged={onChanged} />)}
+        {members.map((c) => <MemberRow key={`${c.name}/${c.project_card || ''}`} card={c} L={L} onChanged={onChanged} />)}
       </Panel>
 
       {/* Everything here lands on EVERY member service at once — the reason a
@@ -123,11 +124,11 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
       <Panel title={tr("p_to_every_member_at_once")}
         hint={(info?.services || []).join(', ') || '—'}>
         <Field label={tr("p_visibility")}>
-          <select defaultValue="" onChange={(e) => { setVis(e.target.value); e.target.value = '' }}
+          <Select value="" onChange={(e) => setVis(e.target.value)}
             style={{ ...fieldInput, maxWidth: 220 }}>
             <option value="">{tr("p_apply_to_all")}</option>
             {VIS.map(([v, k]) => <option key={v} value={v}>{t(k)}</option>)}
-          </select>
+          </Select>
         </Field>
 
         <Field label={tr("p_access")} align="start">
@@ -142,10 +143,10 @@ export default function GroupManagePanel({ group, members = [], onChanged }) {
               ))}
         </Field>
         <FieldActions>
-          <select value={pick} onChange={(e) => setPick(e.target.value)} style={{ ...fieldInput, maxWidth: 220 }}>
+          <Select value={pick} onChange={(e) => setPick(e.target.value)} style={{ ...fieldInput, maxWidth: 220 }}>
             <option value="">{tr("p_pick_an_account")}</option>
             {users.map((u) => <option key={u.id} value={u.id}>{u.username}{u.role === 'manager' ? ' · admin' : ''}</option>)}
-          </select>
+          </Select>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
             <input type="checkbox" checked={asAdmin} onChange={(e) => setAsAdmin(e.target.checked)} />
             {tr("p_as_admin")}
@@ -190,7 +191,7 @@ export function FixedGroupPanel({ band, onChanged }) {
               : tr("p_every_card_is_in_a")}
           </Row>
         )}
-        {members.map((c) => <MemberRow key={c.name} card={c} L={L} onChanged={onChanged} />)}
+        {members.map((c) => <MemberRow key={`${c.name}/${c.project_card || ''}`} card={c} L={L} onChanged={onChanged} />)}
       </Panel>
 
       <Panel title={tr("p_about_this_band")}>

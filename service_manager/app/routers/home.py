@@ -35,15 +35,22 @@ def _read() -> dict:
             d.setdefault("hidden_services", [])
             d.setdefault("live_hidden", [])
             d.setdefault("live_public", [])
+            d.setdefault("split_cards", [])
             return d
     except Exception:
         pass
-    return {"order": [], "builtins": {}, "hidden_services": [], "live_hidden": [], "live_public": []}
+    return {"order": [], "builtins": {}, "hidden_services": [], "live_hidden": [], "live_public": [], "split_cards": []}
 
 
 def live_public() -> set[str]:
     """Services whose live numbers a visitor may see without signing in."""
     return set(_read().get("live_public") or [])
+
+
+def split_cards() -> set[str]:
+    """Multi-project services drawn as one cover card per project, so that their
+    projects can sit in different groups."""
+    return set(_read().get("split_cards") or [])
 
 
 def live_hidden() -> set[str]:
@@ -80,7 +87,7 @@ def set_order(body: OrderBody, _: models.User = Depends(require_portal_admin)):
     # Mirror the relative service order into manifests (non-admins sort by that).
     i = 0
     for k in body.keys:
-        if k.startswith("@") or k.startswith("#"):
+        if k.startswith("@") or k.startswith("#") or "/" in k:      # "/": one project's card
             continue
         if registry.service_dir(k).exists():
             m = registry.read_manifest(k)
@@ -97,6 +104,7 @@ class HiddenServiceBody(BaseModel):
     hidden: Optional[bool] = None        # off the cover (and therefore off the live wall)
     live_hidden: Optional[bool] = None   # off the live wall only
     live_public: Optional[bool] = None   # on the signed-out live wall too
+    split: Optional[bool] = None         # one card per project instead of one for the service
 
 
 @router.put("/api/admin/home-service")
@@ -111,9 +119,27 @@ def set_service_hidden(body: HiddenServiceBody, _: models.User = Depends(require
         current = set(d.get(key) or [])
         (current.add if flag else current.discard)(body.name)
         d[key] = sorted(current)
+    if body.split is not None:
+        _set_split(d, body.name, body.split)
     _write(d)
-    return {"name": body.name, "hidden": body.name in d["hidden_services"], "live_hidden": body.name in d["live_hidden"],
+    return {"name": body.name, "split": body.name in d["split_cards"], "hidden": body.name in d["hidden_services"], "live_hidden": body.name in d["live_hidden"],
             "live_public": body.name in d.get("live_public", [])}
+
+
+def _set_split(d: dict, name: str, on: bool) -> None:
+    """Turn a service's card into one per project, or back. The new cards take the
+    old one's place in its group and in the order, so nothing jumps on the cover."""
+    from . import service_groups
+    m = registry.read_manifest(name)
+    if not (m.get("capabilities") or {}).get("multi_project"):
+        raise HTTPException(400, "프로젝트가 여러 개인 서비스만 나눌 수 있습니다.")
+    from .. import project_runtime as pr
+    projs = [p["name"] for p in pr.list_projects(name)]
+    current = set(d["split_cards"])
+    (current.add if on else current.discard)(name)
+    d["split_cards"] = sorted(current)
+    d["order"] = service_groups.swap_card(d["order"], name, projs, on)
+    service_groups.split_members(name, projs, on)
 
 
 class BuiltinBody(BaseModel):

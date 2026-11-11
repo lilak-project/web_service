@@ -70,6 +70,41 @@ def _find(d: dict, gid: str) -> dict:
     raise HTTPException(404, "그룹을 찾을 수 없습니다.")
 
 
+def _is_project_card(k: str) -> bool:
+    svc, _, proj = k.partition("/")
+    return bool(proj) and registry.valid_name(svc) and registry.valid_name(proj)
+
+
+def swap_card(keys: list[str], svc: str, projs: list[str], on: bool) -> list[str]:
+    """`keys` with a service's one card replaced by one per project (on), or those
+    by the one (off) — at the place the first of them held."""
+    out: list[str] = []
+    for k in keys:
+        if on and k == svc:
+            out += [f"{svc}/{p}" for p in projs if f"{svc}/{p}" not in keys]
+        elif not on and k.startswith(svc + "/"):
+            if svc not in out:
+                out.append(svc)
+        else:
+            out.append(k)
+    return out
+
+
+def split_members(svc: str, projs: list[str], on: bool) -> None:
+    """A card sits in one group: going back to one card, the first group keeps it."""
+    d = _read()
+    seen = False
+    for g in d["groups"]:
+        had = g.get("members", [])
+        new = swap_card(had, svc, projs, on)
+        if not on and svc in new:
+            if seen:
+                new = [k for k in new if k != svc]
+            seen = True
+        g["members"] = new
+    _write(d)
+
+
 def _clean_members(d: dict, gid: str, members: list[str]) -> list[str]:
     """Members are card keys; a key sits in one group at a time, so adding it here
     removes it from wherever else it was."""
@@ -78,7 +113,7 @@ def _clean_members(d: dict, gid: str, members: list[str]) -> list[str]:
         k = str(k).strip()
         if not k or k in keys or k.startswith("#g:"):
             continue
-        if not (k.startswith("@") or registry.valid_name(k)):
+        if not (k.startswith("@") or registry.valid_name(k) or _is_project_card(k)):
             continue
         keys.append(k)
     for g in d["groups"]:
@@ -88,7 +123,9 @@ def _clean_members(d: dict, gid: str, members: list[str]) -> list[str]:
 
 
 def _service_members(g: dict) -> list[str]:
-    return [m for m in g.get("members", []) if not m.startswith("@") and registry.service_dir(m).exists()]
+    # A one-project card is left out: a tier or grant on the whole service would
+    # also reach the projects filed in other groups.
+    return [m for m in g.get("members", []) if not m.startswith("@") and "/" not in m and registry.service_dir(m).exists()]
 
 
 def set_orders(keys: list[str]) -> None:

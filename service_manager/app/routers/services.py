@@ -28,7 +28,7 @@ from ..models import (
     VIS_ADMIN, VIS_PRIVATE, VIS_PROTECTED, VIS_PUBLIC, DEFAULT_VISIBILITY,
     AccessRequest, Service, ServicePermission,
 )
-from .projects import list_raw_services
+from .projects import list_raw_services, split_cards
 
 router = APIRouter(tags=["portal-services"])
 
@@ -108,7 +108,7 @@ def list_services(
     db: Session = Depends(get_db),
 ):
     # Which project a card opens straight away is the account's own choice.
-    out = annotate_services(db, user, prefs.with_entries(user, list_raw_services()))
+    out = split_cards(annotate_services(db, user, prefs.with_entries(user, list_raw_services())), user, db)
     if not _is_admin(user):
         # Hidden in manage mode, or inside a group that is hidden as a whole.
         # "No group" hidden takes every service filed nowhere with it.
@@ -116,8 +116,9 @@ def list_services(
         in_hidden_group = {m for g in all_groups() if g.get("hidden") for m in g.get("members", [])}
         filed = {m for g in all_groups() for m in g.get("members", [])}
         loose_hidden = bool(loose().get("hidden"))
-        out = [s for s in out if not s.get("hidden") and s["name"] not in in_hidden_group
-               and not (loose_hidden and s["name"] not in filed)]
+        key = lambda s: f"{s['name']}/{s['project_card']}" if s.get("project_card") else s["name"]   # noqa: E731
+        out = [s for s in out if not s.get("hidden") and key(s) not in in_hidden_group
+               and not (loose_hidden and key(s) not in filed)]
     return out
 
 

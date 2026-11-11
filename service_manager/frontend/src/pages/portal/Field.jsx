@@ -63,8 +63,8 @@ export function Panel({ title, hint, right, danger, bare, fold, open: openProp, 
 }
 
 /** One record in a list panel: `<Row>` is a flex line with a rule above it. */
-export function Row({ className, style, children }) {
-  return <div className={`set-row${className ? ' ' + className : ''}`} style={style}>{children}</div>
+export function Row({ className, style, children, ...rest }) {
+  return <div className={`set-row${className ? ' ' + className : ''}`} style={style} {...rest}>{children}</div>
 }
 
 /** The status vocabulary: tone is undefined | "ok" | "warn" | "bad". */
@@ -78,7 +78,7 @@ export function Field({ label, align, children }) {
     <>
       <span style={{ ...FIELD_TEXT,
         alignItems: align === 'start' ? 'flex-start' : undefined }}>{label}</span>
-      <div style={{ ...FIELD_TEXT, color: 'var(--text-primary)', minWidth: 0,
+      <div style={{ ...FIELD_TEXT, color: 'var(--dock-text-primary)', minWidth: 0,
         display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{children}</div>
     </>
   )
@@ -95,19 +95,19 @@ export function FieldActions({ children }) {
 }
 
 /** Secondary text inside a row ("no grants yet"), at the page's one size. */
-export const fieldMuted = { ...FIELD_TEXT, color: 'var(--text-secondary)' }
+export const fieldMuted = { ...FIELD_TEXT, color: 'var(--dock-text-secondary)' }
 
 /** A removable/plain chip — same text size and corner as everything else. */
 export const fieldChip = {
   display: 'inline-flex', alignItems: 'center', gap: 4, ...FIELD_TEXT,
   padding: '0 4px 0 8px', borderRadius: 'var(--rack-radius, 0)',
-  border: '1px solid var(--border-subtle)', background: 'var(--surface-2)' }
+  border: '1px solid var(--dock-border-subtle)', background: 'var(--dock-surface-2)' }
 
 /** The one input style, for the places that cannot use a plain <input>. */
 export const fieldInput = {
   height: 28, borderRadius: 'var(--rack-radius, 0)', ...FIELD_TEXT,
-  padding: '0 9px', background: 'var(--input-bg)', color: 'var(--text-primary)',
-  border: '1px solid var(--input-border)', boxSizing: 'border-box', minWidth: 0 }
+  padding: '0 9px', background: 'var(--dock-input-bg)', color: 'var(--dock-text-primary)',
+  border: '1px solid var(--dock-input-border)', boxSizing: 'border-box', minWidth: 0 }
 
 /** Deprecated: a heading above a card. Panels carry their own title now. */
 export function SettingsHead({ title, hint, children }) {

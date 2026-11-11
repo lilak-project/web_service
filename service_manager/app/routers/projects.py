@@ -113,6 +113,26 @@ def api_projects(user=Depends(require_portal_user), db: Session = Depends(get_db
     return prefs.with_entries(user, rows)
 
 
+def split_cards(rows: list[dict], user, db: Session) -> list[dict]:
+    """A service set to one card per project becomes that many cards: the same
+    service, each opening its own project (`entry_project`), named after it."""
+    from .home import split_cards as split_names
+    from .. import project_runtime as pr
+    split = split_names()
+    out: list[dict] = []
+    for r in rows:
+        ps = pr.list_projects(r["name"]) if r["name"] in split and r["multi_project"] else []
+        if not permissions.is_admin(user):
+            ps = [p for p in ps if permissions.can_enter_project(db, user, r["name"], p["name"])]
+        if not ps:
+            out.append(r)
+            continue
+        out += [{**r, "project_card": p["name"], "entry_project": p["name"], "running": p["running"],
+                 "label": p["label"] or p["name"], "labels": None,
+                 "service_label": r["label"], "service_labels": r["labels"]} for p in ps]
+    return out
+
+
 @router.get("/api/public-services")
 def api_public_services(db: Session = Depends(get_db)):
     """The services a visitor may see BEFORE signing in — the signed-out cover

@@ -17,7 +17,7 @@ import { downloadFrom } from './download'
  * Managers also get: create a project, drag-and-drop (or pick) a .zip to import,
  * and export each project. Deletion lives in the admin Services screen.
  */
-export default function ServiceProjects({ service, canManage, manage = false, onChanged }) {
+export default function ServiceProjects({ service, canManage, manage = false, onChanged, onEnter }) {
   const { t } = useLang()
   const svc = service.name
   const canIE = !!service.import_export
@@ -65,6 +65,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
     // SSO handoff (same origin): hand the self-UI service the portal token.
     const tok = store.get(PORTAL_TOKEN_KEY)
     if (tok) store.set('elog_token', tok)
+    if (onEnter) { onEnter(proj); return }          // the cover shows it in its own panel
     window.open(`/pp/${svc}/${proj}/`, '_blank')
   }
 
