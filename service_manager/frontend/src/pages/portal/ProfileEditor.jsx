@@ -64,9 +64,9 @@ export default function ProfileEditor({ me, onSaved }) {
           so you could not click Random twice without chasing it. */}
       <div style={rowS}>
         <Avatar icon={shape} color={effColor} seed={me.username} size={40} />
-        {shape && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{shape}</span>}
-        {locked && <span style={{ color: 'var(--text-secondary)' }}>{isManager ? tr("p_managers_locked_to_black") : tr("p_scoped_admins_locked_to_grey")}</span>}
-        {dirty && <span style={{ color: 'var(--warning-text, #b45309)' }}>{tr("p_unsaved")}</span>}
+        {shape && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--dock-text-secondary)' }}>{shape}</span>}
+        {locked && <span style={{ color: 'var(--dock-text-secondary)' }}>{isManager ? tr("p_managers_locked_to_black") : tr("p_scoped_admins_locked_to_grey")}</span>}
+        {dirty && <span style={{ color: 'var(--dock-warning-text, #b45309)' }}>{tr("p_unsaved")}</span>}
       </div>
       <div style={rowS}>
         <Button variant="secondary" onClick={roll}><Icon name="refresh" size={13} /> {tr("p_random_3")}</Button>
@@ -74,35 +74,35 @@ export default function ProfileEditor({ me, onSaved }) {
         <Button variant="primary" disabled={!dirty || busy} onClick={save}>{tr("p_save")}</Button>
       </div>
       {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, border: '1px solid var(--border-strong)', borderRadius: 'var(--rack-radius, 0)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, border: '1px solid var(--dock-border-strong)', borderRadius: 'var(--rack-radius, 0)' }}>
           {/* colour — only non-admins choose; admins are fixed to black */}
           {!locked && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {AVATAR_COLORS.map((c) => (
                 <button key={c} type="button" className="set-plain" onClick={() => pick(shape, c)} title={c}
                   style={{ width: 22, height: 22, borderRadius: '50%', backgroundColor: c, cursor: 'pointer',
-                    border: color === c ? '2px solid var(--text-primary)' : '1px solid var(--border-default)' }} />
+                    border: color === c ? '2px solid var(--dock-text-primary)' : '1px solid var(--dock-border-default)' }} />
               ))}
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
               placeholder={tr("p_search_name_or_tag_nut")}
-              style={{ flex: 1, backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
-                border: '1px solid var(--input-border)' }} />
-            <span style={{ color: 'var(--text-secondary)' }}>{shown.length}</span>
+              style={{ flex: 1, backgroundColor: 'var(--dock-input-bg)', color: 'var(--dock-text-primary)',
+                border: '1px solid var(--dock-input-border)' }} />
+            <span style={{ color: 'var(--dock-text-secondary)' }}>{shown.length}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 4, maxHeight: 170, overflowY: 'auto' }}>
             {shown.map((ic) => (
               <button key={ic} type="button" className="set-plain" title={ic} onClick={() => pick(ic, color)}
                 style={{ display: 'grid', placeItems: 'center', padding: 3, borderRadius: 8, cursor: 'pointer',
-                  border: shape === ic ? '2px solid var(--btn-primary-bg)' : '1px solid transparent',
-                  background: shape === ic ? 'var(--surface-2)' : 'transparent' }}>
+                  border: shape === ic ? '2px solid var(--dock-btn-primary-bg)' : '1px solid transparent',
+                  background: shape === ic ? 'var(--dock-surface-2)' : 'transparent' }}>
                 <Avatar icon={ic} color={effColor || '#64748b'} size={28} />
               </button>
             ))}
             {shown.length === 0 && (
-              <span style={{ gridColumn: '1 / -1', color: 'var(--text-secondary)', padding: 4 }}>
+              <span style={{ gridColumn: '1 / -1', color: 'var(--dock-text-secondary)', padding: 4 }}>
                 {tr("p_no_match_2")}
               </span>
             )}

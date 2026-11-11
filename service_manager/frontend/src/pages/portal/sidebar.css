@@ -9,9 +9,9 @@
 .pl-root {
   /* One firm line for every edge and divider the portal's own chrome draws: the
      bar's right edge, the rule over the foot, the bands, the settings
-     separators. A step past --border-strong, which the cards inside the bars
+     separators. A step past --dock-border-strong, which the cards inside the bars
      already use — the chrome's own lines have to beat the cards'. */
-  --divider: var(--text-muted);
+  --divider: var(--dock-text-muted);
   /* The second bar's width and the time it takes, in one place: the box, its
      contents and both folds all read them. */
   --b2w: 214px;
@@ -26,11 +26,11 @@
   inset: 0;
   display: flex;
   font-size: var(--fs-body);
-  color: var(--text-primary);
-  /* Whatever is briefly uncovered between the bars is this, not --app-bg's
+  color: var(--dock-text-primary);
+  /* Whatever is briefly uncovered between the bars is this, not --dock-app-bg's
      near-white: the chrome's own ground, so a gap between two bars looks like
      more bar rather than a hole in the page. */
-  background: var(--surface-3);
+  background: var(--dock-surface-3);
 }
 /* :where() so the reset carries ZERO specificity. As `.pl-root button` it was
    (0,1,1) and beat every single-class rule — which silently stripped the border
@@ -39,13 +39,13 @@
 
 /* ── sidebar ─────────────────────────────────────────────────────────────── */
 .pl-side {
-  width: 260px;
+  width: var(--b2w);      /* wide = the settings bar's width (214px), so the two read as a pair */
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--surface-2);
+  background: var(--dock-surface-2);
   /* The firmest line on the screen: it is what separates the portal's own
-     chrome from the service running beside it. A step past --border-strong,
+     chrome from the service running beside it. A step past --dock-border-strong,
      which the cards inside the bar already use — the bar's own edge has to beat
      them. It stays 1px: the box is border-box, so 2px would eat a pixel of the
      collapsed 64px bar and drag every icon off centre. */
@@ -66,29 +66,28 @@
 /* The browser's focus ring is drawn OUTSIDE the button, so at 64px it spilled past
    the clip edge and looked like a stray box beside the mark. An inset ring stays
    in bounds and still shows keyboard focus. */
-.pl-logo:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--border-focus); }
+.pl-logo:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--dock-border-focus); }
 .pl-logo[disabled] { cursor: default; }
 .pl-row:focus-visible { outline: none; }   /* the CARD carries the ring (see :has below) */
 .pl-root.mini .pl-brand { padding: 0 10px; }
 .pl-root.mini .pl-logo { width: 44px; padding: 7px; margin-left: 0; border-radius: var(--radius-lg, 5px); }
-.pl-mark { width: 30px; height: 23px; color: var(--text-emphasis); flex-shrink: 0; }
-.pl-brand b { font-size: var(--fs-plate); font-weight: var(--rack-weight, 500); color: var(--text-emphasis); }
-/* The second word of the brand is the host this window is on, and the
-   portal's build after it — small, because it is an address rather than a
-   name, and cut short rather than pushing the fold button out of the bar. */
+.pl-mark { width: 30px; height: 23px; color: var(--dock-text-emphasis); flex-shrink: 0; }
+/* Beside the mark: the host this window is on, the portal's build under it —
+   cut short rather than pushing the fold button out of the bar. */
 .pl-brand .sub {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: var(--fs-small); color: var(--text-secondary);
+  min-width: 0; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+  line-height: 1.25; white-space: nowrap; font-size: var(--fs-small); color: var(--dock-text-secondary);
 }
-.pl-brand .sub i { font-style: normal; font-family: var(--font-mono); color: var(--text-muted); margin-left: 6px; }
+.pl-brand .sub i { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-style: normal; font-family: var(--font-mono);
+  font-size: var(--fs-tiny); color: var(--dock-text-muted); }
 .pl-logo { min-width: 0; }
 
 /* Collapsed is the SAME layout clipped to 64px — nothing is re-centred, the
    labels just fade. Re-arranging on collapse made the icons jump. */
-.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub { transition: opacity .15s; }
+.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand .sub { transition: opacity .15s; }
 /* Scoped to the SERVICE bar: unscoped it also blanked the settings bar's labels,
    which sits beside a collapsed service bar by design. */
-.pl-root.mini .pl-side :is(.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand b, .pl-brand .sub) {
+.pl-root.mini .pl-side :is(.pl-txt, .pl-chev, .pl-out, .pl-search input, .pl-brand .sub) {
   opacity: 0;
   pointer-events: none;
 }
@@ -116,8 +115,8 @@
    grey. The tile's colour is inline, so it takes !important; the icons and
    colours come back with the pointer. */
 .pl-root.mini .pl-side:not(:hover):not(:focus-within) .pl-nav .pl-av {
-  /* A shade past --surface-3: under the rail's own fade that one all but vanished. */
-  background: color-mix(in srgb, var(--surface-3, #e5e7eb) 62%, var(--text-muted, #6b7280)) !important;
+  /* A shade past --dock-surface-3: under the rail's own fade that one all but vanished. */
+  background: color-mix(in srgb, var(--dock-surface-3, #e5e7eb) 62%, var(--dock-text-muted, #6b7280)) !important;
   box-shadow: none;
 }
 /* opacity, not visibility, so it can fade back in. */
@@ -147,16 +146,17 @@
 .pl-root.mini .pl-nav::-webkit-scrollbar { width: 0; height: 0; }
 
 .pl-card {
+  -webkit-user-select: none; user-select: none;   /* right click would select the word under it */
   /* A column flex child grows if anything inside claims flex:1 — the cards are a
      fixed height, so pin it. */
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  background: var(--surface);
+  background: var(--dock-surface);
   /* The same weight the project rows inside them already used: at
-     --border-default a card's edge was faint enough that a row of them read as
+     --dock-border-default a card's edge was faint enough that a row of them read as
      one block instead of as separate things. */
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--dock-border-strong);
   border-radius: var(--radius-lg, 5px);
   box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
   overflow: hidden;
@@ -164,10 +164,10 @@
 /* Expanded only. Collapsed, .pl-root.mini .pl-card ties this on specificity and
    loses on order, so a hover would draw a border box in a bar that has no cards
    to outline. */
-.pl-root:not(.mini) .pl-card:hover { border-color: var(--divider); background: var(--surface-2); }
+.pl-root:not(.mini) .pl-card:hover { border-color: var(--divider); background: var(--dock-surface-2); }
 /* Collapsed there is no card to fill, so the 43px hit square takes the plate. */
-.pl-root.mini .pl-card:hover .pl-row { background: var(--surface-3); }
-.pl-card.on { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
+.pl-root.mini .pl-card:hover .pl-row { background: var(--dock-surface-3); }
+.pl-card.on { border-color: var(--dock-border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
 
 /* Every icon's centre lands on x=32, the middle of the collapsed 64px bar:
    nav padding 10 + the card's 1px border + this 6px puts a 30px tile at 17..47.
@@ -194,19 +194,19 @@
 /* Run state — see RunDot. */
 .pl-run { flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; }
 /* Stopped: a 5px grey dot — the smallest mark that still reads as deliberate. */
-.pl-run:not(.up) { width: 5px; height: 5px; background: var(--text-muted); }
+.pl-run:not(.up) { width: 5px; height: 5px; background: var(--dock-text-muted); }
 /* Running: a green play button. */
 .pl-run.up { width: 10px; height: 10px; background: #10b981; }
 .pl-txt {
   flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-size: var(--fs-body); font-weight: var(--rack-weight, 500); color: var(--text-emphasis);
+  font-size: var(--fs-body); font-weight: var(--rack-weight, 500); color: var(--dock-text-emphasis);
 }
 .pl-txt small {
   margin-left: 4px;
   font-family: var(--font-mono);
   font-size: var(--fs-tiny); font-weight: 400;
-  color: var(--text-secondary);
+  color: var(--dock-text-secondary);
 }
 .pl-chev { flex-shrink: 0; transition: transform .12s; display: inline-flex; }
 .pl-card.open .pl-chev { transform: rotate(90deg); }
@@ -221,13 +221,13 @@
   flex: 1; min-width: 0; height: 24px; padding: 0;
   border: 0; outline: 0; background: transparent;
   font: inherit; font-size: var(--fs-body); font-weight: var(--rack-weight, 500);
-  color: var(--text-emphasis);
+  color: var(--dock-text-emphasis);
 }
-.pl-search input::placeholder { color: var(--text-secondary); font-weight: var(--rack-weight, 500); }
-.pl-card.pl-search:focus-within { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
+.pl-search input::placeholder { color: var(--dock-text-secondary); font-weight: var(--rack-weight, 500); }
+.pl-card.pl-search:focus-within { border-color: var(--dock-border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .15); }
 
 /* Keyboard focus rings the whole card, not the inner button. */
-.pl-card:has(> .pl-row:focus-visible) { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
+.pl-card:has(> .pl-row:focus-visible) { border-color: var(--dock-border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 .pl-row:focus-visible { outline: none; }
 
 /* ── projects ────────────────────────────────────────────────────────────── */
@@ -237,7 +237,7 @@
 /* The line stands at x=20 and the rows start at x=32 — where the parent tile's
    own centre is — and it stops at the last row's middle, so the list reads as
    hanging off the card rather than as the next thing in the bar. Drawn in the
-   same --divider as the bar's other lines: at --border-strong it was the same
+   same --divider as the bar's other lines: at --dock-border-strong it was the same
    weight as the card edges it runs past and disappeared among them.
    It lives INSIDE the container's padding box on purpose: the open/close
    animation sets overflow:hidden, which would have clipped a rail drawn in the
@@ -263,19 +263,19 @@
   flex-shrink: 0;
   display: flex; align-items: center; gap: 8px;
   height: 32px; padding: 0 9px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
+  background: var(--dock-surface);
+  border: 1px solid var(--dock-border-strong);
   border-radius: var(--radius-lg, 5px);
   box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
   font-size: var(--fs-body); font-weight: 500;
-  color: var(--text-primary);
+  color: var(--dock-text-primary);
 }
-.pl-proj:hover { border-color: var(--border-focus); background: var(--surface-2); }
+.pl-proj:hover { border-color: var(--dock-border-focus); background: var(--dock-surface-2); }
 .pl-proj.on:hover { background: var(--accent, #2563eb); }
 .pl-proj.on { background: var(--accent, #2563eb); border-color: var(--accent, #2563eb); color: #fff; }
 .pl-proj.on .pl-run { box-shadow: 0 0 0 1.5px #fff; }
 .pl-proj .pl-txt { font-weight: 500; color: inherit; }
-.pl-proj:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
+.pl-proj:focus-visible { outline: none; border-color: var(--dock-border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 
 /* Slide, not fade: the box grows/shrinks (--h is measured in JS right before the
    animation) while the cards inside travel down from under the card above.
@@ -314,7 +314,7 @@
   flex-shrink: 0;
   display: flex; flex-direction: column; gap: 4px;
   padding: 10px;
-  background: var(--surface-3);
+  background: var(--dock-surface-3);
   border-top: 1px solid var(--divider);
 }
 .pl-user .pl-av { flex-shrink: 0; }   /* without this the avatar squeezed when collapsed */
@@ -330,7 +330,7 @@
   /* Grey, not white. It is the RACK ground, so the empty panel already looks
      like the pages that will fill it, and the strip a second bar uncovers as it
      steps out is not a flash of white. A framed service paints over it. */
-  background: var(--surface-2);
+  background: var(--dock-surface-2);
   overflow: hidden;
 }
 .pl-panel > iframe { flex: 1; width: 100%; border: 0; display: block; }
@@ -341,21 +341,35 @@
   flex: 1;
   display: grid; place-items: center;
   text-align: center;
-  color: var(--text-muted);
+  color: var(--dock-text-muted);
   padding: 24px;
 }
-.pl-empty .path { font-family: var(--font-mono); font-size: var(--fs-tiny); color: var(--text-muted); }
-.pl-empty .big { font-size: var(--fs-large); font-weight: var(--rack-weight, 500); color: var(--text-emphasis); margin: 6px 0 4px; }
+.pl-empty .path { font-family: var(--font-mono); font-size: var(--fs-tiny); color: var(--dock-text-muted); }
+.pl-empty .big { font-size: var(--fs-large); font-weight: var(--rack-weight, 500); color: var(--dock-text-emphasis); margin: 6px 0 4px; }
 /* ── home: the panel with nothing open (HomeView) ───────────────────────── */
-.pl-home { display: flex; flex-direction: column; gap: 22px; padding-top: 40px; }
-.pl-home > * { width: 100%; max-width: 1040px; margin: 0 auto; flex: 0 0 auto; }
+.pl-home { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; padding: 40px 0 0; }
+/* Search and tabs stay put; only what is under the tabs scrolls. */
+/* One column, as wide as a panel (940px), with 40px kept clear on each side
+   so nothing runs into the scrollbar. */
+.pl-hhead { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: 1020px; margin: 0 auto; flex: none; box-sizing: border-box; padding: 0 40px; }
+.pl-hbody { display: flex; flex-direction: column; gap: 22px; padding: 14px 40px 20px; }
+.pl-hbodywrap { position: relative; flex: 1; min-height: 0; display: flex; margin-top: 10px; }
+.pl-hbody { scrollbar-width: none; }
+.pl-hbody::-webkit-scrollbar { display: none; }
+.pl-hthumb {
+  position: absolute; top: 0; right: 4px; width: 6px; border-radius: 3px; z-index: 2; pointer-events: none;
+  background: var(--dock-text-secondary); opacity: 0; transition: opacity .3s;
+}
+.pl-hthumb.on { opacity: .55; transition: opacity .1s; }
+.pl-home .pl-hrecent .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pl-hbody > * { width: 100%; max-width: 940px; margin: 0 auto; flex: 0 0 auto; }
 .pl-hmanage { --plate: var(--plate-manage); display: flex; flex-direction: column; gap: 8px; }
 .pl-hfold {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
   padding: 0; border: 0; background: none; cursor: pointer;
-  font: inherit; color: var(--text-secondary);
+  font: inherit; color: var(--dock-text-secondary);
 }
-.pl-hfold:hover { color: var(--text-primary); }
+.pl-hfold:hover { color: var(--dock-text-primary); }
 .pl-hfold svg { transition: transform var(--b2t) cubic-bezier(.2, .8, .2, 1); }
 .pl-hfold.open svg { transform: rotate(90deg); }
 .pl-homecard { margin-bottom: 6px; }
@@ -363,36 +377,76 @@
 .pl-hsearch label {
   display: flex; align-items: center; gap: 12px; width: 100%; max-width: 640px;
   height: 48px; padding: 0 14px; box-sizing: border-box;
-  background: var(--surface); border: 1px solid var(--border-strong);
+  background: var(--dock-surface); border: 1px solid var(--dock-border-strong);
   border-radius: var(--rack-radius, 0);
 }
-.pl-hsearch label:focus-within { border-color: var(--border-focus); }
+.pl-hsearch label:focus-within { border-color: var(--dock-border-focus); }
 .pl-hsearch input {
   flex: 1; min-width: 0; border: 0; outline: none; background: transparent;
-  font: inherit; font-size: var(--fs-large); color: var(--text-primary);
+  font: inherit; font-size: var(--fs-large); color: var(--dock-text-primary);
 }
-.pl-hsearch .hint { font-size: var(--fs-small); color: var(--text-secondary); }
-.pl-hrecent h2 { margin: 0 0 8px !important; color: var(--text-secondary); }
+.pl-htabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-height: 36px; border-bottom: 1px solid var(--dock-border-default); }
+.pl-htabs > button {
+  padding: 6px 14px; font: inherit; cursor: pointer; border: 0; background: transparent;
+  border-bottom: 2px solid transparent; color: var(--dock-text-secondary);
+}
+.pl-htabs > button.on { border-bottom-color: var(--dock-info-text); color: var(--dock-text-primary); font-weight: 600; }
+.pl-htool { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pl-hview { display: inline-flex; border: 1px solid var(--dock-border-strong); }
+.pl-hview button {
+  padding: 2px 10px; font: inherit; font-size: var(--fs-small); cursor: pointer; border: 0;
+  background: transparent; color: var(--dock-text-secondary);
+}
+.pl-hview button.on { background: var(--dock-surface); color: var(--dock-text-primary); font-weight: 600; }
+.pl-hbtn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; cursor: pointer; white-space: nowrap;
+  font: inherit; font-size: var(--fs-small); background: transparent;
+  border: 1px solid var(--dock-border-strong); color: var(--dock-text-primary);
+}
+.pl-hbtn.on { background: var(--dock-info-bg, var(--dock-surface)); border-color: var(--dock-info-text); color: var(--dock-info-text); font-weight: 600; }
+.pl-hmanagebtn { margin-left: auto; }
+.pl-hedithint { margin: -12px 0 0 !important; font-size: var(--fs-small); color: var(--dock-text-secondary); }
+.pl-hrow.drag:not(.head) { cursor: grab; }
+.pl-hmove { position: relative; overflow: visible !important; }
+.pl-hmove > button { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; color: var(--dock-text-secondary); cursor: pointer; }
+.pl-hmenu-back { position: fixed; inset: 0; z-index: 20; }
+.pl-hmenu {
+  position: fixed; z-index: 21; min-width: 160px; max-height: 50vh; overflow: auto; display: flex; flex-direction: column;
+  background: var(--dock-surface); border: 1px solid var(--dock-border-strong); box-shadow: 0 4px 12px rgb(0 0 0 / .12);
+}
+.pl-hmenu button { padding: 6px 10px; text-align: left; font: inherit; border: 0; background: transparent; cursor: pointer; color: var(--dock-text-primary); }
+.pl-hmenu button:hover { background: var(--dock-surface-2); }
+.pl-hmenu button.on { font-weight: 600; }
+.pl-hrename-btn { display: inline-flex; align-items: center; gap: 5px; font-weight: inherit; cursor: pointer; }
+.pl-hrename { font: inherit; font-weight: 600; padding: 1px 4px; border: 1px solid var(--dock-border-focus); background: var(--dock-surface); }
+.pl-htabs button { white-space: nowrap; }
+.pl-hrack { display: flex; flex-direction: column; gap: 22px; }
+.pl-hrecent h2 { margin: 0 0 8px !important; color: var(--dock-text-secondary); }
 .pl-hrecent .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
 .pl-hrc {
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
   min-height: 84px; padding: 0 0 10px; text-align: left; cursor: pointer;
-  background: var(--surface); border: 1px solid var(--border-strong);
-  border-radius: var(--rack-radius, 0); font: inherit; color: var(--text-primary);
+  background: var(--dock-surface); border: 1px solid var(--dock-border-strong);
+  border-radius: var(--rack-radius, 0); font: inherit; color: var(--dock-text-primary);
 }
-.pl-hrc:hover { border-color: var(--border-focus); }
+.pl-hrc:hover { border-color: var(--dock-border-focus); }
 .pl-hrc .strip { align-self: stretch; height: 5px; margin-bottom: 8px; }
 .pl-hrc .name { padding: 0 12px; font-family: var(--font-mono); font-size: var(--fs-plate); }
-.pl-hrc .app { padding: 0 12px; color: var(--text-secondary); }
+.pl-hrc .app { padding: 0 12px; color: var(--dock-text-secondary); }
 .pl-hrow.cols { grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(80px, .7fr) 96px 64px; }
-.pl-hrow.head { color: var(--text-secondary); }
-.pl-hrow:not(.head):hover, .pl-hrow.at { background: var(--surface-2); }
-.pl-hrow.at { box-shadow: inset 3px 0 0 var(--border-focus); }
+.pl-hrow.nogrp { grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) 96px 64px; }
+.pl-hrow.nogrp > :nth-child(3) { display: none; }
+.pl-hrow.head { color: var(--dock-text-secondary); }
+.pl-hrow:not(.head):hover, .pl-hrow.at { background: var(--dock-surface-2); }
+.pl-hrow.at { box-shadow: inset 3px 0 0 var(--dock-border-focus); }
 .pl-hrow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-hrow .app { display: flex; align-items: center; gap: 8px; }
 .pl-hrow .app > svg { flex: 0 0 auto; }
 @media (max-width: 640px) {
   .pl-home { padding-top: 16px; }
+  .pl-hhead { padding: 0 16px; }
+  .pl-hbody { padding-left: 16px; padding-right: 16px; }
+  .pl-home .pl-hrecent .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pl-hrow.cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 64px; }
   .pl-hrow > :nth-child(3), .pl-hrow > :nth-child(4) { display: none; }
 }
@@ -445,8 +499,8 @@
   transition: transform .12s;
 }
 .pl-gchev.open { transform: rotate(90deg); }
-.pl-grp .pl-txt { font-weight: var(--rack-weight, 500); color: var(--text-secondary); }
-.pl-gcount { flex-shrink: 0; font-size: var(--fs-tiny); font-family: var(--font-mono); color: var(--text-muted); }
+.pl-grp .pl-txt { font-weight: var(--rack-weight, 500); color: var(--dock-text-secondary); }
+.pl-gcount { flex-shrink: 0; font-size: var(--fs-tiny); font-family: var(--font-mono); color: var(--dock-text-muted); }
 .pl-grp:focus-visible { outline: none; }
 .pl-grp:focus-visible .pl-gchev {
   border-radius: var(--radius-md, 3px);
@@ -472,7 +526,7 @@
   display: flex;
   /* The account plinth's ground: this bar is the same kind of surface — the
      portal talking about itself rather than about a service. */
-  background: var(--surface-3);
+  background: var(--dock-surface-3);
   border-right: 1px solid var(--divider);
   /* TWO motions at once, and the second is why: the BOX grows from nothing to
      its width, so the panel beside it gives way continuously — the way it does
@@ -502,7 +556,7 @@
 /* The bar has to be over it for the slide to read as coming from underneath. */
 .pl-side { position: relative; z-index: 2; }
 .pl-b2head { height: 50px; padding: 0 16px; display: flex; align-items: center; white-space: nowrap; }
-.pl-b2head b { font-size: var(--fs-plate); font-weight: var(--rack-weight, 500); color: var(--text-emphasis); }
+.pl-b2head b { font-size: var(--fs-plate); font-weight: var(--rack-weight, 500); color: var(--dock-text-emphasis); }
 /* "lilak portal", "Settings" and the open page's name are the same rank — the
    same three words in three columns — so they are one size, 15px. */
 .pl-nav2 { flex: 1; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
@@ -511,20 +565,27 @@
 .pl-c2 {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 9px;
-  height: 36px; padding: 0 12px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
+  height: 31px; padding: 0 12px;
+  background: var(--dock-surface);
+  border: 1px solid var(--dock-border-strong);
   border-radius: var(--radius-lg, 5px);
   box-shadow: var(--shadow, 0 1px 2px rgba(15, 23, 42, .04));
 }
-.pl-c2:hover { border-color: var(--divider); background: var(--surface-2); }
+.pl-c2:hover { border-color: var(--divider); background: var(--dock-surface-2); }
 /* PRESSED, not merely selected: on this bar every item is already a raised
    white tile, so a ring around one was easy to miss. The on state fills. */
-.pl-c2.on { border-color: var(--border-focus); background: var(--info-bg); }
+.pl-c2.on { border-color: var(--dock-border-focus); background: var(--dock-info-bg); }
 .pl-c2.on .pl-txt { color: var(--accent, #2563eb); }
 /* The menu is a list of names; weight was making all seven shout at once. */
 .pl-c2 .pl-txt { font-weight: 400; }
-.pl-c2:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
+/* Manage sidebar, a manager's choice of whose bar: two halves of one control. */
+.pl-b2seg { display: flex; border: 1px solid var(--dock-border-strong); border-radius: var(--radius-lg, 5px); overflow: hidden; flex: 0 0 auto; }
+.pl-b2seg button { flex: 1; height: 29px; font-size: var(--fs-small); text-align: center; background: var(--dock-surface); color: var(--dock-text-secondary); }
+.pl-b2seg button + button { border-left: 1px solid var(--dock-border-strong); }
+.pl-b2seg button.on { background: var(--dock-info-bg); color: var(--accent, #2563eb); }
+/* A manager-only page: a small crown at the card's right end. */
+.pl-c2 .pl-c2mgr { margin-left: auto; flex-shrink: 0; color: var(--dock-text-muted); }
+.pl-c2:focus-visible { outline: none; border-color: var(--dock-border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 /* Sections are a rule, not a heading — the names labelled a split the items make. */
 .pl-sep { flex: 0 0 auto; height: 1px; margin: 6px 2px; background: var(--divider); }
 
@@ -538,22 +599,22 @@
   display: flex; align-items: flex-start; gap: 8px;
   padding: 9px 11px;
   border: 1px dashed var(--divider);
-  color: var(--text-secondary); font-size: var(--fs-small); line-height: 1.3;
+  color: var(--dock-text-secondary); font-size: var(--fs-small); line-height: 1.3;
   transition: border-color .12s, background .12s, color .12s;
 }
-.pl-b2drop.live { border-color: var(--warning-text, #b45309); }
+.pl-b2drop.live { border-color: var(--dock-warning-text, #b45309); }
 .pl-b2drop.over {
-  border-color: var(--warning-text, #b45309);
-  background: var(--warning-bg, #fef3c7);
-  color: var(--warning-text, #b45309);
+  border-color: var(--dock-warning-text, #b45309);
+  background: var(--dock-warning-bg, #fef3c7);
+  color: var(--dock-warning-text, #b45309);
 }
 
 /* Log out lives at the FOOT of the settings bar, pushed there by a spring, so it
    is plainly not one of the settings pages above it. */
 .pl-spring { flex: 1 1 auto; min-height: 8px; }
-.pl-c2.out { color: var(--danger-text); }
-.pl-c2.out:hover { border-color: var(--danger-text); background: var(--danger-bg); }
-.pl-c2.out .pl-txt { color: var(--danger-text); }
+.pl-c2.out { color: var(--dock-danger-text); }
+.pl-c2.out:hover { border-color: var(--dock-danger-text); background: var(--dock-danger-bg); }
+.pl-c2.out .pl-txt { color: var(--dock-danger-text); }
 
 /* ── manage mode ─────────────────────────────────────────────────────────── */
 /* The bar becomes editable: a button that makes a group, a grip on every card,
@@ -587,12 +648,12 @@
   background: #7c3aed;
 }
 .pl-card.off { opacity: .5; }
-.pl-group.drop { background: var(--info-bg); }
+.pl-group.drop { background: var(--dock-info-bg); }
 .pl-gempty {
   margin: 2px 0 2px;
   padding: 10px; text-align: center;
-  font-size: var(--fs-small); color: var(--text-muted);
-  border: 1px dashed var(--border-strong);
+  font-size: var(--fs-small); color: var(--dock-text-muted);
+  border: 1px dashed var(--dock-border-strong);
   border-radius: var(--radius-lg, 5px);
 }
 .pl-root.mini .pl-gempty { display: none; }
@@ -602,11 +663,11 @@
 .pl-mgtitle {
   margin: 0 0 10px;
   font-size: var(--fs-plate); font-weight: var(--rack-weight, 500);
-  color: var(--text-emphasis);
+  color: var(--dock-text-emphasis);
 }
 
 /* The settings bar hangs off the account button and the two share a colour —
-   but that is the PLINTH's job (.pl-user is already --surface-3, the bar's own
+   but that is the PLINTH's job (.pl-user is already --dock-surface-3, the bar's own
    ground). The card used to carry the fill itself, with negative margins to
    reach the bar's edges, which meant the account card alone changed shape as
    the bar collapsed while every other card simply faded. */
@@ -621,9 +682,9 @@
   border: 1px solid transparent;
   transition: background .12s, border-color .12s, transform .06s;
 }
-.pl-fold:hover { background: var(--surface-3); border-color: var(--divider); }
-.pl-fold:active { background: var(--border-strong); transform: translateY(1px); }
-.pl-fold:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
+.pl-fold:hover { background: var(--dock-surface-3); border-color: var(--divider); }
+.pl-fold:active { background: var(--dock-border-strong); transform: translateY(1px); }
+.pl-fold:focus-visible { outline: none; border-color: var(--dock-border-focus); box-shadow: 0 0 0 2px rgba(59, 130, 246, .35); }
 /* Collapsed the labels go, and so does this: there is nothing beside it to fold
    a list under, and at 64px it crowded the mark. */
 .pl-root.mini .pl-fold { opacity: 0; pointer-events: none; }
@@ -655,7 +716,7 @@
   /* Top-aligned, not centred: the panel grows downward when you choose sign-up,
      and a centred panel would slide the username row up under the cursor. */
   display: grid; place-items: start center; align-content: start;
-  background: var(--surface-2);
+  background: var(--dock-surface-2);
   padding: 10vh 24px 24px;
 }
 
@@ -667,14 +728,14 @@
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--dock-border-default);
   border-radius: 3px;
   background: var(--surface-1);
   font: inherit;
   font-size: var(--fs-tiny);
   line-height: 14px;
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--dock-text-secondary);
 }
 /* No ring: the keys ON the cards are the signal, and a folded bar coming back
    to full colour is the rest of it. A box around the whole side said "this is
@@ -685,7 +746,7 @@
   flex: 0 0 auto;
   padding: 6px 12px 10px;
   font-size: var(--fs-tiny);
-  color: var(--text-muted);
+  color: var(--dock-text-muted);
 }
 .pl-root.mini .pl-cmdhint { display: none; }
 /* Folded, the key still works, so it is still shown — on the corner of the
@@ -707,14 +768,14 @@
 .pl-lockhint {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   margin-top: 10px; padding: 10px 12px;
-  border: 1px solid var(--border-default); background: var(--surface);
-  font-size: var(--fs-body); color: var(--text-secondary);
+  border: 1px solid var(--dock-border-default); background: var(--dock-surface);
+  font-size: var(--fs-body); color: var(--dock-text-secondary);
 }
 .pl-lockbtn {
-  height: 28px; padding: 0 12px; border: 1px solid var(--border-strong);
-  background: var(--surface-2); font: inherit; font-size: var(--fs-body); cursor: pointer;
+  height: 28px; padding: 0 12px; border: 1px solid var(--dock-border-strong);
+  background: var(--dock-surface-2); font: inherit; font-size: var(--fs-body); cursor: pointer;
 }
-.pl-lockbtn:hover { border-color: var(--border-focus); }
+.pl-lockbtn:hover { border-color: var(--dock-border-focus); }
 
 /* The manage bar's tray: a card set down while the bar scrolls. Blue, a place
    to hold things, not the amber of putting them away. */
@@ -723,16 +784,16 @@
   display: flex; flex-direction: column; gap: 4px;
   padding: 7px 9px;
   border: 1px dashed var(--divider);
-  color: var(--text-secondary); font-size: var(--fs-small); line-height: 1.3;
+  color: var(--dock-text-secondary); font-size: var(--fs-small); line-height: 1.3;
   transition: border-color .12s, background .12s;
 }
 .pl-b2tray:has(> svg) { flex-direction: row; align-items: flex-start; gap: 8px; padding: 9px 11px; }
-.pl-b2tray.live { border-color: var(--border-focus); }
-.pl-b2tray.over { border-color: var(--border-focus); background: rgba(59, 130, 246, .08); }
+.pl-b2tray.live { border-color: var(--dock-border-focus); }
+.pl-b2tray.over { border-color: var(--dock-border-focus); background: rgba(59, 130, 246, .08); }
 .pl-b2chip {
   display: flex; align-items: center; gap: 8px; padding: 3px;
   border: 1px solid var(--divider); background: var(--bg-primary, #fff);
-  color: var(--text-primary); cursor: grab;
+  color: var(--dock-text-primary); cursor: grab;
 }
 .pl-b2chip .pl-av { width: 24px; height: 24px; }
 .pl-b2chip.dragging, .pl-card.parked { opacity: .4; }
@@ -745,12 +806,24 @@
 
 /* The account's "compact" service bar (data-portal-bar on <html>, set from its
    preferences): narrower, tighter cards, the host over the build in place of
-   the name. The 6px left of a row and the nav's 10px gutters stay: they are what
-   puts the folded icons on x=32. */
+   the name. Open, a tile keeps one margin to the card on top, bottom and left
+   (6px); folded, it is centred in the 44px square, on x=32. */
 :root[data-portal-bar="compact"] .pl-root:not(.mini) .pl-side { width: 174px; }
-:root[data-portal-bar="compact"] .pl-row { gap: 7px; padding: 3px 6px; }
-:root[data-portal-bar="compact"] .pl-root.mini .pl-row { padding: 3px 6px; }
+:root[data-portal-bar="compact"] .pl-row { gap: 7px; padding: 5px 6px 5px 5px; }
+/* …and smaller tiles, the account's included: 22px with a 14px glyph, against 30 / 19.
+   The tile sits the same distance from the card's top, bottom and left edge. */
+:root[data-portal-bar="compact"] .pl-side .pl-av { width: 22px; height: 22px; }
+:root[data-portal-bar="compact"] .pl-side .pl-av svg { width: 14px; height: 14px; }
+:root[data-portal-bar="compact"] .pl-user .pl-av > span { width: 22px !important; height: 22px !important; }
+/* Folded, the card is the 44px square at 10..54: centre the tile in it (x=32). */
+:root[data-portal-bar="compact"] .pl-root.mini .pl-row { padding: 10px; }
 :root[data-portal-bar="compact"] .pl-nav { gap: 3px; }
-:root[data-portal-bar="compact"] .pl-brand b { display: none; }
-:root[data-portal-bar="compact"] .pl-brand .sub { display: flex; flex-direction: column; line-height: 1.25; }
-:root[data-portal-bar="compact"] .pl-brand .sub i { margin-left: 0; font-size: var(--fs-tiny); overflow: hidden; text-overflow: ellipsis; }
+/* The closed grip eats the row's gap back (see .pl-grip): 7px here, not 10. */
+:root[data-portal-bar="compact"] .pl-grip:not(.on) { margin-right: -7px; }
+
+/* Right-click menu on a service card. */
+.pl-ctx { position: fixed; z-index: 80; min-width: 190px; padding: 4px; background: var(--dock-surface);
+  border: 1px solid var(--dock-border-default); border-radius: 0; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.pl-ctx button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 9px; border: 0; border-radius: 0;
+  background: transparent; color: var(--dock-text-primary); font: inherit; font-size: var(--fs-small); text-align: left; cursor: pointer; }
+.pl-ctx button:hover, .pl-ctx button:focus-visible { background: var(--dock-surface-2); outline: none; }

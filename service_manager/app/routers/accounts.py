@@ -352,6 +352,34 @@ class PrefsBody(BaseModel):
     recent: Optional[list[str]] = None
     # The service bar's width and spacing: "wide" (the default) or "compact".
     density: Optional[str] = None
+    # List or groups, for the service bar and Home alike: "group" (the default) or "list".
+    homeView: Optional[str] = None
+    # This account's own service bar: order, groups, hidden cards, its own names.
+    # Absent = the manager's default. See _clean_layout.
+    layout: Optional[dict] = None
+
+
+def _clean_layout(d: dict) -> dict:
+    """Keep only the known shape, with bounded sizes: a personal layout is
+    {order:[key], groups:[{id,name,members:[key],hidden}], hidden:[key],
+     labels:{key:name}, looseHidden:bool}. Keys are card keys or "#g:<id>"."""
+    def keys(v, n=2000):
+        out = [str(k)[:200] for k in (v or []) if isinstance(k, (str, int)) and str(k).strip()]
+        if len(out) > n:
+            raise HTTPException(400, "사이드바 배치가 너무 큽니다.")
+        return list(dict.fromkeys(out))
+    groups = []
+    for g in (d.get("groups") or [])[:200]:
+        if not isinstance(g, dict) or not str(g.get("id") or "").strip():
+            continue
+        groups.append({"id": str(g["id"])[:40], "name": str(g.get("name") or "")[:80],
+                       "members": keys(g.get("members")), "hidden": bool(g.get("hidden"))})
+    labels = {str(k)[:200]: str(v).strip()[:80] for k, v in (d.get("labels") or {}).items()
+              if isinstance(v, str) and v.strip()}
+    if len(labels) > 2000:
+        raise HTTPException(400, "사이드바 배치가 너무 큽니다.")
+    return {"order": keys(d.get("order")), "groups": groups, "hidden": keys(d.get("hidden")),
+            "labels": labels, "looseHidden": bool(d.get("looseHidden"))}
 
 
 @router.get("/api/account/prefs")
@@ -383,6 +411,12 @@ def update_prefs(body: PrefsBody, user: models.User = Depends(require_portal_use
         if data["density"] not in ("wide", "compact", None):
             raise HTTPException(400, "화면 밀도 값이 올바르지 않습니다.")
         prefs.put(user, density=None if data["density"] == "wide" else data["density"])
+    if "homeView" in data:
+        if data["homeView"] not in ("list", "group", None):
+            raise HTTPException(400, "홈 보기 값이 올바르지 않습니다.")
+        prefs.put(user, homeView=None if data["homeView"] == "group" else data["homeView"])
+    if "layout" in data:
+        prefs.put(user, layout=_clean_layout(data["layout"]) if data["layout"] else None)
     db.commit()
     return {"prefs": prefs.get(user)}
 

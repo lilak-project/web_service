@@ -5,7 +5,7 @@ import { Icon } from 'lilak-ui'
  * with the group colour. Deliberately distinct from the round, filled user avatars.
  */
 export default function GroupMark({ icon, color, size = 22 }) {
-  const c = color || 'var(--text-secondary)'
+  const c = color || 'var(--dock-text-secondary)'
   return (
     <span style={{
       display: 'grid', placeItems: 'center', width: size, height: size, borderRadius: 5,

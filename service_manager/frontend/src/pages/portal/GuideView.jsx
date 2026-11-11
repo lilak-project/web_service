@@ -60,7 +60,7 @@ export default function GuideView({ onChanged }) {
               {copied ? t('portal_guide_copied') : t('portal_guide_copy')}
             </Button>
           </>}>
-        {err && <div style={{ padding: '12px 16px', color: 'var(--danger-text)' }}>{err}</div>}
+        {err && <div style={{ padding: '12px 16px', color: 'var(--dock-danger-text)' }}>{err}</div>}
         <div style={{ padding: '2px 16px 10px' }}><Markdown>{md}</Markdown></div>
       </Panel>
     </>

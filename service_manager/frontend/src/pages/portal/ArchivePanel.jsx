@@ -46,13 +46,13 @@ export default function ArchivePanel({ signal, onChanged, always = false }) {
         {items.length === 0 && <Row className="empty">{tr("p_nothing_is_archived")}</Row>}
         {items.map((s) => (
           <Row key={s.name}>
-            <Icon name={s.icon || 'box'} size={16} color={s.color || 'var(--text-muted)'} />
+            <Icon name={s.icon || 'box'} size={16} color={s.color || 'var(--dock-text-muted)'} />
             <span>{s.label || s.name}</span>
-            <span className="mono" style={{ color: 'var(--text-muted)' }}>{s.name} · {s.kind}</span>
+            <span className="mono" style={{ color: 'var(--dock-text-muted)' }}>{s.name} · {s.kind}</span>
             <span className="sp" />
             {sure === s.name ? (
               <>
-                <span style={{ color: 'var(--text-muted)' }}>{tr("p_this_cannot_be_undone")}</span>
+                <span style={{ color: 'var(--dock-text-muted)' }}>{tr("p_this_cannot_be_undone")}</span>
                 <Button variant="danger" onClick={() => purge(s.name)}>{tr("p_delete_for_good")}</Button>
                 <Button variant="secondary" onClick={() => setSure('')}>{tr("p_cancel")}</Button>
               </>

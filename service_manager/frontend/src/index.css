@@ -57,246 +57,246 @@
 [data-theme="bright"],
 [data-theme="teal"] {
   /* Surface */
-  --app-bg:                 #f8fafc;
-  --surface:                #ffffff;
-  --surface-2:              #f1f5f9;
-  --surface-3:              #e2e8f0;
-  --overlay:                rgba(15,23,42,0.40);
+  --dock-app-bg:                 #f8fafc;
+  --dock-surface:                #ffffff;
+  --dock-surface-2:              #f1f5f9;
+  --dock-surface-3:              #e2e8f0;
+  --dock-overlay:                rgba(15,23,42,0.40);
   /* Border */
-  --border-default:         #e2e8f0;
-  --border-subtle:          #f1f5f9;
-  --border-strong:          #cbd5e1;
-  --border-focus:           #3b82f6;
+  --dock-border-default:         #e2e8f0;
+  --dock-border-subtle:          #f1f5f9;
+  --dock-border-strong:          #cbd5e1;
+  --dock-border-focus:           #3b82f6;
   /* Text */
-  --text-primary:           #1e293b;
-  --text-secondary:         #475569;
-  --text-muted:             #94a3b8;
-  --text-emphasis:          #0f172a;
-  --text-inverse:           #ffffff;
-  --text-link:              #2563eb;
-  --text-link-hover:        #1d4ed8;
+  --dock-text-primary:           #1e293b;
+  --dock-text-secondary:         #475569;
+  --dock-text-muted:             #94a3b8;
+  --dock-text-emphasis:          #0f172a;
+  --dock-text-inverse:           #ffffff;
+  --dock-text-link:              #2563eb;
+  --dock-text-link-hover:        #1d4ed8;
   /* Status */
-  --success-bg:             #d1fae5;
-  --success-text:           #065f46;
-  --warning-bg:             #fef3c7;
-  --warning-text:           #92400e;
-  --danger-bg:              #fee2e2;
-  --danger-text:            #b91c1c;
-  --info-bg:                #dbeafe;
-  --info-text:              #1d4ed8;
+  --dock-success-bg:             #d1fae5;
+  --dock-success-text:           #065f46;
+  --dock-warning-bg:             #fef3c7;
+  --dock-warning-text:           #92400e;
+  --dock-danger-bg:              #fee2e2;
+  --dock-danger-text:            #b91c1c;
+  --dock-info-bg:                #dbeafe;
+  --dock-info-text:              #1d4ed8;
   /* Bubble */
-  --bubble-mine-bg:         #dbeafe;
-  --bubble-mine-border:     #bfdbfe;
-  --bubble-mine-text:       #1e293b;
-  --bubble-other-bg:        #ffffff;
-  --bubble-other-border:    #e2e8f0;
-  --bubble-other-text:      #1e293b;
-  --bubble-system-bg:       #f1f5f9;
-  --bubble-system-text:     #64748b;
-  --bubble-ai-bg:           #ede9fe;
-  --bubble-ai-border:       #c4b5fd;
-  --bubble-ai-text:         #5b21b6;
+  --dock-bubble-mine-bg:         #dbeafe;
+  --dock-bubble-mine-border:     #bfdbfe;
+  --dock-bubble-mine-text:       #1e293b;
+  --dock-bubble-other-bg:        #ffffff;
+  --dock-bubble-other-border:    #e2e8f0;
+  --dock-bubble-other-text:      #1e293b;
+  --dock-bubble-system-bg:       #f1f5f9;
+  --dock-bubble-system-text:     #64748b;
+  --dock-bubble-ai-bg:           #ede9fe;
+  --dock-bubble-ai-border:       #c4b5fd;
+  --dock-bubble-ai-text:         #5b21b6;
   /* Button */
-  --btn-primary-bg:         #2563eb;
-  --btn-primary-hover:      #1d4ed8;
-  --btn-primary-text:       #ffffff;
-  --btn-secondary-bg:       #ffffff;
-  --btn-secondary-text:     #475569;
-  --btn-danger-bg:          #dc2626;
-  --btn-danger-text:        #ffffff;
+  --dock-btn-primary-bg:         #2563eb;
+  --dock-btn-primary-hover:      #1d4ed8;
+  --dock-btn-primary-text:       #ffffff;
+  --dock-btn-secondary-bg:       #ffffff;
+  --dock-btn-secondary-text:     #475569;
+  --dock-btn-danger-bg:          #dc2626;
+  --dock-btn-danger-text:        #ffffff;
   /* Input */
-  --input-bg:               #ffffff;
-  --input-border:           #cbd5e1;
-  --input-focus-border:     #3b82f6;
-  --input-placeholder:      #94a3b8;
+  --dock-input-bg:               #ffffff;
+  --dock-input-border:           #cbd5e1;
+  --dock-input-focus-border:     #3b82f6;
+  --dock-input-placeholder:      #94a3b8;
   /* Schedule */
-  --today-marker:           #ef4444;
-  --focused-day-bg:         #bfdbfe;
-  --focused-day-ring:       #3b82f6;
-  --day-separator:          #cbd5e1;
-  --week-separator:         #64748b;
-  --section-divider:        #3b82f6;
+  --dock-today-marker:           #ef4444;
+  --dock-focused-day-bg:         #bfdbfe;
+  --dock-focused-day-ring:       #3b82f6;
+  --dock-day-separator:          #cbd5e1;
+  --dock-week-separator:         #64748b;
+  --dock-section-divider:        #3b82f6;
   /* Nav / command bars */
-  --nav-bg:                 #18181b;
-  --nav-border:             #27272a;
-  --nav-text:               #f4f4f5;
-  --nav-text-muted:         #a1a1aa;
-  --nav-accent:             #3f3f46;
+  --dock-nav-bg:                 #18181b;
+  --dock-nav-border:             #27272a;
+  --dock-nav-text:               #f4f4f5;
+  --dock-nav-text-muted:         #a1a1aa;
+  --dock-nav-accent:             #3f3f46;
   /* Misc */
-  --highlight-bg:           #fef9c3;
-  --selection-bg:           rgba(59,130,246,0.30);
-  --scrollbar-thumb:        #cbd5e1;
+  --dock-highlight-bg:           #fef9c3;
+  --dock-selection-bg:           rgba(59,130,246,0.30);
+  --dock-scrollbar-thumb:        #cbd5e1;
   /* Short aliases kept for legacy overrides */
-  --c-bg:      var(--app-bg);
-  --c-surface: var(--surface);
-  --c-srf2:    var(--surface-2);
-  --c-border:  var(--border-default);
-  --c-brd-s:   var(--border-subtle);
-  --c-tx1:     var(--text-primary);
-  --c-tx2:     var(--text-secondary);
-  --c-tx3:     var(--text-muted);
+  --c-bg:      var(--dock-app-bg);
+  --c-surface: var(--dock-surface);
+  --c-srf2:    var(--dock-surface-2);
+  --c-border:  var(--dock-border-default);
+  --c-brd-s:   var(--dock-border-subtle);
+  --c-tx1:     var(--dock-text-primary);
+  --c-tx2:     var(--dock-text-secondary);
+  --c-tx3:     var(--dock-text-muted);
 }
 
 /* Teal — the bright base (above) with teal bars + accents, matching the kit
    Teal preset. Recolours nav/command bars, buttons, links, focus and info. */
 [data-theme="teal"] {
-  --btn-primary-bg:    #0d9488;
-  --btn-primary-hover: #0f766e;
-  --btn-primary-text:  #ffffff;
-  --text-link:         #0d9488;
-  --text-link-hover:   #0f766e;
-  --border-focus:      #0d9488;
-  --input-focus-border:#0d9488;
-  --info-bg:           #ccfbf1;
-  --info-text:         #0f766e;
-  --selection-bg:      rgba(13,148,136,0.28);
-  --nav-bg:            #0d9488;
-  --nav-border:        #0f766e;
-  --nav-accent:        #0f766e;
-  --nav-text:          #ffffff;
-  --nav-text-muted:    #a7f3e4;
+  --dock-btn-primary-bg:    #0d9488;
+  --dock-btn-primary-hover: #0f766e;
+  --dock-btn-primary-text:  #ffffff;
+  --dock-text-link:         #0d9488;
+  --dock-text-link-hover:   #0f766e;
+  --dock-border-focus:      #0d9488;
+  --dock-input-focus-border:#0d9488;
+  --dock-info-bg:           #ccfbf1;
+  --dock-info-text:         #0f766e;
+  --dock-selection-bg:      rgba(13,148,136,0.28);
+  --dock-nav-bg:            #0d9488;
+  --dock-nav-border:        #0f766e;
+  --dock-nav-accent:        #0f766e;
+  --dock-nav-text:          #ffffff;
+  --dock-nav-text-muted:    #a7f3e4;
 }
 
 [data-theme="dark"] {
-  --app-bg:                 #0f172a;
-  --surface:                #1e293b;
-  --surface-2:              #162032;
-  --surface-3:              #334155;
-  --overlay:                rgba(0,0,0,0.55);
-  --border-default:         #334155;
-  --border-subtle:          #243347;
-  --border-strong:          #475569;
-  --border-focus:           #60a5fa;
-  --text-primary:           #e2e8f0;
-  --text-secondary:         #94a3b8;
-  --text-muted:             #64748b;
-  --text-emphasis:          #f8fafc;
-  --text-inverse:           #ffffff;
-  --text-link:              #60a5fa;
-  --text-link-hover:        #93c5fd;
-  --success-bg:             rgba(16,185,129,0.18);
-  --success-text:           #34d399;
-  --warning-bg:             rgba(120,53,15,0.35);
-  --warning-text:           #fcd34d;
-  --danger-bg:              rgba(127,29,29,0.35);
-  --danger-text:            #fca5a5;
-  --info-bg:                #1e3a5a;
-  --info-text:              #93c5fd;
-  --bubble-mine-bg:         #1e2e4a;
-  --bubble-mine-border:     #2a4068;
-  --bubble-mine-text:       #e2e8f0;
-  --bubble-other-bg:        #1e293b;
-  --bubble-other-border:    #334155;
-  --bubble-other-text:      #e2e8f0;
-  --bubble-system-bg:       #162032;
-  --bubble-system-text:     #94a3b8;
-  --bubble-ai-bg:           rgba(139,92,246,0.20);
-  --bubble-ai-border:       #7c3aed;
-  --bubble-ai-text:         #c4b5fd;
-  --btn-primary-bg:         #3b82f6;
-  --btn-primary-hover:      #2563eb;
-  --btn-primary-text:       #ffffff;
-  --btn-secondary-bg:       #1e293b;
-  --btn-secondary-text:     #cbd5e1;
-  --btn-danger-bg:          #dc2626;
-  --btn-danger-text:        #ffffff;
-  --input-bg:               #1e293b;
-  --input-border:           #334155;
-  --input-focus-border:     #60a5fa;
-  --input-placeholder:      #64748b;
-  --today-marker:           #f87171;
-  --focused-day-bg:         #1e3a5a;
-  --focused-day-ring:       #60a5fa;
-  --day-separator:          #334155;
-  --week-separator:         #94a3b8;
-  --section-divider:        #60a5fa;
-  --nav-bg:                 #070d1a;
-  --nav-border:             #1a2440;
-  --nav-text:               #e2e8f0;
-  --nav-text-muted:         #64748b;
-  --nav-accent:             #1e3a5a;
-  --highlight-bg:           rgba(250,204,21,0.25);
-  --selection-bg:           rgba(96,165,250,0.30);
-  --scrollbar-thumb:        #475569;
-  --c-bg:      var(--app-bg);
-  --c-surface: var(--surface);
-  --c-srf2:    var(--surface-2);
-  --c-border:  var(--border-default);
-  --c-brd-s:   var(--border-subtle);
-  --c-tx1:     var(--text-primary);
-  --c-tx2:     var(--text-secondary);
-  --c-tx3:     var(--text-muted);
+  --dock-app-bg:                 #0f172a;
+  --dock-surface:                #1e293b;
+  --dock-surface-2:              #162032;
+  --dock-surface-3:              #334155;
+  --dock-overlay:                rgba(0,0,0,0.55);
+  --dock-border-default:         #334155;
+  --dock-border-subtle:          #243347;
+  --dock-border-strong:          #475569;
+  --dock-border-focus:           #60a5fa;
+  --dock-text-primary:           #e2e8f0;
+  --dock-text-secondary:         #94a3b8;
+  --dock-text-muted:             #64748b;
+  --dock-text-emphasis:          #f8fafc;
+  --dock-text-inverse:           #ffffff;
+  --dock-text-link:              #60a5fa;
+  --dock-text-link-hover:        #93c5fd;
+  --dock-success-bg:             rgba(16,185,129,0.18);
+  --dock-success-text:           #34d399;
+  --dock-warning-bg:             rgba(120,53,15,0.35);
+  --dock-warning-text:           #fcd34d;
+  --dock-danger-bg:              rgba(127,29,29,0.35);
+  --dock-danger-text:            #fca5a5;
+  --dock-info-bg:                #1e3a5a;
+  --dock-info-text:              #93c5fd;
+  --dock-bubble-mine-bg:         #1e2e4a;
+  --dock-bubble-mine-border:     #2a4068;
+  --dock-bubble-mine-text:       #e2e8f0;
+  --dock-bubble-other-bg:        #1e293b;
+  --dock-bubble-other-border:    #334155;
+  --dock-bubble-other-text:      #e2e8f0;
+  --dock-bubble-system-bg:       #162032;
+  --dock-bubble-system-text:     #94a3b8;
+  --dock-bubble-ai-bg:           rgba(139,92,246,0.20);
+  --dock-bubble-ai-border:       #7c3aed;
+  --dock-bubble-ai-text:         #c4b5fd;
+  --dock-btn-primary-bg:         #3b82f6;
+  --dock-btn-primary-hover:      #2563eb;
+  --dock-btn-primary-text:       #ffffff;
+  --dock-btn-secondary-bg:       #1e293b;
+  --dock-btn-secondary-text:     #cbd5e1;
+  --dock-btn-danger-bg:          #dc2626;
+  --dock-btn-danger-text:        #ffffff;
+  --dock-input-bg:               #1e293b;
+  --dock-input-border:           #334155;
+  --dock-input-focus-border:     #60a5fa;
+  --dock-input-placeholder:      #64748b;
+  --dock-today-marker:           #f87171;
+  --dock-focused-day-bg:         #1e3a5a;
+  --dock-focused-day-ring:       #60a5fa;
+  --dock-day-separator:          #334155;
+  --dock-week-separator:         #94a3b8;
+  --dock-section-divider:        #60a5fa;
+  --dock-nav-bg:                 #070d1a;
+  --dock-nav-border:             #1a2440;
+  --dock-nav-text:               #e2e8f0;
+  --dock-nav-text-muted:         #64748b;
+  --dock-nav-accent:             #1e3a5a;
+  --dock-highlight-bg:           rgba(250,204,21,0.25);
+  --dock-selection-bg:           rgba(96,165,250,0.30);
+  --dock-scrollbar-thumb:        #475569;
+  --c-bg:      var(--dock-app-bg);
+  --c-surface: var(--dock-surface);
+  --c-srf2:    var(--dock-surface-2);
+  --c-border:  var(--dock-border-default);
+  --c-brd-s:   var(--dock-border-subtle);
+  --c-tx1:     var(--dock-text-primary);
+  --c-tx2:     var(--dock-text-secondary);
+  --c-tx3:     var(--dock-text-muted);
 }
 
 [data-theme="lowcontrast"] {
-  --app-bg:                 #ede8dc;
-  --surface:                #f5f0e6;
-  --surface-2:              #e8e0ce;
-  --surface-3:              #dac9a0;
-  --overlay:                rgba(60,40,20,0.40);
-  --border-default:         #cec5af;
-  --border-subtle:          #dfd8c8;
-  --border-strong:          #b9a98e;
-  --border-focus:           #8a6040;
-  --text-primary:           #2c2618;
-  --text-secondary:         #5a5040;
-  --text-muted:             #998c78;
-  --text-emphasis:          #1a1408;
-  --text-inverse:           #fdf8f0;
-  --text-link:              #7a5020;
-  --text-link-hover:        #5a3810;
-  --success-bg:             #cce0c0;
-  --success-text:           #3a5028;
-  --warning-bg:             #e8d8a8;
-  --warning-text:           #7a5a10;
-  --danger-bg:              #e8c8c0;
-  --danger-text:            #8a3020;
-  --info-bg:                #e8d8c0;
-  --info-text:              #7a5020;
-  --bubble-mine-bg:         #e8d8c0;
-  --bubble-mine-border:     #c9b89a;
-  --bubble-mine-text:       #2c2618;
-  --bubble-other-bg:        #f5f0e6;
-  --bubble-other-border:    #cec5af;
-  --bubble-other-text:      #2c2618;
-  --bubble-system-bg:       #e8e0ce;
-  --bubble-system-text:     #7a6a50;
-  --bubble-ai-bg:           #e0d4d8;
-  --bubble-ai-border:       #b09498;
-  --bubble-ai-text:         #5a3858;
-  --btn-primary-bg:         #8a6040;
-  --btn-primary-hover:      #7a5030;
-  --btn-primary-text:       #fdf8f0;
-  --btn-secondary-bg:       #f5f0e6;
-  --btn-secondary-text:     #5a5040;
-  --btn-danger-bg:          #a04040;
-  --btn-danger-text:        #fdf8f0;
-  --input-bg:               #f5f0e6;
-  --input-border:           #cec5af;
-  --input-focus-border:     #8a6040;
-  --input-placeholder:      #998c78;
-  --today-marker:           #a04040;
-  --focused-day-bg:         #dac9a0;
-  --focused-day-ring:       #8a6040;
-  --day-separator:          #cec5af;
-  --week-separator:         #7a6a50;
-  --section-divider:        #8a6040;
-  --nav-bg:                 #6b5040;
-  --nav-border:             #5a4030;
-  --nav-text:               #fdf8f0;
-  --nav-text-muted:         #c0a070;
-  --nav-accent:             #7a5a38;
-  --highlight-bg:           #ead8a8;
-  --selection-bg:           rgba(138,96,64,0.30);
-  --scrollbar-thumb:        #b9a98e;
-  --c-bg:      var(--app-bg);
-  --c-surface: var(--surface);
-  --c-srf2:    var(--surface-2);
-  --c-border:  var(--border-default);
-  --c-brd-s:   var(--border-subtle);
-  --c-tx1:     var(--text-primary);
-  --c-tx2:     var(--text-secondary);
-  --c-tx3:     var(--text-muted);
+  --dock-app-bg:                 #ede8dc;
+  --dock-surface:                #f5f0e6;
+  --dock-surface-2:              #e8e0ce;
+  --dock-surface-3:              #dac9a0;
+  --dock-overlay:                rgba(60,40,20,0.40);
+  --dock-border-default:         #cec5af;
+  --dock-border-subtle:          #dfd8c8;
+  --dock-border-strong:          #b9a98e;
+  --dock-border-focus:           #8a6040;
+  --dock-text-primary:           #2c2618;
+  --dock-text-secondary:         #5a5040;
+  --dock-text-muted:             #998c78;
+  --dock-text-emphasis:          #1a1408;
+  --dock-text-inverse:           #fdf8f0;
+  --dock-text-link:              #7a5020;
+  --dock-text-link-hover:        #5a3810;
+  --dock-success-bg:             #cce0c0;
+  --dock-success-text:           #3a5028;
+  --dock-warning-bg:             #e8d8a8;
+  --dock-warning-text:           #7a5a10;
+  --dock-danger-bg:              #e8c8c0;
+  --dock-danger-text:            #8a3020;
+  --dock-info-bg:                #e8d8c0;
+  --dock-info-text:              #7a5020;
+  --dock-bubble-mine-bg:         #e8d8c0;
+  --dock-bubble-mine-border:     #c9b89a;
+  --dock-bubble-mine-text:       #2c2618;
+  --dock-bubble-other-bg:        #f5f0e6;
+  --dock-bubble-other-border:    #cec5af;
+  --dock-bubble-other-text:      #2c2618;
+  --dock-bubble-system-bg:       #e8e0ce;
+  --dock-bubble-system-text:     #7a6a50;
+  --dock-bubble-ai-bg:           #e0d4d8;
+  --dock-bubble-ai-border:       #b09498;
+  --dock-bubble-ai-text:         #5a3858;
+  --dock-btn-primary-bg:         #8a6040;
+  --dock-btn-primary-hover:      #7a5030;
+  --dock-btn-primary-text:       #fdf8f0;
+  --dock-btn-secondary-bg:       #f5f0e6;
+  --dock-btn-secondary-text:     #5a5040;
+  --dock-btn-danger-bg:          #a04040;
+  --dock-btn-danger-text:        #fdf8f0;
+  --dock-input-bg:               #f5f0e6;
+  --dock-input-border:           #cec5af;
+  --dock-input-focus-border:     #8a6040;
+  --dock-input-placeholder:      #998c78;
+  --dock-today-marker:           #a04040;
+  --dock-focused-day-bg:         #dac9a0;
+  --dock-focused-day-ring:       #8a6040;
+  --dock-day-separator:          #cec5af;
+  --dock-week-separator:         #7a6a50;
+  --dock-section-divider:        #8a6040;
+  --dock-nav-bg:                 #6b5040;
+  --dock-nav-border:             #5a4030;
+  --dock-nav-text:               #fdf8f0;
+  --dock-nav-text-muted:         #c0a070;
+  --dock-nav-accent:             #7a5a38;
+  --dock-highlight-bg:           #ead8a8;
+  --dock-selection-bg:           rgba(138,96,64,0.30);
+  --dock-scrollbar-thumb:        #b9a98e;
+  --c-bg:      var(--dock-app-bg);
+  --c-surface: var(--dock-surface);
+  --c-srf2:    var(--dock-surface-2);
+  --c-border:  var(--dock-border-default);
+  --c-brd-s:   var(--dock-border-subtle);
+  --c-tx1:     var(--dock-text-primary);
+  --c-tx2:     var(--dock-text-secondary);
+  --c-tx3:     var(--dock-text-muted);
 }
 
 /* Apply bg/text to root */
@@ -378,7 +378,7 @@ html {
 [data-theme="bright"] nav .text-blue-300             { color: #a1a1aa !important; }
 [data-theme="bright"] nav .text-blue-400             { color: #a1a1aa !important; }
 /* (removed) old-navbar search-input recolor — the kit CommandBar uses the bar
-   color (transparent input over --nav-bg) as the lilak-ui default. */
+   color (transparent input over --dock-nav-bg) as the lilak-ui default. */
 
 /* lowcontrast nav 내부 파란색 → 갈색 계열 */
 [data-theme="lowcontrast"] nav .bg-blue-700,
@@ -408,24 +408,24 @@ html {
 /* ── Form inputs (skip .bg-transparent — those are bar inputs on a dark bar) ─ */
 [data-theme="bright"] input:not(.bg-transparent):not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]),
 [data-theme="bright"] textarea:not(.bg-transparent),
-[data-theme="bright"] select:not(.bg-transparent),
+[data-theme="bright"] .lk-select:not(.bg-transparent),
 [data-theme="teal"] input:not(.bg-transparent):not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]),
 [data-theme="teal"] textarea:not(.bg-transparent),
-[data-theme="teal"] select:not(.bg-transparent) {
+[data-theme="teal"] .lk-select:not(.bg-transparent) {
   background-color: #ffffff;
   color: #1e293b;
   border-color: var(--c-border);
 }
 [data-theme="dark"] input:not(.bg-transparent):not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]),
 [data-theme="dark"] textarea:not(.bg-transparent),
-[data-theme="dark"] select:not(.bg-transparent) {
+[data-theme="dark"] .lk-select:not(.bg-transparent) {
   background-color: var(--c-surface) !important;
   color: var(--c-tx1) !important;
   border-color: var(--c-border) !important;
 }
 [data-theme="lowcontrast"] input:not(.bg-transparent):not([class*="bg-blue"]):not([class*="bg-green"]):not([class*="bg-red"]),
 [data-theme="lowcontrast"] textarea:not(.bg-transparent),
-[data-theme="lowcontrast"] select:not(.bg-transparent) {
+[data-theme="lowcontrast"] .lk-select:not(.bg-transparent) {
   background-color: var(--c-surface) !important;
   color: var(--c-tx1) !important;
   border-color: var(--c-border) !important;
@@ -680,7 +680,7 @@ html {
 /* ── Inputs: square + tighter (skip bar inputs — they should be invisible) ─ */
 [data-density="compact"] input:not(.bg-transparent),
 [data-density="compact"] textarea:not(.bg-transparent),
-[data-density="compact"] select:not(.bg-transparent) {
+[data-density="compact"] .lk-select:not(.bg-transparent) {
   border-width: 1px !important;
 }
 
@@ -704,7 +704,7 @@ html {
 .fixed.bottom-0 input,
 .fixed.bottom-0 textarea {
   background-color: transparent !important;
-  color: var(--nav-text) !important;
+  color: var(--dock-nav-text) !important;
   -webkit-appearance: none !important;
   appearance: none !important;
   box-shadow: none !important;
@@ -712,15 +712,15 @@ html {
 }
 .fixed.bottom-0 input::placeholder,
 .fixed.bottom-0 textarea::placeholder {
-  color: var(--nav-text-muted) !important;
+  color: var(--dock-nav-text-muted) !important;
 }
 
 /* Kill browser autofill yellow background; keep text in nav palette */
 .fixed.bottom-0 input:-webkit-autofill,
 .fixed.bottom-0 textarea:-webkit-autofill {
   -webkit-box-shadow: 0 0 0 100px transparent inset !important;
-  -webkit-text-fill-color: var(--nav-text) !important;
-  caret-color: var(--nav-text) !important;
+  -webkit-text-fill-color: var(--dock-nav-text) !important;
+  caret-color: var(--dock-nav-text) !important;
   transition: background-color 9999s ease-in-out 0s !important;
 }
 
@@ -728,8 +728,8 @@ html {
 .fixed.bottom-0 input:focus,
 .fixed.bottom-0 textarea:focus {
   background-color: transparent !important;
-  color: var(--nav-text) !important;
-  caret-color: var(--nav-text) !important;
+  color: var(--dock-nav-text) !important;
+  caret-color: var(--dock-nav-text) !important;
   outline: none !important;
   box-shadow: none !important;
 }
@@ -821,14 +821,14 @@ html {
    themselves opt out with .keep-font. */
 @media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not(.keep-font),
-  select:not(.keep-font),
+  .lk-select:not(.keep-font),
   textarea:not(.keep-font) { font-size: 16px !important; }
 }
 
 /* ── Soft scrollbar: hidden until hover or active scroll (community, panels) ── */
 .scroll-soft { scrollbar-width: thin; scrollbar-color: transparent transparent; }
 .scroll-soft:hover,
-.scroll-soft.is-scrolling { scrollbar-color: var(--scrollbar-thumb) transparent; }
+.scroll-soft.is-scrolling { scrollbar-color: var(--dock-scrollbar-thumb) transparent; }
 .scroll-soft::-webkit-scrollbar { width: 10px; height: 10px; }
 .scroll-soft::-webkit-scrollbar-track { background: transparent; }
 .scroll-soft::-webkit-scrollbar-thumb {
@@ -836,4 +836,4 @@ html {
   border: 3px solid transparent; background-clip: padding-box;
 }
 .scroll-soft:hover::-webkit-scrollbar-thumb,
-.scroll-soft.is-scrolling::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); background-clip: padding-box; }
+.scroll-soft.is-scrolling::-webkit-scrollbar-thumb { background: var(--dock-scrollbar-thumb); background-clip: padding-box; }

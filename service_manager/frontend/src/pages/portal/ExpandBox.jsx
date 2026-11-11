@@ -59,9 +59,9 @@ export default function ExpandBox({
 
   // Keep the border WIDTH fixed (only the colour changes on open) — a thicker open
   // border shrank the content box and nudged the icon/title ~1px down-right.
-  const border = `1.5px ${manage ? 'dashed' : 'solid'} ${borderColor || (open ? 'var(--btn-primary-bg, #2563eb)' : 'var(--border-strong, #94a3b8)')}`
+  const border = `1.5px ${manage ? 'dashed' : 'solid'} ${borderColor || (open ? 'var(--dock-btn-primary-bg, #2563eb)' : 'var(--dock-border-strong, #94a3b8)')}`
   return (
-    <div {...outerProps} style={{ border, borderRadius: radius, overflow: 'hidden', background: 'var(--surface)', marginBottom: 10, ...style }}>
+    <div {...outerProps} style={{ border, borderRadius: radius, overflow: 'hidden', background: 'var(--dock-surface)', marginBottom: 10, ...style }}>
       <div onClick={toggleable ? onToggle : undefined}
         style={{ display: 'flex', alignItems: 'center', gap: 13, padding,
           cursor: toggleable ? 'pointer' : 'default',
@@ -75,7 +75,7 @@ export default function ExpandBox({
           // One glyph rotated 90° on open (not caret-right↔caret-down, whose slightly
           // different shapes nudged the icon/title). Same box → nothing shifts; the
           // rotation also animates.
-          <Icon name="caret-right" size={15} color="var(--text-muted)"
+          <Icon name="caret-right" size={15} color="var(--dock-text-muted)"
             style={{ flexShrink: 0, transition: 'transform .2s ease', transform: open ? 'rotate(90deg)' : 'none' }} />
         )}
         {icon != null && <div style={{ flexShrink: 0, display: 'flex' }}>{icon}</div>}
@@ -84,7 +84,7 @@ export default function ExpandBox({
             <span style={{ fontSize: titleSize, fontWeight: titleWeight }}>{title}</span>
             {badges}
           </div>
-          {subtitle != null && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--text-muted)', marginTop: 0, lineHeight: 1.25 }}>{subtitle}</div>}
+          {subtitle != null && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--dock-text-muted)', marginTop: 0, lineHeight: 1.25 }}>{subtitle}</div>}
         </div>
         {right != null && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
@@ -95,7 +95,7 @@ export default function ExpandBox({
         <div style={{ display: 'grid', gridTemplateRows: grown ? '1fr' : '0fr',
           transition: `grid-template-rows ${ANIM_MS}ms ease` }}>
           <div style={{ overflow: 'hidden', minHeight: 0 }}>
-            <div style={divider ? { borderTop: '1px solid var(--border-default)' } : undefined}>{children}</div>
+            <div style={divider ? { borderTop: '1px solid var(--dock-border-default)' } : undefined}>{children}</div>
           </div>
         </div>
       )}

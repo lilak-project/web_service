@@ -57,3 +57,9 @@ cd <name>/frontend && LILAK_UI_PATH=~/web_service/lilak_ui npm install && npm ru
 If you didn't pass `--register`, register `data/<name>/service.json` with the
 portal via the admin **Services** UI or `/api/handshake`. Fix `start.cwd` per
 host if the checkout moves.
+
+## `dock.py` — DOCK colour token names
+
+The kit's colours are `--dock-<name>` (names from `lilak_ui/src/theme/tokens.js`).
+`python3 scripts/dock.py --check` lists any old bare `--surface` … still in the
+stack (exit 1 if there is one); `--write <paths>` renames them; `--selftest`.

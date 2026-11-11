@@ -1,3 +1,4 @@
+import Select from 'lilak-ui/components/Select.jsx'
 import { useEffect, useState } from 'react'
 import { Button, Icon, ColorPicker, AVATAR_COLORS, Avatar, tr } from 'lilak-ui'
 import { launcher } from '../../api'
@@ -40,7 +41,7 @@ function GroupProfile({ group, onSaved }) {
  * the convenient bulk way to give a whole lab/team a project.
  */
 const input = { ...fieldInput }
-const card = { border: '1px solid var(--border-default)', borderRadius: 8, padding: 10, marginBottom: 8 }
+const card = { border: '1px solid var(--dock-border-default)', borderRadius: 8, padding: 10, marginBottom: 8 }
 
 export default function GroupsAdmin({ users, services, onChanged }) {
   const { lang } = useLang()
@@ -114,7 +115,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                         <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={18} />
                           <span>{u.display_name || u.username}</span>
-                          <span style={{ color: 'var(--text-primary)' }}>@{u.username} · {u.email}</span>
+                          <span style={{ color: 'var(--dock-text-primary)' }}>@{u.username} · {u.email}</span>
                         </div>))}
                     </div>}
               </Field>
@@ -145,8 +146,8 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                             <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: u.is_active === false ? 0.55 : 1 }}>
                               <Avatar icon={u.profile_shape} color={u.profile_color} seed={u.username} size={18} />
                               <span>{u.username}</span>
-                              <span style={{ color: 'var(--text-primary)' }}>{u.email}</span>
-                              {u.is_active === false && <span style={{ color: 'var(--danger-text)' }}>{tr("p_inactive")}</span>}
+                              <span style={{ color: 'var(--dock-text-primary)' }}>{u.email}</span>
+                              {u.is_active === false && <span style={{ color: 'var(--dock-danger-text)' }}>{tr("p_inactive")}</span>}
                               <div style={{ flex: 1 }} />
                               <Button variant="dangerSoft" onClick={() => removeMember(g.id, u.id)}>{tr("p_remove")}</Button>
                             </div>))}
@@ -169,20 +170,20 @@ export default function GroupsAdmin({ users, services, onChanged }) {
                     {g.permissions.length === 0 ? <span style={fieldMuted}>—</span>
                       : g.permissions.map((p, i) => (
                         <span key={i} style={{ ...fieldChip, fontFamily: 'var(--font-mono)' }}>{p.service}{p.project ? '/' + p.project : ' (' + tr("p_all") + ')'}
-                          {p.admin && <span style={{ color: 'var(--warning-text, #b45309)' }} title={tr("p_every_member_administers_this_scope")}>· admin</span>}
+                          {p.admin && <span style={{ color: 'var(--dock-warning-text, #b45309)' }} title={tr("p_every_member_administers_this_scope")}>· admin</span>}
                           <button type="button" className="set-plain set-x" onClick={() => revokePerm(g.id, p)} title={tr("p_revoke")}>✕</button>
                         </span>))}
                   </Field>
                   <FieldActions>
-                    <select value={add.svc} onChange={(e) => pickSvc(e.target.value)} style={{ ...input, maxWidth: 160 }}>
+                    <Select value={add.svc} onChange={(e) => pickSvc(e.target.value)} style={{ ...input, maxWidth: 160 }}>
                       <option value="">{tr("p_service_3")}</option>
                       {services.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
-                    </select>
-                    <select value={add.proj} onChange={(e) => setAdd((s) => ({ ...s, proj: e.target.value }))} style={{ ...input, maxWidth: 160 }} disabled={!add.svc}>
+                    </Select>
+                    <Select value={add.proj} onChange={(e) => setAdd((s) => ({ ...s, proj: e.target.value }))} style={{ ...input, maxWidth: 160 }} disabled={!add.svc}>
                       <option value="">{tr("p_all_whole_service")}</option>
                       {(projCache[add.svc] || []).map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
-                    </select>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)', cursor: 'pointer' }}
+                    </Select>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-medium, 14px)', color: 'var(--dock-text-primary)', cursor: 'pointer' }}
                       title={tr("p_every_member_administers_this_scope")}>
                       <input type="checkbox" checked={add.admin} onChange={(e) => setAdd((s) => ({ ...s, admin: e.target.checked }))} />
                       {tr("p_as_admin")}

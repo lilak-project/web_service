@@ -333,8 +333,8 @@ export default function Shell() {
   }, [layout]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const status = (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--nav-text)' }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--nav-text-muted)' }} />
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-nav-text)' }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--dock-nav-text-muted)' }} />
       {t('status_idle')}
     </span>
   )
@@ -385,9 +385,9 @@ const placeholderJsx = `import { Icon } from 'lilak-ui'
 export default function Placeholder({ icon, title, note }) {
   return (
     <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ textAlign: 'center', color: 'var(--text-muted)', maxWidth: 520 }}>
+      <div style={{ textAlign: 'center', color: 'var(--dock-text-muted)', maxWidth: 520 }}>
         {icon && <Icon name={icon} size={40} style={{ opacity: 0.5 }} />}
-        <div style={{ fontSize: 'var(--fs-large, 16px)', color: 'var(--text-primary)', marginTop: 10, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 'var(--fs-large, 16px)', color: 'var(--dock-text-primary)', marginTop: 10, fontWeight: 600 }}>{title}</div>
         <div style={{ fontSize: 'var(--fs-small, 12px)', marginTop: 6 }}>{note}</div>
       </div>
     </div>
@@ -399,7 +399,7 @@ const indexCss = `/* Kit components size themselves assuming border-box. */
 * { box-sizing: border-box; }
 
 html, body, #root { height: 100%; margin: 0; }
-body { background: var(--app-bg); color: var(--text-primary); font-family: var(--font-sans); }
+body { background: var(--dock-app-bg); color: var(--dock-text-primary); font-family: var(--font-sans); }
 `
 
 const indexHtml = `<!DOCTYPE html>
@@ -606,7 +606,7 @@ export default function AnonNames() {
   if (!names) return null
   const save = async () => { const r = await communityApi.saveAnonNames(names); setNames(r); setSaved(true); setTimeout(() => setSaved(false), 1500) }
   const split = (s) => s.split(/[\\s,]+/).filter(Boolean)
-  const ta = { width: '100%', boxSizing: 'border-box', minHeight: 140, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 'var(--fs-small,12px)', fontFamily: 'inherit', resize: 'vertical' }
+  const ta = { width: '100%', boxSizing: 'border-box', minHeight: 140, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--dock-border-default)', background: 'var(--dock-surface)', color: 'var(--dock-text-primary)', fontSize: 'var(--fs-small,12px)', fontFamily: 'inherit', resize: 'vertical' }
   const lbl = { fontSize: 'var(--fs-small,12px)', fontWeight: 600, marginBottom: 4, display: 'block' }
   return (
     <div style={{ maxWidth: 720 }}>
@@ -620,7 +620,7 @@ export default function AnonNames() {
       </div>
       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
         <Button variant="primary" onClick={save}>저장 · {names.surnames.length}×{names.given.length} 조합</Button>
-        {saved && <span style={{ color: 'var(--info-text)', fontSize: 'var(--fs-small,12px)' }}>저장됨</span>}
+        {saved && <span style={{ color: 'var(--dock-info-text)', fontSize: 'var(--fs-small,12px)' }}>저장됨</span>}
       </div>
     </div>
   )
@@ -784,10 +784,10 @@ export default function LayoutSettings() {
   return (
     <div style={{ maxWidth: 720 }}>
       <h3 style={{ margin: '0 0 4px' }}>{t('set_tabs')}</h3>
-      <p style={{ margin: '0 0 14px', color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
+      <p style={{ margin: '0 0 14px', color: 'var(--dock-text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
         탭과 왼쪽 메뉴바 구성을 편집합니다. 변경은 모든 사용자에게 적용됩니다.
       </p>
-      {err && <div style={{ color: 'var(--danger-text, #b91c1c)', fontSize: 'var(--fs-small, 12px)', marginBottom: 10 }}>{err}</div>}
+      {err && <div style={{ color: 'var(--dock-danger-text, #b91c1c)', fontSize: 'var(--fs-small, 12px)', marginBottom: 10 }}>{err}</div>}
       <LayoutEditor value={cfg} onChange={(c) => { setCfg(c); setDirty(true) }} onSave={save} onReset={reset} dirty={dirty} saving={saving} />
     </div>
   )
@@ -797,7 +797,7 @@ export default function LayoutSettings() {
   put('frontend/src/pages/settings/AccountSection.jsx', `import { Stack, Row, Button, Avatar, useLang } from 'lilak-ui'
 import { portalHome } from '../../api'
 
-const card = { border: '1px solid var(--border-default)', backgroundColor: 'var(--surface)', borderRadius: 12, boxShadow: '0 1px 2px rgba(0,0,0,.04)', padding: 20 }
+const card = { border: '1px solid var(--dock-border-default)', backgroundColor: 'var(--dock-surface)', borderRadius: 12, boxShadow: '0 1px 2px rgba(0,0,0,.04)', padding: 20 }
 
 // Portal-centric account view: show the SSO profile; account + password are
 // managed in the portal.
@@ -806,8 +806,8 @@ export default function AccountSection({ me }) {
   const isManager = me?.role === 'manager'
   const row = (k, v) => (
     <div style={{ display: 'flex', gap: 12, fontSize: 'var(--fs-small, 12px)' }}>
-      <span style={{ width: 84, color: 'var(--text-muted)' }}>{k}</span>
-      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{v || '—'}</span>
+      <span style={{ width: 84, color: 'var(--dock-text-muted)' }}>{k}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--dock-text-primary)' }}>{v || '—'}</span>
     </div>
   )
   return (
@@ -815,17 +815,17 @@ export default function AccountSection({ me }) {
       <Stack gap={14} style={card}>
         <Row gap={10} align="center">
           <Avatar icon={me?.shape} color={me?.color} seed={me?.username || me?.email || 'guest'} size={38} />
-          <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--fs-large, 16px)', color: 'var(--text-primary)' }}>{me?.name || me?.username || 'guest'}</p>
+          <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--fs-large, 16px)', color: 'var(--dock-text-primary)' }}>{me?.name || me?.username || 'guest'}</p>
           {me?.role && (
             <span style={{ fontSize: 'var(--fs-small, 12px)', padding: '1px 8px', borderRadius: 999, fontWeight: 500,
-              ...(isManager ? { backgroundColor: 'var(--warning-bg)', color: 'var(--warning-text)' } : { backgroundColor: 'var(--surface-2)', color: 'var(--text-secondary)' }) }}>{me.role}</span>
+              ...(isManager ? { backgroundColor: 'var(--dock-warning-bg)', color: 'var(--dock-warning-text)' } : { backgroundColor: 'var(--dock-surface-2)', color: 'var(--dock-text-secondary)' }) }}>{me.role}</span>
           )}
         </Row>
-        <Stack gap={8} style={{ paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+        <Stack gap={8} style={{ paddingTop: 12, borderTop: '1px solid var(--dock-border-subtle)' }}>
           {row('username', me?.username)}
           {row('email', me?.email)}
         </Stack>
-        <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{t('set_account_note')}</div>
+        <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)' }}>{t('set_account_note')}</div>
         <Button variant="secondary" onClick={() => { window.location.href = portalHome() }} style={{ width: '100%', padding: '8px 0' }}>{t('set_open_portal')}</Button>
       </Stack>
     </Stack>
@@ -836,7 +836,7 @@ export default function AccountSection({ me }) {
   put('frontend/src/pages/settings/ManageUsers.jsx', `import { Stack, Button, useLang } from 'lilak-ui'
 import { portalHome } from '../../api'
 
-const card = { border: '1px solid var(--border-default)', backgroundColor: 'var(--surface)', borderRadius: 12, boxShadow: '0 1px 2px rgba(0,0,0,.04)', padding: 20 }
+const card = { border: '1px solid var(--dock-border-default)', backgroundColor: 'var(--dock-surface)', borderRadius: 12, boxShadow: '0 1px 2px rgba(0,0,0,.04)', padding: 20 }
 
 // Portal owns accounts + permissions, so user management links out to the portal.
 export default function ManageUsers() {
@@ -844,8 +844,8 @@ export default function ManageUsers() {
   return (
     <Stack gap={16} style={{ maxWidth: 384 }}>
       <Stack gap={12} style={card}>
-        <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--fs-body, 13px)', color: 'var(--text-primary)' }}>{t('set_users')}</p>
-        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{t('set_users_note')}</div>
+        <p style={{ margin: 0, fontWeight: 600, fontSize: 'var(--fs-body, 13px)', color: 'var(--dock-text-primary)' }}>{t('set_users')}</p>
+        <div style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-muted)' }}>{t('set_users_note')}</div>
         <Button variant="secondary" onClick={() => { window.location.href = portalHome() }} style={{ width: '100%', padding: '8px 0' }}>{t('set_open_portal')}</Button>
       </Stack>
     </Stack>

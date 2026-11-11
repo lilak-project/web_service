@@ -65,12 +65,12 @@ export default function IconPick({ value, onChange, disabled, color }) {
         <div ref={ref} style={{
           position: 'fixed', zIndex: 1000, top: pos.top, left: pos.left, width: POP_W,
           display: 'flex', flexDirection: 'column', gap: 6, padding: 8, maxHeight: POP_H,
-          backgroundColor: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 8,
+          backgroundColor: 'var(--dock-surface)', border: '1px solid var(--dock-border-default)', borderRadius: 8,
           boxShadow: '0 6px 20px rgba(0,0,0,.18)',
         }}>
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="search…"
             style={{ height: 28, borderRadius: 'var(--rack-radius, 0)', fontSize: 'var(--fs-medium, 14px)', padding: '0 9px',
-              backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }} />
+              backgroundColor: 'var(--dock-input-bg)', color: 'var(--dock-text-primary)', border: '1px solid var(--dock-input-border)' }} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 30px)', gap: 4, overflowY: 'auto' }}>
             {shown.map((ic) => (
               // set-plain: the grid lives inside a settings panel, whose one
@@ -80,13 +80,13 @@ export default function IconPick({ value, onChange, disabled, color }) {
                 onClick={() => { onChange(ic); setOpen(false) }}
                 style={{
                   display: 'grid', placeItems: 'center', width: 30, height: 30, borderRadius: 6, cursor: 'pointer',
-                  border: ic === value ? '2px solid var(--btn-primary-bg)' : '1px solid var(--input-border)',
-                  backgroundColor: ic === value ? 'var(--info-bg, var(--surface-2))' : 'var(--surface)',
+                  border: ic === value ? '2px solid var(--dock-btn-primary-bg)' : '1px solid var(--dock-input-border)',
+                  backgroundColor: ic === value ? 'var(--dock-info-bg, var(--dock-surface-2))' : 'var(--dock-surface)',
                 }}>
                 <Icon name={ic} size={16} weight={ICON_WEIGHT} color={color || undefined} />
               </button>
             ))}
-            {shown.length === 0 && <span style={{ gridColumn: '1 / -1', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', padding: 4 }}>no match</span>}
+            {shown.length === 0 && <span style={{ gridColumn: '1 / -1', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)', padding: 4 }}>no match</span>}
           </div>
         </div>
       )}

@@ -92,7 +92,7 @@ export default function NewServiceView({ onCreated }) {
         <Field label={t('newsvc_title')}>{t('newsvc_intro')}</Field>
 
         <Field label={t('newsvc_name')}>
-          <input style={{ ...field, flex: 1, borderColor: name && !nameOk ? 'var(--danger-text)' : undefined }}
+          <input style={{ ...field, flex: 1, borderColor: name && !nameOk ? 'var(--dock-danger-text)' : undefined }}
             value={name} placeholder="mysvc" disabled={!!job}
             onChange={(e) => setName(e.target.value.toLowerCase())} />
           <span style={fieldMuted}>{t('newsvc_name_rule')}</span>
@@ -105,7 +105,7 @@ export default function NewServiceView({ onCreated }) {
 
         <Field label={t('newsvc_icon')}>
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
-            borderRadius: 'var(--rack-radius, 0)', border: '1px solid var(--border-strong)' }}>
+            borderRadius: 'var(--rack-radius, 0)', border: '1px solid var(--dock-border-strong)' }}>
             <Icon name={icon} size={20} weight="fill" color={color} />
           </span>
           <IconPick value={icon} onChange={setIcon} disabled={!!job} color={color} />
@@ -180,13 +180,13 @@ export default function NewServiceView({ onCreated }) {
       {(err || job) && (
         <Panel bare title={t('newsvc_create')}
           hint={job ? (running ? t('newsvc_building', job.name) : done ? t('newsvc_done', job.name) : t('newsvc_error')) : undefined}>
-          {err && <div className="set-row" style={{ color: 'var(--danger-text)' }}>{err}</div>}
-          {job?.error && <div className="set-row" style={{ color: 'var(--danger-text)' }}>{job.error}</div>}
+          {err && <div className="set-row" style={{ color: 'var(--dock-danger-text)' }}>{err}</div>}
+          {job?.error && <div className="set-row" style={{ color: 'var(--dock-danger-text)' }}>{job.error}</div>}
           {job && (
             <>
               <pre ref={logBox} style={{
                 margin: 14, maxHeight: 200, overflow: 'auto', fontSize: 'var(--fs-small, 13px)', lineHeight: 1.5,
-                backgroundColor: 'var(--surface-2)', color: 'var(--text-secondary)',
+                backgroundColor: 'var(--dock-surface-2)', color: 'var(--dock-text-secondary)',
                 borderRadius: 'var(--rack-radius, 0)', padding: 10, whiteSpace: 'pre-wrap',
               }}>{(job.log || []).join('\n') || '…'}</pre>
               <div className="set-row">

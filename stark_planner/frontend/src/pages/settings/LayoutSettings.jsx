@@ -30,10 +30,10 @@ export default function LayoutSettings() {
   return (
     <div style={{ maxWidth: 720 }}>
       <h3 style={{ margin: '0 0 4px' }}>{t('set_tabs')}</h3>
-      <p style={{ margin: '0 0 14px', color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
+      <p style={{ margin: '0 0 14px', color: 'var(--dock-text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
         탭과 왼쪽 메뉴바 구성을 편집합니다. 변경은 모든 사용자에게 적용됩니다.
       </p>
-      {err && <div style={{ color: 'var(--danger-text, #b91c1c)', fontSize: 'var(--fs-small, 12px)', marginBottom: 10 }}>{err}</div>}
+      {err && <div style={{ color: 'var(--dock-danger-text, #b91c1c)', fontSize: 'var(--fs-small, 12px)', marginBottom: 10 }}>{err}</div>}
       <LayoutEditor value={cfg} onChange={(c) => { setCfg(c); setDirty(true) }} onSave={save} onReset={reset} dirty={dirty} saving={saving} />
     </div>
   )

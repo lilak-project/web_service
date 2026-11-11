@@ -213,3 +213,21 @@ class McpToken(Base):
     revoked_at = Column(DateTime, nullable=True)
     last_used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_now)
+
+
+class Passkey(Base):
+    """A WebAuthn credential (Touch ID, Face ID, a security key) that signs this
+    account in without a password. Only the public key is kept. Bound to the host
+    it was made on (`rp_id`): a passkey from the Mac's localhost does not open
+    the server portal. See app/routers/passkeys.py."""
+    __tablename__ = "portal_passkeys"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    credential_id = Column(String(512), nullable=False, unique=True, index=True)   # base64url
+    public_key = Column(Text, nullable=False)                                      # base64url COSE key
+    sign_count = Column(Integer, nullable=False, default=0)
+    rp_id = Column(String(256), nullable=False)
+    name = Column(String(64), nullable=False, default="")
+    created_at = Column(DateTime, default=_now)
+    last_used_at = Column(DateTime, nullable=True)

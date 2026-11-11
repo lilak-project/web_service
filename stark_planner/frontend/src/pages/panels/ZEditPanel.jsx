@@ -1,6 +1,7 @@
 // Every component that has a z, on one shared scale. The rows line up into a
 // side elevation of the beamline, so dragging one ring shows immediately what it
 // runs into — which is the thing the 3D gizmo was bad at.
+import Select from 'lilak-ui/components/Select.jsx'
 import { useMemo, useState } from 'react'
 import { usePlanner } from '../../stark/store.jsx'
 import { DET_COLOR } from '../../stark/data.js'
@@ -110,25 +111,25 @@ export default function ZEditPanel() {
     <div className="zeditpanel">
       <div className="psaverow">
         <label className="zopt">눈금
-          <select value={step} onChange={(e) => setStep(+e.target.value)}>
+          <Select value={step} onChange={(e) => setStep(+e.target.value)}>
             <option value={0.1}>0.1 mm</option>
             <option value={0.5}>0.5 mm</option>
             <option value={1}>1 mm</option>
             <option value={5}>5 mm</option>
-          </select>
+          </Select>
         </label>
         <label className="zopt">순서
-          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+          <Select value={sort} onChange={(e) => setSort(e.target.value)}>
             <option value="fixed">기본</option>
             <option value="z">z 순</option>
-          </select>
+          </Select>
         </label>
         <label className="zopt">여백
-          <select value={pad} onChange={(e) => setPad(+e.target.value)}>
+          <Select value={pad} onChange={(e) => setPad(+e.target.value)}>
             <option value={20}>좁게</option>
             <option value={60}>보통</option>
             <option value={200}>넓게</option>
-          </select>
+          </Select>
         </label>
       </div>
 

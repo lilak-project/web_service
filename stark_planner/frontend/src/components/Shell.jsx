@@ -44,8 +44,8 @@ export default function Shell() {
   }, [layout]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const status = (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--nav-text)' }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--nav-text-muted)' }} />
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-nav-text)' }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--dock-nav-text-muted)' }} />
       {t('status_idle')}
     </span>
   )

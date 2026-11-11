@@ -1,3 +1,4 @@
+import Select from 'lilak-ui/components/Select.jsx'
 import { useEffect, useState } from 'react'
 import { Button, tr } from 'lilak-ui'
 import { launcher } from '../../api'
@@ -64,29 +65,29 @@ export default function InvitesAdmin({ services, onChanged }) {
       {/* create — one aligned control per row (label column + input column) */}
       <Panel title={tr("p_new_code")}>
         <Field label={tr("p_kind")}>
-          <select value={f.kind} onChange={setF1('kind')} style={{ ...input, maxWidth: 220 }}>
+          <Select value={f.kind} onChange={setF1('kind')} style={{ ...input, maxWidth: 220 }}>
             <option value="project">{tr("p_project_service")}</option>
             <option value="group">{tr("p_group_2")}</option>
-          </select>
+          </Select>
         </Field>
 
         <Field label={tr("p_target")}>
           {f.kind === 'project' ? (
             <>
-              <select value={f.service} onChange={(e) => pickSvc(e.target.value)} style={{ ...input, maxWidth: 150 }}>
+              <Select value={f.service} onChange={(e) => pickSvc(e.target.value)} style={{ ...input, maxWidth: 150 }}>
                 <option value="">{tr("p_service_3")}</option>
                 {services.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
-              </select>
-              <select value={f.project} onChange={setF1('project')} style={{ ...input, maxWidth: 150 }} disabled={!f.service}>
+              </Select>
+              <Select value={f.project} onChange={setF1('project')} style={{ ...input, maxWidth: 150 }} disabled={!f.service}>
                 <option value="">{tr("p_all")}</option>
                 {(projCache[f.service] || []).map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
-              </select>
+              </Select>
             </>
           ) : (
-            <select value={f.group_id} onChange={setF1('group_id')} style={{ ...input, maxWidth: 200 }}>
+            <Select value={f.group_id} onChange={setF1('group_id')} style={{ ...input, maxWidth: 200 }}>
               <option value="">{tr("p_group_3")}</option>
               {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
+            </Select>
           )}
         </Field>
 

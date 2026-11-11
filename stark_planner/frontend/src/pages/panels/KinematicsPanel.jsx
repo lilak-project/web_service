@@ -1,5 +1,6 @@
 // Reaction, beam energy loss, the E–θ curves with each ring's coverage band,
 // and the whole-array acceptance.
+import Select from 'lilak-ui/components/Select.jsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePlanner } from '../../stark/store.jsx'
 import { DET_TYPES, DET_COLOR, MATERIALS } from '../../stark/data.js'
@@ -25,7 +26,7 @@ function Plot({ mode, range, canvasRef }) {
     const g = c.getContext('2d')
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
     g.clearRect(0, 0, W, H)
-    const ink = cssv('--text'), ink3 = cssv('--text-muted'), line = cssv('--border')
+    const ink = cssv('--text'), ink3 = cssv('--dock-text-muted'), line = cssv('--border')
     const L = 46, R = 10, Tp = 10, B = 26
     const T = targetPos(S)
 
@@ -194,10 +195,10 @@ export default function KinematicsPanel() {
       <div className="psec">
         <div className="psechead">
           <span>Kinematics</span>
-          <select value={mode} onChange={(e) => setMode(e.target.value)}>
+          <Select value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="lab">vs θ_lab</option>
             <option value="cm">vs θ_cm</option>
-          </select>
+          </Select>
         </div>
         <Plot mode={mode} range={range} canvasRef={canvasRef} />
         <div className="krange">
@@ -233,9 +234,9 @@ export default function KinematicsPanel() {
           : (<div className="piobox">
               <div className="dnote">한 줄에 두 열: 에너지(MeV), stopping power. SRIM/LISE++ 출력을 그대로 붙여넣어도 됩니다.</div>
               <div className="psaverow">
-                <select value={unit} onChange={(e) => setUnit(e.target.value)}>
+                <Select value={unit} onChange={(e) => setUnit(e.target.value)}>
                   <option>MeV/(mg/cm2)</option><option>MeV/(g/cm2)</option><option>MeV/mm</option>
-                </select>
+                </Select>
                 <input type="file" accept=".txt,.csv,.dat,text/plain"
                   onChange={(e) => { const fl = e.target.files[0]; if (fl) fl.text().then(setTbl) }} />
               </div>

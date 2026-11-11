@@ -72,7 +72,7 @@ export default function FeedbackView({ isManager }) {
             <>
               <textarea value={drafts[r.id] ?? r.reply ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
                 rows={3} placeholder={tr("p_write_a_reply")} style={textarea} />
-              <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--dock-border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
                 <Button variant="secondary" onClick={() => sendReply(r)}>{tr("p_save_reply")}</Button>
                 <Button variant={r.status === 'resolved' ? 'ghost' : 'primary'} onClick={() => toggleResolve(r)}>
                   {r.status === 'resolved' ? tr("p_reopen") : tr("p_mark_resolved")}
@@ -82,8 +82,8 @@ export default function FeedbackView({ isManager }) {
               </div>
             </>
           ) : (
-            <div style={{ whiteSpace: 'pre-wrap', borderTop: '1px solid var(--border-default)', paddingTop: 10,
-              color: r.reply ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+            <div style={{ whiteSpace: 'pre-wrap', borderTop: '1px solid var(--dock-border-default)', paddingTop: 10,
+              color: r.reply ? 'var(--dock-text-primary)' : 'var(--dock-text-secondary)' }}>
               {r.reply || tr("p_no_reply_yet")}
             </div>
           )}
@@ -104,7 +104,7 @@ export default function FeedbackView({ isManager }) {
               <button key={k} type="button" onClick={() => setF((s) => ({ ...s, kind: k }))}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 13px',
                   cursor: 'pointer', fontSize: 'var(--fs-medium, 14px)',
-                  border: `1px solid ${f.kind === k ? m.color : 'var(--border-default)'}`,
+                  border: `1px solid ${f.kind === k ? m.color : 'var(--dock-border-default)'}`,
                   background: f.kind === k ? m.color : 'transparent',
                   color: f.kind === k ? '#fff' : m.color }}>
                 <Icon name={m.icon} size={16} color={f.kind === k ? '#fff' : m.color} /> {L(m.ko, m.en)}

@@ -1,5 +1,6 @@
 // The component dock: add beams / collimators / targets / rings / single
 // detectors, edit any of them, and read the numbers each one implies.
+import Select from 'lilak-ui/components/Select.jsx'
 import { useState } from 'react'
 import { usePlanner } from '../../stark/store.jsx'
 import { RING_TYPES, DET_TYPES, DET_COLOR, MATERIALS } from '../../stark/data.js'
@@ -47,9 +48,9 @@ function Field({ o, k, label, unit, opts, list, text, bool, step = 0.1 }) {
   if (opts) {
     return (
       <Row label={label} unit={unit}>
-        <select value={o[k]} onChange={(e) => setField(o.id, k, e.target.value)}>
+        <Select value={o[k]} onChange={(e) => setField(o.id, k, e.target.value)}>
           {opts.map((x) => <option key={x} value={x}>{x}</option>)}
-        </select>
+        </Select>
       </Row>
     )
   }
@@ -91,10 +92,10 @@ function PairBlock({ o }) {
       <div className="pfrow">
         <label>페어 링</label>
         <div className="pfin">
-          <select value={o.pair || ''} onChange={(e) => { setPair(o.id, e.target.value || null); setRes(null) }}>
+          <Select value={o.pair || ''} onChange={(e) => { setPair(o.id, e.target.value || null); setRes(null) }}>
             <option value="">없음</option>
             {others.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
       {mate && (

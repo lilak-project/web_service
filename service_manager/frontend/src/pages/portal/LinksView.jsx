@@ -69,12 +69,12 @@ export default function LinksView({ links, manage, onChanged }) {
             // rel="noreferrer" with target=_blank: without it the opened page gets
             // a handle on this one via window.opener.
             <a key={i} href={r.url} target="_blank" rel="noreferrer" className="set-row set-link">
-              <Icon name={r.icon || 'link'} size={18} weight={ICON_WEIGHT} color={r.color || 'var(--text-secondary)'} />
+              <Icon name={r.icon || 'link'} size={18} weight={ICON_WEIGHT} color={r.color || 'var(--dock-text-secondary)'} />
               <span>{r.label}</span>
               {r.note && <span className="sub">{r.note}</span>}
               <span className="sp" />
               <span className="sub mono">{where(r.url)}</span>
-              <Icon name="link" size={13} color="var(--text-muted)" />
+              <Icon name="link" size={13} color="var(--dock-text-muted)" />
             </a>
           ))}
         </Panel>
@@ -90,7 +90,7 @@ export default function LinksView({ links, manage, onChanged }) {
         </Button>}>
         {rows.map((r, i) => (
           <div key={i} className="set-row">
-            <IconPick value={r.icon || 'link'} onChange={(v) => edit(i, 'icon', v)} color={r.color || 'var(--text-secondary)'} />
+            <IconPick value={r.icon || 'link'} onChange={(v) => edit(i, 'icon', v)} color={r.color || 'var(--dock-text-secondary)'} />
             <ColorPicker value={r.color || AVATAR_COLORS[0]} onChange={(v) => edit(i, 'color', v)} />
             <input style={{ ...fieldInput, width: 150 }} value={r.label} placeholder={tr("p_name")}
               onChange={(e) => edit(i, 'label', e.target.value)} />

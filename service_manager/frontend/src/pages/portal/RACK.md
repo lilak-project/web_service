@@ -4,6 +4,10 @@
 명판이 붙습니다 — 19인치 랙에 꽂힌 계측 모듈과 같은 구조라 **RACK** 이라
 부릅니다.
 
+RACK이 아닌 쪽은 **DOCK** 입니다. kit 기본 화면(`AppShell`)이 그쪽이고, 둥근 카드와
+알약 배지, 탭이 꽂힌 색 위쪽 바를 씁니다. elog, nptoy, analysis, stark_planner가
+DOCK입니다. 설명은 `lilak_ui/README.md`에 있습니다.
+
 ## 규칙 셋
 
 1. 화면은 **회색 바닥**입니다. 내용이 바닥에 직접 놓이지 않고 흰 **모듈** 위에 놓입니다.
@@ -34,10 +38,10 @@
 
 | 명판 | 변수 | 지금 색 | 어디에 |
 |---|---|---|---|
-| 설정 | `--plate-settings` | 회색 `--surface-3` | 내 계정 · 그룹 · 초대 · 시스템 · 로그인 |
+| 설정 | `--plate-settings` | 회색 `--dock-surface-3` | 내 계정 · 그룹 · 초대 · 시스템 · 로그인 |
 | 관리 | `--plate-manage` | 연한 겨자 `#f3e5bb` | 서비스·그룹을 고쳐 쓰는 화면 |
-| 도구 | `--plate-tool` | 파랑 `--info-bg` | 포털 자신을 다루는 붙박이 |
-| 위험 | `--danger-bg` | 빨강 | 되돌릴 수 없는 것 — 계정 삭제 · 서비스 보관 · 그룹 삭제 |
+| 도구 | `--plate-tool` | 파랑 `--dock-info-bg` | 포털 자신을 다루는 붙박이 |
+| 위험 | `--dock-danger-bg` | 빨강 | 되돌릴 수 없는 것 — 계정 삭제 · 서비스 보관 · 그룹 삭제 |
 
 ## 치수
 
@@ -85,7 +89,7 @@
 | `portal/InvitesAdmin.jsx` | 설정 | 모듈·표·채널·표시등 |
 | `portal/LinksView.jsx` | 도구 | 모듈·채널 |
 | `portal/NewServiceView.jsx` | 도구 | 모듈·표·채널·표시등 |
-| `portal/RackView.jsx` | 도구 | 모듈·명판·표·채널·표시등 |
+| `portal/RackView.jsx` | 도구 | 모듈·채널·표시등 |
 | `portal/ServiceManagePanel.jsx` | 관리 | 모듈·표·채널·표시등 |
 | `portal/ServiceProjects.jsx` | 관리 | 모듈·표·채널·표시등 |
 | `portal/ServiceSingle.jsx` | 관리 | 모듈·표·표시등 |

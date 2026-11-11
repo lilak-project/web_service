@@ -33,17 +33,17 @@ const C = { file: '#9333ea', view: '#0d9488', par: '#d97706', danger: '#dc2626' 
 const S = {
   page: { height: '100%', display: 'flex', flexDirection: 'column', gap: 10, padding: 12, boxSizing: 'border-box' },
   bar: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '8px 10px', borderRadius: 10,
-    backgroundColor: 'var(--surface)', border: '1px solid var(--border-default)' },
+    backgroundColor: 'var(--dock-surface)', border: '1px solid var(--dock-border-default)' },
   row: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', overflowX: 'auto', minWidth: 0 },
-  rowLabel: { width: 46, flexShrink: 0, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', fontWeight: 700 },
-  panel: { borderRadius: 10, border: '1px solid var(--border-default)', backgroundColor: 'var(--surface)' },
-  th: { position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'var(--nav-bg)', color: 'var(--nav-text)',
+  rowLabel: { width: 46, flexShrink: 0, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--dock-text-muted)', fontWeight: 700 },
+  panel: { borderRadius: 10, border: '1px solid var(--dock-border-default)', backgroundColor: 'var(--dock-surface)' },
+  th: { position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'var(--dock-nav-bg)', color: 'var(--dock-nav-text)',
     textAlign: 'left', fontSize: 11, fontWeight: 600, padding: '7px 10px', letterSpacing: '.04em', whiteSpace: 'nowrap' },
-  td: { padding: '3px 8px', verticalAlign: 'middle', borderBottom: '1px solid var(--border-subtle, rgba(0,0,0,0.05))' },
+  td: { padding: '3px 8px', verticalAlign: 'middle', borderBottom: '1px solid var(--dock-border-subtle, rgba(0,0,0,0.05))' },
   cellInput: { width: '100%', height: 26, fontSize: 12, fontFamily: 'var(--font-mono)' },
   groupHead: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600,
-    color: 'var(--text-secondary)', backgroundColor: 'var(--surface-2)', borderRadius: 6, margin: '8px 8px 2px' },
-  empty: { padding: 40, textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' },
+    color: 'var(--dock-text-secondary)', backgroundColor: 'var(--dock-surface-2)', borderRadius: 6, margin: '8px 8px 2px' },
+  empty: { padding: 40, textAlign: 'center', fontSize: 13, color: 'var(--dock-text-muted)' },
 }
 
 const COLS = [
@@ -211,23 +211,23 @@ export default function ParameterEditor() {
   function ParamRow({ r, i }) {
     const sel = isSel(i)
     const dimmed = r.kind === 'parameter' && !isEnabled(r)
-    const base = { cursor: 'pointer', backgroundColor: sel ? 'var(--info-bg)' : 'transparent', opacity: dimmed ? 0.5 : 1 }
+    const base = { cursor: 'pointer', backgroundColor: sel ? 'var(--dock-info-bg)' : 'transparent', opacity: dimmed ? 0.5 : 1 }
     if (r.kind === 'comment') {
       return (
         <tr onClick={() => toggleSel(i)} style={base}>
-          <td style={{ ...S.td, textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{i + 1}</td>
+          <td style={{ ...S.td, textAlign: 'center', color: 'var(--dock-text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{i + 1}</td>
           <td style={{ ...S.td, textAlign: 'center' }}><Check on={sel} /></td>
           <td style={S.td} colSpan={5}>
-            <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>#&nbsp;</span>
+            <span style={{ color: 'var(--dock-text-muted)', fontFamily: 'var(--font-mono)' }}>#&nbsp;</span>
             <Input onClick={stop} value={r.comment} onChange={(e) => updateRow(i, { comment: e.target.value })}
-              style={{ ...S.cellInput, width: '90%', color: 'var(--text-muted)' }} />
+              style={{ ...S.cellInput, width: '90%', color: 'var(--dock-text-muted)' }} />
           </td>
         </tr>
       )
     }
     return (
       <tr onClick={() => toggleSel(i)} style={base}>
-        <td style={{ ...S.td, textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{i + 1}</td>
+        <td style={{ ...S.td, textAlign: 'center', color: 'var(--dock-text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{i + 1}</td>
         <td style={{ ...S.td, textAlign: 'center' }}><Check on={sel} /></td>
         <td style={S.td}><Input onClick={stop} value={r.group} placeholder="group" onChange={(e) => updateRow(i, { group: e.target.value })} style={S.cellInput} /></td>
         <td style={S.td}><Input onClick={stop} value={r.name} onChange={(e) => updateRow(i, { name: e.target.value })} style={S.cellInput} /></td>
@@ -238,7 +238,7 @@ export default function ParameterEditor() {
             style={{ ...S.cellInput, textAlign: 'center' }} />
         </td>
         <td style={S.td}><Input onClick={stop} value={r.comment} placeholder="#" onChange={(e) => updateRow(i, { comment: e.target.value })}
-          style={{ ...S.cellInput, color: 'var(--text-muted)' }} /></td>
+          style={{ ...S.cellInput, color: 'var(--dock-text-muted)' }} /></td>
       </tr>
     )
   }
@@ -248,9 +248,9 @@ export default function ParameterEditor() {
     const parts = (r.value || '').trim() === '' ? [] : r.value.trim().split(/\s+/)
     const setParts = (ps) => updateRow(i, { value: ps.join('  ') })
     return (
-      <tr onClick={() => toggleSel(i)} style={{ cursor: 'pointer', backgroundColor: isSel(i) ? 'var(--info-bg)' : 'transparent', opacity: isEnabled(r) ? 1 : 0.5 }}>
+      <tr onClick={() => toggleSel(i)} style={{ cursor: 'pointer', backgroundColor: isSel(i) ? 'var(--dock-info-bg)' : 'transparent', opacity: isEnabled(r) ? 1 : 0.5 }}>
         <td style={{ ...S.td, textAlign: 'center' }}><Check on={isSel(i)} /></td>
-        <td style={{ ...S.td, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{fullName(r)}</td>
+        <td style={{ ...S.td, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--dock-text-primary)', whiteSpace: 'nowrap' }}>{fullName(r)}</td>
         <td style={S.td}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
             {parts.map((p, pi) => (
@@ -261,11 +261,11 @@ export default function ParameterEditor() {
               </span>
             ))}
             <Button variant="secondary" size="sm" onClick={(e) => { stop(e); setParts([...parts, '']) }}>+ value</Button>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{parts.length} values</span>
+            <span style={{ fontSize: 10, color: 'var(--dock-text-muted)' }}>{parts.length} values</span>
           </div>
         </td>
         <td style={S.td}><Input onClick={stop} value={r.comment} placeholder="#" onChange={(e) => updateRow(i, { comment: e.target.value })}
-          style={{ ...S.cellInput, color: 'var(--text-muted)' }} /></td>
+          style={{ ...S.cellInput, color: 'var(--dock-text-muted)' }} /></td>
       </tr>
     )
   }
@@ -332,7 +332,7 @@ export default function ParameterEditor() {
           <IB ic="copy" iconColor={C.par} onClick={copyRow}>copy</IB>
           <IB ic="paste" iconColor={C.par} onClick={pasteRows}>paste</IB>
           <div style={{ flex: 1 }} />
-          {message && <span style={{ fontSize: 11, color: 'var(--warning-text)' }}>{message}</span>}
+          {message && <span style={{ fontSize: 11, color: 'var(--dock-warning-text)' }}>{message}</span>}
         </div>
       </div>
 
@@ -355,7 +355,7 @@ export default function ParameterEditor() {
           <textarea value={rawText} spellCheck={false}
             onChange={(e) => { setRawText(e.target.value); patchFile(file.id, { dirty: true }) }}
             style={{ width: '100%', height: '100%', minHeight: '100%', padding: 10, boxSizing: 'border-box', border: 'none', outline: 'none',
-              resize: 'none', fontFamily: 'var(--font-mono)', fontSize: 12, backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)' }} />
+              resize: 'none', fontFamily: 'var(--font-mono)', fontSize: 12, backgroundColor: 'var(--dock-input-bg)', color: 'var(--dock-text-primary)' }} />
         ) : viewMode === 'group' ? (
           <div style={{ paddingBottom: 8 }}>
             {groupedRows().map((g) => {
@@ -368,13 +368,13 @@ export default function ParameterEditor() {
                 <div key={g.name}>
                   <div style={S.groupHead}>
                     <button onClick={() => setClosedGroups((c) => ({ ...c, [g.name]: !closed }))}
-                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>{closed ? '▸' : '▾'}</button>
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--dock-text-secondary)' }}>{closed ? '▸' : '▾'}</button>
                     <span role="button" title="select group" onClick={() => setGroupSel(gIdx, !gAll)} style={{ display: 'inline-flex', cursor: 'pointer' }}>
                       <Check on={gAll} indeterminate={gSome} />
                     </span>
                     <span style={{ fontFamily: 'var(--font-mono)' }}>{g.name}</span>
-                    <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({g.items.length})</span>
-                    {isClassName && <a href={docURL(g.name)} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: 'var(--text-link)' }}>doc ↗</a>}
+                    <span style={{ color: 'var(--dock-text-muted)', fontWeight: 400 }}>({g.items.length})</span>
+                    {isClassName && <a href={docURL(g.name)} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: 'var(--dock-text-link)' }}>doc ↗</a>}
                   </div>
                   {!closed && (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -412,9 +412,9 @@ function chip(active) {
   return {
     height: 24, padding: '0 10px', borderRadius: 999, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-mono)',
     borderWidth: 1, borderStyle: 'solid',
-    borderColor: active ? 'var(--btn-primary-bg)' : 'var(--border-default)',
-    background: active ? 'var(--btn-primary-bg)' : 'var(--surface-2)',
-    color: active ? 'var(--btn-primary-text, #fff)' : 'var(--text-secondary)',
+    borderColor: active ? 'var(--dock-btn-primary-bg)' : 'var(--dock-border-default)',
+    background: active ? 'var(--dock-btn-primary-bg)' : 'var(--dock-surface-2)',
+    color: active ? 'var(--dock-btn-primary-text, #fff)' : 'var(--dock-text-secondary)',
   }
 }
 const rowBtn = {
@@ -452,7 +452,7 @@ function OpenModal({ onPick, onClose }) {
         <>
           {/* sub-projects */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text-muted)', fontWeight: 700 }}>projects</span>
+            <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--dock-text-muted)', fontWeight: 700 }}>projects</span>
             <button onClick={() => browse('')} style={chip(cwd === '')}>root</button>
             {projects.map((p) => (
               <button key={p.path} onClick={() => browse(p.path)}
@@ -462,40 +462,40 @@ function OpenModal({ onPick, onClose }) {
           {/* breadcrumb */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 12, fontFamily: 'var(--font-mono)', flexWrap: 'wrap' }}>
             <button onClick={() => browse(parent)} disabled={!cwd}
-              style={{ ...rowBtn, width: 'auto', padding: '2px 8px', color: cwd ? 'var(--text-link)' : 'var(--text-muted)', cursor: cwd ? 'pointer' : 'default' }}>
+              style={{ ...rowBtn, width: 'auto', padding: '2px 8px', color: cwd ? 'var(--dock-text-link)' : 'var(--dock-text-muted)', cursor: cwd ? 'pointer' : 'default' }}>
               <Icon name="caret-up" size={13} /> up
             </button>
-            <span onClick={() => browse('')} style={{ cursor: 'pointer', color: cwd ? 'var(--text-link)' : 'var(--text-secondary)' }}>lilak</span>
+            <span onClick={() => browse('')} style={{ cursor: 'pointer', color: cwd ? 'var(--dock-text-link)' : 'var(--dock-text-secondary)' }}>lilak</span>
             {crumbs.map((seg, i) => {
               const p = crumbs.slice(0, i + 1).join('/')
               const last = i === crumbs.length - 1
-              return <span key={p} style={{ color: 'var(--text-muted)' }}>/&nbsp;
-                <span onClick={() => !last && browse(p)} style={{ cursor: last ? 'default' : 'pointer', color: last ? 'var(--text-primary)' : 'var(--text-link)' }}>{seg}</span>
+              return <span key={p} style={{ color: 'var(--dock-text-muted)' }}>/&nbsp;
+                <span onClick={() => !last && browse(p)} style={{ cursor: last ? 'default' : 'pointer', color: last ? 'var(--dock-text-primary)' : 'var(--dock-text-link)' }}>{seg}</span>
               </span>
             })}
           </div>
         </>
       )}
 
-      <div style={{ overflowY: 'auto', maxHeight: '48vh', borderTop: '1px solid var(--border-default)', paddingTop: 4 }}>
+      <div style={{ overflowY: 'auto', maxHeight: '48vh', borderTop: '1px solid var(--dock-border-default)', paddingTop: 4 }}>
         {searching ? (
           matches.length
             ? matches.map((p) => (
-              <button key={p} onClick={() => onPick(p)} title={p} style={{ ...rowBtn, color: 'var(--text-link)', overflowWrap: 'anywhere' }}>{p}</button>
+              <button key={p} onClick={() => onPick(p)} title={p} style={{ ...rowBtn, color: 'var(--dock-text-link)', overflowWrap: 'anywhere' }}>{p}</button>
             ))
-            : <div style={{ fontSize: 12, padding: 8, color: 'var(--text-muted)' }}>no matches</div>
+            : <div style={{ fontSize: 12, padding: 8, color: 'var(--dock-text-muted)' }}>no matches</div>
         ) : (
           entries.length
             ? entries.map((e) => (
               e.is_dir
-                ? <button key={e.path} onClick={() => browse(e.path)} style={{ ...rowBtn, color: 'var(--text-secondary)' }}>
-                    <Icon name="folder" size={15} color={C.file} /><span style={{ flex: 1 }}>{e.name}</span><span style={{ color: 'var(--text-muted)' }}>/</span>
+                ? <button key={e.path} onClick={() => browse(e.path)} style={{ ...rowBtn, color: 'var(--dock-text-secondary)' }}>
+                    <Icon name="folder" size={15} color={C.file} /><span style={{ flex: 1 }}>{e.name}</span><span style={{ color: 'var(--dock-text-muted)' }}>/</span>
                   </button>
-                : <button key={e.path} onClick={() => onPick(e.path)} title={e.path} style={{ ...rowBtn, color: 'var(--text-link)' }}>
+                : <button key={e.path} onClick={() => onPick(e.path)} title={e.path} style={{ ...rowBtn, color: 'var(--dock-text-link)' }}>
                     <span style={{ width: 15, flexShrink: 0 }} /><span>{e.name}</span>
                   </button>
             ))
-            : <div style={{ fontSize: 12, padding: 8, color: 'var(--text-muted)' }}>empty folder</div>
+            : <div style={{ fontSize: 12, padding: 8, color: 'var(--dock-text-muted)' }}>empty folder</div>
         )}
       </div>
     </Modal>

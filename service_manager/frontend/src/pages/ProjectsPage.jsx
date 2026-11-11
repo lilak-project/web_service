@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, PROJECT_ICONS } from 'lilak-ui'
+import { Button, Icon, PROJECT_ICONS } from 'lilak-ui'
+import { passkeyLogin, passkeyRegister, passkeySupported, passkeyCancelled, hasPasskeyHere, passkeyAutofill } from '../passkey'
 import { launcher, errText, store, PORTAL_TOKEN_KEY } from '../api'
 import { useLang } from '../context/LangContext'
 import SidebarPortal from './portal/SidebarPortal'
@@ -21,12 +22,8 @@ import { notify } from './portal/settingsMsg'
  * and the writes that reorder and regroup it.
  */
 
-// Builtins: portal tools listed like services. Only the links card is for
-// everyone (and only once it has something in it); the rest are a manager's.
-const ICON_SERVICE = { name: 'lilak icon', kind: 'tool', builtin: 'iconlab', icon: 'lilak', can_enter: true }
-const CREATE_SERVICE = { name: 'new-service', kind: 'tool', builtin: 'newservice', icon: 'plus', can_enter: true }
-const LINKS_SERVICE = { name: 'links', kind: 'tool', builtin: 'links', icon: 'link', can_enter: true }
-const RACK_SERVICE = { name: 'rack', kind: 'tool', builtin: 'rack', icon: 'wall', can_enter: true }
+// No builtin cards left: the icon lab was uninstalled, and making a service
+// lives in Home's "dock services" tab.
 
 // Stable per-name fallback icon so a service without a stored icon still looks
 // distinct.
@@ -34,7 +31,7 @@ function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 
 const iconFor = (name, stored) => stored || PROJECT_ICONS[hashStr(name) % PROJECT_ICONS.length]
 
 // A card's stable key (builtins use "@iconlab"…; services use the name).
-const cardKey = (p) => (p.builtin ? '@' + p.builtin : p.name)
+const cardKey = (p) => (p.builtin ? '@' + p.builtin : p.project_card ? `${p.name}/${p.project_card}` : p.name)
 // Sort by the admin-saved order; anything not listed keeps its default place.
 function sortByHome(cards, order) {
   const def = new Map(cards.map((c, i) => [cardKey(c), i]))
@@ -76,10 +73,21 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
   const signup = mode === 'signup'
   const locked = busy || !!pending    // the account rows are settled once a code is out
 
-  async function finish(token) {
+  const [offer, setOffer] = useState(null)      // a new account: offer this device a passkey first
+  async function finish(token, newAccount = false) {
     setPortalToken(token)                      // authorize the follow-up /auth/me
     const me = await launcher.get('/auth/me')
+    if (newAccount && passkeySupported() && !(await hasPasskeyHere())) { setOffer(me.data); return }
     onAuthed(me.data)
+  }
+  async function addPasskey() {
+    setBusy(true); setErr('')
+    try { await passkeyRegister(navigator.platform || 'this device'); onAuthed(offer) }
+    catch (e2) {
+      if (passkeyCancelled(e2)) return
+      const detail = e2?.response?.data?.detail
+      setErr((typeof detail === 'string' && detail) || t('passkey_add_fail'))
+    } finally { setBusy(false) }
   }
 
   async function submit(e) {
@@ -103,7 +111,7 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
         invite_code: f.invite_code.trim() || undefined,
       })
       if (res.data.verify_required) { setVerifyCode(''); setPending(res.data) }
-      else await finish(res.data.access_token)   // verification disabled → straight in
+      else await finish(res.data.access_token, true)   // verification disabled → straight in
     } catch (e2) {
       const detail = e2?.response?.data?.detail
       if (detail && typeof detail === 'object' && detail.code === 'verify_required') {
@@ -128,7 +136,7 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
         username: pending?.username || f.username.trim(),
         code: verifyCode.trim(),
       })
-      await finish(res.data.access_token)
+      await finish(res.data.access_token, true)
     } catch {
       setErr(t('auth_verify_fail'))
     } finally { setBusy(false) }
@@ -162,7 +170,7 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
           </Field>
           <FieldActions>
             <Button type="submit" variant="primary" disabled={busy || !f.password}>{t('setup_submit')}</Button>
-            {err && <span style={{ color: 'var(--danger-text)' }}>{err}</span>}
+            {err && <span style={{ color: 'var(--dock-danger-text)' }}>{err}</span>}
           </FieldActions>
         </Panel>
       </form>
@@ -171,12 +179,58 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
 
   // The two modes live in the panel's own strip — the choice happens where the
   // title would be, not as a pair of buttons wedged in beside it.
+  // Waiting quietly: the username field's autofill lists this host's passkeys,
+  // and picking one asks for Touch ID — no button press first. Browsers do not
+  // let a page listen for a finger on its own; this is the nearest they allow.
+  const quiet = useRef(null)
+  useEffect(() => {
+    if (signup || pending || needsSetup || offer) return
+    const ac = new AbortController()
+    quiet.current = ac
+    passkeyAutofill().then((ok) => ok && passkeyLogin({ conditional: true, signal: ac.signal })
+      .then((r) => finish(r.access_token))
+      .catch((e2) => {
+        if (ac.signal.aborted || passkeyCancelled(e2)) return
+        const detail = e2?.response?.data?.detail
+        setErr((typeof detail === 'string' && detail) || t('passkey_login_fail'))
+      }))
+    return () => ac.abort()
+  }, [signup, pending, needsSetup, offer])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // No username: the device offers the passkeys it holds for this host.
+  async function withPasskey() {
+    quiet.current?.abort()        // one WebAuthn request at a time
+    setBusy(true); setErr('')
+    try { await finish((await passkeyLogin()).access_token) }
+    catch (e2) {
+      if (passkeyCancelled(e2)) return
+      const detail = e2?.response?.data?.detail
+      setErr((typeof detail === 'string' && detail) || t('passkey_login_fail'))
+    } finally { setBusy(false) }
+  }
+
   const tab = (m, label) => (
     <button type="button" className="set-plain" aria-pressed={mode === m} disabled={locked}
       onClick={() => { setMode(m); setErr('') }}>{label}</button>
   )
   const host = info && `${info.host || '?'}${info.version ? ` · ${info.version}` : ''}`
   const canSubmit = !busy && f.username.trim() && f.password && (!signup || f.email.trim())
+
+  if (offer) return (
+    <div className="set-auth" style={cardStyle}>
+      {host && <span className="set-host">{host}</span>}
+      <Panel title={t('passkey_offer_title')}>
+        <Field label={<Icon name="fingerprint" size={18} />}>
+          <span>{t('passkey_offer_text')}</span>
+        </Field>
+        <FieldActions>
+          <Button variant="primary" disabled={busy} onClick={addPasskey}>{t('passkey_offer_yes')}</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => onAuthed(offer)}>{t('passkey_offer_later')}</Button>
+          {err && <span style={{ color: 'var(--dock-danger-text)' }}>{err}</span>}
+        </FieldActions>
+      </Panel>
+    </div>
+  )
 
   return (
     /* On signup we deliberately break the browser's login autofill (off /
@@ -190,7 +244,7 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
           <input autoFocus placeholder={t('projects_login_user')} value={f.username} onChange={set('username')}
             style={inputStyle} disabled={locked}
             name={signup ? 'su_id' : 'username'}
-            autoComplete={signup ? 'off' : 'username'}
+            autoComplete={signup ? 'off' : 'username webauthn'}
             {...(signup ? { 'data-1p-ignore': true, 'data-lpignore': 'true' } : {})} />
         </Field>
         <Field label={t('projects_login_pass')}>
@@ -242,7 +296,12 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
               {t(signup ? 'projects_signup_submit' : 'projects_login_submit')}
             </Button>
           )}
-          {err && <span style={{ color: 'var(--danger-text)' }}>{err}</span>}
+          {!signup && !pending && passkeySupported() && (
+            <Button variant="secondary" disabled={busy} onClick={withPasskey}>
+              <Icon name="fingerprint" size={14} /> {t('passkey_login')}
+            </Button>
+          )}
+          {err && <span style={{ color: 'var(--dock-danger-text)' }}>{err}</span>}
         </FieldActions>
       </Panel>
     </form>
@@ -288,6 +347,9 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState(null)   // null = loading
   const [homeCfg, setHomeCfg] = useState(null)     // manager: builtin overrides + card order
   const [groups, setGroups] = useState([])
+  const [layout, setLayout] = useState(null)              // prefs.layout: this account's own bar
+  const [layoutTarget, setLayoutTarget] = useState('mine') // a manager arranges 'mine' or the shared 'default'
+  const layoutRef = useRef(null)
   const [links, setLinks] = useState(null)
   const [portalInfo, setPortalInfo] = useState(null)   // { host, version } — which server this is
   const [publicCards, setPublicCards] = useState([])   // the signed-out bar
@@ -347,6 +409,12 @@ export default function ProjectsPage() {
     }
   }
   useEffect(() => { if (user) refresh() }, [user])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let L = null
+    try { L = JSON.parse(user?.preferences_json || '{}').layout || null } catch { /* none */ }
+    layoutRef.current = L
+    setLayout(L)
+  }, [user?.id])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isManager) return
     launcher.get('/admin/home').then((r) => setHomeCfg(r.data)).catch(() => {})
@@ -413,27 +481,26 @@ export default function ProjectsPage() {
   // ── the cards ──
   // Builtins with the manager's saved label / icon / colour overrides applied.
   const bi = homeCfg?.builtins || {}
-  const iconCard = { ...ICON_SERVICE, label: bi.iconlab?.label || ICON_SERVICE.name, icon: bi.iconlab?.icon || ICON_SERVICE.icon, color: bi.iconlab?.color, hidden: !!bi.iconlab?.hidden }
-  const createCard = { ...CREATE_SERVICE, label: bi.newservice?.label || t('newsvc_title'), icon: bi.newservice?.icon || CREATE_SERVICE.icon, color: bi.newservice?.color, hidden: !!bi.newservice?.hidden }
   // Service Manager is part of home now; home keeps the card's colour.
   const homeIcon = { icon: 'home', color: bi.store?.color }
-  const rackCard = { ...RACK_SERVICE, label: bi.rack?.label || t('rack_title'), icon: bi.rack?.icon || RACK_SERVICE.icon, color: bi.rack?.color, hidden: !!bi.rack?.hidden }
-  const linkCfg = links?.card || {}
-  const linksCard = { ...LINKS_SERVICE, label: linkCfg.label || t('links_title'), icon: linkCfg.icon || LINKS_SERVICE.icon, color: linkCfg.color, hidden: !!linkCfg.hidden, count: (links?.links || []).length }
   // A service may carry a name per language (manifest `labels`); `label` otherwise.
-  const inLang = (s) => (s.labels?.[lang] ? { ...s, label: s.labels[lang] } : s)
+  const inLang = (s) => ({ ...s, label: s.labels?.[lang] || s.label, service_label: s.service_labels?.[lang] || s.service_label })
   // Every card, hidden ones included: the sidebar has its own manage mode and
   // does its own hiding — filtering here meant a card hidden from the bar
   // vanished from manage mode too, with no way left to bring it back.
-  const named = (projects || []).map(inLang)
-  const cardsAll = isManager
-    ? sortByHome([iconCard, linksCard, ...named, createCard, rackCard], homeCfg?.order || [])
-    : sortByHome([...(linksCard.hidden || !linksCard.count ? [] : [linksCard]), ...named], homeCfg?.order || [])
+  const named0 = (projects || []).map(inLang)
+  // This account's own bar (prefs.layout): order, groups, hidden cards, its own
+  // names. Absent, the account sees the manager's default. A manager chooses in
+  // manage mode which of the two it is arranging (layoutTarget).
+  const mine = !!layout && !(isManager && layoutTarget === 'default')
+  const named = mine
+    ? named0.map((c) => { const k = cardKey(c); return { ...c, hidden: layout.hidden.includes(k),
+      label: layout.labels[k] || c.label, my_label: layout.labels[k] || '', default_label: c.label } })
+    : named0
+  const cardsAll = sortByHome(named, homeCfg?.order || [])
   const cards = isManager ? cardsAll.filter((c) => !c.hidden) : cardsAll
 
   const groupKey = (g) => `#g:${g.id}`
-  const memberOf = {}
-  for (const g of groups) for (const m of g.members || []) memberOf[m] = g
   // Where a key sits: a manager by the saved order; everyone else by the order
   // mirrored into manifests (services) and group records (groups).
   const savedOrder = homeCfg?.order || []
@@ -445,17 +512,68 @@ export default function ProjectsPage() {
     if (!c) return 9999
     return isManager ? 1000 + (defaultPos.get(key) ?? 0) : (c.builtin ? -1 : 1000 + (c.order ?? 1000))
   }
-  const fullOrder = [...cards.map(cardKey), ...groups.map(groupKey)].sort((a, b) => orderOf(a) - orderOf(b))
+  const fullOrder0 = [...cards.map(cardKey), ...groups.map(groupKey)].sort((a, b) => orderOf(a) - orderOf(b))
+  const looseG = groups.find((g) => g.loose) || { id: 'none', loose: true, name: '', members: [] }
+  // The layout's groups stand in for the shared ones, and its order for the shared order;
+  // anything the layout has never seen (a service added since) keeps its default place, after.
+  const shownGroups = mine
+    ? [...layout.groups.map((g) => ({ ...g, label: g.name, personal: true })), { ...looseG, hidden: !!layout.looseHidden }]
+      .map((g) => ({ ...g, order: layout.order.indexOf(groupKey(g)) }))
+    : groups
+  const fullOrder = mine
+    ? [...cards.map(cardKey), ...shownGroups.map(groupKey)].sort((a, b) => {
+      const ia = layout.order.indexOf(a), ib = layout.order.indexOf(b)
+      return (ia < 0 ? 10000 + fullOrder0.indexOf(a) : ia) - (ib < 0 ? 10000 + fullOrder0.indexOf(b) : ib)
+    })
+    : fullOrder0
+
+  // ── writes to this account's own layout ──
+  // The first change starts from what the account was looking at: the default.
+  const snapshot = () => ({
+    order: fullOrder0,
+    groups: groups.filter((g) => !g.loose).map((g) => ({ id: g.id, name: g.label || g.name || '', members: [...(g.members || [])], hidden: !!g.hidden })),
+    hidden: named0.filter((c) => c.hidden).map(cardKey), labels: {}, looseHidden: !!looseG.hidden,
+  })
+  const writeMine = isManager ? layoutTarget === 'mine' : true
+  // Two writes in one gesture (regroup, then the new order) must chain: each
+  // starts from the last one's result, not from this render's copy.
+  async function saveLayout(fn) {
+    const next = fn(structuredClone(layoutRef.current || snapshot()))
+    layoutRef.current = next
+    setLayout(next)
+    try { await launcher.put('/account/prefs', { layout: next }) } catch (e) { notify(errText(e, t('p_failed')), 'bad') }
+  }
+  const dropFrom = (L, key) => { for (const g of L.groups) g.members = g.members.filter((m) => m !== key) }
+  const personal = {
+    on: writeMine,
+    has: !!layout,
+    target: isManager ? layoutTarget : 'mine',
+    setTarget: (v) => setLayoutTarget(v),
+    reset: async () => { layoutRef.current = null; setLayout(null); try { await launcher.put('/account/prefs', { layout: null }) } catch { /* kept locally */ } },
+    hideCard: (key, h) => saveLayout((L) => { L.hidden = h ? [...new Set([...L.hidden, key])] : L.hidden.filter((k) => k !== key); return L }),
+    setLabel: (key, name) => saveLayout((L) => { if (name.trim()) L.labels[key] = name.trim(); else delete L.labels[key]; return L }),
+    renameGroup: (id, name) => saveLayout((L) => { const g = L.groups.find((x) => x.id === id); if (g) g.name = name.trim(); return L }),
+    hideGroup: (id, h) => saveLayout((L) => {
+      if (id === looseG.id) L.looseHidden = h
+      else { const g = L.groups.find((x) => x.id === id); if (g) g.hidden = h }
+      return L
+    }),
+    deleteGroup: (id) => saveLayout((L) => { L.groups = L.groups.filter((g) => g.id !== id); L.order = L.order.filter((k) => k !== `#g:${id}`); return L }),
+  }
 
   // ── the writes the sidebar's manage mode makes ──
   async function regroup(key, gid) {
     if (!key || key.startsWith('#g:')) return
+    if (writeMine) {
+      return saveLayout((L) => { dropFrom(L, key); const g = L.groups.find((x) => x.id === gid); if (g) g.members.push(key); return L })
+    }
     const from = groups.find((g) => (g.members || []).includes(key))
     if ((from?.id || null) === (gid || null)) return
     if (from) await launcher.put(`/admin/service-groups/${from.id}`, { members: (from.members || []).filter((m) => m !== key) })
     if (gid) { const g = groups.find((x) => x.id === gid); await launcher.put(`/admin/service-groups/${gid}`, { members: [...(g?.members || []), key] }) }
   }
   async function saveOrder(keys) {
+    if (writeMine) return saveLayout((L) => { L.order = keys; return L })
     setHomeCfg((c) => ({ ...(c || { builtins: {} }), order: keys }))   // optimistic
     try { await launcher.put('/admin/home-order', { keys }); await refresh() }
     catch { await refresh() }
@@ -463,10 +581,22 @@ export default function ProjectsPage() {
   // A band draws its cards in its group's member order: a move inside a group
   // is that list, rewritten.
   async function setMembers(gid, members) {
+    if (writeMine) {
+      return saveLayout((L) => { for (const k of members) dropFrom(L, k); const g = L.groups.find((x) => x.id === gid); if (g) g.members = members; return L })
+    }
     try { await launcher.put(`/admin/service-groups/${gid}`, { members }); await refresh() }
     catch { await refresh() }
   }
   async function createGroup(name, members) {
+    if (writeMine) {
+      const id = 'm' + Math.random().toString(36).slice(2, 9)
+      return saveLayout((L) => {
+        for (const k of members || []) dropFrom(L, k)
+        L.groups.push({ id, name: name || t('p_group_n', L.groups.length + 1), members: [...(members || [])], hidden: false })
+        L.order = [...L.order.filter((k) => k !== `#g:${id}`), `#g:${id}`]
+        return L
+      })
+    }
     try {
       const body = { name: name || t('p_group_n', groups.filter((g) => !g.loose).length + 1) }
       const { data } = await launcher.post('/admin/service-groups', body)
@@ -481,11 +611,13 @@ export default function ProjectsPage() {
   // inside a hidden group), in the cover's order, on a full-screen wall.
   const liveCards = fullOrder
     .map((k) => cards.find((c) => cardKey(c) === k))
-    .filter((c) => c && c.live && !c.builtin && !c.hidden && !c.live_hidden && !memberOf[cardKey(c)]?.hidden)
+    .filter((c) => c && c.live && !c.builtin && !c.hidden && !c.live_hidden
+      && !shownGroups.find((g) => (g.members || []).includes(cardKey(c)))?.hidden)
+    .filter((c, i, a) => a.findIndex((x) => x.name === c.name) === i)      // live is per service, cards may be per project
 
   if (!authReady) return null
   if (framed && !user) {
-    return <p style={{ padding: 24, color: 'var(--text-muted)' }}>{t('p_signed_out_framed')}</p>
+    return <p style={{ padding: 24, color: 'var(--dock-text-muted)' }}>{t('p_signed_out_framed')}</p>
   }
 
   // Signed out: the bar lists the services a manager marked PUBLIC (an untouched
@@ -508,8 +640,8 @@ export default function ProjectsPage() {
   return (
     <SidebarPortal
       user={user} isManager={isManager} cards={sideCards} iconFor={iconFor}
-      groups={groups.map(inLang)} liveCards={liveCards} links={links?.links || []}
-      fullOrder={fullOrder}
+      groups={shownGroups.map(inLang)} liveCards={liveCards} links={links?.links || []}
+      fullOrder={fullOrder} personal={personal}
       onLogout={logout} onRefresh={refresh}
       onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup} onSetMembers={setMembers}
       settingsTab={settingsTab} onSettingsTab={setSettingsTab} info={portalInfo} homeIcon={homeIcon}

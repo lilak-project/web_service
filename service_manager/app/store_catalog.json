@@ -211,8 +211,8 @@
       "bundle": [
         "jobbook"
       ],
-      "ko": "분석 파이프라인 묶음 — jobbook (rack 화면으로 그리므로 rack services를 먼저 설치, 파라미터·로그 연결은 log services 필요)",
-      "en": "Analysis pipeline — jobbook (drawn with the rack frame: install rack services first; log services for parameter and log links)"
+      "ko": "분석 파이프라인 묶음 — jobbook(잡 기록과 그 흐름 보드) (rack 화면으로 그리므로 rack services를 먼저 설치, 파라미터·로그 연결은 log services 필요)",
+      "en": "Analysis pipeline — jobbook (job records and the flow board around a job) (drawn with the rack frame: install rack services first; log services for parameter and log links)"
     },
     {
       "name": "analysis-v2",

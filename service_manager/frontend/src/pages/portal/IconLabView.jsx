@@ -1,3 +1,4 @@
+import Select from 'lilak-ui/components/Select.jsx'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Icon, ColorPicker, tr } from 'lilak-ui'
 import { launcher } from '../../api'
@@ -95,7 +96,7 @@ function NumField({ label, value, min, max, step = 1, onChange, suffix = '' }) {
 function MiniIcon({ cfg, px = 30 }) {
   const c = cfg
   return (
-    <div style={{ width: px, height: px, borderRadius: 6, overflow: 'hidden', background: c.bgTransparent ? CHECKER : 'transparent', border: '1px solid var(--border-subtle)' }}>
+    <div style={{ width: px, height: px, borderRadius: 6, overflow: 'hidden', background: c.bgTransparent ? CHECKER : 'transparent', border: '1px solid var(--dock-border-subtle)' }}>
       <svg viewBox={`0 0 ${VB} ${VB}`} width={px} height={px}>
         {!c.bgTransparent && <rect width={VB} height={VB} rx={c.radius / 100 * VB} fill={c.bg} />}
         <g transform={transformStr(c)}>
@@ -202,7 +203,7 @@ export default function IconLabView() {
   // Live preview (React SVG → instant).
   const Preview = ({ px, dark = false, checker = false }) => (
     <div style={{ width: px, height: px, borderRadius: Math.min(px * 0.06, 12), overflow: 'hidden',
-      background: dark ? '#1e1e1e' : (checker ? CHECKER : 'transparent'), border: '1px solid var(--border-subtle)' }}>
+      background: dark ? '#1e1e1e' : (checker ? CHECKER : 'transparent'), border: '1px solid var(--dock-border-subtle)' }}>
       <svg viewBox={`0 0 ${VB} ${VB}`} width={px} height={px}>
         {!c.bgTransparent && <rect width={VB} height={VB} rx={c.radius / 100 * VB} fill={c.bg} />}
         <g transform={transformStr(c)}>
@@ -235,22 +236,22 @@ export default function IconLabView() {
                     style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
                     <MiniIcon cfg={normCfg(p.config)} px={36} />
                   </button>
-                  <span style={{ fontSize: 'var(--fs-small, 12px)', color: p.fixed ? 'var(--btn-primary-bg)' : 'var(--text-muted)',
+                  <span style={{ fontSize: 'var(--fs-small, 12px)', color: p.fixed ? 'var(--dock-btn-primary-bg)' : 'var(--dock-text-muted)',
                     maxWidth: 54, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
                     {p.fixed ? L(p.name_ko, p.name_en) : p.name}
                   </span>
                   {!p.fixed && (
                     <button type="button" className="set-plain" onClick={() => deletePreset(p.id)} title={tr("p_delete_3")}
                       style={{ position: 'absolute', top: -4, right: 2, width: 16, height: 16, lineHeight: '14px', borderRadius: 999,
-                        border: '1px solid var(--border-default)', background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-tiny)', padding: 0 }}>×</button>
+                        border: '1px solid var(--dock-border-default)', background: 'var(--dock-surface)', color: 'var(--dock-text-muted)', cursor: 'pointer', fontSize: 'var(--fs-tiny)', padding: 0 }}>×</button>
                   )}
                 </span>
               ))}
               <button type="button" className="set-plain" onClick={saveCurrent} disabled={presets.length >= 10}
                 title={tr("p_save_current_as_preset")}
-                style={{ width: 36, height: 36, borderRadius: 'var(--rack-radius, 0)', border: '1px dashed var(--border-strong)',
+                style={{ width: 36, height: 36, borderRadius: 'var(--rack-radius, 0)', border: '1px dashed var(--dock-border-strong)',
                   display: 'grid', placeItems: 'center', lineHeight: 1,
-                  background: 'var(--surface)', color: 'var(--text-muted)', cursor: presets.length >= 10 ? 'default' : 'pointer',
+                  background: 'var(--dock-surface)', color: 'var(--dock-text-muted)', cursor: presets.length >= 10 ? 'default' : 'pointer',
                   fontSize: 'var(--fs-xlarge)', opacity: presets.length >= 10 ? 0.4 : 1 }}>+</button>
             </Row>
           </Panel>
@@ -279,9 +280,9 @@ export default function IconLabView() {
               <Button variant="secondary" onClick={exportPNG}>PNG</Button>
               <Button variant="secondary" disabled={busy === 'pdf'} onClick={() => exportVector('pdf')}>PDF</Button>
               <Button variant="secondary" disabled={busy === 'eps'} onClick={() => exportVector('eps')}>EPS</Button>
-              <select value={pngSize} onChange={(e) => setPngSize(Number(e.target.value))} style={{ ...fieldInput, width: 84 }}>
+              <Select value={pngSize} onChange={(e) => setPngSize(Number(e.target.value))} style={{ ...fieldInput, width: 84 }}>
                 {[256, 512, 1024].map((v) => <option key={v} value={v}>{v}px</option>)}
-              </select>
+              </Select>
             </Row>
             <Row>
               <Button variant="secondary" disabled={busy === 'save'} onClick={saveWorking}>{tr("p_save_working_copy")}</Button>
@@ -322,7 +323,7 @@ export default function IconLabView() {
               <span style={{ textAlign: 'right' }}>Y</span>
             </Row>
             {c.lines.map((ln, i) => (
-              <div key={i} className="set-row cols" style={{ ...LINE_COLS, background: hover === i ? 'var(--surface-2)' : undefined }}
+              <div key={i} className="set-row cols" style={{ ...LINE_COLS, background: hover === i ? 'var(--dock-surface-2)' : undefined }}
                 onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
                 <input type="checkbox" checked={ln.on} onChange={(e) => updLine(i, { on: e.target.checked })} />
                 <span style={{ opacity: ln.on ? 1 : 0.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{L(LOGO_PATHS[i].ko, LOGO_PATHS[i].en)}</span>
@@ -340,9 +341,9 @@ export default function IconLabView() {
             <Field label={tr("p_colour")}>
               <span className="set-pick"><ColorPicker value={c.lines[0].color} onChange={(v) => allLines({ color: v })} size={22} title={tr("p_all_color")} /></span>
               <button type="button" className="set-plain" onClick={() => allLines({ color: '#111827' })} title="#111827"
-                style={{ width: 20, height: 20, borderRadius: 4, background: '#111827', border: '1px solid var(--border-strong)', cursor: 'pointer', padding: 0 }} />
+                style={{ width: 20, height: 20, borderRadius: 4, background: '#111827', border: '1px solid var(--dock-border-strong)', cursor: 'pointer', padding: 0 }} />
               <button type="button" className="set-plain" onClick={() => allLines({ color: '#ffffff' })} title="#ffffff"
-                style={{ width: 20, height: 20, borderRadius: 4, background: '#ffffff', border: '1px solid var(--border-strong)', cursor: 'pointer', padding: 0 }} />
+                style={{ width: 20, height: 20, borderRadius: 4, background: '#ffffff', border: '1px solid var(--dock-border-strong)', cursor: 'pointer', padding: 0 }} />
             </Field>
             <NumField label={tr("p_all_width")} value={c.lines[0].width} min={0} max={70} onChange={(v) => allLines({ width: v })} />
             <NumField label={tr("p_all_rotate")} value={c.lines[0].rot} min={-180} max={180} onChange={(v) => allLines({ rot: v })} suffix="°" />

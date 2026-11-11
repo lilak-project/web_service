@@ -111,8 +111,8 @@ function ElogAddress({ service }) {
   return (
     <>
       <Field label={t('elog_addr')}>
-        <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--surface-2)',
-          color: 'var(--text-primary)', padding: '2px 8px', borderRadius: 'var(--rack-radius, 0)',
+        <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--dock-surface-2)',
+          color: 'var(--dock-text-primary)', padding: '2px 8px', borderRadius: 'var(--rack-radius, 0)',
           minWidth: 0, overflowWrap: 'anywhere' }}>{addr}</code>
       </Field>
       <FieldActions>

@@ -185,8 +185,14 @@ async def stream_proxy(
         finally:
             await upstream.aclose()
         # Only here: this reads every manifest, and most responses are not a page.
-        links = registry.link_projects() if service and service.get("project") else {}
-        body = inject_base(body, html_base, {**service, "links": links} if service and service.get("name") in links else service)
+        # `links`: where a link to each service points (its main project, or this
+        # project's share set's); `share`: the set itself, whose tags it reads.
+        if service and service.get("project"):
+            share = registry.share_for(service["name"], service["project"])
+            links = {**registry.link_projects(), **share}
+            if service["name"] in links:
+                service = {**service, "links": links, "share": share}
+        body = inject_base(body, html_base, service)
         headers, set_cookies = _copy_headers(upstream, body_rewritten=True)
         resp = Response(content=body, status_code=upstream.status_code,
                         headers=headers, media_type=ctype)

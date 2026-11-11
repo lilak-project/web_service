@@ -9,6 +9,8 @@ so they follow the person to any browser:
     favTags [tag, …] — the tags starred, first in every tags tab
     recent  ["svc" | "svc/project", …] — last opened, newest first (home)
     density 'compact' — the narrower service bar; absent means the wide one
+    layout  this account's own service bar (order, groups, hidden, names);
+            absent means the manager's default arrangement
 """
 from __future__ import annotations
 

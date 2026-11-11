@@ -98,7 +98,7 @@ export default function StoreView({ onChanged }) {
                 exists on this portal. Until it is installed the row keeps the
                 slot (so the labels stay aligned) but shows nothing. */}
             {s.registered
-              ? <Icon name={s.icon || 'circle'} size={18} weight="fill" color={s.color || 'var(--text-primary)'} />
+              ? <Icon name={s.icon || 'circle'} size={18} weight="fill" color={s.color || 'var(--dock-text-primary)'} />
               : <span aria-hidden="true" />}
             {/* The repo is on the name's tooltip, not in the row: it is the
                 longest thing here and the least often read. */}
@@ -140,10 +140,10 @@ export default function StoreView({ onChanged }) {
         <Panel bare
           title={job.name === 'portal' ? tr("p_portal_build") : job.name}
           hint={running ? tr("p_running") : job.status === 'done' ? tr("p_done_2") : tr("p_failed")}>
-          {job.error && <div className="set-row" style={{ color: 'var(--danger-text)' }}>{job.error}</div>}
+          {job.error && <div className="set-row" style={{ color: 'var(--dock-danger-text)' }}>{job.error}</div>}
           <pre ref={logBox} style={{
             margin: 14, maxHeight: 240, overflow: 'auto', fontSize: 'var(--fs-small, 13px)', lineHeight: 1.5,
-            backgroundColor: 'var(--surface-2)', color: 'var(--text-secondary)',
+            backgroundColor: 'var(--dock-surface-2)', color: 'var(--dock-text-secondary)',
             borderRadius: 'var(--rack-radius, 0)', padding: 10, whiteSpace: 'pre-wrap',
           }}>{(job.log || []).join('\n') || '…'}</pre>
         </Panel>

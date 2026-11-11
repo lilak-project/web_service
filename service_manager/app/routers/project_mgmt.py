@@ -253,6 +253,58 @@ def set_link_project(svc: str, body: LinkProject, _: models.User = Depends(requi
     return {"service": svc, "link_project": body.project}
 
 
+class ShareSet(BaseModel):
+    name: str
+    members: dict[str, str]
+
+
+class ShareSets(BaseModel):
+    sets: list[ShareSet]
+
+
+def _racklist_service(svc: str) -> bool:
+    m = registry.read_manifest(svc)
+    return bool((m.get("capabilities") or {}).get("multi_project")) and (
+        m.get("kind") == "rack" or bool((m.get("capabilities") or {}).get("tags")))
+
+
+@router.get("/api/share-sets")
+def get_share_sets(_: models.User = Depends(require_portal_admin)):
+    sets, stored = registry.share_sets()
+    return {"sets": sets, "stored": stored}
+
+
+@router.put("/api/share-sets")
+def put_share_sets(body: ShareSets, _: models.User = Depends(require_portal_admin)):
+    """Replace every set. A project may sit in one set only (a link from it must
+    have one place to point), and only a rack service's real projects count."""
+    names = set(registry.list_service_names())
+    seen: dict[tuple[str, str], str] = {}
+    out = []
+    for st in body.sets:
+        name = st.name.strip()
+        if not name:
+            raise HTTPException(400, "세트 이름이 비어 있습니다")
+        for svc, proj in st.members.items():
+            if svc not in names or not _racklist_service(svc):
+                raise HTTPException(400, f"'{svc}' 는 rack 서비스가 아닙니다")
+            if proj not in _project_names(svc):
+                raise HTTPException(400, f"'{svc}/{proj}' 프로젝트가 없습니다")
+            if (svc, proj) in seen:
+                raise HTTPException(400, f"'{svc}/{proj}' 가 '{seen[(svc, proj)]}' 와 '{name}' 두 세트에 있습니다")
+            seen[(svc, proj)] = name
+        out.append({"name": name, "members": dict(st.members)})
+    registry.write_share_sets(out)
+    return {"sets": out, "stored": True}
+
+
+@router.delete("/api/share-sets")
+def reset_share_sets(_: models.User = Depends(require_portal_admin)):
+    """Back to the sets the manifests give."""
+    registry._share_file().unlink(missing_ok=True)
+    return {"sets": registry.default_share_sets(), "stored": False}
+
+
 @router.post("/api/services/{svc}/projects/{proj}/start")
 def start_project(svc: str, proj: str, user: models.User = Depends(require_portal_user),
                  db: Session = Depends(get_db)):

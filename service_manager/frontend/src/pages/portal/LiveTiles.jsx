@@ -21,9 +21,9 @@ import { serviceApi, store, PORTAL_TOKEN_KEY } from '../../api'
 const POLL_MS = 4000
 const TONE = {
   running: 'var(--ok-text, #2f9e44)', on: 'var(--ok-text, #2f9e44)', ok: 'var(--ok-text, #2f9e44)',
-  idle: 'var(--info-text, #1c7ed6)', stopped: 'var(--text-muted)', off: 'var(--text-muted)',
-  warn: 'var(--warning-text, #e67700)', trip: 'var(--danger-text, #e03131)', alarm: 'var(--danger-text, #e03131)',
-  error: 'var(--danger-text, #e03131)', down: 'var(--danger-text, #e03131)',
+  idle: 'var(--dock-info-text, #1c7ed6)', stopped: 'var(--dock-text-muted)', off: 'var(--dock-text-muted)',
+  warn: 'var(--dock-warning-text, #e67700)', trip: 'var(--dock-danger-text, #e03131)', alarm: 'var(--dock-danger-text, #e03131)',
+  error: 'var(--dock-danger-text, #e03131)', down: 'var(--dock-danger-text, #e03131)',
 }
 
 function authHeaders() {
@@ -104,46 +104,46 @@ export default function LiveTiles({ service, big = false, pad, wall = false }) {
     display: 'flex', flexDirection: 'column', gap: wall ? 4 : 2,
     flex: wall ? (stack ? '1 1 170px' : '1 1 150px') : '0 0 auto',
     padding: wall ? '10px 14px' : big ? '8px 12px' : '6px 10px',
-    borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border-subtle)', minWidth: 0,
+    borderRadius: 12, background: 'var(--dock-surface-2)', border: '1px solid var(--dock-border-subtle)', minWidth: 0,
   }
   const labelPx = wall ? 14 : null
   return (
     <div style={{ padding: pad || (big ? '4px 18px 14px 58px' : '2px 14px 10px 46px') }}>
       {unsupported ? (
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>live 정보 없음</span>
+        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-muted)' }}>live 정보 없음</span>
       ) : err && !items.length ? (
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--danger-text)' }}>{err}</span>
+        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-danger-text)' }}>{err}</span>
       ) : !data ? (
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>…</span>
+        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-muted)' }}>…</span>
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: wall ? 10 : 8, alignItems: 'stretch' }}>
-          {items.length === 0 && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>—</span>}
+          {items.length === 0 && <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-muted)' }}>—</span>}
           {items.map((it, i) => {
             const tone = TONE[(it.state || '').toLowerCase()]
             const label = (
-              <span style={{ fontSize: labelPx ? `${labelPx}px` : 'var(--fs-micro, 11px)', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-flex', gap: 6, alignItems: 'center', }}>
+              <span style={{ fontSize: labelPx ? `${labelPx}px` : 'var(--fs-micro, 11px)', color: 'var(--dock-text-secondary)', fontWeight: 600, letterSpacing: '.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-flex', gap: 6, alignItems: 'center', }}>
                 {tone && <span style={{ width: 9, height: 9, borderRadius: 999, background: tone, flexShrink: 0 }} />}
                 {it.label}
               </span>
             )
             const value = (
-              <span style={{ ...valueFont, fontSize: valuePx ? `${valuePx}px` : big ? 'var(--fs-xlarge, 18px)' : 'var(--fs-large, 16px)', lineHeight: 1.1, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
-                {it.value ?? '—'}{it.unit ? <span style={{ fontSize: wall ? 16 : 'var(--fs-small, 12px)', fontWeight: 500, color: 'var(--text-muted)', marginLeft: 4 }}>{it.unit}</span> : null}
+              <span style={{ ...valueFont, fontSize: valuePx ? `${valuePx}px` : big ? 'var(--fs-xlarge, 18px)' : 'var(--fs-large, 16px)', lineHeight: 1.1, color: 'var(--dock-text-primary)', whiteSpace: 'nowrap' }}>
+                {it.value ?? '—'}{it.unit ? <span style={{ fontSize: wall ? 16 : 'var(--fs-small, 12px)', fontWeight: 500, color: 'var(--dock-text-muted)', marginLeft: 4 }}>{it.unit}</span> : null}
               </span>
             )
             const spark = Array.isArray(it.spark) && it.spark.length > 1 ? it.spark : null
             return (
               <div key={i} style={{ ...tile, position: 'relative', overflow: 'hidden' }} title={it.title || it.label}>
-                {spark && <Spark values={spark} log={!!it.spark_log} color={tone || 'var(--text-secondary)'} />}
+                {spark && <Spark values={spark} log={!!it.spark_log} color={tone || 'var(--dock-text-secondary)'} />}
                 <span style={{ position: 'relative' }}>{label}</span>
                 <span style={{ position: 'relative' }}>{value}</span>
                 {(it.sub || it.spark_window) && (stack
-                  ? <span style={{ ...valueFont, fontSize: valuePx ? `${Math.round(valuePx * 0.72)}px` : 'var(--fs-medium, 14px)', lineHeight: 1.2, color: 'var(--text-secondary)', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{it.sub}</span>
-                  : <span style={{ position: 'relative', fontSize: wall ? 14 : 'var(--fs-micro, 11px)', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.sub || (spark ? `${it.spark_window || ''} ↗` : '')}</span>)}
+                  ? <span style={{ ...valueFont, fontSize: valuePx ? `${Math.round(valuePx * 0.72)}px` : 'var(--fs-medium, 14px)', lineHeight: 1.2, color: 'var(--dock-text-secondary)', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{it.sub}</span>
+                  : <span style={{ position: 'relative', fontSize: wall ? 14 : 'var(--fs-micro, 11px)', color: 'var(--dock-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.sub || (spark ? `${it.spark_window || ''} ↗` : '')}</span>)}
               </div>
             )
           })}
-          {data?.note && <div style={{ flexBasis: '100%', fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{data.note}</div>}
+          {data?.note && <div style={{ flexBasis: '100%', fontSize: 'var(--fs-micro, 11px)', color: 'var(--dock-text-muted)' }}>{data.note}</div>}
         </div>
       )}
     </div>

@@ -76,6 +76,10 @@ def _stream(job_id: str, argv: list[str], cwd: Optional[Path] = None,
     import os
     _log(job_id, "$ " + " ".join(argv))
     env = {**os.environ, **(env_extra or {})}
+    # A launchd-started portal has PATH=/usr/bin:/bin…; npm found at /opt/homebrew/bin
+    # still runs `#!/usr/bin/env node`, so its own directory must be on PATH.
+    if "/" in argv[0]:
+        env["PATH"] = os.path.dirname(argv[0]) + os.pathsep + env.get("PATH", "")
     try:
         proc = subprocess.Popen(argv, cwd=str(cwd) if cwd else None, env=env,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

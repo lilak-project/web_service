@@ -20,8 +20,8 @@ export default function Shell() {
   const tabs = TABS.map((x) => ({ id: x.id, label: t('tab_' + x.id), icon: x.icon }))
 
   const status = (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--nav-text)' }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--nav-text-muted)' }} />
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-nav-text)' }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'var(--dock-nav-text-muted)' }} />
       {t('status_idle')}
     </span>
   )

@@ -1,3 +1,4 @@
+import Select from 'lilak-ui/components/Select.jsx'
 import { useState, useEffect } from 'react'
 import { Button, Icon, ColorPicker, AVATAR_COLORS, LayoutEditor, tr } from 'lilak-ui'
 import { launcher, serviceApi, errText } from '../../api'
@@ -176,7 +177,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
             said nothing about which one did what. */}
         <Field label={tr("p_icon")}>
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
-            borderRadius: 'var(--rack-radius, 0)', border: '1px solid var(--border-strong)' }}>
+            borderRadius: 'var(--rack-radius, 0)', border: '1px solid var(--dock-border-strong)' }}>
             <Icon name={icon} size={20} weight={ICON_WEIGHT} color={color} />
           </span>
           <IconPick value={icon} onChange={setIcon} color={color} />
@@ -209,9 +210,9 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
       <Panel title={tr("p_on_the_cover")}>
         {!isBuiltin && (
           <Field label={tr("p_visibility")}>
-            <select value={vis} onChange={(e) => changeVis(e.target.value)} style={sel}>
+            <Select value={vis} onChange={(e) => changeVis(e.target.value)} style={sel}>
               {VIS_OPTS.map((o) => <option key={o.v} value={o.v}>{t(o.key)}</option>)}
-            </select>
+            </Select>
           </Field>
         )}
         {!isBuiltin && (
@@ -253,7 +254,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
             {service.live && (<>
               <Field label={tr('p_live_public')}>
                 {livePublic ? <Pill tone="warn">{tr('p_live_public_on')}</Pill> : <Pill>{tr('p_live_public_off')}</Pill>}
-                <span style={{ color: 'var(--text-muted)' }}>{tr('p_live_public_hint')}</span>
+                <span style={{ color: 'var(--dock-text-muted)' }}>{tr('p_live_public_hint')}</span>
               </Field>
               <FieldActions>
                 <Button variant={livePublic ? 'warning' : 'secondary'} onClick={toggleLivePublic}>
@@ -294,7 +295,7 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
             <div style={{ padding: 14 }}>
               <LayoutEditor value={layout} onChange={(c) => { setLayout(c); setLyDirty(true) }}
                 onSave={saveLayout} onReset={resetLayout} dirty={lyDirty} saving={lySaving} />
-              {lyErr && <div style={{ color: 'var(--danger-text)', marginTop: 8 }}>{lyErr}</div>}
+              {lyErr && <div style={{ color: 'var(--dock-danger-text)', marginTop: 8 }}>{lyErr}</div>}
             </div>
           ) : (
             <div className="set-row empty">{tr("p_loading")}</div>

@@ -134,7 +134,7 @@ export default function SystemAdmin() {
           <input style={input} type="number" value={start} onChange={(e) => setStart(e.target.value)} />
           <span style={fieldMuted}>–</span>
           <input style={input} type="number" value={end} onChange={(e) => setEnd(e.target.value)} />
-          <span style={{ color: bad ? 'var(--danger-text)' : 'var(--text-secondary)' }}>
+          <span style={{ color: bad ? 'var(--dock-danger-text)' : 'var(--dock-text-secondary)' }}>
             = {Number.isFinite(slots) ? slots : '?'} {tr("p_slots")}
           </span>
         </Field>

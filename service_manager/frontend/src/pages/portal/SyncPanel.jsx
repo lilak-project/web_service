@@ -1,3 +1,4 @@
+import Select from 'lilak-ui/components/Select.jsx'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Icon, tr } from 'lilak-ui'
 import { launcher } from '../../api'
@@ -16,9 +17,9 @@ import { useLang } from '../../context/LangContext'
  * Only project data syncs; accounts and permissions stay per-server.
  */
 const input = { height: 30, borderRadius: 6, fontSize: 'var(--fs-small, 12px)', padding: '0 8px', flex: 1, minWidth: 140,
-  backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }
+  backgroundColor: 'var(--dock-input-bg)', color: 'var(--dock-text-primary)', border: '1px solid var(--dock-input-border)' }
 const sel = { ...input, flex: 'none', minWidth: 120 }
-const lbl = { fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', minWidth: 78 }
+const lbl = { fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-secondary)', minWidth: 78 }
 const row = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
 const btn = { height: 32, borderRadius: 8, padding: '0 14px', fontSize: 'var(--fs-small, 12px)', justifyContent: 'center', flexShrink: 0 }
 
@@ -199,12 +200,12 @@ export default function SyncPanel({ service, project = '', onChanged }) {
   const role = pick ?? (cfg?.role || '')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 10, borderTop: '1px dashed var(--dock-border-subtle)' }}>
       <div style={row}>
         <span style={lbl}>{tr("p_sync")}</span>
         {/* off and main need nothing typed, so they save on the spot; sub
             opens its form and waits for 연결 저장. */}
-        <select value={role} style={sel}
+        <Select value={role} style={sel}
           onChange={(e) => {
             const v = e.target.value
             if (v === 'sub' && cfg?.role !== 'sub') {
@@ -215,12 +216,12 @@ export default function SyncPanel({ service, project = '', onChanged }) {
           <option value="">{tr("p_off")}</option>
           <option value="main">{tr("p_main_source")}</option>
           <option value="sub">{tr("p_sub_mirror")}</option>
-        </select>
-        {cfg?.last_sync && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
+        </Select>
+        {cfg?.last_sync && <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)' }}>
           {tr("p_last")}: {cfg.last_sync}
         </span>}
       </div>
-      <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
+      <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)' }}>
         {project
           ? tr("p_a_link_for_project_alone", project)
           : (cfg?.own_links?.length
@@ -230,7 +231,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
 
       {role === 'main' && (
         <>
-          <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)' }}>
             {tr("p_paste_the_connection_code_into")}
           </div>
           <div style={row}>
@@ -239,7 +240,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
               placeholder="http://kiki.local:8025" />
           </div>
           {addrLocal && (
-            <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--warning-text, #b45309)' }}>
+            <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-warning-text, #b45309)' }}>
               {tr("p_localhost_cannot_be_reached_from")}
             </div>
           )}
@@ -253,7 +254,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
           </div>
           <div style={row}>
             <span style={lbl}>{tr("p_two_way")}</span>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-secondary)', cursor: 'pointer' }}>
               <input type="checkbox" checked={!!cfg.accept_push}
                 onChange={(e) => save('main', { accept_push: e.target.checked })} />
               {tr("p_accept_edits_made_on_the")}
@@ -265,13 +266,13 @@ export default function SyncPanel({ service, project = '', onChanged }) {
       {/* Other servers asking to follow this one: approve (it becomes main
           for that link) or reject. The pin is the one the asker sees. */}
       {asked.filter((r) => r.status === 'pending' && mine(r)).map((r) => (
-        <div key={r.id} style={{ ...row, padding: 8, borderRadius: 8, background: 'var(--surface-2)' }}>
+        <div key={r.id} style={{ ...row, padding: 8, borderRadius: 8, background: 'var(--dock-surface-2)' }}>
           <span style={{ fontSize: 'var(--fs-small, 12px)', flex: 1, minWidth: 220 }}>
-            <b>{tr("p_link_request")}</b> · {r.from_name || '?'} <span style={{ color: 'var(--text-muted)' }}>({r.from_url || '?'})</span>
+            <b>{tr("p_link_request")}</b> · {r.from_name || '?'} <span style={{ color: 'var(--dock-text-muted)' }}>({r.from_url || '?'})</span>
             {' · '}{r.by || '?'} · {r.project ? tr("p_project", r.project) : tr("p_whole_service")}
             {' · '}{tr("p_pin")} <b style={{ fontFamily: 'var(--font-mono)' }}>{r.pin}</b>
           </span>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-secondary)' }}>
             <input type="checkbox" defaultChecked={!!r.two_way} id={`ap-${r.id}`} /> {tr("p_allow_two_way")}
           </label>
           <Button variant="primary" style={btn}
@@ -282,7 +283,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
 
       {/* The way in: main's address (it asks; main approves) or main's code. */}
       {role !== 'main' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 6, borderBottom: '1px dashed var(--border-subtle)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 6, borderBottom: '1px dashed var(--dock-border-subtle)' }}>
           <div style={row}>
             <span style={lbl}>{tr("p_link_to")}</span>
             <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)}
@@ -296,12 +297,12 @@ export default function SyncPanel({ service, project = '', onChanged }) {
                 <input value={askProj} onChange={(e) => setAskProj(e.target.value)} disabled={!!project}
                   placeholder={tr("p_project_empty_whole_service")}
                   style={{ ...input, flex: 'none', width: 220, fontFamily: 'var(--font-mono)' }} />
-                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-secondary)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={askTwo} onChange={(e) => setAskTwo(e.target.checked)} />
                   {tr("p_two_way_2")}
                 </label>
               </>)}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-secondary)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={joinLive} onChange={(e) => setJoinLive(e.target.checked)} />
                 {tr("p_live")}
               </label>
@@ -336,13 +337,13 @@ export default function SyncPanel({ service, project = '', onChanged }) {
           </div>
           <div style={row}>
             <span style={lbl}>{tr("p_direction")}</span>
-            <select value={form.two_way ? 'two' : 'one'} style={sel}
+            <Select value={form.two_way ? 'two' : 'one'} style={sel}
               onChange={(e) => setForm((f) => ({ ...f, two_way: e.target.value === 'two' }))}>
               <option value="one">{tr("p_main_here_mirror")}</option>
               <option value="two">{tr("p_two_way_2")}</option>
-            </select>
+            </Select>
             {!form.two_way && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-secondary)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.read_only}
                   onChange={(e) => setForm((f) => ({ ...f, read_only: e.target.checked }))} />
                 {tr("p_lock_read_only_recommended")}
@@ -356,15 +357,15 @@ export default function SyncPanel({ service, project = '', onChanged }) {
               <span style={lbl}>{tr("p_projects")}</span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', flex: 1 }}>
                 {[...new Set([...(choices.main || []), ...(form.two_way ? choices.local || [] : [])])].sort().map((p) => (
-                  <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-secondary)', cursor: 'pointer' }}>
                     <input type="checkbox" checked={form.projects.includes(p)}
                       onChange={(e) => setForm((f) => ({ ...f, projects: e.target.checked
                         ? [...f.projects, p] : f.projects.filter((x) => x !== p) }))} />
                     <span style={{ fontFamily: 'var(--font-mono)' }}>{p}</span>
-                    {!(choices.main || []).includes(p) && <span style={{ color: 'var(--text-muted)' }}>{tr("p_here_only")}</span>}
+                    {!(choices.main || []).includes(p) && <span style={{ color: 'var(--dock-text-muted)' }}>{tr("p_here_only")}</span>}
                   </label>
                 ))}
-                <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)', flexBasis: '100%' }}>
+                <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)', flexBasis: '100%' }}>
                   {choices.error || (form.projects.length
                     ? tr("p_only_these", form.projects.length)
                     : tr("p_none_ticked_every_project"))}
@@ -378,7 +379,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
                 which projects changed — a stat on main's side — and pulls only
                 those, so a mirror trails main by seconds without re-reading the
                 whole project each time. */}
-            <select value={form.live ? 'live' : form.interval_min}
+            <Select value={form.live ? 'live' : form.interval_min}
               onChange={(e) => {
                 const v = e.target.value
                 setForm((f) => (v === 'live' ? { ...f, live: true, interval_min: 0 }
@@ -390,12 +391,12 @@ export default function SyncPanel({ service, project = '', onChanged }) {
               <option value={5}>{tr("p_every_5_min")}</option>
               <option value={15}>{tr("p_every_15_min")}</option>
               <option value={60}>{tr("p_hourly")}</option>
-            </select>
-            <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
+            </Select>
+            <span style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)' }}>
               {tr("p_takes_effect_on_save")}
             </span>
           </div>
-          <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)' }}>
             {form.two_way
               ? tr("p_edits_on_either_side_reach")
               : tr("p_a_sync_overwrites_this_server")}
@@ -407,7 +408,7 @@ export default function SyncPanel({ service, project = '', onChanged }) {
               {running ? tr("p_syncing") : tr("p_sync_now")}
             </Button>
           </div>
-          <div style={{ ...row, paddingTop: 4, borderTop: '1px dashed var(--border-subtle)' }}>
+          <div style={{ ...row, paddingTop: 4, borderTop: '1px dashed var(--dock-border-subtle)' }}>
             <span style={lbl}>{tr("p_grants")}</span>
             <Button variant="secondary" style={btn} onClick={() => loadGrants(false)}>
               {tr("p_check_main")}
@@ -419,8 +420,8 @@ export default function SyncPanel({ service, project = '', onChanged }) {
             )}
           </div>
           {grants && (
-            <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)',
-              background: 'var(--surface-2)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)',
+              background: 'var(--dock-surface-2)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
               {grants.matched.length === 0 && grants.skipped.length === 0 && <span>{tr("p_no_grants_on_main")}</span>}
               {grants.matched.map((m, i) => (
                 <span key={'m' + i}>
@@ -441,11 +442,11 @@ export default function SyncPanel({ service, project = '', onChanged }) {
         </>
       )}
 
-      {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--text-muted)' }}>{msg}</div>}
+      {msg && <div style={{ fontSize: 'var(--fs-tiny, 11px)', color: 'var(--dock-text-muted)' }}>{msg}</div>}
       {/* The last sync's log — after a join too, while the role still reads off. */}
       {job && (
         <pre style={{ margin: 0, maxHeight: 160, overflow: 'auto', fontSize: 'var(--fs-micro, 10px)', lineHeight: 1.5,
-          backgroundColor: 'var(--surface-2)', color: 'var(--text-muted)', borderRadius: 8, padding: 10, whiteSpace: 'pre-wrap' }}>
+          backgroundColor: 'var(--dock-surface-2)', color: 'var(--dock-text-muted)', borderRadius: 8, padding: 10, whiteSpace: 'pre-wrap' }}>
           {(job.log || []).join('\n') || '…'}{job.error ? `\n! ${job.error}` : ''}
         </pre>
       )}

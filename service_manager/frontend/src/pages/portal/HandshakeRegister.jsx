@@ -1,3 +1,4 @@
+import Select from 'lilak-ui/components/Select.jsx'
 import { useEffect, useState } from 'react'
 import { Button, Icon } from 'lilak-ui'
 import { launcher } from '../../api'
@@ -100,7 +101,7 @@ export default function HandshakeRegister({ onChanged }) {
 
   return (
     <>
-      {err && <div className="set-msg" style={{ color: 'var(--danger-text)' }}>{err}</div>}
+      {err && <div className="set-msg" style={{ color: 'var(--dock-danger-text)' }}>{err}</div>}
 
       <Panel bare title={t('portal_hs_title')}
         right={
@@ -110,10 +111,10 @@ export default function HandshakeRegister({ onChanged }) {
           </Button>}>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>{t('portal_hs_desc')}</div>
-          <pre style={{ margin: 0, padding: 12, borderRadius: 'var(--rack-radius, 0)', background: 'var(--surface-2)',
+          <pre style={{ margin: 0, padding: 12, borderRadius: 'var(--rack-radius, 0)', background: 'var(--dock-surface-2)',
             fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 13px)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-            color: 'var(--text-primary)' }}>{hsSnippet || '…'}</pre>
-          <div style={{ color: 'var(--text-secondary)' }}>{t('portal_hs_guide_hint')}</div>
+            color: 'var(--dock-text-primary)' }}>{hsSnippet || '…'}</pre>
+          <div style={{ color: 'var(--dock-text-secondary)' }}>{t('portal_hs_guide_hint')}</div>
         </div>
       </Panel>
 
@@ -129,13 +130,13 @@ export default function HandshakeRegister({ onChanged }) {
           <input placeholder={t('portal_ext_kind')} value={reg.kind} onChange={setR('kind')} style={{ ...fieldStyle, maxWidth: 88 }} />
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <select value={reg.mode} onChange={setR('mode')} style={{ ...fieldStyle, maxWidth: 130 }}>
+          <Select value={reg.mode} onChange={setR('mode')} style={{ ...fieldStyle, maxWidth: 130 }}>
             <option value="managed">{t('portal_reg_managed')}</option>
             <option value="external">{t('portal_reg_external')}</option>
-          </select>
-          <select value={reg.visibility} onChange={setR('visibility')} style={{ ...fieldStyle, maxWidth: 130 }}>
+          </Select>
+          <Select value={reg.visibility} onChange={setR('visibility')} style={{ ...fieldStyle, maxWidth: 130 }}>
             {VIS_OPTS.map((o) => <option key={o.v} value={o.v}>{t(o.key)}</option>)}
-          </select>
+          </Select>
           <input placeholder={t('portal_ext_health')} value={reg.health} onChange={setR('health')} style={{ ...fieldStyle, maxWidth: 120 }} />
         </div>
         {reg.mode === 'managed' ? (
@@ -152,14 +153,14 @@ export default function HandshakeRegister({ onChanged }) {
               <input placeholder={t('portal_ext_token')} value={reg.token} onChange={setR('token')} style={fieldStyle} />
               <Button variant="secondary" disabled={!reg.url.trim()} onClick={testConn}>{t('portal_ext_test')}</Button>
               {probe && (
-                <span style={{ whiteSpace: 'nowrap', color: probe.reachable ? 'var(--ok-text, #2f9e44)' : 'var(--danger-text)' }}>
+                <span style={{ whiteSpace: 'nowrap', color: probe.reachable ? 'var(--ok-text, #2f9e44)' : 'var(--dock-danger-text)' }}>
                   {probe.reachable ? `✓ ${t('portal_ext_reachable')}` : `✕ ${t('portal_ext_unreachable')}`}{probe.status ? ` (${probe.status})` : ''}
                 </span>
               )}
             </div>
           </>
         )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, color: 'var(--text-secondary)', marginTop: 2 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, color: 'var(--dock-text-secondary)', marginTop: 2 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}><input type="checkbox" checked={reg.accepts_portal_token} onChange={setR('accepts_portal_token')} /> {t('portal_ext_sso')}</label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}><input type="checkbox" checked={reg.multi_project} onChange={setR('multi_project')} /> {t('portal_reg_multi')}</label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: reg.multi_project ? 0.6 : 1 }}
@@ -167,7 +168,7 @@ export default function HandshakeRegister({ onChanged }) {
             <input type="checkbox" checked={reg.import_export || reg.multi_project} disabled={reg.multi_project} onChange={setR('import_export')} /> {t('portal_reg_importexport')}</label>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {regMsg && <span style={{ color: 'var(--text-secondary)' }}>{regMsg}</span>}
+          {regMsg && <span style={{ color: 'var(--dock-text-secondary)' }}>{regMsg}</span>}
           <div style={{ flex: 1 }} />
           <Button variant="primary" disabled={!reg.name.trim() || (reg.mode === 'external' && !reg.url.trim())} onClick={registerService}>{t('portal_ext_register')}</Button>
         </div>

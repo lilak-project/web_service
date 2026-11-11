@@ -160,7 +160,7 @@ export default function SyncAll() {
           {sent && <span style={fieldMuted}>{tr('p_pin')} <b style={mono}>{sent.pin}</b></span>}
         </FieldActions>
         {sent && sent.results.filter((x) => !x.ok).map((x) => (
-          <Field key={x.svc} label={x.svc}><span style={{ color: 'var(--danger-text)' }}>{x.error}</span></Field>
+          <Field key={x.svc} label={x.svc}><span style={{ color: 'var(--dock-danger-text)' }}>{x.error}</span></Field>
         ))}
       </Panel>
     </>

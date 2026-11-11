@@ -1,3 +1,4 @@
+import Select from 'lilak-ui/components/Select.jsx'
 import { useEffect, useState } from 'react'
 import { Button, Icon, Avatar, tr } from 'lilak-ui'
 import { launcher } from '../../api'
@@ -13,6 +14,7 @@ import GuideView from './GuideView'
 import ProfileEditor from './ProfileEditor'
 import GroupMark from './GroupMark'
 import ExpandBox from './ExpandBox'
+import PasskeysPanel from './PasskeysPanel'
 
 const LANG_NAMES = { ko: '한국어', en: 'English', ja: '日本語', zh: '中文' }
 
@@ -27,7 +29,7 @@ const card = { marginBottom: 10 }
 const rowS = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }
 const input = { ...fieldInput }
 const pwOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
-const pwDialog = { background: 'var(--surface-1, #fff)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 16, width: 320, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }
+const pwDialog = { background: 'var(--surface-1, #fff)', border: '1px solid var(--dock-border-default)', borderRadius: 8, padding: 16, width: 320, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }
 
 /**
  * Masked password prompt — replaces window.prompt() for anything that asks for a
@@ -38,7 +40,7 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
   return (
     <div style={pwOverlay} onClick={onCancel}>
       <div style={pwDialog} onClick={(e) => e.stopPropagation()}>
-        <div style={{ ...FIELD_TEXT, color: 'var(--text-primary)', marginBottom: 10 }}>{title}</div>
+        <div style={{ ...FIELD_TEXT, color: 'var(--dock-text-primary)', marginBottom: 10 }}>{title}</div>
         <input type="password" autoFocus value={v} onChange={(e) => setV(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') onSubmit(v); if (e.key === 'Escape') onCancel() }}
           name="portal-confirm-pw" autoComplete="new-password" data-1p-ignore data-lpignore="true"
@@ -53,8 +55,18 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
 }
 
 // The settings sub-menu, shared so the header can drive it on narrow screens.
+// Pages only a manager sees; the menu marks them.
+export const MANAGER_PAGES = new Set(['map', 'sets', 'dock', 'store', 'accounts', 'groups', 'invites', 'system', 'sync', 'handshake'])
 export function settingsMenu(isManager, lang) {
   return [
+    // Home and its pages first: the account menu is where the cover starts.
+    ['home', 'home', tr("p_home")],
+    ...(isManager ? [
+      ['map', 'tree', tr("rack_title")],
+      ['sets', 'link', tr("p_rack_tab_sets")],
+      ['dock', 'plus', tr("p_home_tab_dock")],
+      ['store', 'gear', tr("p_home_tab_store")],
+    ] : []),
     ['me', 'user', tr("p_my_account")],
     ['feedback', 'chats', tr("p_feedback")],
     ...(isManager ? [
@@ -70,7 +82,7 @@ export function settingsMenu(isManager, lang) {
 
 // tab/onTab make the active sub-tab controllable from the header; hideMenu drops
 // the left sidebar (the header dropdown navigates instead) on narrow screens.
-export default function AccountView({ isManager, onChanged, onAccountGone, tab: tabProp, onTab, hideMenu = false }) {
+export default function AccountView({ isManager, onChanged, onAccountGone, tab: tabProp, onTab, hideMenu = false, homeDefault, onHomeDefault }) {
   const { lang, setLang, langs } = useLang()
   async function signOutEverywhere() {
     try {
@@ -91,6 +103,11 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
     if (v === 'wide') delete document.documentElement.dataset.portalBar
     else document.documentElement.dataset.portalBar = v
     try { await launcher.put('/account/prefs', { density: v }); notify(tr('p_density_saved'), 'ok') }
+    catch (e) { notify(e?.response?.data?.detail || tr('p_failed'), 'bad') }
+  }
+  async function changeHomeView(v) {
+    onHomeDefault?.(v)
+    try { await launcher.put('/account/prefs', { homeView: v }); notify(tr('p_home_view_saved'), 'ok') }
     catch (e) { notify(e?.response?.data?.detail || tr('p_failed'), 'bad') }
   }
   const L = (ko, en) => (lang === 'ko' ? ko : en)
@@ -185,7 +202,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
     }
   }
 
-  if (!me) return <div style={{ color: 'var(--text-primary)', fontSize: 'var(--fs-small,12px)' }}>{msg || '…'}</div>
+  if (!me) return <div style={{ color: 'var(--dock-text-primary)', fontSize: 'var(--fs-small,12px)' }}>{msg || '…'}</div>
 
   const verifyText = (ago, left) => (ago == null ? tr("p_unverified")
     : tr("p_verified_d_ago_d_left", ago, left))
@@ -201,7 +218,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
         display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
         padding: '7px 4px', cursor: 'pointer', fontSize: 'var(--fs-medium, 14px)',
         border: 'none', background: 'transparent',
-        color: on ? 'var(--text-primary)' : 'var(--text-primary)', fontWeight: on ? 600 : 400,
+        color: on ? 'var(--dock-text-primary)' : 'var(--dock-text-primary)', fontWeight: on ? 600 : 400,
         textDecoration: on ? 'underline' : 'none', textUnderlineOffset: 4, textDecorationThickness: 2 }}><Icon name={icon} size={15} /> {label}</button>
     )
   }
@@ -238,18 +255,26 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
 
         <Field label={tr('p_language')}>
           {/* Each language by its own name, so it can be found in any of them. */}
-          <select value={lang} onChange={(e) => changeLang(e.target.value)} style={{ ...input, flex: 'none', minWidth: 160 }}>
+          <Select value={lang} onChange={(e) => changeLang(e.target.value)} style={{ ...input, flex: 'none', minWidth: 160 }}>
             {(langs || ['ko', 'en']).map((l) => <option key={l} value={l}>{LANG_NAMES[l] || l}</option>)}
-          </select>
+          </Select>
           <span style={fieldMuted}>{tr('p_language_hint')}</span>
         </Field>
 
         <Field label={tr('p_density')}>
-          <select value={density} onChange={(e) => changeDensity(e.target.value)} style={{ ...input, flex: 'none', minWidth: 160 }}>
+          <Select value={density} onChange={(e) => changeDensity(e.target.value)} style={{ ...input, flex: 'none', minWidth: 160 }}>
             <option value="wide">{tr('p_density_wide')}</option>
             <option value="compact">{tr('p_density_compact')}</option>
-          </select>
+          </Select>
           <span style={fieldMuted}>{tr('p_density_hint')}</span>
+        </Field>
+
+        <Field label={tr('p_home_view')}>
+          <Select value={homeDefault || 'list'} onChange={(e) => changeHomeView(e.target.value)} style={{ ...input, flex: 'none', minWidth: 160 }}>
+            <option value="list">{tr('p_home_view_list')}</option>
+            <option value="group">{tr('p_home_view_group')}</option>
+          </Select>
+          <span style={fieldMuted}>{tr('p_home_view_hint')}</span>
         </Field>
       </Panel>
 
@@ -273,7 +298,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
             <Field label={tr("p_email_verification")}>
               {me.verification_current
                 ? <span>{tr("p_verified_2")}</span>
-                : <span style={{ color: 'var(--danger-text)' }}>{tr("p_verification_lapsed_projects_are_view")}</span>}
+                : <span style={{ color: 'var(--dock-danger-text)' }}>{tr("p_verification_lapsed_projects_are_view")}</span>}
             </Field>
             <FieldActions>
               <Button variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{tr("p_request_verification_temp")}</Button>
@@ -299,6 +324,8 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
           <Button variant="dangerSoft" onClick={signOutEverywhere}>{tr('p_sign_out_everywhere')}</Button>
         </FieldActions>
       </Panel>
+
+      <PasskeysPanel />
 
       <Panel title={tr("p_access")} hint={tr("p_granted_by_an_administrator")}>
         <Field label={tr("p_my_access")} align="start">
@@ -356,11 +383,11 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
       )}
       <Panel bare title={tr("p_accounts")} hint={`${shownUsers.length}`}
         right={
-          <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} style={{ ...input, maxWidth: 200 }}>
+          <Select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} style={{ ...input, maxWidth: 200 }}>
             <option value="">{tr("p_by_group_all")}</option>
             {Array.from(new Map(users.flatMap((u) => u.groups || []).map((g) => [g.id, g])).values())
               .map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>}>
+          </Select>}>
       <div className="set-list">
       {shownUsers.map((u) => (
         <ExpandBox key={u.id} open={openUser === u.id}
@@ -376,7 +403,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
         >
             <div className={FIELD_CARD_CLASS}>
               <Field label={tr("p_email_verification_2")}>
-                {u.email} · {u.verification_current === false ? <span style={{ color: 'var(--danger-text)' }}>{tr("p_re_verify")}</span>
+                {u.email} · {u.verification_current === false ? <span style={{ color: 'var(--dock-danger-text)' }}>{tr("p_re_verify")}</span>
                   : (u.verify_days_left != null ? tr("p_verified_d_left", u.verify_days_left) : tr("p_unverified"))}
               </Field>
               <FieldActions>
@@ -442,14 +469,14 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
               </Field>
               {openUser === u.id && (
                 <FieldActions>
-                  <select value={agrant.svc} onChange={(e) => agrantPickSvc(e.target.value)} style={{ ...input, height: 28, maxWidth: 180 }}>
+                  <Select value={agrant.svc} onChange={(e) => agrantPickSvc(e.target.value)} style={{ ...input, height: 28, maxWidth: 180 }}>
                     <option value="">{tr("p_service")}</option>
                     {services.map((s) => <option key={s.name} value={s.name}>{s.label || s.name}</option>)}
-                  </select>
-                  <select value={agrant.proj} onChange={(e) => setAgrant((s) => ({ ...s, proj: e.target.value }))} disabled={!agrant.svc} style={{ ...input, height: 28, flex: 1, minWidth: 140 }}>
+                  </Select>
+                  <Select value={agrant.proj} onChange={(e) => setAgrant((s) => ({ ...s, proj: e.target.value }))} disabled={!agrant.svc} style={{ ...input, height: 28, flex: 1, minWidth: 140 }}>
                     <option value="">{tr("p_all_whole_service")}</option>
                     {(projCache[agrant.svc] || []).map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
-                  </select>
+                  </Select>
                   <Button variant="secondary" disabled={!agrant.svc} onClick={() => grantScopedAdmin(u)}>{tr("p_grant_admin")}</Button>
                 </FieldActions>
               )}
@@ -502,7 +529,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
         {/* Narrow screens drop the sidebar — the header's settings dropdown navigates. */}
         {!hideMenu && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 150, flexShrink: 0,
-            borderRight: '1px solid var(--border-subtle)', paddingRight: 8 }}>
+            borderRight: '1px solid var(--dock-border-subtle)', paddingRight: 8 }}>
             {MENU.map(menuBtn)}
           </div>
         )}

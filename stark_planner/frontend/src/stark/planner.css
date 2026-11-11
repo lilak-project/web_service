@@ -18,8 +18,8 @@
   padding: 4px 0 2px; border-bottom: 1px solid var(--line);
 }
 .psechead em { font-style: normal; opacity: .7; }
-.psechead select {
-  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+.psechead .lk-select {
+  border: 1px solid var(--line); background: var(--dock-surface); color: var(--fg);
   border-radius: 5px; padding: 2px 5px; font: 500 11px var(--font-mono, monospace);
   text-transform: none; letter-spacing: 0;
 }
@@ -49,13 +49,13 @@
 .pfrow > label { font-size: 11px; color: var(--muted); }
 .pfin { min-width: 0; }
 .pfu { font: 400 10px var(--font-mono, monospace); color: var(--muted); }
-.pfrow input, .pfrow select {
-  width: 100%; min-width: 0; border: 1px solid var(--line); background: var(--surface);
+.pfrow input, .pfrow .lk-select {
+  width: 100%; min-width: 0; border: 1px solid var(--line); background: var(--dock-surface);
   color: var(--fg); border-radius: 5px; padding: 3px 5px;
   font: 500 11.5px var(--font-mono, monospace);
 }
 .pfrow input[type=checkbox] { width: 15px; height: 15px; padding: 0; accent-color: var(--accent, #2673c2); }
-.pfrow input:focus, .pfrow select:focus { outline: 2px solid var(--accent, #2673c2); outline-offset: -1px; }
+.pfrow input:focus, .pfrow .lk-select:focus { outline: 2px solid var(--accent, #2673c2); outline-offset: -1px; }
 
 /* computed numbers */
 .pfkv { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; }
@@ -71,11 +71,11 @@
 
 .psaverow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .psaverow input[type=text], .psaverow input:not([type]) {
-  flex: 1; min-width: 80px; border: 1px solid var(--line); background: var(--surface);
+  flex: 1; min-width: 80px; border: 1px solid var(--line); background: var(--dock-surface);
   color: var(--fg); border-radius: 5px; padding: 3px 5px; font: 500 11.5px var(--font-mono, monospace);
 }
-.psaverow select {
-  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+.psaverow .lk-select {
+  border: 1px solid var(--line); background: var(--dock-surface); color: var(--fg);
   border-radius: 5px; padding: 3px 5px; font: 500 11px var(--font-mono, monospace);
 }
 .psaved { display: flex; flex-direction: column; gap: 1px; }
@@ -89,7 +89,7 @@
 .piobox { display: flex; flex-direction: column; gap: 5px; }
 .piobox textarea {
   width: 100%; height: 150px; resize: vertical; border: 1px solid var(--line);
-  border-radius: 6px; background: var(--surface); color: var(--fg); padding: 6px;
+  border-radius: 6px; background: var(--dock-surface); color: var(--fg); padding: 6px;
   font: 400 11px/1.5 var(--font-mono, monospace);
 }
 .pflash { font: 600 11px var(--font-mono, monospace); color: var(--accent, #2673c2); }
@@ -144,8 +144,8 @@
    of the beamline and a drag shows what it collides with. */
 .zeditpanel { display: flex; flex-direction: column; gap: 3px; }
 .zopt { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
-.zopt select {
-  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+.zopt .lk-select {
+  border: 1px solid var(--line); background: var(--dock-surface); color: var(--fg);
   border-radius: 5px; padding: 2px 4px; font: 500 11px var(--font-mono, monospace);
 }
 
@@ -169,7 +169,7 @@
   color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .znum {
-  width: 66px; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  width: 66px; border: 1px solid var(--line); background: var(--dock-surface); color: var(--fg);
   border-radius: 5px; padding: 2px 4px; font: 500 11px var(--font-mono, monospace);
   text-align: right;
 }
@@ -206,12 +206,12 @@
 .ztrack input[type=range]::-moz-range-track { height: 20px; background: transparent; }
 .ztrack input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none; width: 11px; height: 18px; border-radius: 3px;
-  background: var(--surface); border: 2px solid var(--accent, #2673c2); margin-top: 1px;
+  background: var(--dock-surface); border: 2px solid var(--accent, #2673c2); margin-top: 1px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
 }
 .ztrack input[type=range]::-moz-range-thumb {
   width: 11px; height: 18px; border-radius: 3px; border: 2px solid var(--accent, #2673c2);
-  background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+  background: var(--dock-surface); box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
 }
 .simpanel.zedit { width: 460px; }
 @media (max-width: 860px) { .simpanel.zedit { width: calc(100vw - 100px); } }
@@ -233,7 +233,7 @@
 .krange span + input { margin-left: 1px; }
 .krange em { font-style: normal; color: var(--muted); }
 .krange input {
-  width: 58px; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  width: 58px; border: 1px solid var(--line); background: var(--dock-surface); color: var(--fg);
   border-radius: 5px; padding: 2px 5px; font: 500 11px var(--font-mono, monospace); text-align: right;
 }
 .krange input:focus { outline: 2px solid var(--accent, #2673c2); outline-offset: -1px; }

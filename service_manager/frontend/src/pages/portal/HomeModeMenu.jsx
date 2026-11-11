@@ -31,14 +31,14 @@ export default function HomeModeMenu({ open, onClose, mode, onPick, isManager, l
   const items = HOME_MODES.filter((m) => !m.admin || isManager)
   const row = (active) => ({
     display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', cursor: 'pointer',
-    background: active ? 'var(--surface-2)' : 'transparent', border: 'none', borderRadius: 8, padding: '9px 12px',
-    font: 'inherit', fontSize: 'var(--fs-medium, 14px)', color: 'var(--text-primary)',
+    background: active ? 'var(--dock-surface-2)' : 'transparent', border: 'none', borderRadius: 8, padding: '9px 12px',
+    font: 'inherit', fontSize: 'var(--fs-medium, 14px)', color: 'var(--dock-text-primary)',
   })
   return (
     <div ref={ref} style={{ position: 'absolute', [anchor]: 0, top: 'calc(100% + 6px)', minWidth: 250, zIndex: 1000,
-      background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 12,
+      background: 'var(--dock-surface)', border: '1px solid var(--dock-border-default)', borderRadius: 12,
       boxShadow: '0 8px 26px rgba(0,0,0,.16)', padding: 6 }}>
-      <div style={{ padding: '4px 12px 8px', fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{tr("p_home_mode")}</div>
+      <div style={{ padding: '4px 12px 8px', fontSize: 'var(--fs-micro, 11px)', color: 'var(--dock-text-muted)', letterSpacing: '.05em', textTransform: 'uppercase' }}>{tr("p_home_mode")}</div>
       <button type="button" style={row(mode == null)} onClick={() => { onPick(null); onClose?.() }}>
         <Icon name="home" size={16} /> <span style={{ flex: 1 }}>{tr("p_normal")}</span>{mode == null && <Icon name="check" size={14} />}
       </button>
@@ -49,7 +49,7 @@ export default function HomeModeMenu({ open, onClose, mode, onPick, isManager, l
             <Icon name={m.icon} size={16} />
             <span style={{ flex: 1, display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
               <span>{tr(m.label)}</span>
-              <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--text-muted)' }}>{tr(m.hint)}</span>
+              <span style={{ fontSize: 'var(--fs-micro, 11px)', color: 'var(--dock-text-muted)' }}>{tr(m.hint)}</span>
             </span>
             {active && <Icon name="check" size={14} />}
           </button>

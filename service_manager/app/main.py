@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from . import config
 from . import autostart
 from .routers import service_groups  # noqa: E402
-from .routers import accounts, auth, home, iconlab, links, mcp, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
+from .routers import accounts, auth, passkeys, home, iconlab, links, mcp, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
 
 config.ensure_dirs()
 
@@ -82,6 +82,7 @@ async def _proxy_error_page(request: Request, exc: HTTPException):
 
 # Order matters: auth + specific service routes, then lifecycle, then proxy.
 app.include_router(auth.router)
+app.include_router(passkeys.router)         # /api/auth/passkey* (Touch ID / Face ID sign-in)
 app.include_router(accounts.router)
 app.include_router(services.router)
 app.include_router(scaffold.router)        # /api/admin/services/scaffold (+ job status)

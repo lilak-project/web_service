@@ -124,7 +124,7 @@ export default function LiveWall({ cards, big, onDone, iconFor, framed = false }
     return () => window.removeEventListener('keydown', onKey)
   }, [pages.length, onDone])
 
-  const dot = (p) => (p.multi_project ? 'var(--info-text)' : p.running ? 'var(--ok-text, #2f9e44)' : 'var(--text-muted)')
+  const dot = (p) => (p.multi_project ? 'var(--dock-info-text)' : p.running ? 'var(--ok-text, #2f9e44)' : 'var(--dock-text-muted)')
 
   // `framed`: fill the box we are given instead of the window. The sidebar cover
   // keeps its bar — live takes the right panel, not the screen.
@@ -133,16 +133,16 @@ export default function LiveWall({ cards, big, onDone, iconFor, framed = false }
       ...(framed
         ? { flex: 1, minWidth: 0, minHeight: 0 }
         : { position: 'fixed', inset: 0, zIndex: 900 }),
-      background: 'var(--app-bg)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column' }}>
+      background: 'var(--dock-app-bg)', color: 'var(--dock-text-primary)', display: 'flex', flexDirection: 'column' }}>
       {/* the one bar: pager + Done */}
-      <div style={{ height: BAR_H, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--border-subtle)' }}>
-        <Icon name="broadcast" size={18} color="var(--warning-text, #e67700)" />
-        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--text-muted)' }}>{tr("p_live_2")} · {cards.length}</span>
+      <div style={{ height: BAR_H, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--dock-border-subtle)' }}>
+        <Icon name="broadcast" size={18} color="var(--dock-warning-text, #e67700)" />
+        <span style={{ fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-muted)' }}>{tr("p_live_2")} · {cards.length}</span>
         <span style={{ flex: 1 }} />
         {pages.length > 1 && (
           <>
             <Button variant="secondary" size="sm" disabled={cur === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} title={tr("p_previous")}><Icon name="caret-left" size={15} /> {tr("p_prev")}</Button>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)', color: 'var(--text-secondary)', minWidth: 48, textAlign: 'center' }}>{cur + 1} / {pages.length}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small, 12px)', color: 'var(--dock-text-secondary)', minWidth: 48, textAlign: 'center' }}>{cur + 1} / {pages.length}</span>
             <Button variant="secondary" size="sm" disabled={cur >= pages.length - 1} onClick={() => setPage((p) => Math.min(pages.length - 1, p + 1))} title={tr("p_next")}>{tr("p_next")} <Icon name="caret-right" size={15} /></Button>
             <span style={{ width: 8 }} />
           </>
@@ -154,16 +154,16 @@ export default function LiveWall({ cards, big, onDone, iconFor, framed = false }
           (no remount, no flash) and simply slides to its new place. */}
       <div ref={areaRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         {cards.length === 0 && (
-          <div style={{ textAlign: 'center', paddingTop: 80, color: 'var(--text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
+          <div style={{ textAlign: 'center', paddingTop: 80, color: 'var(--dock-text-muted)', fontSize: 'var(--fs-small, 12px)' }}>
             {tr("p_no_service_supports_live_yet")}
           </div>
         )}
         {placed.map(({ card: p, left, top, width }) => (
           <div key={p.name} ref={observe(p.name)} data-live-key={p.name}
             style={{ position: 'absolute', left, top, width, transition: 'left .18s ease, top .18s ease',
-              minHeight: cardMin, maxHeight: Math.max(cardMin, dims.h), overflow: 'hidden', border: '1.5px solid var(--border-strong, #94a3b8)', borderRadius: 16, background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
+              minHeight: cardMin, maxHeight: Math.max(cardMin, dims.h), overflow: 'hidden', border: '1.5px solid var(--dock-border-strong, #94a3b8)', borderRadius: 16, background: 'var(--dock-surface)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px 6px', flexShrink: 0 }}>
-              <Icon name={iconFor(p.name, p.icon)} size={30} weight="fill" color={p.color || 'var(--text-primary)'} />
+              <Icon name={iconFor(p.name, p.icon)} size={30} weight="fill" color={p.color || 'var(--dock-text-primary)'} />
               <span style={{ fontSize: 'var(--fs-xlarge)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.name}</span>
               <span style={{ marginLeft: 'auto', width: 10, height: 10, borderRadius: 999, background: dot(p), flexShrink: 0 }} />
             </div>

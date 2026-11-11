@@ -251,3 +251,55 @@ def link_project(name: str, manifest: Optional[dict] = None) -> str:
 def link_projects() -> dict[str, str]:
     """{ service: its link project } for every service that has one."""
     return {n: p for n in list_service_names() if (p := link_project(n))}
+
+
+# ── share sets ────────────────────────────────────────────────────────────────
+# Which projects of the rack services share tags and link records with each
+# other. A set is {service: project}; a project is in one set at most, so a link
+# from it to another service has one place to point. Stored by a manager in
+# rack services (data/_portal/share_sets.json); until then the sets are derived
+# from the manifests: each `capabilities.tags` group, through its main projects.
+def _share_file() -> Path:
+    return config.DATA_ROOT / "_portal" / "share_sets.json"
+
+
+def default_share_sets() -> list[dict]:
+    groups: dict[str, dict] = {}
+    for n in list_service_names():
+        m = read_manifest(n)
+        t = (m.get("capabilities") or {}).get("tags")
+        p = t and link_project(n, m)
+        if p:
+            g = "managers" if t is True else str(t)
+            groups.setdefault(g, {"name": g, "members": {}})["members"][n] = p
+    return list(groups.values())
+
+
+def share_sets() -> tuple[list[dict], bool]:
+    """(sets, stored): the manager's sets, or the derived ones."""
+    try:
+        d = json.loads(_share_file().read_text("utf-8"))
+        if isinstance(d.get("sets"), list):
+            return d["sets"], True
+    except (OSError, ValueError, AttributeError):
+        pass
+    return default_share_sets(), False
+
+
+def write_share_sets(sets: list[dict]) -> None:
+    _atomic_write_text(_share_file(), json.dumps({"sets": sets}, ensure_ascii=False, indent=2))
+
+
+def share_for(svc: str, proj: str) -> dict[str, str]:
+    """The {service: project} this project reads tags from and links into: its
+    own set; for a project in none, the set of its service's main project, which
+    it reads but which does not read it (as before sets existed)."""
+    sets, _ = share_sets()
+    for s in sets:
+        if (s.get("members") or {}).get(svc) == proj:
+            return dict(s["members"])
+    main = link_project(svc)
+    for s in sets:
+        if main and (s.get("members") or {}).get(svc) == main:
+            return dict(s["members"])
+    return {}

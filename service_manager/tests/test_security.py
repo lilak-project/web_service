@@ -125,6 +125,48 @@ class Accounts(unittest.TestCase):
         self.assertEqual(registry.link_project("racka"), "two")
         self.assertEqual(c.delete("/api/services/racka/projects/one", headers=admin).status_code, 200)
 
+    def test_split_cards_swap_in_place_and_merge_to_first_group(self):
+        from app.routers import service_groups as sg
+        keys = ["a", "svc", "b"]
+        split = sg.swap_card(keys, "svc", ["p", "q"], True)
+        self.assertEqual(split, ["a", "svc/p", "svc/q", "b"])
+        self.assertEqual(sg.swap_card(split, "svc", ["p", "q"], False), keys)
+        self.assertTrue(sg._is_project_card("svc/p"))
+        self.assertFalse(sg._is_project_card("svc/../p"))
+        self.assertFalse(sg._is_project_card("svc/"))
+        sg._write({"groups": [{"id": "g1", "members": ["svc/p"]}, {"id": "g2", "members": ["svc/q", "x"]}]})
+        sg.split_members("svc", ["p", "q"], False)
+        self.assertEqual([g["members"] for g in sg.all_groups()], [["svc"], ["x"]])
+        sg._write({"groups": []})
+
+    def test_share_sets_are_a_managers_and_disjoint(self):
+        for name, tags in (("sharea", True), ("shareb", True), ("sharelog", "log")):
+            for proj in ("main", "second"):
+                (registry.service_dir(name) / "projects" / proj).mkdir(parents=True, exist_ok=True)
+            registry.write_manifest(name, {**registry.default_manifest("rack", "managed"),
+                "capabilities": {"multi_project": True, "tags": tags}, "entry_project": "main"})
+        admin = bearer(self.admin)
+        # Before a manager saves: the manifests' groups, through the main projects.
+        sets = {s["name"]: s["members"] for s in c.get("/api/share-sets", headers=admin).json()["sets"]}
+        self.assertEqual((sets["managers"].get("sharea"), sets["log"]), ("main", {"sharelog": "main"}))
+
+        user = self.register("sharer")
+        self.assertEqual(c.get("/api/share-sets", headers=bearer(user)).status_code, 403)
+        two = {"sets": [{"name": "a", "members": {"sharea": "main"}}, {"name": "b", "members": {"sharea": "main"}}]}
+        self.assertEqual(c.put("/api/share-sets", json=two, headers=admin).status_code, 400)
+        nope = {"sets": [{"name": "a", "members": {"sharea": "nope"}}]}
+        self.assertEqual(c.put("/api/share-sets", json=nope, headers=admin).status_code, 400)
+
+        ok = {"sets": [{"name": "managers", "members": {"sharea": "main", "shareb": "main"}},
+                       {"name": "second", "members": {"sharea": "second", "shareb": "second", "sharelog": "main"}}]}
+        self.assertEqual(c.put("/api/share-sets", json=ok, headers=admin).status_code, 200)
+        self.assertEqual(registry.share_for("sharelog", "main"), ok["sets"][1]["members"])
+        self.assertEqual(registry.share_for("sharea", "second")["shareb"], "second")
+        # In no set: it reads its main project's set.
+        self.assertEqual(registry.share_for("sharelog", "second"), ok["sets"][1]["members"])
+        self.assertTrue(c.delete("/api/share-sets", headers=admin).json()["stored"] is False)
+        self.assertEqual(registry.share_for("sharelog", "main"), {"sharelog": "main"})
+
     def test_recent_is_deduped_and_capped(self):
         tok = self.register("recent")
         keys = ["a/1", "b", "a/1"] + [f"x{i}" for i in range(10)]
@@ -139,6 +181,29 @@ class Accounts(unittest.TestCase):
         self.assertNotIn("density", r.json()["prefs"])
         r = c.put("/api/account/prefs", headers=bearer(tok), json={"density": "tiny"})
         self.assertEqual(r.status_code, 400)
+
+    def test_home_tabs_writes_are_a_managers(self):
+        # Every call the Home tabs make beyond reading: group editing, rack services,
+        # share sets, the store. A signed-in user who is not a manager gets 403 on each.
+        user = bearer(self.register("homeuser"))
+        calls = [("get", "/api/share-sets", None), ("put", "/api/share-sets", {"sets": []}),
+                 ("delete", "/api/share-sets", None),
+                 ("post", "/api/admin/service-groups", {"name": "x"}),
+                 ("put", "/api/admin/service-groups/abcd1234", {"name": "x"}),
+                 ("put", "/api/admin/home-service", {"name": "elog", "split": True}),
+                 ("post", "/api/services/elog/projects", {"name": "x"}),
+                 ("get", "/api/admin/store", None), ("post", "/api/admin/store/install", {"name": "x"}),
+                 ("post", "/api/admin/store/build-portal", {"pull": False}),
+                 ("post", "/api/admin/services/scaffold", {"name": "x"})]
+        for verb, url, body in calls:
+            r = getattr(c, verb)(url, headers=user, **({"json": body} if body is not None else {}))
+            self.assertEqual(r.status_code, 403, f"{verb} {url}: {r.status_code}")
+
+    def test_home_view_is_list_or_group(self):
+        tok = bearer(self.register("homeview"))
+        self.assertEqual(c.put("/api/account/prefs", headers=tok, json={"homeView": "list"}).json()["prefs"]["homeView"], "list")
+        self.assertNotIn("homeView", c.put("/api/account/prefs", headers=tok, json={"homeView": "group"}).json()["prefs"])
+        self.assertEqual(c.put("/api/account/prefs", headers=tok, json={"homeView": "tree"}).status_code, 400)
 
     def test_handshake_cannot_turn_a_managed_service_external(self):
         registry.service_dir("runsvc").mkdir(parents=True, exist_ok=True)
@@ -308,6 +373,26 @@ class Sync(unittest.TestCase):
             z.writestr("data/a.json", '{"x": 2}')
         self.assertEqual(c.put(url, content=buf2.getvalue(), headers=bearer("tok-seed")).status_code, 409)
         self.assertEqual((pr.project_dir("seedsvc", "p1") / "data/a.json").read_text(), '{"x": 1}')
+
+
+class StoreToolPath(unittest.TestCase):
+    def test_tool_dir_on_path(self):
+        """A launchd portal (PATH=/usr/bin:/bin) runs /opt/homebrew/bin/npm, whose
+        `env node` shebang needs node's dir on PATH — _stream puts it there."""
+        from app.routers import store
+        d = tempfile.mkdtemp()
+        (Path(d) / "node").write_text("#!/bin/sh\necho found\n")
+        (Path(d) / "npm").write_text("#!/usr/bin/env node\n")
+        for f in ("node", "npm"):
+            os.chmod(Path(d) / f, 0o755)
+        store._jobs["t"] = {"log": []}
+        old = os.environ["PATH"]
+        os.environ["PATH"] = "/usr/bin:/bin"
+        try:
+            self.assertEqual(store._stream("t", [str(Path(d) / "npm")]), 0)
+        finally:
+            os.environ["PATH"] = old
+        self.assertIn("found", store._jobs["t"]["log"])
 
 
 if __name__ == "__main__":

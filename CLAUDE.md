@@ -134,6 +134,11 @@ build; the elog/asset frontends are served by their own backends through the pro
   its password instead of offering sign-up (`/api/auth/setup`, gated on the user
   count; `needs_setup` rides along on `/api/health`). Later signups are ordinary
   users.
+- **Two looks: RACK and DOCK.** The portal cover and rack services are RACK
+  (`service_manager/frontend/src/pages/portal/RACK.md`, `--rk-*`, `.rl-*`); the kit's own
+  `AppShell` look (elog, nptoy, analysis, stark_planner …) is DOCK (`lilak_ui/README.md`),
+  coloured with `--dock-<name>` tokens. Write `--dock-surface`, not `--surface` — the bare
+  names are only aliases until `scripts/dock.py --check` is clean.
 - **Type is decided in one place:** `lilak_ui/src/fonts/fonts.css` — the font files
   (Pretendard, IBM Plex Sans, D2 coding, kept in the kit, no CDN), `--font-sans` /
   `--font-mono`, and the `--fs-*` size scale (+ `--fs-plate` 15px, RACK's nameplate rank,
@@ -156,6 +161,11 @@ build; the elog/asset frontends are served by their own backends through the pro
 - **Per-account settings live on the account** (`users.preferences_json`, `app/prefs.py`):
   `lang`, and `entry` — the project a multi-project service's card opens straight away
   ("open directly"; each account's own, falling back to the manifest's `entry_project`).
+  `homeView` = list or groups for the service bar and Home together (absent = groups); the
+  switch on Home saves it. The account menu (settings bar) is the cover's start: Home, then a manager's rack services / Share sets / dock services / Install services (HomeView), then the settings pages (AccountView), then group/live/manage mode. Nothing open = account menu on Home.
+  `layout` = the account's own service bar (order, groups, hidden, its names for cards), made in
+  Manage sidebar; absent = the shared default (home.json + service_groups.json). Everyone arranges
+  their own; a manager switches Manage sidebar to "Everyone's default" to edit the shared one.
 - **A rack service's data routes require a signed-in caller** (`lilak_portal_auth.signed_in`,
   `manager` for host-touching ones); `identity` alone is for whoami. The portal proxy lets
   some bearers through unchecked (service-to-service calls), so the service must check.
@@ -167,6 +177,16 @@ build; the elog/asset frontends are served by their own backends through the pro
   def never names a project. Another project reads their main projects, they do not read it;
   its footer says so. A stored link keeps its `{svc, proj, id}`, so moving the main project
   does not rewrite links (the panel says how many stay behind), and the main one cannot be deleted.
+- **Share sets decide which projects share** (portal account menu → Share sets, `registry.share_sets`,
+  `data/_portal/share_sets.json`, `/api/share-sets`). A set is `{service: project}`; its projects
+  read each other's tags and link each other's records; a project sits in one set at most. Until a
+  manager saves, the sets are the manifests' `capabilities.tags` groups through the main projects.
+  Each page gets its set as `__PORTAL_SERVICE__.share` (racklist `SHARE`, tags.js), and `links`
+  is the main projects overlaid with that set. A project in no set reads its main project's set.
+- **A multi-project service can be drawn as one card per project** (right-click its card; `home.json`
+  `split_cards`, expanded by `projects.split_cards` in `/api/services`). A project card is the service with
+  `project_card` + `entry_project`, its key is `svc/proj` in group members and the home order, so its projects
+  can sit in different groups. Group-wide tiers and grants skip project cards (`_service_members`).
 - Adding a service = write `data/<name>/service.json` + a `Service` DB row (via the
   admin Services UI, the `/api/handshake` self-registration, or directly). Set
   `capabilities.multi_project` for elog-style services.
