@@ -1599,4 +1599,5 @@ export default {
   p_manage_mode_hint: 'name · icon · visibility · hide · groups · drag to arrange',
   p_live_mode_hint: 'live numbers on cards that support it',
   p_group_n: (a0) => `Group ${a0}`,
+  p_service_busy: "busy (recording…) — keeps going while you look elsewhere",
 }

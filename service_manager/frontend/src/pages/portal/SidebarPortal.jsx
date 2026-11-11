@@ -135,12 +135,18 @@ function RunDot({ on }) {
   )
 }
 
-function Tile({ icon, color, on, badge }) {
+/** Whether a framed page is the one in sight (`lilak:shown`). */
+function tellShown(frame, on) {
+  try { frame.contentWindow?.postMessage({ type: 'lilak:shown', on }, window.location.origin) } catch { /* gone */ }
+}
+
+function Tile({ icon, color, on, badge, busy }) {
   const c = color || 'var(--text-secondary)'
   return (
     <span className={`pl-av${on ? ' round' : ''}`} style={{ background: c }}>
       <Icon name={icon} size={19} weight="fill" color="#fff" />
       {badge > 0 && <b className="pl-badge">{badge > 99 ? '99+' : badge}</b>}
+      {busy && <i className="pl-busy" title={tr("p_service_busy")} />}
     </span>
   )
 }
@@ -351,6 +357,25 @@ export default function SidebarPortal({
       setSel({ svc: String(m.svc), proj: String(m.proj || '') })
       setView('service')
       setDeep({ svc: String(m.svc), proj: String(m.proj || ''), id: String(m.id || '') })
+    }
+    window.addEventListener('message', on)
+    return () => window.removeEventListener('message', on)
+  }, [])
+  // A framed page that is busy (note recording: `lilak:busy`) is kept alive,
+  // hidden, while another is looked at — a new frame would end what it is
+  // doing — and its card says so. { [frame src]: service name }.
+  const [kept, setKept] = useState({})
+  useEffect(() => {
+    const on = (e) => {
+      if (e.origin !== window.location.origin || e.data?.type !== 'lilak:busy') return
+      const f = [...document.querySelectorAll('iframe.pl-frame')].find((x) => x.contentWindow === e.source)
+      const at = f?.getAttribute('src')
+      if (!at) return
+      const svc = (/^\/pp?\/([^/]+)\//.exec(at) || [])[1] || ''
+      setKept((k) => {
+        if (!e.data.on) { const { [at]: _gone, ...rest } = k; return rest }
+        return { ...k, [at]: svc }
+      })
     }
     window.addEventListener('message', on)
     return () => window.removeEventListener('message', on)
@@ -944,6 +969,15 @@ export default function SidebarPortal({
   const src = base && deep?.id && deep.svc === sel.svc && deep.proj === (sel.proj || '')
     ? `${base}#open=${encodeURIComponent(deep.id)}` : base
 
+  const shownFrame = !(signedOut && view !== 'live') && view === 'service' && src ? src : null
+  const frames = signedOut ? (shownFrame ? [shownFrame] : [])
+    : [...new Set([...Object.keys(kept), ...(shownFrame ? [shownFrame] : [])])]
+  // A kept page is told when it is out of sight: it may stop what it is doing
+  // after long enough unseen (note's recorder, after an hour).
+  useEffect(() => {
+    for (const f of document.querySelectorAll('iframe.pl-frame')) tellShown(f, f.getAttribute('src') === shownFrame)
+  }, [shownFrame, frames.length])
+
   const serviceCard = (s) => {
     const key = cardKey(s)
     const hot = cmd ? cmdKeys.indexOf(key) : -1     // its key while command mode is on
@@ -1002,7 +1036,7 @@ export default function SidebarPortal({
               </span>
             )}
             <Tile icon={iconFor ? iconFor(s.name, s.icon) : (s.icon || 'circle')}
-              color={s.color} on={on} badge={badges[s.name]} />
+              color={s.color} on={on} badge={badges[s.name]} busy={Object.values(kept).includes(s.name)} />
             <span className="pl-txt">
               {s.label || s.name}
               {multi && s.projects_count != null && <small>({s.projects_count})</small>}
@@ -1437,20 +1471,26 @@ export default function SidebarPortal({
               </div>
               <SettingsStatus />
             </>
-          ) : view === 'service' && src ? (
-            <iframe key={src} ref={frameRef} src={src} title={sel.svc}
-              allow="clipboard-read; clipboard-write; fullscreen"
+          ) : view === 'service' && src ? null : (
+            <HomeView cards={cards} groups={groups} recent={recent} isManager={isManager}
+              storeOpen={storeLink} onRefresh={onRefresh} iconFor={iconFor}
+              onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
+          )}
+          {/* The service in the panel, and any busy one kept alive behind it
+              (`kept`), in one keyed list: going back to a kept one is the same
+              frame, not a new one. */}
+          {frames.map((f) => (
+            <iframe key={f} ref={f === shownFrame ? frameRef : undefined} src={f} title={kept[f] || sel?.svc}
+              className="pl-frame" style={f === shownFrame ? undefined : { display: 'none' }}
+              allow="clipboard-read; clipboard-write; fullscreen; microphone"
               onLoad={(e) => {
+                tellShown(e.target, f === shownFrame)
                 // Same origin for a proxied service; an external one throws and
                 // simply does not get the shortcut.
                 try { e.target.contentDocument.addEventListener('keydown', (ev) => foldKey.current(ev)) }
                 catch { /* another origin */ }
               }} />
-          ) : (
-            <HomeView cards={cards} groups={groups} recent={recent} isManager={isManager}
-              storeOpen={storeLink} onRefresh={onRefresh} iconFor={iconFor}
-              onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
-          )}
+          ))}
         </div>
       </main>
     </div>

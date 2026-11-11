@@ -1599,4 +1599,5 @@ export default {
   p_manage_mode_hint: '이름 · 아이콘 · 공개 범위 · 숨김 · 그룹 · 끌어서 정렬',
   p_live_mode_hint: '지원하는 카드에 실시간 숫자 표시',
   p_group_n: (a0) => `그룹 ${a0}`,
+  p_service_busy: "작업 중 (녹음 등) — 다른 화면을 봐도 계속됩니다",
 }
