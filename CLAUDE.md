@@ -134,11 +134,13 @@ build; the elog/asset frontends are served by their own backends through the pro
   its password instead of offering sign-up (`/api/auth/setup`, gated on the user
   count; `needs_setup` rides along on `/api/health`). Later signups are ordinary
   users.
-- **Two looks: RACK and DOCK.** The portal cover and rack services are RACK
+- **Three looks: RACK, DOCK and NEON.** The portal cover and rack services are RACK
   (`service_manager/frontend/src/pages/portal/RACK.md`, `--rk-*`, `.rl-*`); the kit's own
   `AppShell` look (elog, nptoy, analysis, stark_planner …) is DOCK (`lilak_ui/README.md`),
   coloured with `--dock-<name>` tokens. Write `--dock-surface`, not `--surface` — the bare
-  names are only aliases until `scripts/dock.py --check` is clean.
+  names are only aliases until `scripts/dock.py --check` is clean. DAQ screens (MTE first) are
+  NEON (`neon_ui/NEON.md`, `@neon`, `--neon-*`, `.neon-*`): two hues only, cyan normal/picked
+  and pink wrong, themes bright (default) and dark.
 - **Type is decided in one place:** `lilak_ui/src/fonts/fonts.css` — the font files
   (Pretendard, IBM Plex Sans, D2 coding, kept in the kit, no CDN), `--font-sans` /
   `--font-mono`, and the `--fs-*` size scale (+ `--fs-plate` 15px, RACK's nameplate rank,

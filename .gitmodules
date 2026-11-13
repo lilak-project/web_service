@@ -72,3 +72,7 @@
 	path = lilak_pipeline
 	url = git@github.com:lilak-project/lilak_pipeline.git
 	branch = main
+[submodule "neon_ui"]
+	path = neon_ui
+	url = git@github.com:lilak-project/neon_ui.git
+	branch = main

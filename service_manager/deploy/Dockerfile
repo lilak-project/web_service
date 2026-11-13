@@ -21,6 +21,9 @@ ENV LILAK_UI_PATH=/src/lilak_ui
 # (@phosphor-icons/react, react, …) resolve from lilak_ui/node_modules, so install
 # them here. Vite dedups react, so no double-react.
 RUN cd lilak_ui                  && npm install --no-audit --no-fund
+# NEON (neon_ui), the DAQ screens' kit, is consumed the same way (@neon alias);
+# its own install gives its sources their react/uplot types.
+RUN cd neon_ui                   && npm install --no-audit --no-fund
 RUN cd lilak_elog/frontend       && npm install --no-audit --no-fund && npm run build
 RUN cd service_manager/frontend  && npm install --no-audit --no-fund && npm run build
 RUN cd asset_manager             && npm install --no-audit --no-fund && npm run build
