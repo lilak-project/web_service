@@ -9,7 +9,7 @@
   "health": "/api/health",
   "entry": "/",
   "identity": {
-    "accepts_portal_token": false,
+    "accepts_portal_token": true,
     "link_by": "email"
   },
   "capabilities": {

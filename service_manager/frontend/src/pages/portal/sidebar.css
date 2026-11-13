@@ -827,3 +827,23 @@
 .pl-ctx button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 9px; border: 0; border-radius: 0;
   background: transparent; color: var(--dock-text-primary); font: inherit; font-size: var(--fs-small); text-align: left; cursor: pointer; }
 .pl-ctx button:hover, .pl-ctx button:focus-visible { background: var(--dock-surface-2); outline: none; }
+
+/* Beside a NEON page in its dark theme (SidebarPortal `neonDark`), the sidebar
+   takes NEON dark's colours, so the bar and the DAQ screen read as one dark
+   screen. Only the tokens the bar uses are re-pointed, inside the bar. */
+.pl-root.neon-dark .pl-side {
+  --dock-surface: #12121a;
+  --dock-surface-2: #0a0a0f;
+  --dock-surface-3: #1a1a25;
+  --dock-border-default: #2a2a3a;
+  --dock-border-strong: #3a3a52;
+  --dock-text-primary: #eceaf6;
+  --dock-text-secondary: #9391a8;
+  --dock-text-muted: #6f6d85;
+  --dock-text-emphasis: #ffffff;
+  --divider: #3a3a52;
+  color-scheme: dark;
+}
+/* The folded bar is drawn at 60 % (`.mini` above): what shows through it must
+   be dark too, or the whole bar and its tiles wash out to grey. */
+.pl-root.neon-dark { background: #0a0a0f; }

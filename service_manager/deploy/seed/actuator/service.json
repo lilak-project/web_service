@@ -11,7 +11,7 @@
   "url": null,
   "token": null,
   "identity": {
-    "accepts_portal_token": false,
+    "accepts_portal_token": true,
     "link_by": "email"
   },
   "capabilities": {
@@ -20,7 +20,7 @@
   },
   "icon": "arrows-left-right",
   "color": "#1971c2",
-  "label": "Actuator Control",
+  "label": "Actuator",
   "order": 1,
   "autostart": true,
   "live": true

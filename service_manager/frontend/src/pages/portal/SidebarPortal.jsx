@@ -1005,6 +1005,31 @@ export default function SidebarPortal({
     for (const f of document.querySelectorAll('iframe.pl-frame')) tellShown(f, f.getAttribute('src') === shownFrame)
   }, [shownFrame, frames.length])
 
+  // A NEON page (the DAQ screens) says which of its themes is on (`neon:theme`);
+  // while the one shown is dark, the sidebar goes dark with it, so the two read
+  // as one screen. { [frame src]: 'dark' | 'bright' }. A frame shown again is
+  // asked (`neon:theme?`), since it may have spoken before this listened.
+  const [neonTheme, setNeonTheme] = useState({})
+  // The NEON choice itself (shared by every NEON page): once one has spoken, its
+  // switch stays in the brand row beside any service, not only beside NEON.
+  const [neonPick, setNeonPick] = useState(null)
+  useEffect(() => {
+    const on = (e) => {
+      if (e.origin !== window.location.origin || e.data?.type !== 'neon:theme') return
+      const f = [...document.querySelectorAll('iframe.pl-frame')].find((x) => x.contentWindow === e.source)
+      const at = f?.getAttribute('src')
+      if (at) setNeonTheme((t) => (t[at] === e.data.theme ? t : { ...t, [at]: e.data.theme }))
+      setNeonPick(e.data.theme)
+    }
+    window.addEventListener('message', on)
+    return () => window.removeEventListener('message', on)
+  }, [])
+  useEffect(() => {
+    const f = [...document.querySelectorAll('iframe.pl-frame')].find((x) => x.getAttribute('src') === shownFrame)
+    try { f?.contentWindow?.postMessage({ type: 'neon:theme?' }, window.location.origin) } catch { /* not loaded yet */ }
+  }, [shownFrame])
+  const neonDark = !!shownFrame && neonTheme[shownFrame] === 'dark'
+
   // Right click on a card: the things you do to a service besides opening it.
   const [ctx, setCtx] = useState(null)           // { s, x, y }
   useEffect(() => {
@@ -1236,7 +1261,7 @@ export default function SidebarPortal({
 
   return (
     <div className={`pl-root${mini ? ' mini' : ''}${view === 'settings' ? ' settings' : ''}`
-      + `${manage ? ' managing' : ''}${cmd ? ' cmd' : ''}`}>
+      + `${manage ? ' managing' : ''}${cmd ? ' cmd' : ''}${neonDark ? ' neon-dark' : ''}`}>
       <aside className="pl-side" ref={sideRef} tabIndex={-1}
         onMouseEnter={onSideEnter} onMouseLeave={onSideLeave} onMouseDown={endPeek}>
         <div className="pl-brand">
@@ -1253,6 +1278,20 @@ export default function SidebarPortal({
             </span>
           </button>
           <span style={{ flex: 1 }} />
+          {/* Beside a NEON page (the DAQ screens): its bright/dark, from here.
+              Written where NEON keeps it (localStorage `neon.theme`, same
+              origin), so every open NEON page follows and tells us back. */}
+          {neonPick ? (
+            <button type="button" className="pl-fold"
+              title={neonPick === 'dark' ? 'Bright' : 'Dark'}
+              onClick={() => {
+                const next = neonPick === 'dark' ? 'bright' : 'dark'
+                try { localStorage.setItem('neon.theme', next) } catch { /* private window */ }
+                setNeonPick(next)
+              }}>
+              <Icon name={neonPick === 'dark' ? 'sun' : 'moon'} size={14} color="var(--dock-text-secondary)" />
+            </button>
+          ) : null}
           <button type="button" className="pl-fold"
             title={anyOpen ? tr("p_collapse_all") : tr("p_expand_all")}
             onClick={foldAll}>
