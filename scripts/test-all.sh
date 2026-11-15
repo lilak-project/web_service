@@ -24,11 +24,15 @@ step "portal security tests"      $PY -W ignore $ROOT/service_manager/tests/test
 step "portal mcp tests"           $PY -W ignore $ROOT/service_manager/tests/test_mcp.py
 step "portal passkey tests"       $PY -W ignore $ROOT/service_manager/tests/test_passkeys.py
 step "portal layout tests"        $PY -W ignore $ROOT/service_manager/tests/test_layout.py
+step "portal chat tests"          $PY -W ignore $ROOT/service_manager/tests/test_chat.py
+step "portal agent tests"         $PY -W ignore $ROOT/service_manager/tests/test_agent.py
+step "portal delegate tests"         $PY -W ignore $ROOT/service_manager/tests/test_delegate.py
+step "portal set-admin tests"         $PY -W ignore $ROOT/service_manager/tests/test_set_admins.py
 step "rack store security tests"  $PY -W ignore $ROOT/lilak_rack/tests/test_store_security.py
 step "rack store folder tests"    $PY -W ignore $ROOT/lilak_rack/tests/test_store_folders.py
 step "rack store tag tests"       $PY -W ignore $ROOT/lilak_rack/tests/test_store_tags.py
 step "rack store upload tests"    $PY -W ignore $ROOT/lilak_rack/tests/test_store_uploads.py
-step "project inbox tests"       $PY -W ignore $ROOT/lilak_rack/project_manager/backend/test_inbox.py
+step "inbox tests"               $PY -W ignore $ROOT/lilak_rack/inbox/backend/test_inbox.py
 step "parlib tests"               $PY -W ignore $ROOT/lilak_log/parlib/tests/test_lilak_par.py
 step "parameters backend tests"   $PY -W ignore $ROOT/lilak_log/parameters/backend/test_parameters.py
 step "sync merge self-test"       $PY $ROOT/service_manager/app/sync_merge.py

@@ -123,8 +123,9 @@
   border-bottom: 1px solid var(--plate-border, var(--dock-border-strong));
 }
 .set-bar b { font-weight: var(--rack-weight); color: var(--plate-fg, var(--dock-text-emphasis)); }
-/* A foldable panel's strip IS the handle: the title and a caret, nothing else
-   moves. */
+/* A foldable panel's strip IS the handle — all of it, not just the title and
+   its caret (what sits on its right keeps its own click). */
+.set-bar.set-foldbar { cursor: pointer; user-select: none; -webkit-user-select: none; }
 .set-bar .set-fold {
   display: inline-flex; align-items: center; gap: 7px;
   background: none; border: 0; padding: 0; margin: 0;
@@ -256,8 +257,10 @@
    stacks: name on its own line, value under it, rule still between rows. */
 @media (max-width: 639px) {
   .pl-setpage, .pl-mgpage { padding: 10px 10px 16px; }
-  .set-card { grid-template-columns: 1fr; }
-  .set-card > *:nth-child(even) { border-top: 0; padding-top: 0; }
+  /* Not the sign-in card: it keeps its two columns at every width, and taking
+     the value cells' top padding there pressed the first field into the tabs. */
+  .set-card:not(.set-auth *) { grid-template-columns: 1fr; }
+  .set-card:not(.set-auth *) > *:nth-child(even) { border-top: 0; padding-top: 0; }
 }
 
 /* ── the one status line ─────────────────────────────────────────────────── */

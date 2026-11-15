@@ -1,0 +1,88 @@
+/* PortalChat: speech bubbles laid over the page, out of the account icon at the
+   foot of the bar. The layer itself is transparent and lets clicks through;
+   only the bubbles take them. */
+.pc-root {
+  position: fixed; bottom: 10px; left: var(--pc-left, 72px); z-index: 70;
+  width: min(440px, calc(100vw - var(--pc-left, 72px) - 16px));
+  display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+  font-size: var(--fs-small); color: var(--dock-text-primary);
+}
+.pc-root > * { pointer-events: auto; }
+/* The strips' outline: a step darker than the kit's strong border, so a strip
+   holds its shape over any page underneath. */
+.pc-root { --pc-edge: color-mix(in srgb, var(--dock-border-strong) 55%, var(--dock-text-secondary)); }
+.pc-list {
+  max-height: 62vh; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px;
+  pointer-events: none; padding: 2px;
+}
+.pc-list::-webkit-scrollbar { width: 0; }
+.pc-group { display: flex; flex-direction: column; gap: 2px; pointer-events: auto; }
+/* One message, one strip: the author's colour down the left edge, their icon and
+   name in it, the text, and the time at the right end. */
+.pc-line {
+  display: flex; align-items: baseline; gap: 6px; padding: 3px 8px 3px 7px;
+  background: var(--dock-surface); border: 1px solid var(--pc-edge);
+  border-left: 3px solid var(--pc-col, var(--dock-border-strong));
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .12); pointer-events: auto;
+}
+.pc-line > .pc-av, .pc-line > span:first-child { align-self: center; flex: none; }
+.pc-line.pc-empty { color: var(--dock-text-secondary); }
+.pc-name { flex: none; font-weight: 600; color: var(--pc-col, var(--dock-text-primary)); }
+.pc-body { flex: 1; min-width: 0; }
+.pc-side { flex: none; margin-left: auto; position: relative; align-self: flex-start; }
+.pc-time { font-family: var(--font-mono); font-size: var(--fs-tiny); color: var(--dock-text-muted); white-space: nowrap; }
+.pc-acts { position: absolute; inset: 0; display: none; align-items: center; justify-content: flex-end; gap: 5px; }
+.pc-line:hover .pc-acts { display: flex; }
+.pc-line:hover .pc-time { visibility: hidden; }
+.pc-acts button { display: inline-flex; }
+.pc-acts button, .pc-quote button { border: 0; background: none; padding: 0; cursor: pointer; color: var(--dock-text-muted); font: inherit; }
+.pc-acts button:hover { color: var(--dock-text-primary); }
+.pc-text { white-space: pre-wrap; word-break: break-word; line-height: 1.4; }
+.pc-at { color: var(--accent, #2563eb); font-weight: 600; }
+.pc-gone { color: var(--dock-text-muted); }
+.pc-quote { display: block; color: var(--dock-text-secondary); font-size: var(--fs-tiny);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-img { display: block; max-width: 220px; max-height: 160px; margin-top: 3px; cursor: zoom-in; }
+.pc-file { display: inline-flex; align-items: center; gap: 4px; margin: 3px 4px 0 0; padding: 1px 6px; border: 1px solid var(--dock-border-strong);
+  background: var(--dock-surface-2); font: inherit; font-size: var(--fs-tiny); cursor: pointer; color: var(--dock-text-primary); }
+.pc-file button { border: 0; background: none; padding: 0; cursor: pointer; color: var(--dock-text-muted); }
+/* An agent's answer: its own tinted line under the message that asked. */
+.pc-agent { --pc-col: #7f77dd; background: #eeedfe; }
+.pc-agent.failed { --pc-col: var(--dock-danger-text); background: var(--dock-danger-bg); }
+.pc-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--pc-col); display: inline-flex; align-items: center; justify-content: center; }
+
+/* The input: the same strip, in my colour, a step heavier. */
+.pc-input {
+  position: relative; background: var(--dock-surface); border: 1px solid var(--pc-edge);
+  border-left: 3px solid var(--dock-text-primary);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, .2); padding: 4px 8px 5px;
+}
+.pc-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.pc-room { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--dock-border-strong); background: var(--dock-surface-2);
+  padding: 1px 6px; font: inherit; font-size: var(--fs-tiny); cursor: pointer; color: var(--dock-text-primary); }
+.pc-hint { margin-left: auto; font-size: var(--fs-tiny); color: var(--dock-text-muted); }
+.pc-rooms { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; border: 1px solid var(--dock-border-strong); margin-bottom: 4px; }
+.pc-rooms button { text-align: left; border: 0; border-bottom: 1px solid var(--dock-border-default); background: var(--dock-surface);
+  padding: 4px 8px; font: inherit; cursor: pointer; color: var(--dock-text-primary); }
+.pc-rooms button:hover { background: var(--dock-surface-2); }
+.pc-rooms button.on { background: var(--dock-info-bg); color: var(--accent, #2563eb); }
+.pc-rooms .svc { color: var(--dock-text-muted); }
+.pc-atts { display: flex; flex-wrap: wrap; }
+.pc-row { display: flex; align-items: flex-end; gap: 4px; }
+.pc-row textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: transparent; font: inherit;
+  color: var(--dock-text-primary); max-height: 120px; field-sizing: content; padding: 3px 0; }
+.pc-icon { border: 0; background: none; padding: 3px; cursor: pointer; color: var(--dock-text-secondary); }
+.pc-icon:hover { color: var(--dock-text-primary); }
+.pc-err { color: var(--dock-danger-text); font-size: var(--fs-tiny); margin-top: 2px; }
+
+/* Unread messages while the chat is shut: a dot with the count on the account icon. */
+.pl-user .pl-av { position: relative; }
+.pc-unread.pc-reqs { top: auto; bottom: -5px; background: #d97706; }   /* requests, not messages */
+.pc-unread { position: absolute; right: -5px; top: -5px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;
+  background: #dc2626; color: #fff; font-size: 10px; line-height: 15px; text-align: center; font-weight: 600; }
+
+/* A line that @mentions me; other rooms with something unread; a room's counts in the picker. */
+.pc-line.at-me .pc-text { background: var(--dock-info-bg); box-shadow: 0 0 0 2px var(--dock-info-bg); }
+.pc-dot2 { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #dc2626; margin-left: 4px; vertical-align: middle; }
+.pc-n { float: right; color: #dc2626; font-weight: 600; font-size: var(--fs-tiny); }
+.pc-unread.at { background: var(--accent, #2563eb); }

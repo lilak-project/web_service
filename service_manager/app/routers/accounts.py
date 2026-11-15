@@ -18,14 +18,15 @@ import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .. import config, emailer, models, permissions, registry, security, prefs
 from ..db import get_db
-from ..deps import require_portal_admin, require_portal_user
+from ..deps import portal_token, require_portal_admin, require_portal_user, require_portal_user_or_delegated
 from ..models import VERIFY_VALID_DAYS
 
 router = APIRouter(tags=["accounts"])
@@ -74,10 +75,27 @@ class InviteCreate(BaseModel):
     no_verify: bool = False             # signup with this code skips email verification
 
 
+def _may_code(db: Session, user: models.User, kind: str, svc: str, proj: str) -> bool:
+    """A manager handles every code; a project admin, the codes of what they administer."""
+    return permissions.is_admin(user) or (kind == "project" and bool(svc)
+                                          and permissions.is_project_admin(db, user, svc, proj or ""))
+
+
+def _own_code(db: Session, user: models.User, cid: int) -> models.InviteCode:
+    c = db.query(models.InviteCode).filter(models.InviteCode.id == cid).first()
+    if not c or not _may_code(db, user, c.kind, c.service_name, c.project):
+        raise HTTPException(404, "코드를 찾을 수 없습니다.")
+    return c
+
+
 @router.post("/api/admin/invite-codes", status_code=201)
-def create_invite(body: InviteCreate, admin: models.User = Depends(require_portal_admin),
+def create_invite(body: InviteCreate, admin: models.User = Depends(require_portal_user),
                  db: Session = Depends(get_db)):
     kind = body.kind if body.kind in ("project", "group") else "project"
+    if not _may_code(db, admin, kind, body.service or "", (body.project or "").strip()):
+        raise HTTPException(403, "관리하는 프로젝트의 코드만 만들 수 있습니다.")
+    if not permissions.is_admin(admin):
+        body.no_verify = False          # who joins the portal unverified is a manager's call
     if kind == "project":
         if not body.service or not registry.service_dir(body.service).exists():
             raise HTTPException(404, "서비스를 지정하세요.")
@@ -126,8 +144,9 @@ def create_invite(body: InviteCreate, admin: models.User = Depends(require_porta
 
 
 @router.get("/api/admin/invite-codes")
-def list_invites(_: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
-    return [_invite_view(db, c) for c in db.query(models.InviteCode).order_by(models.InviteCode.id.desc()).all()]
+def list_invites(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    return [_invite_view(db, c) for c in db.query(models.InviteCode).order_by(models.InviteCode.id.desc()).all()
+            if _may_code(db, user, c.kind, c.service_name, c.project)]
 
 
 class ExtendBody(BaseModel):
@@ -135,10 +154,8 @@ class ExtendBody(BaseModel):
 
 
 @router.put("/api/admin/invite-codes/{cid}")
-def extend_invite(cid: int, body: ExtendBody, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
-    c = db.query(models.InviteCode).filter(models.InviteCode.id == cid).first()
-    if not c:
-        raise HTTPException(404, "코드를 찾을 수 없습니다.")
+def extend_invite(cid: int, body: ExtendBody, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    c = _own_code(db, user, cid)
     days = max(1, min(365, int(body.days or 7)))
     base = max(c.expires_at, datetime.utcnow())      # extend from now if already expired
     c.expires_at = base + timedelta(days=days)
@@ -156,8 +173,8 @@ def prune_expired_invites(_: models.User = Depends(require_portal_admin), db: Se
 
 
 @router.delete("/api/admin/invite-codes/{cid}")
-def revoke_invite(cid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
-    db.query(models.InviteCode).filter(models.InviteCode.id == cid).delete()
+def revoke_invite(cid: int, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    db.delete(_own_code(db, user, cid))
     db.commit()
     return {"deleted": cid}
 
@@ -184,8 +201,15 @@ def redeem_code(db: Session, user_id: int, code: str) -> dict:
 
 
 def code_is_valid(db: Session, code: str) -> bool:
+    """An active code that lets an address outside the allowed domains sign up: a manager's.
+    A project admin's code gives its project to an account, not an account to a stranger —
+    unless a manager said it may (Invite codes → who may sign up)."""
     c = db.query(models.InviteCode).filter(models.InviteCode.code == (code or "").strip().upper()).first()
-    return bool(c and _code_status(c) == "active")
+    if not c or _code_status(c) != "active":
+        return False
+    by = db.get(models.User, c.created_by) if c.created_by else None
+    from .. import settings_store
+    return c.created_by is None or bool(by and permissions.is_admin(by)) or settings_store.admin_codes_open_signup()
 
 
 def code_no_verify(db: Session, code: str) -> bool:
@@ -194,15 +218,45 @@ def code_no_verify(db: Session, code: str) -> bool:
     return bool(c and _code_status(c) == "active" and getattr(c, "no_verify", False))
 
 
+def name_taken(db: Session, name: str, but: Optional[int] = None) -> bool:
+    """True when another account already goes by `name` — as its id or its display name,
+    whatever the case — so nobody can post as someone else."""
+    from sqlalchemy import func, or_
+    n = (name or "").lower()
+    q = db.query(models.User).filter(or_(func.lower(models.User.username) == n,
+                                         func.lower(models.User.display_name) == n))
+    return (q.filter(models.User.id != but) if but else q).first() is not None
+
+
+def clean_display(db: Session, name: Optional[str], but: Optional[int] = None, own: str = "") -> Optional[str]:
+    """A display name fit to show: one line, 40 characters, nobody else's name and no chat
+    keyword (unless it is the account's own id, as the built-in admin's is). None for none."""
+    import unicodedata
+    from .auth import RESERVED_NAMES
+    name = " ".join((name or "").split())
+    if not name:
+        return None
+    if len(name) > 40 or any(unicodedata.category(ch)[0] == "C" for ch in name):
+        raise HTTPException(400, "표시 이름은 40자까지, 한 줄로 씁니다.")
+    if name_taken(db, name, but) or (name.lower() in RESERVED_NAMES and name != own):
+        raise HTTPException(400, "다른 계정이 쓰는 이름이거나 예약된 이름입니다.")
+    return name
+
+
 class RedeemBody(BaseModel):
     code: str
 
 
 @router.post("/api/invite-codes/redeem")
 def redeem(body: RedeemBody, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    from . import auth
+    key = f"redeem:{user.id}"                  # a code is short: guessing must not be free
+    if auth._too_many(key, 10):
+        auth._slow_down()
     try:
         return {"ok": True, **redeem_code(db, user.id, body.code)}
     except ValueError as e:
+        auth._failed(key)
         raise HTTPException(400, str(e))
 
 
@@ -279,7 +333,7 @@ def my_account(user: models.User = Depends(require_portal_user), db: Session = D
 
 
 @router.get("/api/introspect")
-def introspect(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+def introspect(user: models.User = Depends(require_portal_user_or_delegated), db: Session = Depends(get_db)):
     """Canonical FRESH identity for managed services (elog/nptoy/g4toy/…) to sync a
     portal token's live role/profile/verification on entry — the single source that
     replaces the three divergent models the services used to have: elog synced role
@@ -326,6 +380,8 @@ def update_profile(body: ProfileBody, user: models.User = Depends(require_portal
     """Edit the elog-style profile. Only the fields present in the body are touched;
     a null clears that field. These propagate to elog on the next SSO entry."""
     data = body.model_dump(exclude_unset=True)
+    if data.get("display_name"):
+        data["display_name"] = clean_display(db, data["display_name"], user.id, user.username) or ""
     for k in ("display_name", "phone", "experiment_role", "participation_from",
               "participation_to", "profile_color", "profile_shape"):
         if k in data:
@@ -354,9 +410,17 @@ class PrefsBody(BaseModel):
     density: Optional[str] = None
     # List or groups, for the service bar and Home alike: "group" (the default) or "list".
     homeView: Optional[str] = None
+    # Bright (the default) or dark, for NEON's pages and the rack services alike.
+    theme: Optional[str] = None
+    # The time zone calendars read and write times in (IANA name). Absent = each one's own.
+    zone: Optional[str] = None
+    # The zones a calendar's menu offers, in order: [{zone, name}]. Absent = its own list.
+    zones: Optional[list[dict]] = None
     # This account's own service bar: order, groups, hidden cards, its own names.
     # Absent = the manager's default. See _clean_layout.
     layout: Optional[dict] = None
+    # The chat room this account last used: "portal" or "svc/proj".
+    chatRoom: Optional[str] = None
 
 
 def _clean_layout(d: dict) -> dict:
@@ -372,8 +436,11 @@ def _clean_layout(d: dict) -> dict:
     for g in (d.get("groups") or [])[:200]:
         if not isinstance(g, dict) or not str(g.get("id") or "").strip():
             continue
-        groups.append({"id": str(g["id"])[:40], "name": str(g.get("name") or "")[:80],
-                       "members": keys(g.get("members")), "hidden": bool(g.get("hidden"))})
+        one = {"id": str(g["id"])[:40], "name": str(g.get("name") or "")[:80],
+               "members": keys(g.get("members")), "hidden": bool(g.get("hidden"))}
+        if isinstance(g.get("share_set"), str) and g["share_set"].strip():
+            one["share_set"] = g["share_set"].strip()[:80]     # copied from the shared group it began as
+        groups.append(one)
     labels = {str(k)[:200]: str(v).strip()[:80] for k, v in (d.get("labels") or {}).items()
               if isinstance(v, str) and v.strip()}
     if len(labels) > 2000:
@@ -415,8 +482,39 @@ def update_prefs(body: PrefsBody, user: models.User = Depends(require_portal_use
         if data["homeView"] not in ("list", "group", None):
             raise HTTPException(400, "홈 보기 값이 올바르지 않습니다.")
         prefs.put(user, homeView=None if data["homeView"] == "group" else data["homeView"])
+    if "theme" in data:
+        if data["theme"] not in ("bright", "dark", None):
+            raise HTTPException(400, "테마 값이 올바르지 않습니다.")
+        prefs.put(user, theme=None if data["theme"] == "bright" else data["theme"])
+    if "chatRoom" in data:
+        room = (data["chatRoom"] or "").strip()
+        if room and not re.fullmatch(r"portal|[A-Za-z0-9_\-]{1,64}/[A-Za-z0-9_\-]{1,64}", room):
+            raise HTTPException(400, "채팅방 이름이 올바르지 않습니다.")
+        prefs.put(user, chatRoom=room or None)
     if "layout" in data:
         prefs.put(user, layout=_clean_layout(data["layout"]) if data["layout"] else None)
+    if "zone" in data:
+        zone = (data["zone"] or "").strip()
+        try:
+            if zone:
+                ZoneInfo(zone)
+        except (ValueError, KeyError, OSError):
+            raise HTTPException(400, "시간대 이름이 올바르지 않습니다.")
+        prefs.put(user, zone=zone or None)
+    if "zones" in data:
+        zones = []
+        for z in data["zones"] or []:
+            tz, name = str((z or {}).get("zone") or "").strip(), str((z or {}).get("name") or "").strip()
+            try:
+                ZoneInfo(tz)
+            except (ValueError, KeyError, OSError):
+                raise HTTPException(400, "시간대 이름이 올바르지 않습니다.")
+            if not name or len(name) > 40:
+                raise HTTPException(400, "시간대 이름표가 비었거나 깁니다.")
+            zones.append({"zone": tz, "name": name})
+        if len(zones) > 40:
+            raise HTTPException(400, "시간대가 너무 많습니다.")
+        prefs.put(user, zones=zones or None)
     db.commit()
     return {"prefs": prefs.get(user)}
 
@@ -469,10 +567,40 @@ def request_email_change(body: EmailBody, user: models.User = Depends(require_po
     return {"ok": True, "pending_email": email, "note": "관리자 승인 후 변경됩니다."}
 
 
+class ReverifyBody(BaseModel):
+    code: Optional[str] = None
+
+
 @router.post("/api/account/verify")
-def reverify(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
-    """Temporary (dev) re-verification: stamps the yearly verification. Replaced by
-    a real email round-trip once a sender is wired up."""
+def reverify(body: ReverifyBody = ReverifyBody(), user: models.User = Depends(require_portal_user),
+             db: Session = Depends(get_db)):
+    """The yearly re-verification, by mail: with no code, a 6-digit code is sent to the
+    account's address; with the code, the verification is stamped. (It used to stamp on
+    request alone, which made the yearly check something anyone could wave through.)
+    Only where no mail can be sent AND the dev echo is on (a laptop) is the code handed back."""
+    from .auth import _failed, _slow_down, _too_many
+    key = f"reverify:{user.id}"
+    code = re.sub(r"\D", "", body.code or "")
+    if not code:
+        if _too_many(key, 5):
+            _slow_down()
+        _failed(key)                                   # counts sends too: five mails a quarter-hour
+        token = f"{secrets.randbelow(1_000_000):06d}"
+        try:
+            emailer.send_verification_email(user.email, token)
+        except emailer.EmailDeliveryError as exc:
+            print(f"[re-verify] delivery failed for {user.email}: {exc}", flush=True)
+            if not config.EMAIL_VERIFY_DEV_ECHO:
+                raise HTTPException(502, "인증 메일 발송에 실패했습니다. 잠시 후 다시 시도하세요.")
+        user.verify_token = token
+        db.commit()
+        return {"ok": True, "sent": True, "email": user.email,
+                "verify_code": token if config.EMAIL_VERIFY_DEV_ECHO else None}
+    if _too_many(key, 5):
+        _slow_down()
+    if not user.verify_token or not secrets.compare_digest(user.verify_token, code):
+        _failed(key)
+        raise HTTPException(400, "인증 코드가 올바르지 않습니다.")
     user.email_verified = True
     user.email_verified_at = datetime.utcnow()
     user.verify_token = None
@@ -480,8 +608,15 @@ def reverify(user: models.User = Depends(require_portal_user), db: Session = Dep
     return {"ok": True, **_account_view(db, user)}
 
 
+class ConfirmPwBody(BaseModel):
+    password: str = ""
+
+
 @router.delete("/api/account")
-def delete_self(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+def delete_self(body: ConfirmPwBody = ConfirmPwBody(), user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    # A session left open on a shared machine must not be enough to erase the account.
+    if not security.verify_password(body.password or "", user.password_hash):
+        raise HTTPException(403, "비밀번호가 올바르지 않습니다.")
     if permissions.is_admin(user) and db.query(models.User).filter(models.User.role == "manager").count() <= 1:
         raise HTTPException(400, "마지막 관리자 계정은 삭제할 수 없습니다.")
     db.query(models.ServicePermission).filter(models.ServicePermission.user_id == user.id).delete()
@@ -499,16 +634,25 @@ def _get_user(db: Session, uid: int) -> models.User:
     return u
 
 
+def _end_sessions(u: models.User, admin: models.User) -> None:
+    """A password a manager replaced is usually one that leaked: whoever is signed in with
+    the old one goes too. (The manager's own session stays — they are the one typing.)"""
+    if u.id != admin.id:
+        import time
+        prefs.put(u, sessions_after=time.time())
+
+
 class AdminPwBody(BaseModel):
     new_password: str
 
 
 @router.post("/api/admin/users/{uid}/password")
-def admin_set_password(uid: int, body: AdminPwBody, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+def admin_set_password(uid: int, body: AdminPwBody, admin: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
     u = _get_user(db, uid)
     if len(body.new_password or "") < config.PASSWORD_MIN_LENGTH:
         raise HTTPException(400, f"비밀번호는 최소 {config.PASSWORD_MIN_LENGTH}자 이상이어야 합니다.")
     u.password_hash = security.hash_password(body.new_password)
+    _end_sessions(u, admin)
     db.commit()
     return {"ok": True}
 
@@ -536,7 +680,7 @@ def admin_request_verify(uid: int, _: models.User = Depends(require_portal_admin
 
 
 @router.post("/api/admin/users/{uid}/reset-password-email")
-def admin_reset_password_email(uid: int, _: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
+def admin_reset_password_email(uid: int, admin: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)):
     """Set a NEW random password and email it straight to the user, so an
     admin-initiated reset never exposes the password to the admin. In local dev
     (DEV_ECHO on) the password is also returned so the flow is testable without a
@@ -551,6 +695,7 @@ def admin_reset_password_email(uid: int, _: models.User = Depends(require_portal
         if not config.EMAIL_VERIFY_DEV_ECHO:
             raise HTTPException(502, "비밀번호 재설정 메일 발송에 실패했습니다. 메일 설정을 확인하세요.")
     u.password_hash = security.hash_password(newpw)
+    _end_sessions(u, admin)
     db.commit()
     return {"ok": True, "email": u.email, "password": newpw if config.EMAIL_VERIFY_DEV_ECHO else None}
 
@@ -609,10 +754,6 @@ def admin_set_active(uid: int, body: ActiveBody, _: models.User = Depends(requir
     u.is_active = bool(body.active)
     db.commit()
     return _account_view(db, u)
-
-
-class ConfirmPwBody(BaseModel):
-    password: str = ""
 
 
 @router.delete("/api/admin/users/{uid}")
@@ -807,3 +948,32 @@ def revoke_group_perm(body: GroupPermBody, _: models.User = Depends(require_port
         models.GroupPermission.project == (body.project or "").strip()).delete()
     db.commit()
     return {"granted": False}
+
+
+# ── Delegation: a service writing in ANOTHER service for the person ──────────
+# The rule (web_service/CLAUDE.md): services read each other through links and tags;
+# a service that must write somewhere else for a person asks here for a token that
+# is good for that one project, a few minutes, and says it came through it. It never
+# passes the person's own token on.
+class DelegateBody(BaseModel):
+    to: str                       # "svc/proj" (or "svc" for a single-project service)
+    minutes: int = 5
+
+
+@router.post("/api/delegate")
+def delegate(body: DelegateBody, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db),
+             x_portal_service: str = Header(default=""), x_portal_service_key: str = Header(default="")):
+    import hmac
+    import logging
+    if not (x_portal_service and registry.valid_name(x_portal_service)
+            and hmac.compare_digest(x_portal_service_key, security.service_key(x_portal_service))):
+        raise HTTPException(403, "포털이 띄운 서비스만 위임을 청할 수 있습니다.")
+    svc, _, proj = body.to.strip().partition("/")
+    if not registry.valid_name(svc) or (proj and not registry.valid_name(proj)) or not registry.service_dir(svc).exists():
+        raise HTTPException(400, "위임할 곳이 올바르지 않습니다.")
+    if not permissions.can_enter_project(db, user, svc, proj):
+        raise HTTPException(403, "이 프로젝트에 대한 권한이 없습니다.")
+    minutes = max(1, min(int(body.minutes or 5), 10))
+    logging.getLogger("portal.delegate").info("%s via %s -> %s (%d min)", user.username, x_portal_service, body.to, minutes)
+    return {"token": portal_token(user, scope=body.to.strip(), via=x_portal_service, minutes=minutes),
+            "expires_in": minutes * 60}

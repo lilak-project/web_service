@@ -35,16 +35,24 @@ export async function passkeyRegister(name) {
   return (await launcher.post('/auth/passkey/register', { state, credential: asJSON(cred), name })).data
 }
 
-/** Sign in with whatever passkey this device holds for this host; returns the token response.
- *  `conditional`: wait quietly and answer from the username field's autofill list
- *  (the field needs autocomplete="username webauthn"); `signal` aborts the wait. */
-export async function passkeyLogin({ conditional = false, signal } = {}) {
+/** The server's challenge for a sign-in, fetched AHEAD of the click that will use it. */
+export async function passkeyOptions() {
   const { state, options } = (await launcher.post('/auth/passkey/login/options')).data
   const o = JSON.parse(options)
   o.challenge = toBuf(o.challenge)
   o.allowCredentials = (o.allowCredentials || []).map((c) => ({ ...c, id: toBuf(c.id) }))
-  const cred = await navigator.credentials.get({ publicKey: o, signal, ...(conditional ? { mediation: 'conditional' } : {}) })
-  return (await launcher.post('/auth/passkey/login', { state, credential: asJSON(cred) })).data
+  return { state, o, at: Date.now(), used: false }
+}
+
+/** Ask the device, with options already in hand; returns the token response. Nothing is
+ *  awaited before the browser call, so a click that leads here still counts as the
+ *  person's gesture — Safari refuses a passkey request that arrives after a fetch.
+ *  `conditional`: wait quietly and answer from the username field's autofill list
+ *  (the field needs autocomplete="username webauthn"); `signal` aborts the wait. */
+export function passkeyAsk(pre, { conditional = false, signal } = {}) {
+  return navigator.credentials.get({ publicKey: pre.o, signal, ...(conditional ? { mediation: 'conditional' } : {}) })
+    .then((cred) => { pre.used = true; return launcher.post('/auth/passkey/login', { state: pre.state, credential: asJSON(cred) }) })
+    .then((r) => r.data)
 }
 
 /** The device's own "cancelled" is not an error worth showing. */

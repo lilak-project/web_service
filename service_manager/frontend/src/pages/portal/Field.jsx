@@ -35,7 +35,8 @@ export const FIELD_CARD_CLASS = 'set-card'
  * things that cannot be undone.
  */
 export function Panel({ title, hint, right, danger, bare, fold, open: openProp, strip, style, children }) {
-  // `fold`: the strip becomes the handle for its own body. Local state, because
+  // `fold`: the whole strip becomes the handle for its own body (what sits on its
+  // right — a button, a select — keeps its own click). Local state, because
   // nothing outside the panel needs to know — and a panel you closed stays shut
   // while you work in the one below it.
   const [open, setOpen] = useState(openProp !== false)
@@ -43,18 +44,19 @@ export function Panel({ title, hint, right, danger, bare, fold, open: openProp, 
   return (
     <section className={`set-panel${danger ? ' danger' : ''}`} style={style}>
       {(title || hint || right || strip) && (
-        <header className={`set-bar${strip ? ' tabs' : ''}`}>
+        <header className={`set-bar${strip ? ' tabs' : ''}${fold && !strip ? ' set-foldbar' : ''}`}
+          onClick={fold && !strip ? () => setOpen((o) => !o) : undefined}>
           {strip}
           {!strip && (fold ? (
-            <button type="button" className={`set-plain set-fold${open ? ' open' : ''}`}
-              onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            // The click reaches the strip, which folds; the button is here for the keyboard.
+            <button type="button" className={`set-plain set-fold${open ? ' open' : ''}`} aria-expanded={open}>
               <Icon name="caret-right" size={12} />
               <b>{title}</b>
             </button>
           ) : title && <b>{title}</b>)}
           {hint && <span className="hint">{hint}</span>}
           {!strip && <span className="sp" />}
-          {right}
+          {fold && right ? <span style={{ display: 'contents' }} onClick={(e) => e.stopPropagation()}>{right}</span> : right}
         </header>
       )}
       {shown && (bare ? children : <div className={FIELD_CARD_CLASS}>{children}</div>)}

@@ -20,7 +20,7 @@ const KIND = {
 const input = fieldInput
 const textarea = { ...fieldInput, width: '100%', height: 'auto', minHeight: 0, padding: '9px 10px', resize: 'vertical', lineHeight: 1.5 }
 
-export default function FeedbackView({ isManager }) {
+export default function FeedbackView({ isManager, folded = false }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [f, setF] = useState({ kind: 'inquiry', subject: '', body: '' })
@@ -96,7 +96,7 @@ export default function FeedbackView({ isManager }) {
   return (
     <>
       {/* compose — everyone */}
-      <Panel bare title={tr("p_new_report")}
+      <Panel bare fold open={!folded} title={tr("p_new_report")}
         hint={tr("p_bug_recommendation_inquiry")}>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -122,7 +122,7 @@ export default function FeedbackView({ isManager }) {
       </Panel>
 
       {/* thread */}
-      <Panel bare title={isManager ? tr("p_received_reports") : tr("p_my_reports")}
+      <Panel bare fold open={!folded} title={isManager ? tr("p_received_reports") : tr("p_my_reports")}
         hint={String(rows.length)}>
         {rows.length === 0
           ? <Row className="empty">{tr("p_nothing_yet")}</Row>

@@ -1,3 +1,4 @@
+import InboxView from './InboxView'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, tr } from 'lilak-ui'
 import { launcher } from '../../api'
@@ -17,13 +18,13 @@ const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.project_card ? `${c.name
  * multi-project service's own list, so the per-project grants are the ones
  * the bar already uses.
  */
-export default function HomeView({ cards, groups, recent, onOpen, isManager, storeOpen, onRefresh, iconFor, bands, onRackGo, view, onView, onManage, onRegroup, onCreateGroup, onRenameGroup, tab: tabProp, onTab }) {
+export default function HomeView({ cards, groups, recent, onOpen, onInboxAll, isManager, storeOpen, onRefresh, iconFor, bands, onRackGo, view, onView, onManage, onRegroup, onCreateGroup, onRenameGroup, onSetMembers, onDeleteGroup, tab: tabProp, onTab, canSets = false }) {
   // The account menu picks the tab now (tab/onTab); without them Home keeps its own tab row.
   const [ownTab, setOwnTab] = useState(storeOpen ? 'store' : 'home')      // 'home' | 'map' | 'sets' | 'dock' | 'store'
   const tabWanted = tabProp ?? ownTab
   const setTab = onTab ?? setOwnTab
   // Only a manager has the other tabs; anyone else is always on Home, whatever was asked.
-  const tab = isManager ? tabWanted : 'home'
+  const tab = isManager || (canSets && tabWanted === 'sets') ? tabWanted : 'home'
   const apps = useMemo(() => (cards || []).filter((c) => !c.builtin && !c.hidden)
     .filter((c, i, a) => a.findIndex((x) => x.name === c.name) === i), [cards])     // one row source per service; project cards repeat it
   const groupOf = useMemo(() => {
@@ -55,7 +56,9 @@ export default function HomeView({ cards, groups, recent, onOpen, isManager, sto
     else for (const p of projs[c.name] || []) {
       const own = c.project_card && groupOf[`${c.name}/${p.name}`]     // each project card has its own group
       if (own?.hidden) continue
-      rows.push({ ...base, ...(c.project_card ? { group: groupName(own), gid: own?.id || '', ckey: `${c.name}/${p.name}` } : {}), key: `${c.name}/${p.name}`, proj: p.name, label: p.label, running: !!p.running, enter: !!p.can_enter })
+      rows.push({ ...base, ...(c.project_card ? { group: groupName(own), gid: own?.id || '', ckey: `${c.name}/${p.name}` } : {}), key: `${c.name}/${p.name}`, proj: p.name, label: p.label,
+        // The name the sidebar shows: the project card's (with this account's own name for it), else the project's.
+        shown: (cards || []).find((x) => x.name === c.name && x.project_card === p.name)?.label || p.label || p.name, running: !!p.running, enter: !!p.can_enter })
     }
   }
 
@@ -73,8 +76,6 @@ export default function HomeView({ cards, groups, recent, onOpen, isManager, sto
     : rows
   useEffect(() => setAt(0), [q])
 
-  const byKey = new Map(rows.map((r) => [r.key, r]))
-  const recents = (recent || []).map((k) => byKey.get(k)).filter(Boolean).slice(0, 4)
 
   const open = (r) => onOpen(r.svc, r.proj)
   const inputRef = useRef(null)
@@ -97,12 +98,14 @@ export default function HomeView({ cards, groups, recent, onOpen, isManager, sto
   const swatch = (c) => <Icon name={iconFor ? iconFor(c.name, c.icon) : (c.icon || 'circle')} size={18} weight="fill"
     color={c.color || 'var(--dock-text-primary)'} />
 
-  // Group view lets a manager file cards without manage mode: move a row's
-  // card to another group, rename a group, add one. The rest stays in manage mode.
+  // Group view lets you file cards without manage mode: move a row's card to
+  // another group or to a place inside one, rename, add or delete a group.
   const [editing, setEditing] = useState(false)
   const edit = editing && view === 'group' && !words.length     // everyone arranges their own bar
   const dragged = useRef(null)                    // the row being dragged
   const [over, setOver] = useState(null)          // the band it is over
+  const [overRow, setOverRow] = useState(null)    // the row it would land in front of
+  const [deleting, setDeleting] = useState(null)  // the group whose delete waits for a second press
   const nogrp = view === 'group' && !words.length && !edit ? ' nogrp' : ''
   const [moving, setMoving] = useState(null)      // { key, style }: the row whose menu is open, and where
   const menuAt = (el) => {
@@ -159,21 +162,47 @@ export default function HomeView({ cards, groups, recent, onOpen, isManager, sto
     onDrop: (e) => { e.preventDefault(); setOver(null); const r = dragged.current; dragged.current = null; if (r) moveTo(r, g.loose ? '' : g.id) },
     style: over === g.id ? { outline: '2px solid var(--dock-info-text)', outlineOffset: 2 } : undefined,
   })
-  const drag = (r) => (!edit ? {} : {
+  const drag = (r, g) => (!edit ? {} : {
     draggable: true,
     onDragStart: (e) => { dragged.current = r; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.key) },
-    onDragEnd: () => { dragged.current = null; setOver(null) },
+    onDragEnd: () => { dragged.current = null; setOver(null); setOverRow(null) },
+    // Dropped on a row: the card goes in front of that row's card, in that group —
+    // the same group (a new order) or another (moved there, at that place).
+    onDragOver: (e) => { if (dragged.current && g && !g.loose) { e.preventDefault(); e.stopPropagation(); setOver(g.id); setOverRow(r.key) } },
+    onDrop: (e) => {
+      if (!g || g.loose) return
+      e.preventDefault(); e.stopPropagation()
+      const d = dragged.current
+      dragged.current = null; setOver(null); setOverRow(null)
+      if (!d || d.ckey === r.ckey) return
+      const rest = (g.members || []).filter((k) => k !== d.ckey)
+      const at = rest.indexOf(r.ckey)
+      const members = at < 0 ? [...rest, d.ckey] : [...rest.slice(0, at), d.ckey, ...rest.slice(at)]
+      run(() => onSetMembers(g.id, members))
+    },
   })
+  const delBtn = (g) => (!edit || !g || g.loose || g.share_set || !onDeleteGroup ? null : deleting === g.id ? (
+    <span style={{ display: 'flex', gap: 6 }}>
+      <button type="button" className="pl-hbtn" disabled={busy}
+        onClick={() => { setDeleting(null); run(() => onDeleteGroup(g.id)) }}>{tr('p_home_delete_yes')}</button>
+      <button type="button" className="pl-hbtn" onClick={() => setDeleting(null)}>{tr('p_cancel')}</button>
+    </span>
+  ) : (
+    <button type="button" className="pl-hbtn" title={tr('p_home_delete_hint')} onClick={() => setDeleting(g.id)}>
+      <Icon name="trash" size={12} /> {tr('p_delete_group_2')}
+    </button>
+  ))
 
   const table = (title, hint, list, key, g) => (
     <div key={key} {...zone(g)}>
-    <Panel title={title} hint={hint} bare>
+    <Panel title={title} hint={hint} right={delBtn(g)} bare>
       <Row className={`cols pl-hrow head${nogrp}`}>
         <span>{tr('p_home_app')}</span><span>{tr('p_home_proj')}</span>
         <span>{tr('p_home_group')}</span><span>{tr('p_home_state')}</span><span />
       </Row>
       {list.map((r, i) => (
-        <Row key={r.key} className={`cols pl-hrow${nogrp}${edit ? ' drag' : ''}${words.length && i === at ? ' at' : ''}`} {...drag(r)}>
+        <Row key={r.key} className={`cols pl-hrow${nogrp}${edit ? ' drag' : ''}${words.length && i === at ? ' at' : ''}`} {...drag(r, g)}
+          style={overRow === r.key ? { boxShadow: 'inset 0 2px 0 var(--dock-info-text)' } : undefined}>
           <span className="app">{edit && <Icon name="drag-handle" size={14} color="var(--dock-text-secondary)" />}{swatch(r.svc)}{r.app}</span>
           <span className="mono">{r.proj || '—'}{r.label && <span className="sub"> {r.label}</span>}</span>
           {edit ? moveCell(r) : <span className="sub">{r.group || '—'}</span>}
@@ -190,14 +219,17 @@ export default function HomeView({ cards, groups, recent, onOpen, isManager, sto
   // Editing shows empty groups too, so a new one is there to move into.
   const grouped = view === 'group' && !words.length
   const bandsOf = [...sortedGroups, ...(sortedGroups.some((g) => g.loose) ? [] : [{ id: '@none', loose: true }])]
-    .map((g) => [g, rows.filter((r) => (g.loose ? !r.gid : r.gid === g.id))])
+    // Inside a group, in its own member order (the order the bar shows).
+    .map((g) => [g, rows.filter((r) => (g.loose ? !r.gid : r.gid === g.id))
+      .map((r, n) => [r, g.loose ? n : ((g.members || []).indexOf(r.ckey) + 1 || 1e6) * 1e3 + n])
+      .sort((a, b) => a[1] - b[1]).map(([r]) => r)])
     .filter(([g, list]) => list.length || (edit && !g.loose))
 
   // Rack services are a manager's: without them Home has one page and no tabs.
-  const tabs = isManager && tabProp == null ? [['home', tr('p_home')], ['map', tr('rack_title')], ['sets', tr('p_rack_tab_sets')], ['dock', tr('p_home_tab_dock')], ['store', tr('p_home_tab_store')]] : []
+  const tabs = isManager && tabProp == null ? [['home', tr('p_home')], ['map', tr('rack_title')], ['dock', tr('p_home_tab_dock')], ['neon', tr('p_home_tab_neon')], ['sets', tr('p_rack_tab_sets')], ['store', tr('p_home_tab_store')]] : []
 
   return (
-    <div className="pl-mgpage pl-home">
+    <div className={`pl-mgpage pl-home${tabProp == null ? '' : ' nohead'}`}>
       {/* Opened from the account menu there is no search: the menu is the way round. */}
       {tabProp == null && (
         <div className="pl-hhead">
@@ -260,28 +292,24 @@ export default function HomeView({ cards, groups, recent, onOpen, isManager, sto
       {tab === 'home' && edit && <p className="pl-hedithint">{tr('p_home_edit_hint')}</p>}
 
       {tab === 'store' && <StoreView onChanged={onRefresh} />}
+      {/* The three looks, one list each: a service unfolds into what Manage sidebar
+          offers for it and its admins, a project into its admins. */}
+      {(tab === 'map' || tab === 'dock' || tab === 'neon') && (
+        <div className="pl-hrack">
+          <RackView tab="map" look={{ map: 'rack', dock: 'dock', neon: 'neon' }[tab]} cards={cards}
+            bands={bands} onChanged={onRefresh} onGo={onRackGo} readOnly={!isManager} />
+        </div>
+      )}
       {tab === 'dock' && <NewServiceView onCreated={onRefresh} />}
 
-      {(tab === 'map' || tab === 'sets') && (
+      {tab === 'sets' && (
         <div className="pl-hrack">
-          <RackView tab={tab} bands={bands} onChanged={onRefresh} onGo={onRackGo} />
+          <RackView tab={tab} bands={bands} onChanged={onRefresh} onGo={onRackGo} readOnly={!isManager} />
         </div>
       )}
 
-      {tab === 'home' && !words.length && recents.length > 0 && (
-        <section className="pl-hrecent">
-          <h2>{tr('p_home_recent')}</h2>
-          <div className="grid">
-            {recents.map((r) => (
-              <button key={r.key} type="button" className="pl-hrc" onClick={() => open(r)}>
-                <span className="strip" style={{ background: r.svc.color || 'var(--dock-text-secondary)' }} />
-                <span className="name">{r.proj || r.app}</span>
-                <span className="app">{r.proj ? r.app : r.group}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* What waits for the account's yes, five at most; the rest come up as these are done. */}
+      {tab === 'home' && !words.length && <InboxView limit={5} onAll={onInboxAll} />}
 
       {tab === 'home' && (grouped
         ? bandsOf.map(([g, list]) => table(bandTitle(g, g.label || g.name || ''), tr('p_home_count', list.length), list, g.id, g))

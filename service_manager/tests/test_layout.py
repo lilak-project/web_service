@@ -40,6 +40,19 @@ class Layout(unittest.TestCase):
         p = c.put("/api/account/prefs", headers=self.h, json={"layout": None}).json()["prefs"]
         self.assertNotIn("layout", p)
 
+    def test_zone(self):
+        p = c.put("/api/account/prefs", headers=self.h, json={"zone": "America/Chicago"}).json()["prefs"]
+        self.assertEqual(p["zone"], "America/Chicago")
+        self.assertEqual(c.put("/api/account/prefs", headers=self.h, json={"zone": "Mars/Base"}).status_code, 400)
+        self.assertEqual(c.put("/api/account/prefs", headers=self.h, json={"zone": "../etc"}).status_code, 400)
+        self.assertNotIn("zone", c.put("/api/account/prefs", headers=self.h, json={"zone": ""}).json()["prefs"])
+        z = [{"zone": "Asia/Seoul", "name": "서울"}, {"zone": "America/Chicago", "name": "텍사스", "x": 1}]
+        self.assertEqual(c.put("/api/account/prefs", headers=self.h, json={"zones": z}).json()["prefs"]["zones"],
+                         [{"zone": "Asia/Seoul", "name": "서울"}, {"zone": "America/Chicago", "name": "텍사스"}])
+        self.assertEqual(c.put("/api/account/prefs", headers=self.h, json={"zones": [{"zone": "Nope/X", "name": "x"}]}).status_code, 400)
+        self.assertEqual(c.put("/api/account/prefs", headers=self.h, json={"zones": [{"zone": "UTC", "name": ""}]}).status_code, 400)
+        self.assertNotIn("zones", c.put("/api/account/prefs", headers=self.h, json={"zones": []}).json()["prefs"])
+
     def test_too_big_refused(self):
         r = c.put("/api/account/prefs", headers=self.h, json={"layout": {"order": [f"k{i}" for i in range(3000)]}})
         self.assertEqual(r.status_code, 400)

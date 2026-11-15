@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from . import config
 from . import autostart
 from .routers import service_groups  # noqa: E402
-from .routers import accounts, auth, passkeys, home, iconlab, links, mcp, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
+from .routers import accounts, agent, auth, chat, passkeys, home, iconlab, inbox, links, mcp, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
 
 config.ensure_dirs()
 
@@ -83,6 +83,8 @@ async def _proxy_error_page(request: Request, exc: HTTPException):
 # Order matters: auth + specific service routes, then lifecycle, then proxy.
 app.include_router(auth.router)
 app.include_router(passkeys.router)         # /api/auth/passkey* (Touch ID / Face ID sign-in)
+app.include_router(chat.router)             # /api/chat/* (speech bubbles over the cover)
+app.include_router(agent.router)            # /api/agent/* (AI keys + platform agent runs)
 app.include_router(accounts.router)
 app.include_router(services.router)
 app.include_router(scaffold.router)        # /api/admin/services/scaffold (+ job status)
@@ -93,6 +95,7 @@ app.include_router(home.router)            # /api/admin/home (builtin overrides 
 app.include_router(service_groups.router)  # /api/service-groups (+ admin: home cover groups)
 app.include_router(iconlab.router)
 app.include_router(reports.router)         # /api/reports + /api/admin/reports (feedback)
+app.include_router(inbox.router)           # /api/inbox/sources (the caller's inbox projects, for the cover)
 app.include_router(system.router)          # /api/admin/system/ports (managed-service port window)
 app.include_router(project_mgmt.router)   # /api/services/{svc}/projects… + /pp/…
 app.include_router(projects.router)

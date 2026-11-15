@@ -180,8 +180,12 @@
       "pip": [
         "rackstore"
       ],
-      "ko": "연구 기록 묶음 — activity · author · reference · asset · note · project (한 번에 설치)",
-      "en": "Research records, installed together — activity · author · reference · asset · note · project"
+      "with": [
+        "log",
+        "pipeline"
+      ],
+      "ko": "rack 화면 서비스 전부, 한 번에 — activity · author · reference · asset · note · project · inbox · parameters · jobboard (lilak_rack · lilak_log · lilak_pipeline 세 저장소; note의 녹음 받아쓰기는 따로: note/setup-whisper.sh)",
+      "en": "Every rack-framed service, in one go — activity · author · reference · asset · note · project · inbox · parameters · jobboard (three repos: lilak_rack · lilak_log · lilak_pipeline; note's dictation installs separately: note/setup-whisper.sh)"
     },
     {
       "name": "log",
@@ -192,14 +196,14 @@
       "color": "#2563eb",
       "needs_kit": true,
       "bundle": [
-        "logbook",
         "parameters"
       ],
       "pip": [
         "parlib"
       ],
-      "ko": "기록 묶음 — logbook · parameters (rack 화면으로 그리므로 rack services를 먼저 설치)",
-      "en": "Log records — logbook · parameters (drawn with the rack frame: install rack services first)"
+      "part_of": "rack",
+      "ko": "파라미터 — parameters (rack services와 함께 설치됨)",
+      "en": "Parameter sets — parameters (installed with rack services)"
     },
     {
       "name": "pipeline",
@@ -210,10 +214,11 @@
       "color": "#0f766e",
       "needs_kit": true,
       "bundle": [
-        "jobbook"
+        "jobboard"
       ],
-      "ko": "분석 파이프라인 묶음 — jobbook(잡 기록과 그 흐름 보드) (rack 화면으로 그리므로 rack services를 먼저 설치, 파라미터·로그 연결은 log services 필요)",
-      "en": "Analysis pipeline — jobbook (job records and the flow board around a job) (drawn with the rack frame: install rack services first; log services for parameter and log links)"
+      "part_of": "rack",
+      "ko": "분석 파이프라인 — jobboard(잡 기록과 그 흐름 보드) (rack services와 함께 설치됨)",
+      "en": "Analysis pipeline — jobboard (job records and the flow board around a job) (installed with rack services)"
     },
     {
       "name": "analysis-v2",

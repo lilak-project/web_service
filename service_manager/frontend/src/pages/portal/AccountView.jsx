@@ -10,6 +10,8 @@ import SystemAdmin from './SystemAdmin'
 import SyncAll from './SyncAll'
 import { notify } from './settingsMsg'
 import FeedbackView from './FeedbackView'
+import InboxView from './InboxView'
+import AgentsView from './AgentsView'
 import GuideView from './GuideView'
 import ProfileEditor from './ProfileEditor'
 import GroupMark from './GroupMark'
@@ -56,19 +58,23 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
 
 // The settings sub-menu, shared so the header can drive it on narrow screens.
 // Pages only a manager sees; the menu marks them.
-export const MANAGER_PAGES = new Set(['map', 'sets', 'dock', 'store', 'accounts', 'groups', 'invites', 'system', 'sync', 'handshake'])
-export function settingsMenu(isManager, lang) {
+export const MANAGER_PAGES = new Set(['map', 'dock', 'neon', 'sets', 'store', 'accounts', 'groups', 'invites', 'system', 'sync', 'handshake'])
+export function settingsMenu(isManager, lang, canSets = false) {
   return [
     // Home and its pages first: the account menu is where the cover starts.
     ['home', 'home', tr("p_home")],
     ...(isManager ? [
+      // The three looks' services, then the sets that join their projects.
       ['map', 'tree', tr("rack_title")],
+      ['dock', 'tree', tr("p_home_tab_dock")],
+      ['neon', 'tree', tr("p_home_tab_neon")],
       ['sets', 'link', tr("p_rack_tab_sets")],
-      ['dock', 'plus', tr("p_home_tab_dock")],
       ['store', 'gear', tr("p_home_tab_store")],
-    ] : []),
+    ] : canSets ? [['sets', 'link', tr("p_rack_tab_sets")], ['invites', 'key', tr("p_invite_codes")]] : []),   // a project admin: sets, and codes for their projects
     ['me', 'user', tr("p_my_account")],
-    ['feedback', 'chats', tr("p_feedback")],
+    // The inbox first, feedback under it (the page keeps its old key, so a remembered menu still opens it).
+    ['feedback', 'bell', tr("p_inbox_menu")],
+    // ['agents', 'robot', tr("ag_title")],   // hidden until an AI API key is registered; the page (AgentsView) stays
     ...(isManager ? [
       ['accounts', 'users', tr("p_accounts")],
       ['groups', 'tree', tr("p_groups")],
@@ -82,7 +88,7 @@ export function settingsMenu(isManager, lang) {
 
 // tab/onTab make the active sub-tab controllable from the header; hideMenu drops
 // the left sidebar (the header dropdown navigates instead) on narrow screens.
-export default function AccountView({ isManager, onChanged, onAccountGone, tab: tabProp, onTab, hideMenu = false, homeDefault, onHomeDefault }) {
+export default function AccountView({ isManager, onChanged, onAccountGone, tab: tabProp, onTab, hideMenu = false, homeDefault, onHomeDefault, agentFocus }) {
   const { lang, setLang, langs } = useLang()
   async function signOutEverywhere() {
     try {
@@ -115,6 +121,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   const [users, setUsers] = useState([])
   const [services, setServices] = useState([])
   const [requests, setRequests] = useState([])
+  const [mine, setMine] = useState([])                 // my own access requests, newest first
   const [groupFilter, setGroupFilter] = useState('')
   const [tabInner, setTabInner] = useState('me')       // uncontrolled fallback
   const tab = tabProp ?? tabInner                      // 'me' | 'feedback' | 'accounts' | …
@@ -133,9 +140,13 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   async function load() {
     try {
       setMe((await launcher.get('/account')).data)
+      // Requests this account may answer (a project admin has some too), and its own.
+      setRequests((await launcher.get('/admin/access-requests')).data)
+      const mr = (await launcher.get('/access-requests')).data
+      setMine(mr.mine || [])
+      if (mr.unseen) launcher.post('/access-requests/seen').then(() => window.dispatchEvent(new Event('portal:requests'))).catch(() => {})
       if (isManager) {
         setUsers((await launcher.get('/admin/users?detail=1')).data)
-        setRequests((await launcher.get('/admin/access-requests')).data)
         setServices((await launcher.get('/admin/services')).data)
       }
     } catch (e) { const m = e?.response?.data?.detail || 'load failed'; setMsg(m); notify(m, 'bad') }
@@ -167,10 +178,21 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
     () => tr("p_display_name_changed"))
   const requestEmail = () => f.email.trim() && run(launcher.post('/account/request-email', { new_email: f.email.trim() }),
     () => { setF((s) => ({ ...s, email: '' })); return tr("p_email_change_requested_awaiting_admin") })
-  const reverify = () => run(launcher.post('/account/verify'), () => tr("p_email_verified_temp"))
+  // Yearly re-verification: a code is mailed, then typed here. (vcode.echo: a laptop with no mailer.)
+  const [vcode, setVcode] = useState(null)     // null = not asked; { text, echo }
+  const reverify = async () => {
+    try {
+      const { data } = await launcher.post('/account/verify', {})
+      setVcode({ text: '', echo: data.verify_code || '' })
+      say(tr('p_verify_sent', data.email), 'ok')
+    } catch (e) { say(e?.response?.data?.detail || tr("p_failed"), 'bad') }
+  }
+  const reverifyCode = () => run(launcher.post('/account/verify', { code: vcode.text }).then((r) => { setVcode(null); return r }),
+    () => tr("p_verified_2"))
   async function deleteSelf() {
-    if (!window.confirm(tr("p_delete_your_account_this_cannot"))) return
-    try { await launcher.delete('/account'); onAccountGone?.() } catch (e) { say(e?.response?.data?.detail || tr("p_failed"), 'bad') }
+    const pw = await askPassword(tr("p_delete_your_account_this_cannot"))
+    if (pw == null) return
+    try { await launcher.delete('/account', { data: { password: pw } }); onAccountGone?.() } catch (e) { say(e?.response?.data?.detail || tr("p_failed"), 'bad') }
   }
 
   // ── admin actions on a user ──
@@ -188,7 +210,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   }
   const adminActive = (u) => run(launcher.post(`/admin/users/${u.id}/active`, { active: u.is_active === false }), () => (u.is_active === false ? tr('p_user_activated') : tr('p_user_deactivated')))
   const removeFromGroup = (u, g) => run(launcher.delete(`/admin/groups/${g.id}/members/${u.id}`), () => tr("p_removed_from", g.name))
-  const resolveReq = (rid, action) => run(launcher.post(`/admin/access-requests/${rid}`, { action }), () => action === 'approve' ? tr("p_approved") : tr("p_rejected_2"))
+  const resolveReq = (rid, action) => run(launcher.post(`/admin/access-requests/${rid}`, { action }).then((r) => { window.dispatchEvent(new Event('portal:requests')); return r }), () => action === 'approve' ? tr("p_approved") : tr("p_rejected_2"))
   // scoped (service/project) admin: grant sets is_admin (also grants access); revoke drops admin, keeps access.
   const grantScopedAdmin = (u) => agrant.svc && run(launcher.post('/admin/permissions', { user_id: u.id, service: agrant.svc, project: agrant.proj.trim(), admin: true }), () => { setAgrant({ svc: '', proj: '' }); return tr("p_admin_granted") })
   const revokeScopedAdmin = (u, p) => run(launcher.post('/admin/permissions', { user_id: u.id, service: p.service, project: p.project || '', admin: false }), () => tr("p_admin_revoked"))
@@ -210,7 +232,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
     ? <Pill tone="ok">{verifyText(me.verify_days_ago, me.verify_days_left)}</Pill>
     : <Pill tone="bad">{tr("p_re_verify")}{me.verify_days_ago != null ? ` (${me.verify_days_ago}d)` : ''}</Pill>
 
-  const MENU = settingsMenu(isManager, lang)
+  const MENU = settingsMenu(isManager, lang, !!me?.scoped_admin)
   const menuBtn = ([key, icon, label]) => {
     const on = tab === key
     return (
@@ -229,8 +251,37 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
     </span>
   ))
 
+  // Requests waiting for this account's answer: every one for a manager, their projects' for an admin.
+  const Requests = requests.length > 0 && (
+    <Panel bare title={tr("p_access_requests")} hint={String(requests.length)}>
+      {requests.map((r) => (
+        <Row key={r.id}>
+          <span>{r.username}</span>
+          <span className="sub mono">→ {r.service}{r.project ? '/' + r.project : ''}</span>
+          <span className="sp" />
+          <Button variant="primary" onClick={() => resolveReq(r.id, 'approve')}>{tr("p_approve")}</Button>
+          <Button variant="secondary" onClick={() => resolveReq(r.id, 'reject')}>{tr("p_reject")}</Button>
+        </Row>
+      ))}
+    </Panel>
+  )
+  const reqTone = { approved: 'ok', rejected: 'bad' }
+  const reqWord = { approved: tr("p_approved"), rejected: tr("p_rejected_2"), pending: tr("p_req_waiting") }
+
   const MyAccount = (
     <>
+      {Requests}
+      {mine.length > 0 && (
+        <Panel bare title={tr("p_my_requests")} hint={String(mine.length)}>
+          {mine.map((r) => (
+            <Row key={r.id}>
+              <span className="mono">{r.service}{r.project ? '/' + r.project : ''}</span>
+              <Pill tone={reqTone[r.status]}>{reqWord[r.status] || r.status}</Pill>
+              <span className="sub">{(r.created_at || '').slice(0, 10)}</span>
+            </Row>
+          ))}
+        </Panel>
+      )}
       <Panel title={tr("p_account")} hint={`@${me.username}${isManager ? ' · ' + tr("p_manager") : ''}`}>
         <Field label={tr("p_name")}>
           <span>{me.display_name || me.username}</span>
@@ -293,18 +344,26 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
           <Button variant="secondary" disabled={!f.email.trim()} onClick={requestEmail}>{tr("p_request")}</Button>
         </FieldActions>
 
-        {isManager && (
-          <>
-            <Field label={tr("p_email_verification")}>
-              {me.verification_current
-                ? <span>{tr("p_verified_2")}</span>
-                : <span style={{ color: 'var(--dock-danger-text)' }}>{tr("p_verification_lapsed_projects_are_view")}</span>}
-            </Field>
-            <FieldActions>
-              <Button variant={me.verification_current ? 'secondary' : 'primary'} onClick={reverify}>{tr("p_request_verification_temp")}</Button>
-            </FieldActions>
-          </>
+        {/* Everyone's, not a manager's: it is the ordinary account whose verification lapses. */}
+        <Field label={tr("p_email_verification")}>
+          {me.verification_current
+            ? <span>{tr("p_verified_2")}</span>
+            : <span style={{ color: 'var(--dock-danger-text)' }}>{tr("p_verification_lapsed_projects_are_view")}</span>}
+        </Field>
+        {vcode && (
+          <Field label={tr('p_verify_code')}>
+            <input className="keep-font" inputMode="numeric" maxLength={6} placeholder="------" value={vcode.text}
+              onChange={(e) => setVcode({ ...vcode, text: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+              style={{ ...input, width: 150, textAlign: 'center', letterSpacing: 5 }} />
+            {vcode.echo && <span style={fieldMuted}>DEV {vcode.echo}</span>}
+          </Field>
         )}
+        <FieldActions>
+          {vcode && <Button variant="primary" disabled={vcode.text.length !== 6} onClick={reverifyCode}>{tr('p_verify_confirm')}</Button>}
+          <Button variant={me.verification_current || vcode ? 'secondary' : 'primary'} onClick={reverify}>
+            {tr(vcode ? 'p_verify_resend' : 'p_verify_send')}
+          </Button>
+        </FieldActions>
 
         <Field label={tr("p_change_password")}>
           <input type="password" value={f.cur} onChange={setField('cur')} placeholder={tr("p_current")} style={{ ...input, flex: 1 }}
@@ -368,19 +427,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
 
   const Accounts = (
     <>
-      {requests.length > 0 && (
-        <Panel bare title={tr("p_access_requests")} hint={String(requests.length)}>
-          {requests.map((r) => (
-            <Row key={r.id}>
-              <span>{r.username}</span>
-              <span className="sub mono">→ {r.service}{r.project ? '/' + r.project : ''}</span>
-              <span className="sp" />
-              <Button variant="primary" onClick={() => resolveReq(r.id, 'approve')}>{tr("p_approve")}</Button>
-              <Button variant="secondary" onClick={() => resolveReq(r.id, 'reject')}>{tr("p_reject")}</Button>
-            </Row>
-          ))}
-        </Panel>
-      )}
+      {Requests}
       <Panel bare title={tr("p_accounts")} hint={`${shownUsers.length}`}
         right={
           <Select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} style={{ ...input, maxWidth: 200 }}>
@@ -506,10 +553,11 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   )
 
   const content = tab === 'me' ? MyAccount
-    : tab === 'feedback' ? <FeedbackView isManager={isManager} />
+    : tab === 'feedback' ? <><InboxView decided /><FeedbackView isManager={isManager} folded /></>
+    : tab === 'agents' ? <AgentsView isManager={isManager} focus={agentFocus} />
     : tab === 'accounts' ? Accounts
     : tab === 'groups' ? <GroupsAdmin users={users} services={services} onChanged={load} />
-    : tab === 'invites' ? <InvitesAdmin services={services} onChanged={load} />
+    : tab === 'invites' ? <InvitesAdmin services={services} onChanged={load} scopes={isManager ? null : (me.admin_scopes || [])} />
     : tab === 'system' ? <SystemAdmin />
     : tab === 'sync' ? <SyncAll />
     : tab === 'handshake' ? <GuideView onChanged={onChanged} />

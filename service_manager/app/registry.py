@@ -263,6 +263,12 @@ def _share_file() -> Path:
     return config.DATA_ROOT / "_portal" / "share_sets.json"
 
 
+# A manifest's `capabilities.tags` names its default set: true is the manager bundle's, a
+# string another bundle's own. The older strings (jobboard's "jobs", parameters' "log") are
+# one set now, named as the templates name it (project_mgmt.SET_TEMPLATES).
+_SET_OF = {"jobs": "jobboard", "log": "jobboard"}
+
+
 def default_share_sets() -> list[dict]:
     groups: dict[str, dict] = {}
     for n in list_service_names():
@@ -270,7 +276,7 @@ def default_share_sets() -> list[dict]:
         t = (m.get("capabilities") or {}).get("tags")
         p = t and link_project(n, m)
         if p:
-            g = "managers" if t is True else str(t)
+            g = "manage" if t is True else _SET_OF.get(str(t), str(t))
             groups.setdefault(g, {"name": g, "members": {}})["members"][n] = p
     return list(groups.values())
 
@@ -287,6 +293,10 @@ def share_sets() -> tuple[list[dict], bool]:
 
 
 def write_share_sets(sets: list[dict]) -> None:
+    # Each set keeps an id of its own, so what points at a set (an MCP token bound to
+    # it) survives the set being renamed.
+    import uuid
+    sets = [{**s, "id": s.get("id") or uuid.uuid4().hex[:8]} for s in sets]
     _atomic_write_text(_share_file(), json.dumps({"sets": sets}, ensure_ascii=False, indent=2))
 
 

@@ -59,8 +59,8 @@ def needs_rehash(stored: str) -> bool:
 
 # ── JWT ──────────────────────────────────────────────────────────────────────
 def create_access_token(user_id: int, username: str, role: str,
-                        extra: Optional[dict] = None) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(hours=config.TOKEN_EXPIRE_HOURS)
+                        extra: Optional[dict] = None, minutes: Optional[int] = None) -> str:
+    expire = datetime.now(timezone.utc) + (timedelta(minutes=minutes) if minutes else timedelta(hours=config.TOKEN_EXPIRE_HOURS))
     payload = {"sub": str(user_id), "username": username, "role": role, "exp": expire}
     if extra:
         payload.update(extra)
@@ -78,3 +78,20 @@ def bearer(authorization: Optional[str]) -> Optional[str]:
     if authorization and authorization.startswith("Bearer "):
         return authorization[7:]
     return None
+
+
+def service_key(name: str) -> str:
+    """What a service the portal started shows to say which service it is
+    (PORTAL_SERVICE_KEY in its environment), e.g. when it asks for a delegated token.
+    Derived, so nothing is stored."""
+    import hashlib
+    import hmac
+    return hmac.new(config.SECRET_KEY.encode(), f"service:{name}".encode(), hashlib.sha256).hexdigest()
+
+
+def scope_fits(scope: str, path: str) -> bool:
+    """Does a delegated token's scope (`svc/proj`, or `svc`) cover this proxied path?"""
+    svc, _, proj = scope.partition("/")
+    if proj:
+        return path.startswith(f"/pp/{svc}/{proj}/")
+    return path.startswith((f"/p/{svc}/", f"/pp/{svc}/"))

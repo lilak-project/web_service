@@ -14,7 +14,7 @@
   "url": null,
   "token": null,
   "identity": {
-    "accepts_portal_token": false,
+    "accepts_portal_token": true,
     "link_by": "email"
   },
   "capabilities": {
@@ -26,5 +26,6 @@
   "label": "CAEN GECO Monitoring",
   "order": 2,
   "autostart": true,
-  "live": true
+  "live": true,
+  "look": "neon"
 }

@@ -68,7 +68,7 @@ function McpTokens() {
         <Field key={t.id} label={t.name}>
           {state(t)}
           <Pill>{t.can_write ? tr('p_mcp_write') : tr('p_mcp_read')}</Pill>
-          <span style={fieldMuted}>{t.scope || tr('p_mcp_all')} · {t.owner} · {tr('p_mcp_until')} {t.expires_at.slice(0, 10)} · {tr('p_mcp_used')} {day(t.last_used_at)}</span>
+          <span style={fieldMuted}>{t.scope_label || tr('p_mcp_all')} · {t.owner} · {tr('p_mcp_until')} {t.expires_at.slice(0, 10)} · {tr('p_mcp_used')} {day(t.last_used_at)}</span>
           {!t.revoked && (sure === t.id
             ? <>
                 <Button variant="primary" onClick={() => revoke(t.id)}>{tr('p_mcp_revoke_confirm')}</Button>

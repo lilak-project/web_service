@@ -66,17 +66,20 @@ def machine_caller(request, manifest: dict) -> bool:
     identity = manifest.get("identity") or {}
     if not identity.get("accepts_portal_token", manifest.get("mode") == "managed"):
         return False
-    return bool(security.bearer(request.headers.get("authorization")))
+    tok = security.bearer(request.headers.get("authorization"))
+    # A PORTAL token that found no user here (expired, ended, or a delegated token
+    # outside its scope) is refused, not handed on for the service to judge.
+    payload = security.decode_access_token(tok) if tok else None
+    return bool(tok) and not (payload or {}).get("portal")
 
 
 def _guard(request: Request, name: str) -> None:
     """Enter-permission on a single service (project=''). Token from header or the
     `lilak_portal_token` cookie (top-level navigations carry no auth header)."""
     _block_if_mirror(request, name)
-    token = security.bearer(request.headers.get("authorization")) or request.cookies.get("lilak_portal_token")
     db = SessionLocal()
     try:
-        user = permissions.user_from_request(db, token)
+        user = permissions.user_at_proxy(db, request)
         if not user:
             if machine_caller(request, registry.read_manifest(name)):
                 return                      # the service checks the bearer itself

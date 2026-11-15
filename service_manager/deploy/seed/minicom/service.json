@@ -11,7 +11,7 @@
   "url": null,
   "token": null,
   "identity": {
-    "accepts_portal_token": false,
+    "accepts_portal_token": true,
     "link_by": "email"
   },
   "capabilities": {
@@ -23,5 +23,6 @@
   "label": "minicom Monitoring",
   "order": 4,
   "autostart": true,
-  "live": true
+  "live": true,
+  "look": "neon"
 }

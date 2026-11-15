@@ -23,5 +23,6 @@
   "label": "Vacuum Monitoring",
   "order": 3,
   "autostart": true,
-  "live": true
+  "live": true,
+  "look": "neon"
 }

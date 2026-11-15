@@ -13,7 +13,7 @@ import threading
 import time
 from html import escape
 
-from fastapi import APIRouter, Depends, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -54,14 +54,26 @@ def _slow_down():
     raise HTTPException(status_code=429, detail="시도가 너무 많습니다. 15분 뒤에 다시 해 보세요.")
 
 
+def _addr(request: Request) -> str:
+    """Who is asking, for the throttles. Behind the server's front proxy every peer is
+    the proxy, so the last X-Forwarded-For hop (the one that proxy wrote) is the client.
+    # ponytail: one proxy assumed; with none the header is the client's own word, which
+    # only lets it spread its guesses — the per-name ceiling in login() still holds."""
+    xff = request.headers.get("x-forwarded-for", "")
+    return (xff.split(",")[-1].strip() if xff else "") or (request.client.host if request.client else "")
+
+
 def _verify_url(token: str) -> str:
     return f"{config.BASE_URL}/api/auth/verify?token={token}"
 
 
 @router.post("/api/auth/login", response_model=schemas.TokenResponse)
-def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
-    key = f"login:{(payload.username or '').strip().lower()}"
-    if _too_many(key, 10):
+def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends(get_db)):
+    # Ten wrong guesses from one address; a hundred for the name from anywhere. Counting by
+    # name alone let anyone lock an account out with ten bad tries.
+    wide = f"login:{(payload.username or '').strip().lower()}"
+    key = f"{wide}|{_addr(request)}"
+    if _too_many(key, 10) or _too_many(wide, 100):
         _slow_down()
     user = (
         db.query(models.User)
@@ -69,7 +81,7 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
         .first()
     )
     if not user or not security.verify_password(payload.password, user.password_hash):
-        _failed(key)
+        _failed(key); _failed(wide)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="아이디 또는 비밀번호가 올바르지 않습니다.")
     # Transparently upgrade a legacy (sha256) hash to bcrypt now that we have the
@@ -92,6 +104,8 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
 
 
 SUPERUSER = "admin"
+_NAME_RE = re.compile(r"[\w.\-]{2,32}")
+RESERVED_NAMES = {SUPERUSER, "agent", "all", "everyone", "here", "portal", "system"}
 
 
 class SetupBody(BaseModel):
@@ -124,12 +138,21 @@ def setup_superuser(body: SetupBody, db: Session = Depends(get_db)):
 
 
 @router.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
-def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
+def register(payload: schemas.RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    from .accounts import clean_display, name_taken
+    rk = f"register:{_addr(request)}"          # a class signing up behind one address fits in 30
+    if _too_many(rk, 30):
+        _slow_down()
     email = (payload.email or "").strip()
     if not _EMAIL_RE.match(email):
         raise HTTPException(status_code=400, detail="올바른 이메일 주소를 입력하세요.")
-    if db.query(models.User).filter(models.User.username == payload.username).first():
+    # A name is what others see and @mention: letters, digits, . _ - only, and never one
+    # that reads as somebody else (their id or their display name) or as a chat keyword.
+    if not _NAME_RE.fullmatch(payload.username or "") or payload.username.lower() in RESERVED_NAMES:
+        raise HTTPException(status_code=400, detail="아이디는 글자·숫자·._- 로 2~32자이고, 예약된 이름은 쓸 수 없습니다.")
+    if name_taken(db, payload.username):
         raise HTTPException(status_code=400, detail="이미 사용 중인 아이디입니다.")
+    payload.display_name = clean_display(db, payload.display_name) or payload.username
     if db.query(models.User).filter(models.User.email == email).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
     if len(payload.password or "") < config.PASSWORD_MIN_LENGTH:
@@ -141,10 +164,12 @@ def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
     # needs a valid invite code. (The first account — the admin — is exempt.) When
     # Firebase Auth is wired, enforce the same in a `beforeCreate` blocking function.
     code = (getattr(payload, "invite_code", None) or "").strip()
-    if not first and config.SIGNUP_ALLOWED_DOMAINS:
+    from .. import settings_store
+    allowed = settings_store.signup_domains()
+    if not first and allowed:
         domain = email.rsplit("@", 1)[-1].lower()
         from .accounts import code_is_valid
-        if domain not in config.SIGNUP_ALLOWED_DOMAINS and not (code and code_is_valid(db, code)):
+        if domain not in allowed and not (code and code_is_valid(db, code)):
             raise HTTPException(status_code=403,
                 detail="허용된 이메일 도메인이 아닙니다. 가입하려면 유효한 초대 코드가 필요합니다.")
     token = f"{secrets.randbelow(1_000_000):06d}"
@@ -178,6 +203,7 @@ def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    _failed(rk)
 
     # Optional invite code → instant project permission (no admin approval).
     redeemed = None

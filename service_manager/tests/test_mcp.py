@@ -8,7 +8,7 @@ import os
 import sys
 import tempfile
 import unittest
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 os.environ.update({
@@ -59,6 +59,8 @@ class Gates(unittest.TestCase):
                 return httpx.Response(404, json={"detail": "그 노트가 없습니다."})
             if path == "notes/taken":
                 return httpx.Response(409, json={"detail": "moved on", "current": {}})
+            if path == "file":
+                return httpx.Response(200, json={"name": kw["files"]["f"][0]})
             if method == "POST":
                 return httpx.Response(201, json={"id": "new", "title": "t", "version": "1"})
             if path == "tagged":
@@ -73,10 +75,12 @@ class Gates(unittest.TestCase):
                                              "version": "2", "body": ""})
         cls.real, mcp._note = mcp._note, fake
 
-        async def inbox(request, grant, record):
+        async def inbox(request, grant, record, proj=""):
             cls.proposed.append(record)
             return httpx.Response(200, json={"record": record})
         cls.proposed, cls.real_inbox, mcp._inbox = [], mcp._inbox, inbox
+        # Which set's inbox (no inbox service installed here): the named set's, else "inbox".
+        cls.real_inbox_of, mcp._inbox_of = mcp._inbox_of, lambda g, home: home.get("inbox") or "inbox"
 
         async def activities(request, grant):
             return httpx.Response(200, json={"activities": [{"id": "a1", "name": "TAMU"}]})
@@ -85,6 +89,7 @@ class Gates(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         mcp._note, mcp._inbox, mcp._activities = cls.real, cls.real_inbox, cls.real_activities
+        mcp._inbox_of = cls.real_inbox_of
         cls.db.close()
 
     def setUp(self):
@@ -133,7 +138,9 @@ class Gates(unittest.TestCase):
     def test_read_token_cannot_write(self):
         tok = self.issue(write=False)
         names = {t["name"] for t in rpc(tok, "tools/list").json()["result"]["tools"]}
-        self.assertEqual(names, {"list_services", "search", "get_record", "by_tag", "search_notes", "get_note", "propose_note", "propose_activity"})
+        self.assertEqual(names, {"tags", "find", "related", "my_tasks", "job_context", "job_recipes", "guide", "job_status", "list_services", "search",
+                                 "get_record", "by_tag",
+                                 "search_notes", "get_note", "propose_note", "propose_activity", "agent_run"})
         r = call(tok, "add_note", title="x", body="y")
         self.assertTrue(r["isError"])
         self.assertEqual(self.calls, [])
@@ -231,35 +238,7 @@ class Gates(unittest.TestCase):
         with self.assertRaises(mcp.ToolError):
             asyncio.run(mcp._portal(None, grant, "author_manager", "GET", "data", "authors"))
 
-    def test_a_log_is_written_stamped_and_added_to(self):
-        sent = []
-
-        async def fake(request, grant, svc, method, path, proj="", **kw):
-            self.assertEqual(svc, "logbook")
-            sent.append((method, path, kw.get("json")))
-            if path == "records":
-                return httpx.Response(200, json={"record": {"id": "L1", **kw["json"]["record"]}})
-            if path == "data":
-                return httpx.Response(200, json={"logs": [{"id": "L1", "title": "beam", "body": "first"}]})
-            return httpx.Response(200, json={"record": {"id": "L1", "title": "beam", **kw["json"]["fields"]}})
-        real, mcp._portal = mcp._portal, fake
-        try:
-            tok = self.issue()
-            got = json.loads(call(tok, "add_log", title=" beam ", run="1-5", tags=["#tpc", ""])["content"][0]["text"])
-            rec = sent[0][2]["record"]
-            self.assertEqual((got["id"], rec["title"], rec["run"], rec["tags"], rec["author"]), ("L1", "beam", "1-5", ["tpc"], "t"))
-            self.assertRegex(rec["date"] + " " + rec["time"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
-            self.assertTrue(call(tok, "add_log", title="x", time="25:00").get("isError"))
-            self.assertTrue(call(tok, "add_log", title="  ").get("isError"))
-            sent.clear()
-            call(tok, "append_log", id="L1", text="second")
-            self.assertEqual(sent[-1][2], {"key": "logs", "id": "L1", "fields": {"body": "first\n\nsecond\n"}})
-            self.assertTrue(call(tok, "append_log", id="nope", text="x").get("isError"))
-            self.assertTrue(call(self.issue(write=False), "add_log", title="x").get("isError"))
-        finally:
-            mcp._portal = real
-
-    def test_a_parameter_set_is_registered_and_tied_to_a_log(self):
+    def test_a_parameter_set_is_registered(self):
         sent = []
 
         async def fake(request, grant, svc, method, path, proj="", **kw):
@@ -267,18 +246,14 @@ class Gates(unittest.TestCase):
             if path == "register":
                 return httpx.Response(200, json={"existing": False, "record": {
                     "id": "P1", "title": kw["params"]["title"], "format": kw["params"]["format"], "count": 2, "value_hash": "h"}})
-            if path == "data":
-                return httpx.Response(200, json={"logs": [{"id": "L1", "title": "run", "params": [{"svc": "parameters", "proj": "sets", "id": "P0"}]}]})
-            return httpx.Response(200, json={"record": {"id": "L1", **kw["json"]["fields"]}})
+            raise AssertionError(path)
         real, mcp._portal = mcp._portal, fake
         try:
             tok = self.issue()
-            got = json.loads(call(tok, "add_params", text="a 1\nb 2\n", title="reco", log="L1")["content"][0]["text"])
-            self.assertEqual((got["id"], got["format"], got["existing"], got["log"]), ("P1", "lilak-par", False, "L1"))
+            got = json.loads(call(tok, "add_params", text="a 1\nb 2\n", title="reco")["content"][0]["text"])
+            self.assertEqual((got["id"], got["format"], got["existing"]), ("P1", "lilak-par", False))
             self.assertEqual(sent[0][2]["content"], b"a 1\nb 2\n")
-            self.assertEqual([x["id"] for x in sent[-1][2]["json"]["fields"]["params"]], ["P0", "P1"])
             self.assertTrue(call(tok, "add_params", text=" ").get("isError"))
-            self.assertTrue(call(tok, "add_params", text="a 1", log="nope").get("isError"))
             self.assertTrue(call(self.issue(write=False), "add_params", text="a 1").get("isError"))
         finally:
             mcp._portal = real
@@ -288,8 +263,9 @@ class Gates(unittest.TestCase):
             self.assertEqual((svc, path), ("author_manager", "data"))
             return httpx.Response(200, json={
                 "settings": {"secret": "x"}, "inbox": [{"id": "m", "name": "메일"}], "version": 3,
+                "prefs": [{"id": "p", "name": "메일 화면"}], "pins": [{"id": "q", "name": "메일 고정"}],
                 "authors": [{"id": "a", "name": "Kim Lee", "tags": ["x"]}, {"id": "b", "name": "Park"}, {"name": "no id"}]})
-        real, mcp._portal = mcp._portal, fake
+        real, real_rack, mcp._portal, mcp._rack = mcp._portal, mcp._rack, fake, lambda: ("author_manager",)
         try:
             tok = self.issue()
             r = call(tok, "search", query="kim", service="author_manager")
@@ -303,7 +279,27 @@ class Gates(unittest.TestCase):
             self.assertTrue(call(tok, "get_record", service="author_manager", id="m")["isError"])
             self.assertTrue(call(tok, "get_record", service="elog", id="m")["isError"])
         finally:
-            mcp._portal = real
+            mcp._portal, mcp._rack = real, real_rack
+
+    def test_get_record_reads_a_set_inbox_and_search_does_not(self):
+        sets = [{"name": "manage", "members": {"note": "note", "inbox": "inbox"}},
+                {"name": "jobboard", "members": {"note": "notes-job", "inbox": "research"}}]
+        asked = []
+
+        async def fake(request, grant, method, url, **kw):
+            asked.append(url)
+            rows = [{"id": "mcp-1", "target": "job", "status": "approved", "made": {"svc": "jobboard", "proj": "jobboard", "id": "j9"}}]
+            return httpx.Response(200, json={"settings": {}, "version": 1, "inbox": rows if "research" in url else []})
+        real, real_sets, mcp._self, mcp.registry.share_sets = mcp._self, mcp.registry.share_sets, fake, lambda: (sets, True)
+        try:
+            tok = self.issue()
+            r = json.loads(call(tok, "get_record", service="inbox", id="mcp-1")["content"][0]["text"])
+            self.assertEqual((r["project"], r["record"]["status"], r["record"]["made"]["id"]), ("research", "approved", "j9"))
+            self.assertIn("/pp/inbox/inbox/api/data", asked)                        # every set's inbox is looked in
+            self.assertTrue(call(tok, "get_record", service="inbox", id="nope")["isError"])
+            self.assertTrue(call(tok, "search", query="job", service="inbox")["isError"])     # not a readable service
+        finally:
+            mcp._self, mcp.registry.share_sets = real, real_sets
 
     def test_managers_issue_and_revoke_tokens_and_others_cannot(self):
         admin = c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]
@@ -323,6 +319,547 @@ class Gates(unittest.TestCase):
         self.assertEqual(rpc(new, "ping").status_code, 200)
         self.assertEqual(c.delete(f"/api/admin/mcp-tokens/{row['id']}", headers=h).status_code, 200)
         self.assertEqual(rpc(new, "ping").status_code, 401)
+
+    def test_rack_services_come_from_their_manifests(self):
+        for name, m in (("parameters", {"kind": "rack"}), ("author_manager", {"kind": "author", "capabilities": {"tags": True}}),
+                        ("asset_manager", {"kind": "asset"}), ("note", {"kind": "note", "capabilities": {"tags": True}})):
+            d = mcp.registry.service_dir(name)
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "service.json").write_text(json.dumps(m))
+        got = mcp._rack()           # other tests add manifests of their own to the same data root
+        self.assertTrue({"author_manager", "parameters"} <= set(got) and not {"asset_manager", "note"} & set(got), got)
+
+    def test_a_job_takes_what_people_write_and_keeps_what_jobrun_owns(self):
+        jobs = [{"id": "jobrun-20261112-005005-915d7d", "title": "skim", "tags": ["job/915d7d", "spirit"]},
+                {"id": "jobrun-20261111-000000-aaaaaa", "title": "other", "tags": ["job/aaaaaa"]}]
+        sent = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            if path == "data":
+                return httpx.Response(200, json={"jobs": jobs, "prefs": [{"id": "x"}]})
+            sent.append(kw["json"])
+            return httpx.Response(200, json={"record": {**jobs[0], **kw["json"]["fields"]}})
+        real, mcp._portal = mcp._portal, fake
+        try:
+            tok = self.issue()
+            r = call(tok, "update_job", id="915d7d", goal="g", why="w", add_tags=["#req/x"], remove_tags=["spirit"])
+            self.assertFalse(r["isError"], r)
+            f = sent[0]["fields"]
+            self.assertEqual(sent[0]["id"], "jobrun-20261112-005005-915d7d")
+            self.assertEqual((f["goal"], f["why"], f["agent"], f["tags"]), ("g", "w", "Claude", ["job/915d7d", "req/x"]))
+            self.assertFalse(call(tok, "update_job", id="20261112-005005-915d7d", report="r")["isError"])
+            sent.clear()
+            for bad in ({"id": "915d7d", "status": "done"}, {"id": "915d7d", "title": "x"},
+                        {"id": "915d7d", "remove_tags": ["job/915d7d"]}, {"id": "915d7d"},
+                        {"id": "bbbbbb", "goal": "g"}, {"id": "915d7d", "logs": "L1"}):
+                self.assertTrue(call(tok, "update_job", **bad)["isError"], bad)
+            self.assertEqual(sent, [])
+            self.assertIn("30", call(tok, "update_job", id="jobrun-nope", goal="g")["content"][0]["text"])
+            self.assertTrue(call(self.issue(write=False), "update_job", id="915d7d", goal="g")["isError"])
+        finally:
+            mcp._portal = real
+
+    def test_a_job_files_merge_and_comments_name_a_file(self):
+        jobs = [{"id": "jobrun-20261112-005005-915d7d", "tags": ["job/915d7d"], "files": {"a.png": "old", "b.png": "keep"}}]
+        sent = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            if path == "data":
+                return httpx.Response(200, json={"jobs": jobs})
+            sent.append(kw["json"])
+            return httpx.Response(200, json={"record": {"id": "e1", **jobs[0], **kw["json"].get("fields", {})}})
+        real, mcp._portal = mcp._portal, fake
+        try:
+            tok = self.issue()
+            self.assertFalse(call(tok, "update_job", id="915d7d", files={"a.png": "", "c.png": "new"})["isError"])
+            self.assertEqual(sent[0]["fields"]["files"], {"b.png": "keep", "c.png": "new"})
+            sent.clear()
+            self.assertTrue(call(tok, "update_job", id="915d7d", files={"x/a.png": "n"})["isError"])
+            self.assertFalse(call(tok, "add_evaluation", id="915d7d", text="t", file="b.png")["isError"])
+            self.assertEqual(sent[0]["record"]["file"], "b.png")
+            self.assertTrue(call(tok, "add_evaluation", id="915d7d", text="t", file="../b.png")["isError"])
+        finally:
+            mcp._portal = real
+
+    def test_file_descriptions_go_to_files_not_note(self):
+        jobs = [{"id": "jobrun-20261112-005005-915d7d", "jobId": "20261112-005005-915d7d", "tags": [],
+                 "files": {"a.png": "A"}}]
+        sent = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            if path == "data":
+                return httpx.Response(200, json={"jobs": jobs})
+            if path.startswith("jobrun/"):
+                return httpx.Response(200, json={"state": "done", "files": ["a.png", "b.png", "c.root", "job.log"]})
+            sent.append(kw["json"])
+            return httpx.Response(200, json={"record": {**jobs[0], **kw["json"]["fields"]}})
+        real, mcp._portal = mcp._portal, fake
+        try:
+            tok = self.issue()
+            r = call(tok, "update_job", id="915d7d", note="a.png: x\nb.png: y")
+            self.assertTrue(r["isError"]) ; self.assertIn("files 인자", r["content"][0]["text"])
+            long = "b.png 은 어떤 그림인지 길게 설명하는 문장이 여기 계속 이어지고 c.root 도 함께 이야기한다 " * 2
+            self.assertTrue(call(tok, "update_job", id="915d7d", report=long, files={"b.png": "B"})["isError"])
+            r = call(tok, "update_job", id="915d7d", report="## 그림\n- a.png\n- b.png")
+            self.assertTrue(r["isError"]) ; self.assertIn("b.png", r["content"][0]["text"])
+            self.assertEqual(sent, [])
+            r = call(tok, "update_job", id="915d7d", report="## 그림\n- a.png\n- b.png", files={"b.png": "B"})
+            self.assertFalse(r["isError"], r)
+            self.assertEqual(json.loads(r["content"][0]["text"])["files_missing"], ["c.root"])
+        finally:
+            mcp._portal = real
+
+    def test_guide_reads_the_jobboard_guide(self):
+        d = mcp.registry.service_dir("jobboard")
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "GUIDE.md").write_text("# rules")
+        (d / "service.json").write_text(json.dumps({"kind": "rack", "start": {"cwd": str(d)}}))
+        r = call(self.issue(write=False), "guide")
+        self.assertFalse(r["isError"], r)
+        self.assertIn("# rules", r["content"][0]["text"])
+
+    def test_a_job_takes_its_parents_where_jobrun_named_none(self):
+        jobs = [{"id": "jobrun-20261112-000000-aaaaaa", "tags": ["job/aaaaaa"]},
+                {"id": "jobrun-20261112-000001-bbbbbb", "tags": ["job/bbbbbb"], "inputs": [{"id": "jobrun-20261112-000000-aaaaaa"}]},
+                {"id": "jobrun-20261112-000002-cccccc", "tags": ["job/cccccc"],
+                 "paramValues": {"scan": "20261112-000000-aaaaaa"}}]
+        sent = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            if path == "data":
+                return httpx.Response(200, json={"jobs": jobs})
+            sent.append(kw["json"])
+            return httpx.Response(200, json={"record": {**jobs[0], **kw["json"]["fields"]}})
+        real, mcp._portal = mcp._portal, fake
+        try:
+            tok = self.issue()
+            r = call(tok, "update_job", id="cccccc", goal="g")
+            self.assertFalse(r["isError"], r)
+            sent.clear()
+            r = call(tok, "update_job", id="bbbbbb", inputs=["aaaaaa", "jobrun-20261112-000000-aaaaaa"])
+            self.assertFalse(r["isError"], r)
+            self.assertEqual(sent[-1]["fields"]["inputs"], [{"id": "jobrun-20261112-000000-aaaaaa"}], "short ids, once each")
+            self.assertFalse(call(tok, "update_job", id="bbbbbb", inputs=[])["isError"], "[] clears")
+            n = len(sent)
+            for bad in ({"id": "cccccc", "inputs": ["aaaaaa"]},          # jobrun's parameter names its parent
+                        {"id": "aaaaaa", "inputs": ["aaaaaa"]},          # itself
+                        {"id": "aaaaaa", "inputs": ["bbbbbb"]},          # bbbbbb is built on aaaaaa: a loop
+                        {"id": "bbbbbb", "inputs": ["dddddd"]},          # no such job
+                        {"id": "bbbbbb", "inputs": "aaaaaa"}):           # not a list
+                self.assertTrue(call(tok, "update_job", **bad)["isError"], bad)
+            self.assertEqual(len(sent), n)
+            call(tok, "update_job", id="aaaaaa", briefing="next: widen the scan")
+            self.assertEqual(sent[-1]["fields"]["briefingBy"], "", "an agent's proposal is shown with its agent fields")
+        finally:
+            mcp._portal = real
+
+    def test_a_platform_agent_approves_as_itself_only(self):
+        jobs = [{"id": "jobrun-20261112-005005-915d7d", "title": "skim", "tags": ["job/915d7d"]}]
+        sent = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            if path == "data":
+                return httpx.Response(200, json={"jobs": jobs})
+            sent.append((path, kw["json"]))
+            if path.startswith("approve/"):
+                return httpx.Response(200, json={"allowed": False, "mode": "human", "entry": {"action": "request"},
+                                                 "state": {"approved": False, "confirmed": False}})
+            return httpx.Response(200, json={"record": {"id": "e1", **kw["json"].get("record", {}),
+                                                        **jobs[0], **kw["json"].get("fields", {})}})
+        real, mcp._portal = mcp._portal, fake
+        try:
+            run = models.AgentRun(user_id=self.user.id, service="jobboard", project="", provider="claude",
+                                  approval="similar", task="t")
+            self.db.add(run)
+            self.db.commit()
+            agent = mcp_tokens.issue(self.db, f"agent-run-{run.id}", self.user, True, 1)
+            r = call(agent, "approve_job", id="915d7d", by="사람", reason="done")
+            self.assertFalse(r["isError"], r)
+            path, body = sent[-1]
+            self.assertEqual(path, "approve/jobrun-20261112-005005-915d7d")
+            self.assertEqual((body["by"], body["run"], body["requester"], body["run_mode"]),
+                             ("플랫폼 agent", str(run.id), "admin", "similar"), "the token decides, not by=")
+            self.assertEqual(json.loads(r["content"][0]["text"])["done"], "request")
+            call(agent, "add_evaluation", id="915d7d", text="looks fine", verdict="good", by="person")
+            ev = sent[-1][1]["record"]
+            self.assertEqual((ev["by"], ev["agent"], ev["requester"], ev["verdict"]), ("agent", "플랫폼 agent", "admin", "good"))
+            call(agent, "update_job", id="915d7d", goal="g", agent="사람")
+            f = sent[-1][1]["fields"]
+            self.assertEqual((f["agent"], f["agentRun"], f["agentRequester"]), ("플랫폼 agent", str(run.id), "admin"))
+            # Anyone else: by as given (default Claude), and no run.
+            call(self.issue(), "approve_job", id="915d7d")
+            self.assertEqual(sent[-1][1]["by"], "Claude")
+            self.assertNotIn("run", sent[-1][1])
+            self.assertTrue(call(self.issue(), "approve_job", id="915d7d", action="confirm")["isError"])
+        finally:
+            mcp._portal = real
+
+    def _world(self):
+        """A share set of references, authors, notes and jobs, behind a fake proxy."""
+        jobs = [{"id": "jobrun-1-aaaaaa", "title": "skim", "status": "성공", "agent": "Claude", "tags": ["job/aaaaaa", "SpiRIT"],
+                 "params": ["P1"], "approvals": [{"at": "1", "action": "request", "by": "플랫폼 agent"}]},
+                {"id": "jobrun-2-bbbbbb", "title": "plot", "status": "성공", "report": "done", "tags": ["job/bbbbbb"],
+                 "approvals": [{"at": "1", "action": "approve", "by": "사람"}]},
+                {"id": "jobrun-3-cccccc", "title": "wait", "status": "대기", "agent": "Codex", "tags": ["job/cccccc"]}]
+        data = {
+            "reference_manager": {"references": [
+                {"id": "r-0001-pion", "title": "Pion production in HIC", "date": "2024-03-01", "tags": ["SpiRIT", "pion"],
+                 "authors": [{"name": "K. Pion", "ref": "a-0001-kimp"}]},
+                {"id": "r-0002-kaon", "title": "Kaon flow", "date": "2019-05-01", "tags": ["kaon"]}],
+                "settings": {"x": 1}},
+            "author_manager": {"authors": [{"id": "a-0001-kimp", "name": "Kim Pion", "tags": ["SpiRIT"]}]},
+            "jobboard": {"jobs": jobs, "evaluations": [{"id": "E1", "task": "jobrun-1-aaaaaa", "text": "ok"}],
+                         "approval": [{"id": "rule"}]},
+            "parameters": {"sets": [{"id": "P1", "title": "skim pars"}]},
+        }
+        notes = [{"id": "n1", "title": "pion plan", "date": "2026-11-01", "tags": ["SpiRIT", "agent/x"], "excerpt": "first"}]
+        calls = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            calls.append((svc, path, (kw.get("params") or {}).get("q")))
+            if svc == "note":
+                if path == "notes":
+                    return httpx.Response(200, json={"notes": notes})
+                if path == "tags":
+                    return httpx.Response(200, json={"tags": {"SpiRIT": 1, "agent/x": 1}})
+                if path == "search":
+                    q = kw["params"]["q"]
+                    hit = q in ("pion", "::aaaaaa", "r-0001-pion")
+                    return httpx.Response(200, json={"hits": [{"id": "n1", "title": "pion plan", "line": 2,
+                                                               "text": f"line with {q}"}] if hit else []})
+                if path == "notes/n1":
+                    return httpx.Response(200, json={"id": "n1", "title": "pion plan", "tags": ["SpiRIT"],
+                                                     "body": "see r-0001-pion and ::aaaaaa", "version": "1", "fields": {}})
+            if path == "data":
+                return httpx.Response(200, json=data[svc])
+            if path == "tags":
+                n = {}
+                for k, rows in data[svc].items():
+                    for r in rows if isinstance(rows, list) else []:
+                        for t in r.get("tags") or []:
+                            n[t] = n.get(t, 0) + 1
+                return httpx.Response(200, json={"tags": n})
+            return httpx.Response(404, json={"detail": "no"})
+        world = {"jobboard": "jobboard", "parameters": "sets", "reference_manager": "papers",
+                 "author_manager": "authors", "note": "note"}
+        real = (mcp._portal, mcp._rack, mcp.registry.link_project, mcp.registry.share_for, mcp.registry.share_sets, mcp._note)
+        mcp._portal, mcp._rack = fake, (lambda: ("author_manager", "jobboard", "parameters", "reference_manager"))
+        mcp._note = lambda request, grant, method, path, **kw: fake(request, grant, "note", method, path, **kw)
+        mcp.registry.link_project = lambda s, m=None: world.get(s, "")
+        mcp.registry.share_for = lambda s, p: dict(world)
+        mcp.registry.share_sets = lambda: ([{"name": "jobboard", "members": {"jobboard": "jobboard", "parameters": "sets"}}], True)
+        self.addCleanup(lambda: setattr(mcp, "_portal", real[0]) or setattr(mcp, "_rack", real[1])
+                        or setattr(mcp.registry, "link_project", real[2]) or setattr(mcp.registry, "share_for", real[3])
+                        or setattr(mcp.registry, "share_sets", real[4]) or setattr(mcp, "_note", real[5]))
+        return calls
+
+    def out(self, tok, name, **args):
+        r = call(tok, name, **args)
+        self.assertFalse(r["isError"], r)
+        return json.loads(r["content"][0]["text"])
+
+    def test_tags_are_counted_per_service_and_narrowed_by_prefix(self):
+        self._world()
+        tok = self.issue(write=False)
+        got = {s["service"]: s["tags"] for s in self.out(tok, "tags")["services"]}
+        self.assertEqual(got["reference_manager"], {"SpiRIT": 1, "kaon": 1, "pion": 1})
+        self.assertEqual(got["note"]["agent/x"], 1)
+        got = {s["service"]: s["tags"] for s in self.out(tok, "tags", prefix="agent")["services"]}
+        self.assertEqual(got, {"note": {"agent/x": 1}})
+        got = {s["service"] for s in self.out(tok, "tags", set="jobboard")["services"]}
+        self.assertEqual(got, {"jobboard"})
+
+    def test_find_mixes_words_and_tags_across_services(self):
+        self._world()
+        tok = self.issue(write=False)
+        hits = self.out(tok, "find", query="pion")["hits"]
+        self.assertEqual({(h["service"], h["id"]) for h in hits},
+                         {("reference_manager", "r-0001-pion"), ("author_manager", "a-0001-kimp"), ("note", "n1")})
+        self.assertEqual(hits[0]["id"], "r-0001-pion")          # in the title, and in a tag
+        self.assertIn("Pion", next(h for h in hits if h["id"] == "r-0001-pion")["snippet"])
+        ids = lambda **a: {h["id"] for h in self.out(tok, "find", **a)["hits"]}  # noqa: E731
+        self.assertEqual(ids(tags=["SpiRIT", "pion"]), {"r-0001-pion"})
+        self.assertEqual(ids(tags=["kaon", "pion"], match="any"), {"r-0001-pion", "r-0002-kaon"})
+        self.assertEqual(ids(tags=["agent"]), {"n1"})        # a tag finds the tags inside it
+        self.assertEqual(ids(query="pion", kind="authors"), {"a-0001-kimp"})
+        self.assertEqual(ids(tags=["kaon", "pion"], match="any", since="2020-01-01"), {"r-0001-pion"})
+        self.assertNotIn("rule", ids(query="rule"))         # the approval policy is not a record
+        self.assertTrue(call(tok, "find")["isError"])
+
+    def test_related_follows_links_both_ways_and_shared_tags(self):
+        self._world()
+        tok = self.issue(write=False)
+        r = self.out(tok, "related", service="reference_manager", id="r-0001-pion")
+        self.assertEqual([x["id"] for x in r["links"]], ["a-0001-kimp"])
+        self.assertEqual([x["id"] for x in r["backlinks"]], ["n1"])      # the note names R1
+        self.assertIn("jobrun-1-aaaaaa", [x["id"] for x in r["same_tags"]])
+        r = self.out(tok, "related", service="note", id="n1")
+        self.assertEqual({x["id"] for x in r["links"]}, {"r-0001-pion", "jobrun-1-aaaaaa"})   # an id and a ::short id
+        self.assertTrue(call(tok, "related", service="reference_manager", id="nope")["isError"])
+
+    def test_my_tasks_and_a_jobs_context(self):
+        self._world()
+        tok = self.issue(write=False)
+        t = self.out(tok, "my_tasks")
+        self.assertEqual((t["agent"], [j["id"] for j in t["awaiting_approval"]]), ("Claude", ["jobrun-1-aaaaaa"]))
+        self.assertTrue(t["awaiting_approval"][0]["requested"])
+        self.assertEqual([j["id"] for j in t["no_report"]], ["jobrun-1-aaaaaa"])
+        self.assertEqual([j["id"] for j in t["mine"]], ["jobrun-1-aaaaaa"])
+        self.assertEqual([j["id"] for j in self.out(tok, "my_tasks", agent="Codex")["mine"]], ["jobrun-3-cccccc"])
+        c = self.out(tok, "job_context", id="aaaaaa")
+        self.assertEqual((c["job"]["id"], c["approval"]["requested"]), ("jobrun-1-aaaaaa", True))
+        self.assertEqual([p["id"] for p in c["params"]], ["P1"])
+        self.assertEqual([e["id"] for e in c["evaluations"]], ["E1"])
+        self.assertEqual([n["id"] for n in c["notes"]], ["n1"])
+        self.assertNotIn("approvals", c["job"])
+
+    def test_jobs_are_submitted_and_watched_through_jobboard(self):
+        calls = self._world()
+        tok = self.issue()
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            calls.append((svc, method, path, kw.get("json")))
+            if path == "recipes":
+                return httpx.Response(200, json={"local": {"skim": {"params": ["run"]}}, "stark-zt": {"error": "down"}})
+            if path == "submit":
+                if kw["json"]["project"] == "nope":
+                    return httpx.Response(400, json={"detail": "no such project: nope"})
+                return httpx.Response(200, json={"id": "jobrun-9-dddddd", "jobId": "9-dddddd", "server": "local"})
+            if path == "data":
+                return httpx.Response(200, json={"jobs": [{"id": "jobrun-9-dddddd", "jobId": "9-dddddd", "status": "실행",
+                                                           "recipe": "skim", "tags": ["job/dddddd"]}]})
+            if path == "jobrun/9-dddddd":
+                return httpx.Response(200, json={"state": "running", "error": None, "log_tail": "x" * 3000,
+                                                 "files": ["out.root"], "recipe": "skim"})
+            return httpx.Response(404, json={"detail": "no"})
+        mcp._portal = fake
+        self.assertEqual(self.out(tok, "job_recipes", server="stark-zt"), {"stark-zt": {"error": "down"}})
+        self.assertIn("local", self.out(tok, "job_recipes"))
+        got = self.out(tok, "submit_job", recipe="skim", project="SpiRIT", params={"run": 1241}, why="needed")
+        self.assertEqual((got["status"], got["server"], got["project"]), ("waiting", "local", "SpiRIT"))
+        self.assertFalse(any(c[2] == "submit" for c in calls))      # nothing ran: a person approves first
+        cand = self.proposed[-1]
+        self.assertEqual((cand["target"], cand["recipe"], cand["jobProject"], json.loads(cand["params"]), cand["remark"]),
+                         ("job", "skim", "SpiRIT", {"run": 1241}, "needed"))
+        self.assertEqual(cand["server"], "local")         # the one server that has it, written down for the person
+        self.assertTrue(call(tok, "submit_job", recipe="nope", project="SpiRIT", why="w")["isError"])
+        self.assertTrue(call(tok, "submit_job", recipe="skim", project="SpiRIT", server="stark-zt", why="w")["isError"])
+        self.assertTrue(call(tok, "submit_job", recipe="skim", project="SpiRIT")["isError"])   # no why
+        self.assertTrue(call(self.issue(write=False), "submit_job", recipe="skim", project="SpiRIT", why="w")["isError"])
+        st = self.out(tok, "job_status", id="dddddd")
+        self.assertEqual((st["status"], st["state"], st["files"], len(st["log_tail"])), ("실행", "running", ["out.root"], 2000))
+
+    def test_a_note_becomes_slides_and_back(self):
+        tok = self.issue()
+        self.assertFalse(call(tok, "add_note", title="t", body="b", mode="slide", ratio="16x9")["isError"])
+        self.assertEqual(self.calls[-1][2]["fields"], {"mode": "slide", "ratio": "16x9"})
+        self.calls.clear()
+        self.assertFalse(call(tok, "add_note", title="t", body="b")["isError"])
+        self.assertNotIn("fields", self.calls[-1][2])
+        self.calls.clear()
+        self.assertFalse(call(tok, "update_note", id="plain", base_version="1", mode="slide")["isError"])
+        self.assertEqual(self.calls[-1][2], {"baseVersion": "1", "fields": {"mode": "slide"}})
+        self.assertTrue(call(tok, "update_note", id="paper", base_version="1", mode="slide")["isError"])   # tex
+        self.assertTrue(call(tok, "add_note", title="t", body="b", mode="slide", ratio="3x2")["isError"])
+
+    def test_a_token_bound_to_a_set_goes_to_its_projects(self):
+        sets = [{"name": "jobboard", "members": {"note": "notes-job", "jobboard": "jobboard"}}]
+        real = mcp.registry.share_sets
+        mcp.registry.share_sets = lambda: (sets, True)
+        self.addCleanup(lambda: setattr(mcp.registry, "share_sets", real))
+        allowed = mcp_tokens.allowed
+        self.assertTrue(allowed("set:jobboard", "note", "notes-job"))
+        self.assertFalse(allowed("set:jobboard", "note", "note"))
+        self.assertFalse(allowed("set:jobboard", "author_manager"))
+        self.assertFalse(allowed("set:gone", "note", "note"))           # a set that is gone opens nothing
+        self.assertEqual(mcp_tokens.home("note,set:jobboard"), {"note": "notes-job", "jobboard": "jobboard"})
+        seen = []
+
+        async def through(request, grant, method, url, **kw):
+            seen.append(url)
+            return httpx.Response(200, json={"hits": []})
+        real_self, mcp._self = mcp._self, through
+        try:
+            grant = mcp.Grant("jwt", True, "t", "set:jobboard", mcp_tokens.home("set:jobboard"))
+            asyncio.run(mcp._portal(None, grant, "note", "GET", "search"))
+            self.assertEqual(seen, ["/pp/note/notes-job/api/search"])
+            with self.assertRaises(mcp.ToolError):
+                asyncio.run(mcp._portal(None, grant, "note", "GET", "search", "note"))
+        finally:
+            mcp._self = real_self
+
+    def test_reads_cover_both_sets_and_a_delegate_stays_in_one_project(self):
+        sets = [{"name": "manage", "members": {"note": "note", "author_manager": "authors"}},
+                {"name": "jobboard", "members": {"note": "notes-job", "jobboard": "jobboard"}}]
+        real = (mcp.registry.share_sets, mcp.registry.link_project)
+        mcp.registry.share_sets = lambda: (sets, True)
+        mcp.registry.link_project = lambda s, m=None: {"note": "note", "author_manager": "authors", "jobboard": "jobboard"}.get(s, "")
+        self.addCleanup(lambda: setattr(mcp.registry, "share_sets", real[0]) or setattr(mcp.registry, "link_project", real[1]))
+        # A token that opens everything, or both sets, reads note in BOTH projects; one bound to a set, its own.
+        for scope in ("", "set:manage,set:jobboard"):
+            g = mcp.Grant("jwt", True, "t", scope, mcp_tokens.home(scope))
+            self.assertEqual(mcp._spread(g, ["note", "jobboard"]),
+                             [("note", "note"), ("note", "notes-job"), ("jobboard", "jobboard")])
+        g = mcp.Grant("jwt", True, "t", "set:jobboard", mcp_tokens.home("set:jobboard"))
+        self.assertEqual(mcp._spread(g, ["note", "author_manager"]), [("note", "notes-job")])
+        # delegate: no project named is the token's own project of that service, never the service as a whole.
+        sent = []
+
+        async def through(request, grant, method, url, **kw):
+            sent.append(kw.get("json"))
+            return httpx.Response(200, json={"id": 7, "status": "queued"})
+        real_self, mcp._self = mcp._self, through
+        try:
+            asyncio.run(mcp._delegate(None, g, {"service": "note", "task": "x"}))
+            self.assertEqual(sent[-1]["project"], "notes-job")
+            with self.assertRaises(mcp.ToolError):
+                asyncio.run(mcp._delegate(None, g, {"service": "note", "project": "note", "task": "x"}))
+            with self.assertRaises(mcp.ToolError):
+                asyncio.run(mcp._delegate(None, g, {"service": "author_manager", "task": "x"}))
+        finally:
+            mcp._self = real_self
+        # The run's own token (scope svc/proj) defaults to that project, not the service's main one.
+        self.assertEqual(mcp_tokens.home("note/notes-job"), {"note": "notes-job"})
+
+    def test_a_sets_inbox_is_open_to_its_people_and_the_cover_lists_it(self):
+        from app import permissions, security
+        sets = [{"name": "manage", "members": {"note": "note", "inbox": "inbox"}},
+                {"name": "jobboard", "members": {"note": "notes-job", "inbox": "research"}}]
+        real = mcp.registry.share_sets
+        mcp.registry.share_sets = lambda: (sets, True)
+        self.addCleanup(lambda: setattr(mcp.registry, "share_sets", real))
+        mcp.registry.write_manifest("inbox", {"kind": "rack", "capabilities": {"multi_project": True, "inbox": True}})
+        mcp.registry.write_manifest("note", {"kind": "rack", "capabilities": {"multi_project": True}})
+        db = SessionLocal()
+        try:
+            u = models.User(username="setmate", email="sm@x.org", password_hash=security.hash_password("pw-setmate-1"),
+                            role="user", is_active=True, email_verified=True, email_verified_at=datetime.utcnow())
+            db.add(u)
+            db.commit()
+            db.add(models.ServicePermission(user_id=u.id, service_name="note", project="notes-job"))
+            db.commit()
+            self.assertTrue(permissions.can_enter_project(db, u, "inbox", "research"))   # in the jobboard set
+            self.assertFalse(permissions.can_enter_project(db, u, "inbox", "inbox"))     # not in manage
+            self.assertFalse(permissions.can_enter_project(db, u, "note", "note"))       # nothing else opens
+        finally:
+            db.close()
+        tok = c.post("/api/auth/login", json={"username": "setmate", "password": "pw-setmate-1"}).json()["access_token"]
+        self.assertEqual(c.get("/api/inbox/sources", headers={"Authorization": f"Bearer {tok}"}).json(),
+                         [{"svc": "inbox", "proj": "research", "set": "jobboard"}])
+        admin = c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]
+        self.assertEqual([s["set"] for s in c.get("/api/inbox/sources", headers={"Authorization": f"Bearer {admin}"}).json()],
+                         ["manage", "jobboard"])
+        self.assertEqual(c.get("/api/inbox/sources").status_code, 401)
+
+    def test_a_proposal_goes_to_the_inbox_of_the_set_it_names_made_where_that_set_says(self):
+        sets = [{"name": "manage", "members": {"note": "note", "academic_activities": "activities", "inbox": "inbox"}},
+                {"name": "jobboard", "members": {"note": "notes-job", "academic_activities": "acts-job", "inbox": "research"}},
+                {"name": "bare", "members": {"note": "x"}}]
+        real = mcp.registry.share_sets
+        mcp.registry.share_sets = lambda: (sets, True)
+        self.addCleanup(lambda: setattr(mcp.registry, "share_sets", real))
+        went = []
+
+        async def inbox(request, grant, record, proj):
+            went.append((proj, record.get("destProj")))
+            return httpx.Response(200, json={"record": record})
+        real_inbox, mcp._inbox = mcp._inbox, inbox
+        try:
+            g = mcp.Grant("jwt", True, "t", "", {})
+            asyncio.run(mcp._propose_note(None, g, {"title": "t", "body": "b", "why": "w", "set": "jobboard"}))
+            asyncio.run(mcp._propose_activity(None, g, {"name": "n", "start": "2026-11-13", "why": "w", "set": "jobboard"}))
+            self.assertEqual(went, [("research", "notes-job"), ("research", "acts-job")])
+            for bad in ("nope", "bare"):                                   # no such set; a set with no inbox
+                with self.assertRaises(mcp.ToolError):
+                    asyncio.run(mcp._propose_note(None, g, {"title": "t", "body": "b", "why": "w", "set": bad}))
+        finally:
+            mcp._inbox = real_inbox
+
+    def test_a_file_goes_up_as_text_or_base64(self):
+        tok = self.issue()
+        r = json.loads(call(tok, "add_file", name="fig.svg", text="<svg/>")["content"][0]["text"])
+        self.assertEqual(self.calls[-1][:2], ("POST", "file"))
+        self.assertIn("embed", r)
+        for bad in ({"name": "../x.png", "text": "x"}, {"name": "a.png", "data": "!!"}, {"name": "a.png"},
+                    {"name": "a.png", "text": "x", "data": "eA=="}):
+            self.assertTrue(call(tok, "add_file", **bad)["isError"], bad)
+        self.assertTrue(call(self.issue(write=False), "add_file", name="a.svg", text="x")["isError"])
+
+    def test_a_set_is_made_from_a_template_in_one_go(self):
+        from app import registry
+        for name, m in (("note", {"kind": "note", "capabilities": {"multi_project": True, "tags": True}}),
+                        ("project_manager", {"kind": "rack", "capabilities": {"multi_project": True}}),
+                        ("analysis", {"kind": "generic"})):
+            d = registry.service_dir(name)
+            (d / "projects" / "base").mkdir(parents=True, exist_ok=True)
+            (d / "service.json").write_text(json.dumps(m))
+        admin = c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]
+        h = {"Authorization": f"Bearer {admin}"}
+        c.put("/api/share-sets", headers=h, json={"sets": [{"name": "jobboard", "members": {"note": "base"}}]})
+        r = c.post("/api/share-sets/make", headers=h, json={"name": "jobboard", "services": ["note", "project_manager"]})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual((r.json()["made"], r.json()["joined"]), (["project_manager/jobboard"], ["project_manager"]))
+        self.assertTrue((registry.service_dir("project_manager") / "projects" / "jobboard").is_dir())
+        got = {s["name"]: s["members"] for s in r.json()["sets"]}
+        self.assertEqual(got["jobboard"], {"note": "base", "project_manager": "jobboard"})
+        # project_manager joins the set but leaves the cover: the tags tabs show its projects
+        from app.routers import home
+        self.assertIn("project_manager", home.hidden_services())
+        self.assertNotIn("note", home.hidden_services())
+        self.assertEqual(c.post("/api/share-sets/make", headers=h, json={"name": "x", "services": ["analysis"]}).status_code, 400)
+        # a project already in a set cannot join another
+        self.assertEqual(c.post("/api/share-sets/make", headers=h,
+                                json={"name": "other", "project": "jobboard", "services": ["project_manager"]}).status_code, 400)
+        self.assertEqual(c.post("/api/share-sets/make", json={"name": "y", "services": []}).status_code, 401)
+        names = [t["name"] for t in c.get("/api/share-sets/templates", headers=h).json()]
+        self.assertIn("jobboard", names)
+
+    def test_a_token_stays_bound_to_its_set_through_a_rename(self):
+        from app import registry
+        for name in ("note", "project_manager"):
+            d = registry.service_dir(name)
+            (d / "projects" / "keep").mkdir(parents=True, exist_ok=True)
+            (d / "service.json").write_text(json.dumps({"kind": "rack", "capabilities": {"multi_project": True}}))
+        admin = c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]
+        h = {"Authorization": f"Bearer {admin}"}
+        r = c.put("/api/share-sets", headers=h, json={"sets": [{"name": "lab", "members": {"note": "keep"}}]})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(c.post("/api/admin/mcp-tokens", headers=h, json={"name": "x", "scope": "set:nope"}).status_code, 400)
+        self.assertEqual(c.post("/api/admin/mcp-tokens", headers=h, json={"name": "lab", "scope": "set:lab"}).status_code, 201)
+        sid = registry.share_sets()[0][0]["id"]
+        row = next(t for t in c.get("/api/admin/mcp-tokens", headers=h).json() if t["name"] == "lab")
+        self.assertEqual((row["scope"], row["scope_label"]), (f"set:{sid}", "set:lab"))
+        # renamed on the screen (the id rides along), the token still opens the same projects
+        c.put("/api/share-sets", headers=h, json={"sets": [{"id": sid, "name": "lab2", "members": {"note": "keep"}}]})
+        self.assertTrue(mcp_tokens.allowed(row["scope"], "note", "keep"))
+        self.assertEqual(mcp_tokens.home(row["scope"]), {"note": "keep"})
+        row = next(t for t in c.get("/api/admin/mcp-tokens", headers=h).json() if t["name"] == "lab")
+        self.assertEqual(row["scope_label"], "set:lab2")
+
+    def test_a_jobs_plot_goes_into_notes_without_passing_through_the_agent(self):
+        sent = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            sent.append((svc, path))
+            if path == "data":
+                return httpx.Response(200, json={"jobs": [{"id": "jobrun-1-e8c5b8", "jobId": "1-e8c5b8", "tags": ["job/e8c5b8"]}]})
+            if path == "jobrun/1-e8c5b8/file/pid.png":
+                return httpx.Response(200, content=b"\x89PNG...")
+            if path == "file":
+                return httpx.Response(200, json={"name": kw["files"]["f"][0], "size": len(kw["files"]["f"][1])})
+            return httpx.Response(404, json={"detail": "not in this job's output"})
+        real, mcp._portal = mcp._portal, fake
+        real_note, mcp._note = mcp._note, (lambda request, grant, method, path, **kw: fake(request, grant, "note", method, path, **kw))
+        try:
+            tok = self.issue()
+            r = self.out(tok, "add_file", job="e8c5b8", file="pid.png")
+            self.assertEqual(r["embed"], "![[pid.png]]")
+            self.assertIn(("jobboard", "jobrun/1-e8c5b8/file/pid.png"), sent)
+            self.assertTrue(call(tok, "add_file", job="e8c5b8", file="nope.png")["isError"])
+            self.assertTrue(call(tok, "add_file", job="e8c5b8", file="../x")["isError"])
+            self.assertTrue(call(tok, "add_file", job="e8c5b8", file="pid.png", text="x")["isError"])
+        finally:
+            mcp._portal, mcp._note = real, real_note
 
     def test_note_id_cannot_climb_out_of_the_path(self):
         for bad in ("../../x", "a/b", "a\\b", ".hidden"):

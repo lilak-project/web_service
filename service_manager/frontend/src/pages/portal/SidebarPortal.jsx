@@ -1,3 +1,4 @@
+import { useInbox } from './InboxView'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Avatar, Icon, MANAGER_COLOR, tr } from 'lilak-ui'
 import { launcher, errText, store } from '../../api'
@@ -14,6 +15,7 @@ import NewServiceView from './NewServiceView'
 import IconLabView from './IconLabView'
 import ArchivePanel from './ArchivePanel'
 import HomeView from './HomeView'
+import PortalChat from './PortalChat'
 import { MyCardPanel, MyGroupPanel } from './MyLayoutPanels'
 import './sidebar.css'
 
@@ -29,7 +31,7 @@ const cardAt = (cards, sel) => (cards || []).find((c) => cardKey(c) === sel?.svc
  *  portal, not services it runs, and an admin should not have to file them. */
 const SYSTEM_KEYS = []
 // The account menu's first pages are Home's (HomeView), the rest are settings (AccountView).
-const HOME_TABS = ['home', 'map', 'sets', 'dock', 'store']
+const HOME_TABS = ['home', 'map', 'dock', 'neon', 'sets', 'store']
 const SYSTEM_ID = '@system'
 const NOGROUP_ID = '@none'
 // The name a materialised System band is stored under. Until something is
@@ -144,7 +146,7 @@ function tellShown(frame, on) {
   try { frame.contentWindow?.postMessage({ type: 'lilak:shown', on }, window.location.origin) } catch { /* gone */ }
 }
 
-function Tile({ icon, color, on, badge, busy }) {
+export function Tile({ icon, color, on, badge, busy }) {
   const c = color || 'var(--dock-text-secondary)'
   return (
     <span className={`pl-av${on ? ' round' : ''}`} style={{ background: c }}>
@@ -159,9 +161,13 @@ function Tile({ icon, color, on, badge, busy }) {
  *  `capabilities.badge` answer GET /api/badge on their link project. Asked every
  *  minute while the page is in sight, and at once when a framed page saves. A
  *  caller the service refuses (it is a manager's number) simply sees none. */
-function useBadges(cards) {
+export function useBadges(cards) {
   const [counts, setCounts] = useState({})
-  const asked = cards.filter((c) => c.badge && c.link_project && (!c.project_card || c.project_card === c.link_project)).map((c) => `${c.name}/${c.link_project}`).join(' ')
+  // Per card: a service's card asks its main project, a project card (a service split
+  // one card per project) asks its own project — the jobboard set's projects-job inbox
+  // counts on its own card, not on the manage set's. Counts are keyed `svc/proj`.
+  const asked = [...new Set(cards.filter((c) => c.badge && (c.project_card || c.link_project))
+    .map((c) => `${c.name}/${c.project_card || c.link_project}`))].join(' ')
   useEffect(() => {
     if (!asked) return undefined
     let live = true
@@ -170,7 +176,7 @@ function useBadges(cards) {
       for (const at of asked.split(' ')) {
         fetch(`/pp/${at}/api/badge`, { headers: { Authorization: `Bearer ${localStorage.getItem('lilak_portal_token') || ''}` } })
           .then((r) => (r.ok ? r.json() : null))
-          .then((d) => { if (live) setCounts((m) => ({ ...m, [at.split('/')[0]]: d?.count || 0 })) })
+          .then((d) => { if (live) setCounts((m) => ({ ...m, [at]: d?.count || 0 })) })
           .catch(() => {})
       }
     }
@@ -197,10 +203,15 @@ function readSel() {
   const s = q.get('s') || ''
   return s && s !== '@rack' ? { svc: s, proj: q.get('p') || '' } : null     // @rack: the old card, now tabs of Home
 }
-function writeSel(sel) {
+// The open menu page (Share sets, Accounts …) rides in the URL as ?m=, so a
+// reload comes back to it instead of to Home.
+const readMenu = () => new URLSearchParams(window.location.search).get('m') || ''
+function writeSel(sel, menu) {
   const q = new URLSearchParams(window.location.search)
   if (sel?.svc) { q.set('s', sel.svc); sel.proj ? q.set('p', sel.proj) : q.delete('p') }
   else { q.delete('s'); q.delete('p') }
+  if (menu && menu !== 'home') q.set('m', menu)
+  else q.delete('m')
   const qs = q.toString()
   window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname)
 }
@@ -304,7 +315,7 @@ function ProjectList({ svc, color, sel, onPick, open }) {
 
 export default function SidebarPortal({
   user, isManager, cards, groups, liveCards, links, iconFor, fullOrder,
-  onLogout, onRefresh, onSaveOrder, onRegroup, onCreateGroup, onSetMembers,
+  onLogout, onRefresh, onSaveOrder, onRegroup, onCreateGroup, onSetMembers, onDeleteGroup,
   settingsTab, onSettingsTab, authCard, info, homeIcon, personal,
 }) {
   // Arranging the bar is everyone's now: an account arranges its own (personal.on);
@@ -314,6 +325,7 @@ export default function SidebarPortal({
   // Nothing opens, nothing is managed, and the foot has no account to show.
   const signedOut = !!authCard
   const badges = useBadges(cards || [])
+  const inbox = useInbox()                         // its count on the account menu's inbox
 
   // Logging out takes the settings bar with it — it belongs to an account, and
   // the cover would otherwise keep showing yesterday's menu beside the sign-in
@@ -378,15 +390,26 @@ export default function SidebarPortal({
       const f = [...document.querySelectorAll('iframe.pl-frame')].find((x) => x.contentWindow === e.source)
       const at = f?.getAttribute('src')
       if (!at) return
-      const svc = (/^\/pp?\/([^/]+)\//.exec(at) || [])[1] || ''
+      // The project too (`/pp/<svc>/<proj>/`): one service can stand as
+      // several cards, and only the one recording wears the dot.
+      const [, svc = '', proj = ''] = /^\/pp?\/([^/]+)\/(?:([^/]+)\/)?/.exec(at) || []
       setKept((k) => {
         if (!e.data.on) { const { [at]: _gone, ...rest } = k; return rest }
-        return { ...k, [at]: svc }
+        return { ...k, [at]: { svc, proj: at.startsWith('/pp/') ? proj : '' } }
       })
     }
     window.addEventListener('message', on)
     return () => window.removeEventListener('message', on)
   }, [])
+  // Which card is the busy one: the card of that project — a split-off
+  // project's own, or the service whose entry project it is — and the
+  // service's card for any project of it that has no card of its own.
+  const busyCard = (c) => Object.values(kept).some(({ svc, proj }) => {
+    if (svc !== c.name) return false
+    const mine = c.project_card || (c.multi_project ? c.entry_project : '') || ''
+    if (mine) return mine === proj
+    return !(cards || []).some((o) => o.name === svc && (o.project_card || o.entry_project) === proj)
+  })
   // Asked once: leaving that panel drops the ask, or every return to it (a new
   // frame) would ask again — a filter the user has since cleared coming back.
   useEffect(() => {
@@ -469,7 +492,7 @@ export default function SidebarPortal({
     if (mini) setOpenSvcs(new Set())
   }, [mini])
   useEffect(() => { writeSet(SHUT_KEY, shut) }, [shut])
-  useEffect(() => { writeSel(view === 'service' ? sel : null) }, [sel, view])
+  useEffect(() => { writeSel(view === 'service' ? sel : null, view === 'settings' ? settingsTab : '') }, [sel, view, settingsTab])
 
   // What `fit` needs to know without becoming a reason for it to re-run.
   useEffect(() => { if (manage && isManager) loadArchived() }, [manage, isManager, loadArchived])  // archive: a manager's
@@ -505,9 +528,34 @@ export default function SidebarPortal({
   //                              that does; command mode leaves the width alone
   //   Esc                        command mode on — and off again
   //   1..9 · 0                  while it is on: a card, or the account
+  //   Enter                      while it is on: the chat (PortalChat); Esc closes it
   //
   // `\` is left alone: elog's drawer already has it.
   const foldKey = useRef(null)
+  // The chat: speech bubbles over the page (PortalChat), opened by Esc → Enter.
+  const [chatOpen, setChatOpen] = useState(false)
+  // A project admin may make sets from a template (Share sets, read-only otherwise).
+  const [canSets, setCanSets] = useState(false)
+  useEffect(() => {
+    if (isManager || !user) { setCanSets(!!isManager); return }
+    launcher.get('/account').then((r) => setCanSets(!!r.data?.scoped_admin)).catch(() => {})
+  }, [isManager, user?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+  // Access requests waiting for this account's answer + answers to its own it has not seen.
+  const [reqN, setReqN] = useState(0)
+  useEffect(() => {
+    if (!user) { setReqN(0); return }
+    const ask = () => launcher.get('/access-requests').then((r) => setReqN((r.data.to_resolve || 0) + (r.data.unseen || 0))).catch(() => {})
+    ask()
+    const t = setInterval(ask, 60000)
+    window.addEventListener('portal:requests', ask)
+    return () => { clearInterval(t); window.removeEventListener('portal:requests', ask) }
+  }, [user?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+  const [chatGo, setChatGo] = useState(null)        // { room, text, n } — a framed page asked for the chat
+  const [agentFocus, setAgentFocus] = useState(null) // a run a framed page asked to show (Agents)
+  const [unread, setUnread] = useState(0)
+  const [atMe, setAtMe] = useState(0)               // of those, the ones that @mention this account
+  const chatRef = useRef(false)
+  chatRef.current = chatOpen
   const sideRef = useRef(null)
   const enterCmd = useCallback(() => {
     const nodes = [...(navRef.current?.querySelectorAll('.pl-card[data-key]') || [])]
@@ -528,6 +576,7 @@ export default function SidebarPortal({
       // Escape out of a field is the whole point of Escape: the field lets go,
       // and the keys mean the bar again.
       if (typing) { try { el.blur() } catch { /* gone already */ } }
+      if (chatRef.current) { setChatOpen(false); return }   // Esc closes the chat first
       if (cmd) { setCmd(false); return }
       enterCmd()
       return
@@ -540,6 +589,15 @@ export default function SidebarPortal({
       return
     }
     if (!cmd) return
+    // Enter in command mode: the chat, out of the account icon at the foot of the folded bar.
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      setCmd(false)
+      endPeek()
+      setMini(true)
+      setChatOpen(true)
+      return
+    }
     const press = (sel2) => {
       // The whole bar, not the card list: the account card sits outside it, and
       // looking only in .pl-nav found nothing and did nothing.
@@ -607,7 +665,8 @@ export default function SidebarPortal({
   /** The account button opens the account menu on Home; pressed again it folds
    *  the service bar, the way pressing an open service card does. */
   // Nothing open is the account's Home: the settings bar on its first page.
-  const firstHome = useRef(storeLink ? 'store' : 'home')
+  const firstHome = useRef(storeLink ? 'store'
+    : (readMenu() && (isManager || !MANAGER_PAGES.has(readMenu()) || ['sets', 'invites'].includes(readMenu())) ? readMenu() : 'home'))
   useEffect(() => {
     if (signedOut || view !== 'empty') return
     setView('settings')
@@ -621,6 +680,24 @@ export default function SidebarPortal({
     // service bar folds away (or comes back) — unless the bar is pinned.
     if (!pinnedRef.current) setMini((m) => !m)
   }, [view, openSettings])
+
+  // A framed page (the jobboard's chat button) opens the chat on a room with the
+  // input filled in; `lilak:agent-run` shows one platform agent run in Agents.
+  useEffect(() => {
+    const on = (e) => {
+      if (e.origin !== window.location.origin) return
+      const m = e.data
+      if (m?.type === 'lilak:chat') {
+        setChatGo({ room: String(m.room || 'portal'), text: typeof m.text === 'string' ? m.text : '', n: Date.now() })
+        setChatOpen(true)
+      } else if (m?.type === 'lilak:agent-run' && m.id != null) {
+        setAgentFocus(String(m.id))
+        openSettings('agents')
+      }
+    }
+    window.addEventListener('message', on)
+    return () => window.removeEventListener('message', on)
+  }, [openSettings])
 
   const openService = useCallback((s) => {
     if (signedOut) { setSel({ svc: cardKey(s), proj: '' }); return }
@@ -812,6 +889,7 @@ export default function SidebarPortal({
   // Only when the ORDER changed — a band opening or the grips appearing move
   // cards too, and those have animations of their own.
   const navRef = useRef(null)
+  const navThumb = useRef(null)
   const posRef = useRef(new Map())
   const seqRef = useRef('')
   useLayoutEffect(() => {
@@ -1004,31 +1082,43 @@ export default function SidebarPortal({
   useEffect(() => {
     for (const f of document.querySelectorAll('iframe.pl-frame')) tellShown(f, f.getAttribute('src') === shownFrame)
   }, [shownFrame, frames.length])
+  // A frame is shown once its page has loaded, the dark panel behind until then:
+  // a browser that draws a page before its stylesheet (Safari) flashed it white.
+  // Forgotten when the frame goes, so a page opened again waits again.
+  const [loaded, setLoaded] = useState({})
+  useEffect(() => {
+    setLoaded((l) => (Object.keys(l).every((k) => frames.includes(k)) ? l
+      : Object.fromEntries(Object.entries(l).filter(([k]) => frames.includes(k)))))
+  }, [frames.join('\n')])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A NEON page (the DAQ screens) says which of its themes is on (`neon:theme`);
-  // while the one shown is dark, the sidebar goes dark with it, so the two read
-  // as one screen. { [frame src]: 'dark' | 'bright' }. A frame shown again is
-  // asked (`neon:theme?`), since it may have spoken before this listened.
-  const [neonTheme, setNeonTheme] = useState({})
-  // The NEON choice itself (shared by every NEON page): once one has spoken, its
-  // switch stays in the brand row beside any service, not only beside NEON.
-  const [neonPick, setNeonPick] = useState(null)
+  // Bright or dark for NEON's DAQ screens and the rack services, the sidebar
+  // with them; every other page has only its own.
+  // The choice is the account's (prefs.theme), kept where those pages read it
+  // (localStorage `lilak.theme`, this origin), so every open one follows the
+  // storage event.
+  const [neonPick, setNeonPick] = useState(() => {
+    try {
+      const mine = JSON.parse(user?.preferences_json || '{}').theme
+      return mine === 'dark' || (!mine && localStorage.getItem('lilak.theme') === 'dark') ? 'dark' : 'bright'
+    } catch { return 'bright' }
+  })
+  useEffect(() => {
+    try { if (localStorage.getItem('lilak.theme') !== neonPick) localStorage.setItem('lilak.theme', neonPick) } catch { /* private window */ }
+  }, [neonPick])
+  // A page's own switch (NEON's) writes the same key: the account takes it too.
   useEffect(() => {
     const on = (e) => {
-      if (e.origin !== window.location.origin || e.data?.type !== 'neon:theme') return
-      const f = [...document.querySelectorAll('iframe.pl-frame')].find((x) => x.contentWindow === e.source)
-      const at = f?.getAttribute('src')
-      if (at) setNeonTheme((t) => (t[at] === e.data.theme ? t : { ...t, [at]: e.data.theme }))
-      setNeonPick(e.data.theme)
+      if (e.key !== 'lilak.theme') return
+      const next = e.newValue === 'dark' ? 'dark' : 'bright'
+      setNeonPick(next)
+      launcher.put('/account/prefs', { theme: next }).catch(() => {})
     }
-    window.addEventListener('message', on)
-    return () => window.removeEventListener('message', on)
+    window.addEventListener('storage', on)
+    return () => window.removeEventListener('storage', on)
   }, [])
-  useEffect(() => {
-    const f = [...document.querySelectorAll('iframe.pl-frame')].find((x) => x.getAttribute('src') === shownFrame)
-    try { f?.contentWindow?.postMessage({ type: 'neon:theme?' }, window.location.origin) } catch { /* not loaded yet */ }
-  }, [shownFrame])
-  const neonDark = !!shownFrame && neonTheme[shownFrame] === 'dark'
+  // The bar follows the choice itself, beside any page: waiting for the page to
+  // say so left it bright while a page it had not seen yet was loading.
+  const neonDark = neonPick === 'dark'
 
   // Right click on a card: the things you do to a service besides opening it.
   const [ctx, setCtx] = useState(null)           // { s, x, y }
@@ -1087,8 +1177,6 @@ export default function SidebarPortal({
     // Opening a service's projects counts as picking it: its tile fills, and the
     // card takes the selected border while the bar is expanded (collapsed, every
     // card's border is transparent, so the tile carries it alone).
-    const on = ((view === 'service' || view === 'manage' || signedOut)
-      && (sel?.svc === key || (!!s.project_card && sel?.svc === s.name && sel?.proj === s.project_card))) || projOpen(key)
     // In manage mode a card is a thing to arrange and edit, never a thing to run:
     // even a multi-project service opens its settings instead of its project list.
     // A service that has nominated one project as its entrance is not a list
@@ -1098,6 +1186,11 @@ export default function SidebarPortal({
     // marked open while the bar is folded is a card that says it is showing
     // something it is not. One condition drives the chevron AND the list.
     const listOpen = multi && projOpen(key) && !mini
+    // Lit when it is in the panel, or when its project list is SHOWN. Not when it
+    // is merely in openSvcs: a card with no list (one project nominated, as
+    // jobboard) never leaves that set, and stayed lit beside the one in the panel.
+    const on = ((view === 'service' || view === 'manage' || signedOut)
+      && (sel?.svc === key || (!!s.project_card && sel?.svc === s.name && sel?.proj === s.project_card))) || listOpen
     return (
       <div key={key} style={{ display: 'contents' }}>
         {dropLine(key, false)}
@@ -1139,7 +1232,7 @@ export default function SidebarPortal({
               <Icon name="drag-handle" size={14} color="var(--dock-text-muted)" />
             </span>
             <Tile icon={iconFor ? iconFor(s.name, s.icon) : (s.icon || 'circle')}
-              color={s.color} on={on} badge={!s.project_card || s.project_card === s.link_project ? badges[s.name] : undefined} busy={Object.values(kept).includes(s.name)} />
+              color={s.color} on={on} badge={badges[`${s.name}/${s.project_card || s.link_project}`]} busy={busyCard(s)} />
             <span className="pl-txt">
               {s.label || s.name}
               {multi && s.projects_count != null && <small>({s.projects_count})</small>}
@@ -1224,7 +1317,7 @@ export default function SidebarPortal({
     return (
       <>
         <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
-        <ServiceManagePanel service={selSvc.project_card ? { ...selSvc, label: selSvc.service_label } : selSvc} builtinKey={selSvc.builtin || null}
+        <ServiceManagePanel service={'service_label' in selSvc ? { ...selSvc, label: selSvc.service_label, labels: selSvc.service_labels } : selSvc} builtinKey={selSvc.builtin || null}
           initialIcon={iconFor ? iconFor(selSvc.name, selSvc.icon) : selSvc.icon}
           first={i <= 0} last={i >= (fullOrder || []).length - 1}
           onMove={(dir) => {
@@ -1261,7 +1354,7 @@ export default function SidebarPortal({
 
   return (
     <div className={`pl-root${mini ? ' mini' : ''}${view === 'settings' ? ' settings' : ''}`
-      + `${manage ? ' managing' : ''}${cmd ? ' cmd' : ''}${neonDark ? ' neon-dark' : ''}`}>
+      + `${manage ? ' managing' : ''}${cmd ? ' cmd' : ''}${neonDark ? ' neon-dark' : ''}${neonPick === 'dark' ? ' theme-dark' : ''}`}>
       <aside className="pl-side" ref={sideRef} tabIndex={-1}
         onMouseEnter={onSideEnter} onMouseLeave={onSideLeave} onMouseDown={endPeek}>
         <div className="pl-brand">
@@ -1278,20 +1371,16 @@ export default function SidebarPortal({
             </span>
           </button>
           <span style={{ flex: 1 }} />
-          {/* Beside a NEON page (the DAQ screens): its bright/dark, from here.
-              Written where NEON keeps it (localStorage `neon.theme`, same
-              origin), so every open NEON page follows and tells us back. */}
-          {neonPick ? (
-            <button type="button" className="pl-fold"
-              title={neonPick === 'dark' ? 'Bright' : 'Dark'}
-              onClick={() => {
-                const next = neonPick === 'dark' ? 'bright' : 'dark'
-                try { localStorage.setItem('neon.theme', next) } catch { /* private window */ }
-                setNeonPick(next)
-              }}>
-              <Icon name={neonPick === 'dark' ? 'sun' : 'moon'} size={14} color="var(--dock-text-secondary)" />
-            </button>
-          ) : null}
+          {/* Bright/dark for NEON's pages and the rack services: the account's. */}
+          <button type="button" className="pl-fold"
+            title={neonPick === 'dark' ? 'Bright' : 'Dark'}
+            onClick={() => {
+              const next = neonPick === 'dark' ? 'bright' : 'dark'
+              setNeonPick(next)
+              launcher.put('/account/prefs', { theme: next }).catch(() => {})
+            }}>
+            <Icon name={neonPick === 'dark' ? 'sun' : 'moon'} size={14} color="var(--dock-text-secondary)" />
+          </button>
           <button type="button" className="pl-fold"
             title={anyOpen ? tr("p_collapse_all") : tr("p_expand_all")}
             onClick={foldAll}>
@@ -1299,7 +1388,21 @@ export default function SidebarPortal({
           </button>
         </div>
 
-        <div className="pl-nav" ref={navRef}>
+        {/* Our own thumb, shown only while the list scrolls (as on Home): the
+            native bar stood there all the time. */}
+        <span className="pl-hthumb pl-sthumb" ref={navThumb} />
+        <div className="pl-nav" ref={navRef} onScroll={(e) => {
+          const el = e.currentTarget, th = navThumb.current
+          if (!th) return
+          const h = el.clientHeight, sh = el.scrollHeight
+          const len = Math.max(32, (h * h) / sh)
+          th.style.height = `${len}px`
+          th.style.top = `${el.offsetTop}px`
+          th.style.transform = `translateY(${(el.scrollTop / Math.max(1, sh - h)) * (h - len)}px)`
+          th.classList.add('on')
+          clearTimeout(th._fade)
+          th._fade = setTimeout(() => th.classList.remove('on'), 900)
+        }}>
           {bands.map(({ g, items }) => (g ? (
             /* A group is one tinted REGION spanning the bar's full width, with its
                cards inside it — a tinted title alone left the members looking like
@@ -1319,6 +1422,12 @@ export default function SidebarPortal({
                     <Icon name="caret-right" size={14} weight="bold" color="var(--dock-text-secondary)" />
                   </span>
                   <span className="pl-txt">{g.label || g.name || tr("p_group")}</span>
+                  {/* Made from a share set (Share sets → Make/Update group): its projects share tags and links. */}
+                  {g.share_set && (
+                    <span className="pl-gset" title={tr('p_group_from_set', g.share_set)}>
+                      <Icon name="link" size={13} weight="bold" />
+                    </span>
+                  )}
                   <span className="pl-gcount">{items.length}</span>
                 </button>
               </div>
@@ -1366,6 +1475,12 @@ export default function SidebarPortal({
                 <Avatar icon={user?.profile_shape}
                   color={isManager ? MANAGER_COLOR : user?.profile_color}
                   seed={user?.username} size={30} />
+                {(unread > 0 || atMe > 0) && !chatOpen && <b className={`pc-unread${atMe > 0 ? ' at' : ''}`}>{atMe > 0 ? `@${atMe}` : unread > 99 ? '99+' : unread}</b>}
+                {/* What waits for this person's yes: access requests, and inbox candidates — the
+                    inbox has no card of its own on the bar (hidden), so its count shows here. */}
+                {reqN + inbox.items.length > 0 && <b className="pc-unread pc-reqs"
+                  title={[reqN > 0 && `${tr('p_access_requests')} ${reqN}`, inbox.items.length > 0 && `Inbox ${inbox.items.length}`].filter(Boolean).join(' · ')}>
+                  {reqN + inbox.items.length > 99 ? '99+' : reqN + inbox.items.length}</b>}
               </span>
               <span className="pl-txt">{user?.username}</span>
               {/* INSIDE the row, like a service card's: folded, the key is
@@ -1375,12 +1490,6 @@ export default function SidebarPortal({
             </button>
           </div>
         </div>
-        )}
-        {cmd && (
-          <div className="pl-cmdhint">
-            <b>1–9</b> {tr("p_service_2")} · <b>0</b> {tr("p_settings")}
-            {' · '}<b>`</b> {tr("p_fold")} · <b>Esc</b> {tr("p_exit")}
-          </div>
         )}
       </aside>
 
@@ -1484,13 +1593,15 @@ export default function SidebarPortal({
           <>
           <div className="pl-b2head"><b>{tr("p_settings_2")}</b></div>
           <div className="pl-nav2">
-            {settingsMenu(isManager, lang).map(([key, , label], i, arr) => (
+            {settingsMenu(isManager, lang, canSets).map(([key, , label], i, arr) => (
               <div key={key} style={{ display: 'contents' }}>
                 {/* a rule where the personal half ends, instead of naming the halves */}
                 {i > 0 && (key === 'me' || arr[i - 1][0] === 'feedback') && <div className="pl-sep" />}
                 <button type="button" className={`pl-c2${settingsTab === key ? ' on' : ''}`}
                   onClick={() => onSettingsTab?.(key)}>
                   <span className="pl-txt">{label}</span>
+                  {key === 'me' && reqN > 0 && <b className="pl-badge" style={{ position: 'static' }}>{reqN}</b>}
+                  {key === 'feedback' && inbox.items.length > 0 && <b className="pl-badge" style={{ position: 'static' }}>{inbox.items.length}</b>}
                   {MANAGER_PAGES.has(key) && <Icon name="crown" size={13} className="pl-c2mgr" aria-label={tr('p_manager')} />}
                 </button>
               </div>
@@ -1546,22 +1657,24 @@ export default function SidebarPortal({
       </StepOut>
 
       <main className="pl-main">
-        <div className="pl-panel">
+        <div className={`pl-panel${view === 'settings' && MANAGER_PAGES.has(settingsTab) ? ' mgrpage' : ''}`}>
           {signedOut && view !== 'live' ? (
             <div className="pl-scroll pl-authpage">{authCard}</div>
           ) : view === 'settings' && HOME_TABS.includes(settingsTab) ? (
             <HomeView cards={cards} groups={groups} recent={recent} isManager={isManager}
               onRefresh={onRefresh} iconFor={iconFor} bands={bands} onRackGo={rackGo}
-              tab={settingsTab} onTab={onSettingsTab}
+              tab={settingsTab} onTab={onSettingsTab} canSets={canSets}
               view={groupView ? 'group' : 'list'} onView={saveView} onManage={toggleManage}
               onRegroup={onRegroup} onCreateGroup={() => onCreateGroup?.()}
+              onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup}
               onRenameGroup={mineOn ? personal.renameGroup : undefined}
+              onInboxAll={() => openSettings('feedback')}
               onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
           ) : view === 'settings' ? (
             <>
               <div className="pl-scroll pl-setpage">
                 <AccountView isManager={isManager} onChanged={onRefresh} onAccountGone={onLogout}
-                  tab={settingsTab} onTab={onSettingsTab} hideMenu homeDefault={groupView ? 'group' : 'list'}
+                  tab={settingsTab} onTab={onSettingsTab} hideMenu homeDefault={groupView ? 'group' : 'list'} agentFocus={agentFocus}
                   onHomeDefault={(v) => setGroupView(v === 'group')} />
               </div>
               <SettingsStatus />
@@ -1631,7 +1744,9 @@ export default function SidebarPortal({
               storeOpen={storeLink} onRefresh={onRefresh} iconFor={iconFor} bands={bands} onRackGo={rackGo}
               view={groupView ? 'group' : 'list'} onView={saveView} onManage={toggleManage}
               onRegroup={onRegroup} onCreateGroup={() => onCreateGroup?.()}
+              onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup}
               onRenameGroup={mineOn ? personal.renameGroup : undefined}
+              onInboxAll={() => openSettings('feedback')}
               onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
           )}
           {/* The service in the panel, and any busy one kept alive behind it
@@ -1639,9 +1754,11 @@ export default function SidebarPortal({
               frame, not a new one. */}
           {frames.map((f) => (
             <iframe key={f} ref={f === shownFrame ? frameRef : undefined} src={f} title={kept[f] || sel?.svc}
-              className="pl-frame" style={f === shownFrame ? undefined : { display: 'none' }}
+              className="pl-frame"
+              style={f !== shownFrame ? { display: 'none' } : loaded[f] ? undefined : { visibility: 'hidden' }}
               allow="clipboard-read; clipboard-write; fullscreen; microphone"
               onLoad={(e) => {
+                setLoaded((l) => (l[f] ? l : { ...l, [f]: true }))
                 tellShown(e.target, f === shownFrame)
                 // Same origin for a proxied service; an external one throws and
                 // simply does not get the shortcut.
@@ -1652,6 +1769,11 @@ export default function SidebarPortal({
         </div>
       </main>
       {ctxMenu()}
+      {!signedOut && user && (
+        <div style={{ display: 'contents', '--pc-left': `${mini ? 72 : (document.documentElement.dataset.portalBar === 'compact' ? 182 : 222)}px` }}>
+          <PortalChat open={chatOpen} onClose={() => setChatOpen(false)} user={user} onUnread={(n, a) => { setUnread(n); setAtMe(a) }} go={chatGo} />
+        </div>
+      )}
     </div>
   )
 }

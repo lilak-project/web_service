@@ -122,6 +122,56 @@ def _clean_members(d: dict, gid: str, members: list[str]) -> list[str]:
     return keys
 
 
+def sync_set_groups() -> None:
+    """Every share set has one fixed sidebar group (share_set = its name) holding
+    exactly its projects' cards, named after the set. A service with projects in
+    two or more sets is shown one card per project, so each set's group can hold
+    its own. Called whenever the sets change; a group whose set is gone becomes
+    an ordinary group. Members of a fixed group follow the set only — the group
+    API refuses to change them by hand."""
+    from . import home as _home
+    sets = [s for s in registry.share_sets()[0] if s.get("name")]
+    seen: dict = {}
+    for st in sets:
+        for svc in (st.get("members") or {}):
+            seen[svc] = seen.get(svc, 0) + 1
+    hd = _home._read()
+    for svc, n in seen.items():
+        if n > 1 and svc not in set(hd.get("split_cards") or []):
+            try:
+                _home._set_split(hd, svc, True)
+            except HTTPException:
+                pass
+    _home._write(hd)
+    split = set(hd.get("split_cards") or [])
+    d = _read()
+    # A group follows its set by the set's id (a renamed set keeps its group), by name for one made before ids.
+    ids = {st.get("id") for st in sets if st.get("id")}
+    names = {st["name"] for st in sets}
+    for g in d["groups"]:
+        if g.get("share_set") and not (g.get("share_set_id") in ids or g["share_set"] in names):
+            g.pop("share_set", None)
+            g.pop("share_set_id", None)
+    for st in sets:
+        keys = [f"{svc}/{proj}" if svc in split else svc for svc, proj in (st.get("members") or {}).items()]
+        g = next((x for x in d["groups"] if st.get("id") and x.get("share_set_id") == st["id"]), None) \
+            or next((x for x in d["groups"] if x.get("share_set") == st["name"] and x.get("share_set_id") not in ids), None)
+        if g is None:
+            gid = secrets.token_hex(4)
+            g = {"id": gid, "name": st["name"], "icon": None, "color": None, "members": [], "collapsed": False,
+                 "hidden": False, "order": 1000 + len(d["groups"]), "share_set": st["name"]}
+            d["groups"].append(g)
+            if f"#g:{gid}" not in hd["order"]:
+                hd["order"].append(f"#g:{gid}")
+                _home._write(hd)
+        g["name"] = g["share_set"] = st["name"]
+        if st.get("id"):
+            g["share_set_id"] = st["id"]
+        g.pop("labels", None)
+        g["members"] = _clean_members(d, g["id"], keys)
+    _write(d)
+
+
 def _service_members(g: dict) -> list[str]:
     # A one-project card is left out: a tier or grant on the whole service would
     # also reach the projects filed in other groups.
@@ -147,13 +197,16 @@ def set_orders(keys: list[str]) -> None:
 @router.get("/api/service-groups")
 def list_groups(user: models.User = Depends(require_portal_user)):
     admin = permissions.is_admin(user)
+    sets = {s.get("name") for s in registry.share_sets()[0]}
     out = []
     for g in all_groups():
         if g.get("hidden") and not admin:
             continue
         out.append({"id": g["id"], "name": g.get("name") or "", "labels": g.get("labels"), "icon": g.get("icon"), "color": g.get("color"),
                     "members": list(g.get("members", [])), "collapsed": bool(g.get("collapsed")),
-                    "hidden": bool(g.get("hidden")), "order": g.get("order", 1000)})
+                    "hidden": bool(g.get("hidden")), "order": g.get("order", 1000),
+                    # Only while that set still exists: a deleted or renamed set leaves no badge behind.
+                    "share_set": g.get("share_set") if g.get("share_set") in sets else None})
     lo = loose()
     if admin or not lo.get("hidden"):
         out.append({"id": LOOSE_ID, "name": "", "icon": None, "color": None, "members": [], "collapsed": False,
@@ -170,6 +223,8 @@ class GroupBody(BaseModel):
     collapsed: Optional[bool] = None
     hidden: Optional[bool] = None
     members: Optional[list[str]] = None
+    # The share set this group was made or updated from (Share sets → "Make/Update group"); "" clears it.
+    share_set: Optional[str] = None
 
 
 def _apply(g: dict, body: GroupBody, d: dict) -> None:
@@ -188,7 +243,13 @@ def _apply(g: dict, body: GroupBody, d: dict) -> None:
     if body.hidden is not None:
         g["hidden"] = bool(body.hidden)
     if body.members is not None:
-        g["members"] = _clean_members(d, g["id"], body.members)
+        fixed = {k for x in d["groups"] if x.get("share_set") and x["id"] != g["id"] for k in x.get("members", [])}
+        g["members"] = _clean_members(d, g["id"], [k for k in body.members if k not in fixed])
+    if body.share_set is not None:
+        if body.share_set.strip():
+            g["share_set"] = body.share_set.strip()[:80]
+        else:
+            g.pop("share_set", None)
 
 
 @router.post("/api/admin/service-groups", status_code=201)
@@ -226,6 +287,8 @@ def update_group(gid: str, body: GroupBody, _: models.User = Depends(require_por
         _write(d)
         return lo
     g = _find(d, gid)
+    if g.get("share_set") and body.members is not None:
+        raise HTTPException(400, "공유 세트로 만든 그룹입니다. 구성은 Share sets에서 바꿉니다.")
     _apply(g, body, d)
     _write(d)
     return g
@@ -235,6 +298,8 @@ def update_group(gid: str, body: GroupBody, _: models.User = Depends(require_por
 def delete_group(gid: str, _: models.User = Depends(require_portal_admin)):
     d = _read()
     g = _find(d, gid)
+    if g.get("share_set"):
+        raise HTTPException(400, "공유 세트로 만든 그룹은 세트를 지우면 함께 풀립니다.")
     d["groups"] = [x for x in d["groups"] if x["id"] != gid]
     _write(d)
     from . import home as _home

@@ -100,7 +100,7 @@ export default function GroupsAdmin({ users, services, onChanged }) {
         return (
           <ExpandBox open={isOpen} onToggle={() => setOpen(isOpen ? null : 'admins')}
             outerProps={{ className: isOpen ? 'on' : undefined }}
-            icon={<GroupMark icon="key" color="#111827" size={26} />}
+            icon={<GroupMark icon="key" color="var(--dock-text-primary)" size={26} />}
             title={tr("p_administrators")}
             subtitle={`${admins.length} ${tr("p_members")}`}
           >

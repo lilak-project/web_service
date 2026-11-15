@@ -140,7 +140,7 @@ class Accounts(unittest.TestCase):
         sg._write({"groups": []})
 
     def test_share_sets_are_a_managers_and_disjoint(self):
-        for name, tags in (("sharea", True), ("shareb", True), ("sharelog", "log")):
+        for name, tags in (("sharea", True), ("shareb", True), ("sharelog", "log"), ("sharejobs", "jobs")):
             for proj in ("main", "second"):
                 (registry.service_dir(name) / "projects" / proj).mkdir(parents=True, exist_ok=True)
             registry.write_manifest(name, {**registry.default_manifest("rack", "managed"),
@@ -148,7 +148,9 @@ class Accounts(unittest.TestCase):
         admin = bearer(self.admin)
         # Before a manager saves: the manifests' groups, through the main projects.
         sets = {s["name"]: s["members"] for s in c.get("/api/share-sets", headers=admin).json()["sets"]}
-        self.assertEqual((sets["managers"].get("sharea"), sets["log"]), ("main", {"sharelog": "main"}))
+        # …named as the templates name them: the manager bundle is "manage", and the old "jobs" and
+        # "log" groups (jobboard, parameters) are ONE set, "jobboard" — they must see each other.
+        self.assertEqual((sets["manage"].get("sharea"), sets["jobboard"]), ("main", {"sharelog": "main", "sharejobs": "main"}))
 
         user = self.register("sharer")
         self.assertEqual(c.get("/api/share-sets", headers=bearer(user)).status_code, 403)
@@ -165,7 +167,17 @@ class Accounts(unittest.TestCase):
         # In no set: it reads its main project's set.
         self.assertEqual(registry.share_for("sharelog", "second"), ok["sets"][1]["members"])
         self.assertTrue(c.delete("/api/share-sets", headers=admin).json()["stored"] is False)
-        self.assertEqual(registry.share_for("sharelog", "main"), {"sharelog": "main"})
+        self.assertEqual(registry.share_for("sharelog", "main"), {"sharelog": "main", "sharejobs": "main"})
+        # A set that keeps its name through "back to default" keeps its id (tokens and the group stay bound).
+        put = c.put("/api/share-sets", json={"sets": [{"name": "manage", "members": {"sharea": "second"}}]}, headers=admin).json()
+        sid = put["sets"][0]["id"]
+        # …and through a save that leaves the id out (the page autosaves what it holds).
+        again = c.put("/api/share-sets", json={"sets": [{"name": "manage", "members": {"sharea": "second"}}]}, headers=admin).json()
+        self.assertEqual(again["sets"][0]["id"], sid)
+        back = c.delete("/api/share-sets", headers=admin).json()["sets"]
+        self.assertEqual(next(s for s in back if s["name"] == "manage").get("id"), sid)
+        self.assertEqual(next(s for s in back if s["name"] == "manage")["members"]["sharea"], "main")
+        registry._share_file().unlink(missing_ok=True)
 
     def test_recent_is_deduped_and_capped(self):
         tok = self.register("recent")
@@ -181,6 +193,16 @@ class Accounts(unittest.TestCase):
         self.assertNotIn("density", r.json()["prefs"])
         r = c.put("/api/account/prefs", headers=bearer(tok), json={"density": "tiny"})
         self.assertEqual(r.status_code, 400)
+
+    def test_open_directly_card_takes_the_projects_name(self):
+        (registry.service_dir("entrysvc") / "projects" / "main").mkdir(parents=True, exist_ok=True)
+        (registry.service_dir("entrysvc") / "projects" / "other").mkdir(parents=True, exist_ok=True)
+        registry.write_manifest("entrysvc", {**registry.default_manifest("rack", "managed"), "label": "Entry svc",
+                                             "capabilities": {"multi_project": True}, "entry_project": "main"})
+        admin = bearer(self.admin)
+        self.assertEqual(c.put("/api/services/entrysvc/projects/main/name", json={"name": "main-jw"}, headers=admin).status_code, 200)
+        card = next(s for s in c.get("/api/services", headers=admin).json() if s["name"] == "entrysvc")
+        self.assertEqual((card["label"], card["service_label"]), ("main-jw", "Entry svc"))
 
     def test_home_tabs_writes_are_a_managers(self):
         # Every call the Home tabs make beyond reading: group editing, rack services,
@@ -204,6 +226,9 @@ class Accounts(unittest.TestCase):
         self.assertEqual(c.put("/api/account/prefs", headers=tok, json={"homeView": "list"}).json()["prefs"]["homeView"], "list")
         self.assertNotIn("homeView", c.put("/api/account/prefs", headers=tok, json={"homeView": "group"}).json()["prefs"])
         self.assertEqual(c.put("/api/account/prefs", headers=tok, json={"homeView": "tree"}).status_code, 400)
+        self.assertEqual(c.put("/api/account/prefs", headers=tok, json={"theme": "dark"}).json()["prefs"]["theme"], "dark")
+        self.assertNotIn("theme", c.put("/api/account/prefs", headers=tok, json={"theme": "bright"}).json()["prefs"])
+        self.assertEqual(c.put("/api/account/prefs", headers=tok, json={"theme": "neon"}).status_code, 400)
 
     def test_handshake_cannot_turn_a_managed_service_external(self):
         registry.service_dir("runsvc").mkdir(parents=True, exist_ok=True)
@@ -261,6 +286,12 @@ class Proxy(unittest.TestCase):
         out = proxy_util.inject_base(b"<html><head></head>", '/pp/s/"x', {"label": "</script><img>"}).decode()
         self.assertNotIn("</script><img>", out)
         self.assertIn('&quot;', out)
+
+    def test_theme_is_set_before_the_page_draws(self):
+        """A page opened in the panel is in the account's theme from its first
+        paint: the script that says so is in <head>, before the page's own CSS."""
+        out = proxy_util.inject_base(b"<html><head><link rel=stylesheet href=a.css></head>", "/p/s").decode()
+        self.assertLess(out.index("lilak.theme"), out.index("a.css"))
 
     def test_image_request_carries_the_session_on(self):
         """An <img> sends no Authorization header — only the cookie. A service
@@ -393,6 +424,258 @@ class StoreToolPath(unittest.TestCase):
         finally:
             os.environ["PATH"] = old
         self.assertIn("found", store._jobs["t"]["log"])
+
+
+class Renamed(unittest.TestCase):
+    def test_old_service_address_moves_to_the_new_one(self):
+        r = c.get("/pp/jobbook/platform/api/data?x=1", follow_redirects=False)
+        self.assertEqual((r.status_code, r.headers["location"]), (307, "/pp/jobboard/jobboard/api/data?x=1"))
+
+
+class Accounts2(unittest.TestCase):
+    """Holes found in the 2026-11-13 review."""
+    def reg(self, name):
+        r = c.post("/api/auth/register", json={"username": name, "password": "user-pass-1", "email": f"{name}@x.org"})
+        self.assertIn(r.status_code, (200, 201), r.text)
+        return r.json()
+
+    def test_a_deleted_accounts_id_is_never_given_again(self):
+        from app import mcp_tokens
+        from app.db import SessionLocal
+        old = self.reg("leaver")
+        with SessionLocal() as db:
+            tok = mcp_tokens.issue(db, "old", db.get(models.User, old["user_id"]), True, 30)
+            db.add(models.Passkey(user_id=old["user_id"], credential_id="leaver-cred", public_key="k", rp_id="localhost", name="mac"))
+            db.commit()
+        self.assertEqual(c.request("DELETE", "/api/account", headers=bearer(old["access_token"]),
+                                   json={"password": "user-pass-1"}).status_code, 200)
+        new = self.reg("joiner")
+        self.assertGreater(new["user_id"], old["user_id"])            # SQLite would have handed the id back
+        with SessionLocal() as db:
+            self.assertIsNone(mcp_tokens.owner_of(db, tok))           # the old token is nobody's now
+            self.assertEqual(db.query(models.Passkey).filter_by(credential_id="leaver-cred").count(), 0)
+
+    def test_a_services_own_token_is_not_a_portal_user_at_the_proxy(self):
+        from app import permissions, security as sec
+        from app.db import SessionLocal
+        theirs = sec.create_access_token(1, "someone", "user")        # same secret, no `portal` claim (elog's own)
+        with SessionLocal() as db:
+            self.assertIsNone(permissions.user_from_request(db, theirs))
+            self.assertEqual(permissions.user_from_request(db, c.post(
+                "/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]).username, "admin")
+
+    def test_yearly_verification_needs_the_mailed_code(self):
+        tok = bearer(self.reg("lapsed")["access_token"])
+        from app import config
+        echo, config.EMAIL_VERIFY_DEV_ECHO = config.EMAIL_VERIFY_DEV_ECHO, True      # no mailer in a test: the code is echoed
+        try:
+            sent = c.post("/api/account/verify", json={}, headers=tok).json()
+            self.assertTrue(sent["sent"])
+            self.assertNotIn("verification_current", sent)             # asking does not verify
+            wrong = "000000" if sent["verify_code"] != "000000" else "111111"
+            self.assertEqual(c.post("/api/account/verify", json={"code": wrong}, headers=tok).status_code, 400)
+            ok = c.post("/api/account/verify", json={"code": sent["verify_code"]}, headers=tok)
+            self.assertEqual(ok.status_code, 200)
+            self.assertTrue(ok.json()["verification_current"])
+            # Without a mailer and without the dev echo, nothing is stamped and nothing is handed back.
+            config.EMAIL_VERIFY_DEV_ECHO = False
+            self.assertEqual(c.post("/api/account/verify", json={}, headers=tok).status_code, 502)
+        finally:
+            config.EMAIL_VERIFY_DEV_ECHO = echo
+
+
+class Hardening(unittest.TestCase):
+    """Phase A of the 2026-11-13 review: names, sessions, throttles, requests, grants."""
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = bearer(c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"])
+
+    def reg(self, name, **more):
+        return c.post("/api/auth/register", json={"username": name, "password": "user-pass-1", "email": f"{name}@x.org", **more})
+
+    def test_a_name_cannot_read_as_someone_else(self):
+        self.assertEqual(self.reg("Hong", display_name="홍 길동").status_code, 201)
+        for bad in ("a", "x" * 33, "two words", "a/b", "agent", "ALL", "hong"):
+            self.assertEqual(self.reg(bad).status_code, 400, bad)
+        self.assertEqual(self.reg("gildong", display_name="hong").status_code, 400)       # another's id
+        self.assertEqual(self.reg("gildong", display_name="홍  길동").status_code, 400)    # another's display name
+        tok = bearer(self.reg("gildong").json()["access_token"])
+        put = lambda n: c.post("/api/account/profile", headers=tok, json={"display_name": n}).status_code  # noqa: E731
+        self.assertEqual([put("Admin"), put("x\u202ey"), put("y" * 41), put("길동"), put("길동")], [400, 400, 400, 200, 200])
+
+    def test_a_manager_set_password_ends_that_accounts_sessions(self):
+        r = self.reg("leaked").json()
+        self.assertEqual(c.post(f"/api/admin/users/{r['user_id']}/password", headers=self.admin,
+                                json={"new_password": "fresh-pass-9"}).status_code, 200)
+        self.assertEqual(c.get("/api/auth/me", headers=bearer(r["access_token"])).status_code, 401)
+        self.assertEqual(c.get("/api/auth/me", headers=self.admin).status_code, 200)
+
+    def test_another_address_cannot_lock_an_account_out(self):
+        self.reg("victim")
+        far = {"X-Forwarded-For": "203.0.113.9"}
+        for i in range(11):
+            c.post("/api/auth/login", json={"username": "victim", "password": f"no{i}"}, headers=far)
+        self.assertEqual(c.post("/api/auth/login", json={"username": "victim", "password": "no"}, headers=far).status_code, 429)
+        self.assertEqual(c.post("/api/auth/login", json={"username": "victim", "password": "user-pass-1"}).status_code, 200)
+
+    def test_invite_code_guessing_is_slowed(self):
+        tok = bearer(self.reg("guesser").json()["access_token"])
+        codes = [c.post("/api/invite-codes/redeem", headers=tok, json={"code": f"nope{i}"}).status_code for i in range(11)]
+        self.assertEqual((codes[:10], codes[10]), ([400] * 10, 429))
+
+    def test_a_request_is_for_something_that_exists_and_a_regrant_keeps_admin(self):
+        from app import config
+        u = self.reg("asker").json()
+        tok = bearer(u["access_token"])
+        (config.DATA_ROOT / "realsvc" / "projects" / "p1").mkdir(parents=True, exist_ok=True)
+        ask = lambda **b: c.post("/api/access-requests", headers=tok, json=b).status_code  # noqa: E731
+        self.assertEqual([ask(service="ghost"), ask(service="realsvc", project="nope"), ask(service="realsvc", project="p1")],
+                         [404, 404, 201])
+        grant = lambda **b: c.post("/api/admin/permissions", headers=self.admin,  # noqa: E731
+                                   json={"user_id": u["user_id"], "service": "realsvc", "project": "p1", **b})
+        grant(admin=True); grant()                          # the second is what a plain "grant" sends
+        self.assertTrue(c.get("/api/account", headers=tok).json()["scoped_admin"])
+        grant(admin=False)
+        self.assertFalse(c.get("/api/account", headers=tok).json()["scoped_admin"])
+
+    def test_deleting_yourself_takes_your_password(self):
+        tok = bearer(self.reg("goner").json()["access_token"])
+        self.assertEqual(c.delete("/api/account", headers=tok).status_code, 403)
+        self.assertEqual(c.request("DELETE", "/api/account", headers=tok, json={"password": "wrong"}).status_code, 403)
+        self.assertEqual(c.request("DELETE", "/api/account", headers=tok, json={"password": "user-pass-1"}).status_code, 200)
+
+
+class ProjectAdmins(unittest.TestCase):
+    """Phase B: a project's admin answers its requests and makes its codes; nobody else's."""
+    def test_requests_and_codes_of_their_own_project_only(self):
+        from app import config
+        admin = bearer(c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"])
+        reg = lambda n: c.post("/api/auth/register", json={"username": n, "password": "user-pass-1", "email": f"{n}@x.org"}).json()  # noqa: E731
+        for pr in ("mine", "other"):
+            (config.DATA_ROOT / "labsvc" / "projects" / pr).mkdir(parents=True, exist_ok=True)
+        boss, asker = reg("pboss"), reg("pasker")
+        bt, at = bearer(boss["access_token"]), bearer(asker["access_token"])
+        c.post("/api/admin/permissions", headers=admin, json={"user_id": boss["user_id"], "service": "labsvc", "project": "mine", "admin": True})
+        for pr in ("mine", "other"):
+            self.assertEqual(c.post("/api/access-requests", headers=at, json={"service": "labsvc", "project": pr}).status_code, 201)
+        # The admin of `mine` sees and answers that one; `other` is not theirs; the asker answers none.
+        seen = c.get("/api/admin/access-requests", headers=bt).json()
+        self.assertEqual([(r["username"], r["project"]) for r in seen], [("pasker", "mine")])
+        self.assertEqual(c.get("/api/access-requests", headers=bt).json()["to_resolve"], 1)
+        self.assertEqual(c.get("/api/admin/access-requests", headers=at).json(), [])
+        other = next(r["id"] for r in c.get("/api/admin/access-requests", headers=admin).json() if r["project"] == "other")
+        self.assertEqual(c.post(f"/api/admin/access-requests/{other}", headers=bt, json={"action": "approve"}).status_code, 404)
+        self.assertEqual(c.post(f"/api/admin/access-requests/{seen[0]['id']}", headers=at, json={"action": "approve"}).status_code, 404)
+        self.assertEqual(c.post(f"/api/admin/access-requests/{seen[0]['id']}", headers=bt, json={"action": "approve"}).status_code, 200)
+        # The asker is told once, until they have looked.
+        mine = c.get("/api/access-requests", headers=at).json()
+        self.assertEqual((mine["unseen"], {r["project"]: r["status"] for r in mine["mine"]}), (1, {"mine": "approved", "other": "pending"}))
+        c.post("/api/access-requests/seen", headers=at)
+        self.assertEqual(c.get("/api/access-requests", headers=at).json()["unseen"], 0)
+        # Codes: their project's, never unverified, and not a way into the portal for a stranger.
+        mk = lambda h, **b: c.post("/api/admin/invite-codes", headers=h, json={"service": "labsvc", **b})  # noqa: E731
+        self.assertEqual([mk(bt, project="other").status_code, mk(bt, kind="group", group_id=1).status_code, mk(at, project="mine").status_code],
+                         [403, 403, 403])
+        code = mk(bt, project="mine", no_verify=True).json()
+        self.assertFalse(code["no_verify"])
+        theirs = mk(admin, project="other").json()
+        self.assertEqual([x["code"] for x in c.get("/api/admin/invite-codes", headers=bt).json()], [code["code"]])
+        self.assertEqual(c.delete(f"/api/admin/invite-codes/{theirs['id']}", headers=bt).status_code, 404)
+        from app.db import SessionLocal
+        from app.routers.accounts import code_is_valid
+        with SessionLocal() as db:
+            self.assertEqual((code_is_valid(db, code["code"]), code_is_valid(db, theirs["code"])), (False, True))
+        self.assertEqual(c.delete(f"/api/admin/invite-codes/{code['id']}", headers=bt).status_code, 200)
+
+
+class SignupDomains(unittest.TestCase):
+    def test_a_manager_sets_who_signs_up_without_a_code(self):
+        admin = bearer(c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"])
+        reg = lambda n, mail, **m: c.post("/api/auth/register", json={"username": n, "password": "user-pass-1", "email": mail, **m})  # noqa: E731
+        user = bearer(reg("dom0", "dom0@x.org").json()["access_token"])
+        put = lambda h, **b: c.put("/api/admin/system/signup", headers=h, json=b)  # noqa: E731
+        self.assertEqual([put(user, domains=[]).status_code, put(admin, domains=["not a domain"]).status_code], [403, 400])
+        try:
+            self.assertEqual(put(admin, domains=["@Lab.Example", "lab.example"]).json()["domains"], ["lab.example"])
+            self.assertEqual([reg("dom1", "a@lab.example").status_code, reg("dom2", "a@else.where").status_code], [201, 403])
+            code = c.post("/api/admin/invite-codes", headers=admin, json={"service": "labsvc"}).json()["code"]
+            self.assertEqual(reg("dom2", "a@else.where", invite_code=code).status_code, 201)
+        finally:
+            self.assertEqual(put(admin, domains=[]).json()["domains"], [])      # back to open, for the other tests
+        self.assertEqual(reg("dom3", "b@else.where").status_code, 201)
+
+
+class SetMakers(unittest.TestCase):
+    def test_a_project_admin_reads_sets_but_does_not_rearrange_them(self):
+        from app.db import SessionLocal
+        from app import security as sec
+        db = SessionLocal()
+        for name, admin in (("projadmin", True), ("plainuser", False)):
+            u = models.User(username=name, email=f"{name}@x.org", password_hash=sec.hash_password("pw-12345678"),
+                            role="user", is_active=True, email_verified=True)
+            db.add(u)
+            db.commit()
+            if admin:
+                db.add(models.ServicePermission(user_id=u.id, service_name="note", project="note", is_admin=True))
+                db.commit()
+        db.close()
+        tok = lambda n: c.post("/api/auth/login", json={"username": n, "password": "pw-12345678"}).json()["access_token"]
+        pa, pu = bearer(tok("projadmin")), bearer(tok("plainuser"))
+        self.assertEqual(c.get("/api/share-sets", headers=pa).status_code, 200)
+        self.assertEqual(c.get("/api/share-sets/templates", headers=pa).status_code, 200)
+        self.assertEqual(c.get("/api/share-sets", headers=pu).status_code, 403)
+        self.assertEqual(c.put("/api/share-sets", json={"sets": []}, headers=pa).status_code, 403)
+
+
+class StoreChain(unittest.TestCase):
+    def test_rack_services_bring_log_and_pipeline(self):
+        from app.routers import store
+        rack = store._entry("rack")
+        self.assertEqual([e["name"] for e in store._chain(rack)], ["rack", "log", "pipeline"])
+        for part in ("log", "pipeline"):
+            self.assertEqual(store._entry(part)["part_of"], "rack")
+
+
+class SetGroups(unittest.TestCase):
+    def test_a_set_has_one_fixed_group_that_follows_it(self):
+        from app.routers import service_groups as sg
+        registry.write_share_sets([{"name": "manage", "members": {"author_manager": "authors", "note": "note"}}])
+        sg.sync_set_groups()
+        g = next(x for x in sg.all_groups() if x.get("share_set") == "manage")
+        self.assertEqual((g["name"], g["members"]), ("manage", ["author_manager", "note"]))
+        # The set changes, the group follows; a set that is gone leaves an ordinary group.
+        registry.write_share_sets([{"name": "manage", "members": {"note": "note"}}])
+        sg.sync_set_groups()
+        self.assertEqual(next(x for x in sg.all_groups() if x["id"] == g["id"])["members"], ["note"])
+        tok = c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]
+        r = c.put(f"/api/admin/service-groups/{g['id']}", json={"members": ["note", "elog"]}, headers=bearer(tok))
+        self.assertEqual(r.status_code, 400)                  # members follow the set, not a hand
+        self.assertEqual(c.delete(f"/api/admin/service-groups/{g['id']}", headers=bearer(tok)).status_code, 400)
+        # A service in two sets is one card per project, and cannot be put back to one card.
+        for proj in ("a", "b"):
+            (registry.service_dir("twosets") / "projects" / proj).mkdir(parents=True, exist_ok=True)
+        registry.write_manifest("twosets", {**registry.default_manifest("rack", "managed"),
+                                            "capabilities": {"multi_project": True, "tags": True}, "entry_project": "a"})
+        registry.write_share_sets([{"name": "manage", "members": {"note": "note", "twosets": "a"}},
+                                   {"name": "jobboard", "members": {"twosets": "b"}}])
+        sg.sync_set_groups()
+        by = {x.get("share_set"): x["members"] for x in sg.all_groups() if x.get("share_set")}
+        self.assertEqual((by["manage"], by["jobboard"]), (["note", "twosets/a"], ["twosets/b"]))
+        r = c.put("/api/admin/home-service", json={"name": "twosets", "split": False}, headers=bearer(tok))
+        self.assertEqual(r.status_code, 409)
+        registry.write_share_sets([{"name": "manage", "members": {"note": "note"}}])
+        sg.sync_set_groups()
+        self.assertEqual(c.put("/api/admin/home-service", json={"name": "twosets", "split": False},
+                               headers=bearer(tok)).status_code, 200)
+        # Renamed, the set keeps its group (followed by id), and the group takes the new name.
+        sid = registry.share_sets()[0][0].get("id")
+        if sid:
+            registry.write_share_sets([{"id": sid, "name": "admin", "members": {"note": "note"}}])
+            sg.sync_set_groups()
+            self.assertEqual(next(x for x in sg.all_groups() if x["id"] == g["id"])["name"], "admin")
+        registry.write_share_sets([])
+        sg.sync_set_groups()
+        self.assertNotIn("share_set", next(x for x in sg.all_groups() if x["id"] == g["id"]))
 
 
 if __name__ == "__main__":

@@ -145,9 +145,15 @@ def identity(request: Request, authorization: Optional[str] = Header(default=Non
         # new sign-in) is the cookie's session, not nobody's.
         token = request.cookies.get("lilak_portal_token")
         payload = decode_token(token) if token else None
+    # A delegated token (scope, from the portal's /api/delegate) is good only in the
+    # service it names — not here when it was minted for another one.
+    here = os.environ.get("PORTAL_SERVICE")
+    if payload and payload.get("scope") and here and payload["scope"].split("/")[0] != here:
+        payload = None
     if not payload:
         return {"authenticated": False, "email": None, "username": None,
                 "name": None, "role": None, "color": None, "shape": None}
+    via = payload.get("via")
     payload = fresh_payload(payload, token) if payload else None
     if not payload:
         return {"authenticated": False, "email": None, "username": None,
@@ -160,6 +166,8 @@ def identity(request: Request, authorization: Optional[str] = Header(default=Non
         "role": payload.get("prole") or payload.get("role"),
         "color": payload.get("color"),
         "shape": payload.get("shape"),
+        # the service that wrote here for the person, when a delegated token came in
+        "via": via,
     }
 
 
@@ -180,6 +188,28 @@ def manager(me: dict = Depends(signed_in)) -> dict:
     if not is_manager(me):
         raise HTTPException(403, "관리자만 할 수 있습니다.")
     return me
+
+
+def delegate(person_auth: str, to: str, minutes: int = 5) -> str:
+    """'Bearer <token>' good only in `to` ("svc/proj"), for a few minutes, saying this
+    service asked — what a service uses to write in ANOTHER service for the person
+    (web_service/CLAUDE.md: never pass the person's own token on). `person_auth` is
+    the caller's Authorization header. Raises PermissionError with the portal's reason."""
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{_PORTAL_PORT or '8025'}/api/delegate", method="POST",
+        data=json.dumps({"to": to, "minutes": minutes}).encode(),
+        headers={"Authorization": person_auth, "Content-Type": "application/json",
+                 "X-Portal-Service": os.environ.get("PORTAL_SERVICE", ""),
+                 "X-Portal-Service-Key": os.environ.get("PORTAL_SERVICE_KEY", "")})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return "Bearer " + json.loads(r.read())["token"]
+    except urllib.error.HTTPError as e:
+        try:
+            said = json.loads(e.read()).get("detail")
+        except Exception:                      # noqa: BLE001
+            said = None
+        raise PermissionError(said or f"delegate {to} → {e.code}") from None
 
 
 def _portal_db_path() -> Path:
@@ -212,5 +242,5 @@ def list_accounts() -> list[dict]:
 __all__ = [
     "SECRET_KEY", "ALGORITHM", "MANAGER_COLOR",
     "decode_token", "bearer_from_request", "introspect", "fresh_payload",
-    "identity", "list_accounts",
+    "identity", "list_accounts", "delegate",
 ]

@@ -166,15 +166,44 @@ def can_enter_project(db: Session, user: models.User, svc: str, proj: str) -> bo
         return True
     if not verification_current(user):
         return False
-    return has_service_grant(db, user.id, svc) or (proj in project_grants(db, user.id, svc))
+    return has_service_grant(db, user.id, svc) or (proj in project_grants(db, user.id, svc)) \
+        or follows_its_set(db, user, svc, proj)
 
 
-def user_from_request(db: Session, token: str | None) -> models.User | None:
+def follows_its_set(db: Session, user: models.User, svc: str, proj: str) -> bool:
+    """A set's inbox (a project of a service whose manifest says `capabilities.inbox`) is open to
+    whoever may enter another project of that share set: what waits there is the set's people's to
+    decide, so it needs no grant of its own."""
+    from . import registry
+    if not proj or not (registry.read_manifest(svc).get("capabilities") or {}).get("inbox"):
+        return False
+    for st in registry.share_sets()[0]:
+        m = st.get("members") or {}
+        if m.get(svc) == proj:
+            return any(can_enter_project(db, user, s, p) for s, p in m.items()
+                       if s != svc and not (registry.read_manifest(s).get("capabilities") or {}).get("inbox"))
+    return False
+
+
+def user_from_request(db: Session, token: str | None, path: str = "") -> models.User | None:
     """Resolve a portal user from a raw JWT (used by the proxies, which read it
     from a cookie because a top-level navigation carries no Authorization header)."""
     payload = security.decode_access_token(token) if token else None
-    if not payload:
+    # `portal: true`, as require_portal_user asks: a managed service signs its OWN users' tokens
+    # with the same secret (elog), and one of those is not the portal account whose id it shares.
+    if not payload or not payload.get("portal"):
+        return None
+    # A delegated token (scope) counts only at the proxy path its scope names.
+    if payload.get("scope") and not security.scope_fits(payload["scope"], path):
         return None
     u = db.query(models.User).filter(models.User.id == int(payload.get("sub", 0))).first()
     from . import prefs
     return u if (u and u.is_active and prefs.session_ok(u, payload)) else None
+
+
+def user_at_proxy(db: Session, request) -> models.User | None:
+    """The portal user behind a proxied request: the Authorization bearer when it is a portal
+    token, else the `lilak_portal_token` cookie (a navigation carries no header; a page of a
+    service may send that service's own token in the header while the cookie is the person's)."""
+    return (user_from_request(db, security.bearer(request.headers.get("authorization")), request.url.path)
+            or user_from_request(db, request.cookies.get("lilak_portal_token")))

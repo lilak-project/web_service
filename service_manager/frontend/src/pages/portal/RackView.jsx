@@ -3,6 +3,10 @@ import { tr } from 'lilak-ui'
 import { launcher, errText } from '../../api'
 import { useLang } from '../../context/LangContext'
 import { Panel, Row, Pill } from './Field'
+import AdminEditor from './AdminEditor'
+import ServiceManagePanel from './ServiceManagePanel'
+import ServiceProjects from './ServiceProjects'
+import ServiceSingle from './ServiceSingle'
 
 /**
  * RackView — the rack services (the ones built on racklist): which band each
@@ -23,22 +27,34 @@ const SLOT_TONE = { ok: 'var(--dock-success-text)', warn: 'var(--dock-warning-te
 
 const keyOf = (c) => (c.project_card ? `${c.name}/${c.project_card}` : c.name)
 const isRack = (c) => !c.builtin && (c.kind === 'rack' || c.tags)
+// Which of the account menu's three lists a service is in: NEON says so in its
+// manifest (`look`), rack is the racklist services, everything else is DOCK.
+export const lookOf = (c) => (c.look === 'neon' ? 'neon' : isRack(c) ? 'rack' : 'dock')
+const LOOK_TITLE = { rack: 'rack_title', dock: 'p_home_tab_dock', neon: 'p_home_tab_neon' }
 
 function Swatch({ color }) {
   return <span style={{ width: 10, height: 10, flex: 'none', background: color || 'var(--dock-border-strong)' }} />
 }
 
-export default function RackView({ tab, bands = [], onGo, onChanged }) {
+export default function RackView({ tab, look = 'rack', cards: allCards, bands = [], onGo, onChanged, readOnly = false }) {
+  // readOnly: a project admin sees the sets and makes new ones from a template; only a manager rearranges them.
   const { lang } = useLang()
 
   const groups = bands
     .map((b) => ({ g: b.g, items: b.items.filter(isRack) }))
     .filter((b) => b.items.length)
-  // A service split into project cards is still one service here.
-  const services = [...new Map(groups.flatMap((b) => b.items).map((s) => [s.name, s])).values()]
+  // A service split into project cards is still one service here. The list tabs take
+  // every card (hidden ones too — this is where a manager finds them); the sets, the rack ones in the bar.
+  const all = tab === 'map' && allCards ? allCards.filter((c) => !c.builtin && lookOf(c) === look) : groups.flatMap((b) => b.items)
+  const services = [...new Map(all.map((s) => [s.name, s])).values()]
+  // What is unfolded: a service (`svc`) shows what Manage sidebar shows for it and its
+  // admins; a project (`svc/proj`) its admins.
+  const [open, setOpen] = useState(() => new Set())
+  const flip = (k) => setOpen((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const byName = Object.fromEntries(services.map((s) => [s.name, s]))
-  const cardOf = (svc, proj) => groups.flatMap((b) => b.items).find((c) => c.name === svc && c.project_card === proj)
-  const label = (svc) => { const s = byName[svc]; return s ? (s.service_label || s.labels?.[lang] || s.label || s.name) : svc }
+  const cardOf = (svc, proj) => all.find((c) => c.name === svc && c.project_card === proj)
+  // A card that opens one project is named after it; the service's own name is then service_label (or none).
+  const label = (svc) => { const s = byName[svc]; return !s ? svc : 'service_label' in s ? (s.service_label || s.name) : (s.labels?.[lang] || s.label || s.name) }
 
   // svc -> [project] | null (failed)
   const [projects, setProjects] = useState({})
@@ -68,7 +84,45 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
     launcher.get('/share-sets').then((r) => take(r.data)).catch((e) => setMsg({ tone: 'bad', text: errText(e) }))
   }, [])
 
-  const edit = (fn) => { setSets((old) => fn(structuredClone(old))); setDirty(true); setMsg(null) }
+  // A set made from a template in one go: the projects it lacks are made, then joined.
+  const [tpls, setTpls] = useState([])
+  const [mk, setMk] = useState({ tpl: 0, name: '', project: '' })
+  useEffect(() => {
+    launcher.get('/share-sets/templates').then((r) => setTpls(r.data || [])).catch(() => {})
+  }, [sets])
+  const make = async () => {
+    const t = tpls[mk.tpl]
+    try {
+      const r = await launcher.post('/share-sets/make', { name: mk.name.trim(), project: mk.project.trim(), services: t.services })
+      take(r.data)
+      setMsg({ tone: 'ok', text: tr('p_share_made', mk.name.trim(), r.data.made.length, r.data.joined.length) })
+      setMk({ ...mk, name: '', project: '' })
+      onChanged?.()
+    } catch (e) { setMsg({ tone: 'bad', text: errText(e) }) }
+  }
+
+  // An MCP token bound to one set: an agent given it reads and writes that set's projects only.
+  // Shown once, with the line that registers it in Claude Code. Managers only (the token API is theirs).
+  const [tok, setTok] = useState(null)        // { i, write, made? }
+  // The tokens bound to each set (scope set:<id>), so a set shows who reaches it.
+  const [tokens, setTokens] = useState([])
+  const loadTokens = () => { if (!readOnly) launcher.get('/admin/mcp-tokens').then((r) => setTokens(r.data || [])).catch(() => {}) }
+  useEffect(loadTokens, [readOnly])
+  const boundTo = (st) => tokens.filter((t) => !t.revoked && !t.expired
+    && String(t.scope || '').split(',').some((p) => p === `set:${st.id}` || p === `set:${st.name}`))
+  const issueTok = async (st) => {
+    try {
+      const r = await launcher.post('/admin/mcp-tokens', { name: `set-${st.name}`, scope: `set:${st.id || st.name}`,
+        can_write: !!tok.write, days: 180 })
+      setTok({ ...tok, made: r.data.token })
+      loadTokens()
+      // The sets may have been given their ids just now: take them, so the next save keeps them.
+      launcher.get('/share-sets').then((x) => take(x.data)).catch(() => {})
+    } catch (e) { setMsg({ tone: 'bad', text: errText(e) }) }
+  }
+  const mcpLine = (st, token) => `claude mcp add --transport http --scope user lilak-${st.name} ${window.location.origin}/mcp --header "Authorization: Bearer ${token}"`
+
+  const edit = (fn) => { if (readOnly) return; setSets((old) => fn(structuredClone(old))); setDirty(true); setMsg(null) }
   const setOf = (svc, proj) => (sets || []).findIndex((s) => s.members?.[svc] === proj)
 
   // Every project of every rack service, as a card to click. A click picks it;
@@ -81,7 +135,7 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
   // A set holds one project per service: a link to that service needs one place.
   const twoOfOne = new Set(pickedCards.map((c) => c.svc)).size < pickedCards.length
   const pickedInSet = pickedCards.some((c) => setOf(c.svc, c.proj) >= 0)
-  const toggle = (k) => { setMsg(null); setPicked((old) => { const n = new Set(old); if (n.has(k)) n.delete(k); else n.add(k); return n }) }
+  const toggle = (k) => { if (readOnly) return; setMsg(null); setPicked((old) => { const n = new Set(old); if (n.has(k)) n.delete(k); else n.add(k); return n }) }
   const leave = (s, c) => { for (const t of s) if (t.members?.[c.svc] === c.proj) delete t.members[c.svc] }
   // Moving in a project of a service the set already holds pushes the old one out.
   const moveHere = (i, list = pickedCards) => {
@@ -106,7 +160,7 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
     <div key={at} style={{ display: 'contents' }}
       onDragOver={(e) => { if (!dragged.current.length) return; e.preventDefault(); setOver(at) }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(null) }}
-      onDrop={(e) => { e.preventDefault(); drop(at) }}>
+      onDrop={(e) => { e.preventDefault(); if (!readOnly) drop(at) }}>
       {panel}
     </div>
   )
@@ -145,7 +199,7 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
     if (!dirty) return
     const sent = sets
     const t = setTimeout(() => launcher.put('/share-sets', { sets: sent })
-      .then(() => { setStored(true); if (latest.current === sent) setDirty(false); setMsg({ tone: 'ok', text: tr('p_share_saved') }) })
+      .then(() => { setStored(true); if (latest.current === sent) setDirty(false); setMsg({ tone: 'ok', text: tr('p_share_saved') }); onChanged?.() })
       .catch((e) => setMsg({ tone: 'bad', text: errText(e) })), 600)
     return () => clearTimeout(t)
   }, [sets, dirty])
@@ -156,37 +210,6 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
     if (unsaved.current) launcher.put('/share-sets', { sets: latest.current }).catch(() => {})
   }, [])
 
-  // A set's projects as a sidebar group: the group already holding most of them
-  // gets the rest; with none, a new group named after the set. A card sits in one
-  // group, so a service whose one card another group holds is `taken`: only
-  // splitting it into project cards can bring this set's project over.
-  const groupFor = (st) => {
-    const names = Object.entries(st.members || {}).map(([svc, proj]) => (byName[svc]?.project_card ? `${svc}/${proj}` : svc))
-    const own = bands.filter((b) => b.g && !b.g.fixed && !b.g.loose)
-      .map((b) => ({ g: b.g, mem: b.g.members || b.items.map(keyOf) }))
-    let best = null, n = 0
-    for (const o of own) {
-      const k = names.filter((x) => o.mem.includes(x)).length
-      if (k > n) { best = o; n = k }
-    }
-    const out = names.filter((x) => !best?.mem.includes(x))
-    const taken = out.filter((x) => !x.includes('/') && own.some((o) => o !== best && o.mem.includes(x)))
-    return { g: best?.g, mem: best?.mem || [], missing: out.filter((x) => !taken.includes(x)), taken }
-  }
-  const [asking, setAsking] = useState(null)   // index of the set whose "split them?" is open
-  const toGroup = async (st, split) => {
-    const { g, mem, missing, taken } = groupFor(st)
-    setAsking(null)
-    try {
-      // One at a time: each rewrites the same two files.
-      if (split) for (const svc of taken) await launcher.put('/admin/home-service', { name: svc, split: true })
-      const add = [...missing, ...(split ? taken.map((svc) => `${svc}/${st.members[svc]}`) : [])]
-      if (g) await launcher.put(`/admin/service-groups/${g.id}`, { members: [...mem, ...add] })
-      else await launcher.post('/admin/service-groups', { name: st.name, members: add })
-      setMsg({ tone: 'ok', text: g ? tr('p_share_group_updated', g.name) : tr('p_share_group_made', st.name) })
-      onChanged?.()
-    } catch (e) { setMsg({ tone: 'bad', text: errText(e) }) }
-  }
   const reset = () => launcher.delete('/share-sets')
     .then((r) => { take(r.data); setMsg({ tone: 'ok', text: tr('p_share_reset_done') }) })
     .catch((e) => setMsg({ tone: 'bad', text: errText(e) }))
@@ -203,7 +226,7 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
       {tab === 'map' && [{ g: null, items: services.map((s) => (s.project_card ? { ...s, project_card: null } : s)) }].map(({ g, items }) => {
         const nproj = items.reduce((n, s) => n + (s.multi_project && !s.project_card ? (s.projects_count || 0) : 1), 0)
         return (
-          <Panel key={g?.id || '@all'} title={g?.name || tr('p_map_all')}
+          <Panel key={g?.id || '@all'} title={g?.name || tr(LOOK_TITLE[look])}
             hint={tr('p_map_band_hint', new Set(items.map((s) => s.name)).size, nproj)} bare>
             <Row className="cols head" style={MAP_COLS}>
               <span>{tr('p_map_col_service')}</span><span>{tr('p_map_col_project')}</span>
@@ -215,8 +238,10 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
               const at = keyOf(s)
               const head = (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                  {!readOnly && <Caret on={open.has(s.name)} onClick={() => flip(s.name)} />}
                   <Swatch color={s.color} />
-                  <span style={{ overflowWrap: 'anywhere' }}>{label(s.name)}</span>
+                  <span style={{ overflowWrap: 'anywhere', cursor: readOnly ? undefined : 'pointer' }}
+                    onClick={readOnly ? undefined : () => flip(s.name)}>{label(s.name)}</span>
                   {s.hidden && <Pill>{tr('p_map_hidden')}</Pill>}
                   {s.multi_project && (
                     <button type="button" className="set-plain" title={tr('p_map_new_project')}
@@ -240,6 +265,17 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
                   </span>
                 </Row>
               )
+              const unfolded = open.has(s.name) && (
+                <Row key={`${at}/@`} className="cols" style={MAP_COLS}>
+                  <div style={{ gridColumn: '1 / -1', minWidth: 0 }}>
+                    <AdminEditor scopes={[{ svc: s.name, proj: '' }]} />
+                    <ServiceManagePanel service={'service_label' in s ? { ...s, label: s.service_label, labels: s.service_labels } : s}
+                      onChanged={onChanged} />
+                    {s.multi_project ? <ServiceProjects service={s} canManage manage onChanged={() => { loadProjects(s.name); onChanged?.() }} />
+                      : <ServiceSingle service={s} canManage manage onChanged={onChanged} />}
+                  </div>
+                </Row>
+              )
               const note = !s.multi_project ? tr('p_map_single') : list === undefined ? '…'
                 : list === null ? tr('p_map_load_failed') : list.length === 0 ? tr('p_map_no_projects') : null
               if (note) {
@@ -247,14 +283,17 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
                   <Row key={at} className="cols" style={MAP_COLS}>
                     {head}<span className="sub">{note}</span><span /><span /><span />
                   </Row>
-                ), addRow]
+                ), unfolded, addRow]
               }
               return [...list.map((p, n) => {
                 const k = setOf(s.name, p.name)
-                return (
-                  <Row key={`${s.name}/${p.name}`} className="cols" style={MAP_COLS}>
+                const pk = `${s.name}/${p.name}`
+                return [(
+                  <Row key={pk} className="cols" style={MAP_COLS}>
                     {n === 0 ? head : <span />}
-                    <span style={{ overflowWrap: 'anywhere' }}>{p.label || p.name}</span>
+                    <span style={{ overflowWrap: 'anywhere', display: 'flex', alignItems: 'center', gap: 5,
+                      cursor: readOnly ? undefined : 'pointer' }} onClick={readOnly ? undefined : () => flip(pk)}>
+                      {!readOnly && <Caret on={open.has(pk)} />}{p.label || p.name}</span>
                     <span>{p.name === s.link_project ? tr('p_map_main') : ''}</span>
                     {/* The state doubles as the way in: it opens this project of this service. */}
                     <button type="button" className="set-plain" disabled={!onGo} title={tr('p_map_go')}
@@ -268,7 +307,12 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
                     </button>
                     <span>{k >= 0 ? <Pill tone="ok">{sets[k].name}</Pill> : <span className="sub">—</span>}</span>
                   </Row>
-                )
+                ), n === 0 && unfolded, open.has(pk) && (
+                  <Row key={`${pk}/@`} className="cols" style={MAP_COLS}>
+                    <span />
+                    <div style={{ gridColumn: '2 / -1', minWidth: 0 }}><AdminEditor scopes={[{ svc: s.name, proj: p.name }]} /></div>
+                  </Row>
+                )]
               }), addRow]
             })}
           </Panel>
@@ -278,7 +322,7 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
       {tab === 'sets' && <>
       <Panel title={tr('p_share_sets')} hint={stored ? tr('p_share_stored') : tr('p_share_default')} bare
         right={(
-          <span style={{ display: 'flex', gap: 6 }}>
+          !readOnly && <span style={{ display: 'flex', gap: 6 }}>
             <button type="button" onClick={() => edit((s) => [...s, { name: tr('p_share_new_name', s.length + 1), members: {} }])}>
               {tr('p_share_add_set')}
             </button>
@@ -292,9 +336,30 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
           <span style={{ flex: 1, minWidth: 0, height: '2.8em', lineHeight: 1.4, display: 'flex', alignItems: 'center', color: SLOT_TONE[slot.tone] }}>
             <span title={slot.text} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{slot.text}</span>
           </span>
-          <button type="button" disabled={!pickedInSet} onClick={() => takeOut()}>{tr('p_share_take_out')}</button>
-          <button type="button" disabled={!picked.size} onClick={() => setPicked(new Set())}>{tr('p_share_clear')}</button>
+          {!readOnly && <>
+            <button type="button" disabled={!pickedInSet} onClick={() => takeOut()}>{tr('p_share_take_out')}</button>
+            <button type="button" disabled={!picked.size} onClick={() => setPicked(new Set())}>{tr('p_share_clear')}</button>
+          </>}
         </Row>
+      </Panel>
+
+      <Panel title={tr('p_share_tpl')} bare>
+        <Row className="sub">{tr('p_share_tpl_explain')}</Row>
+        <Row style={{ gap: 6, flexWrap: 'wrap' }}>
+          {/* Buttons, not a <select>: in the portal frame a native menu swallowed the next click. */}
+          {tpls.map((t, k) => (
+            <button key={k} type="button" aria-pressed={mk.tpl === k} onClick={() => setMk({ ...mk, tpl: k })}
+              style={mk.tpl === k ? { fontWeight: 600, borderColor: 'var(--border-focus)' } : undefined}>
+              {t.name}
+            </button>
+          ))}
+          <input placeholder={tr('p_share_tpl_name')} aria-label={tr('p_share_tpl_name')} value={mk.name}
+            onChange={(e) => setMk({ ...mk, name: e.target.value })} />
+          <input placeholder={tr('p_share_tpl_project')} aria-label={tr('p_share_tpl_project')} value={mk.project}
+            onChange={(e) => setMk({ ...mk, project: e.target.value })} />
+          <button type="button" disabled={!tpls[mk.tpl] || !mk.name.trim() || dirty} onClick={make}>{tr('p_share_tpl_make')}</button>
+        </Row>
+        {tpls[mk.tpl] && <Row className="sub">{tpls[mk.tpl].services.join(' · ')}</Row>}
       </Panel>
 
       {(sets || []).map((st, i) => {
@@ -303,36 +368,53 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
           zone(i, <Panel title={st.name} hint={tr('p_share_n', inSet.length)} bare style={zoneStyle(i)}
             right={(
               <span style={{ display: 'flex', gap: 6 }}>
-                {(() => {
-                  const { g, missing, taken } = groupFor(st)
-                  return (
-                    <button type="button" disabled={!missing.length && !taken.length}
-                      title={g && !missing.length && !taken.length ? tr('p_share_group_same', g.name) : undefined}
-                      onClick={() => { if (taken.length) setAsking(asking === i ? null : i); else toGroup(st, false) }}>
-                      {g ? tr('p_share_group_update', g.name) : tr('p_share_group_make')}
-                    </button>
-                  )
-                })()}
-                <button type="button" disabled={!picked.size || twoOfOne} onClick={() => moveHere(i)}>{tr('p_share_move_here')}</button>
-                <button type="button" onClick={() => edit((s) => s.filter((_, k) => k !== i))}>{tr('p_share_delete_set')}</button>
+                {/* The set's sidebar group follows it on its own (service_groups.sync_set_groups). */}
+                {!readOnly && <>
+                  <button type="button" disabled={!picked.size || twoOfOne} onClick={() => moveHere(i)}>{tr('p_share_move_here')}</button>
+                  <button type="button" disabled={dirty} title={dirty ? tr('p_share_tok_save_first') : undefined}
+                    onClick={() => setTok(tok?.i === i ? null : { i, write: true })}>{tr('p_share_tok')}</button>
+                  <button type="button" onClick={() => edit((s) => s.filter((_, k) => k !== i))}>{tr('p_share_delete_set')}</button>
+                </>}
               </span>
             )}>
-            {asking === i && (() => {
-              const { missing, taken } = groupFor(st)
-              return (
-                <Row style={{ background: 'var(--dock-info-bg)' }}>
-                  <span style={{ flex: '1 1 260px' }}>{tr('p_share_split_ask', taken.map(label).join(', '))}</span>
-                  <button type="button" onClick={() => toGroup(st, true)}>{tr('p_share_split_yes')}</button>
-                  {missing.length > 0 && <button type="button" onClick={() => toGroup(st, false)}>{tr('p_share_split_no')}</button>}
-                  <button type="button" onClick={() => setAsking(null)}>{tr('p_cancel')}</button>
-                </Row>
-              )
-            })()}
+            {!readOnly && (
+              <Row className="sub" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <span>{tr('p_share_tok_bound')}</span>
+                {boundTo(st).length ? boundTo(st).map((t) => (
+                  <span key={t.id}><b>{t.name}</b> · {t.can_write ? tr('p_mcp_write') : tr('p_mcp_read')} · {tr('p_mcp_used')} {t.last_used_at
+                    ? new Date(`${t.last_used_at}Z`).toLocaleString('sv').slice(0, 16) : tr('p_mcp_never')}</span>
+                )) : <span>{tr('p_share_tok_none')}</span>}
+              </Row>
+            )}
+            {tok?.i === i && (
+              <Row style={{ background: 'var(--dock-info-bg)', flexWrap: 'wrap', gap: 6 }}>
+                {tok.made ? <>
+                  <span style={{ flex: '1 1 100%' }}>{tr('p_share_tok_once')}</span>
+                  <input readOnly value={mcpLine(st, tok.made)} onFocus={(e) => e.target.select()} aria-label={tr('p_share_tok')}
+                    style={{ flex: '1 1 320px', fontFamily: 'var(--font-mono)' }} />
+                  <button type="button" onClick={() => navigator.clipboard?.writeText(mcpLine(st, tok.made))
+                    .then(() => setMsg({ tone: 'ok', text: tr('p_mcp_copied') }), () => setMsg({ tone: 'bad', text: tr('p_mcp_copy_failed') }))}>
+                    {tr('p_mcp_copy')}</button>
+                  <button type="button" onClick={() => setTok(null)}>{tr('p_mcp_done')}</button>
+                </> : <>
+                  <span style={{ flex: '1 1 260px' }}>{tr('p_share_tok_explain', st.name)}</span>
+                  <label><input type="checkbox" checked={tok.write} onChange={(e) => setTok({ ...tok, write: e.target.checked })} /> {tr('p_mcp_write')}</label>
+                  <button type="button" onClick={() => issueTok(st)}>{tr('p_mcp_issue')}</button>
+                  <button type="button" onClick={() => setTok(null)}>{tr('p_cancel')}</button>
+                </>}
+              </Row>
+            )}
             <Row className="cols" style={TWO}>
               <span className="sub">{tr('p_share_name')}</span>
               <input value={st.name} onChange={(e) => { const v = e.target.value; edit((s) => { s[i].name = v; return s }) }} />
             </Row>
             <Row>{inSet.length ? inSet.map(card) : <span className="sub">{tr('p_share_empty')}</span>}</Row>
+            {/* Admins of every project in the set at once (one per row of a set: n/all). */}
+            {/* A project admin sees this on the sets that are wholly theirs (the API decides). */}
+            {st.id && !dirty && Object.keys(st.members || {}).length > 0 && (
+              <AdminEditor key={`${st.id}:${JSON.stringify(st.members)}`} setKey={st.id}
+                scopes={Object.entries(st.members).map(([svc, proj]) => ({ svc, proj }))} />
+            )}
           </Panel>)
         )
       })}
@@ -342,5 +424,14 @@ export default function RackView({ tab, bands = [], onGo, onChanged }) {
       </Panel>)}
       </>}
     </>
+  )
+}
+
+function Caret({ on, onClick }) {
+  return (
+    <span role={onClick ? 'button' : undefined} aria-expanded={on} onClick={onClick}
+      style={{ flex: 'none', width: 10, color: 'var(--dock-text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+      {on ? '▾' : '▸'}
+    </span>
   )
 }

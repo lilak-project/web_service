@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from . import config
-from .models import Base
+from .models import Base, User
 
 config.ensure_dirs()
 
@@ -87,13 +87,75 @@ def _migrate() -> None:
             "scope": "ALTER TABLE portal_mcp_tokens ADD COLUMN scope VARCHAR(512) NOT NULL DEFAULT ''",
         })
 
+    if "portal_chat_messages" in names:
+        add_missing("portal_chat_messages", {
+            "mentions_json": "ALTER TABLE portal_chat_messages ADD COLUMN mentions_json TEXT NOT NULL DEFAULT '[]'",
+        })
+
     with engine.begin() as conn:
         conn.execute(text(
             "UPDATE users SET email_verified_at = COALESCE(email_verified_at, created_at) "
             "WHERE email_verified = 1 AND email_verified_at IS NULL"))
 
 
+# ── an account's id is never used twice ──────────────────────────────────────
+# SQLite hands a deleted row's id to the next insert when it was the highest, and
+# things are kept BY that id: a passkey, an MCP token, chat lines, agent runs. A
+# person who signed up after someone left would have inherited them (their old
+# token acting as the newcomer). So: the highest id ever given is remembered
+# (portal_settings.user_id_floor), a new account goes above it, and what an
+# account signs in with or is granted goes with it when it is deleted.
+_FLOOR = "user_id_floor"
+_OWNED = ("portal_passkeys", "portal_mcp_tokens", "portal_permissions", "portal_group_members",
+          "portal_access_requests")                   # credentials and grants: gone with the account
+_KEPT = ("portal_chat_messages", "portal_agent_runs", "portal_reports")   # history: kept, the id retired
+
+
+def _floor(conn) -> int:
+    v = conn.execute(text("SELECT value FROM portal_settings WHERE key = :k"), {"k": _FLOOR}).scalar()
+    return int(v or 0)
+
+
+def _raise_floor(conn, to: int) -> None:
+    if to > _floor(conn):
+        conn.execute(text("INSERT INTO portal_settings (key, value) VALUES (:k, :v) "
+                          "ON CONFLICT(key) DO UPDATE SET value = :v"), {"k": _FLOOR, "v": str(to)})
+
+
+@event.listens_for(User, "before_insert")
+def _fresh_user_id(_mapper, conn, target):
+    if target.id is None:
+        top = conn.execute(text("SELECT MAX(id) FROM users")).scalar() or 0
+        floor = _floor(conn)
+        if floor > top:
+            target.id = floor + 1
+
+
+@event.listens_for(User, "after_delete")
+def _retire_user_id(_mapper, conn, target):
+    _raise_floor(conn, target.id)
+    for table in _OWNED:
+        conn.execute(text(f"DELETE FROM {table} WHERE user_id = :u"), {"u": target.id})
+
+
+def _retire_orphans() -> None:
+    """Once per start: accounts deleted before this existed left rows behind. Their ids are
+    retired, and the credentials and grants no account owns any more are removed."""
+    names = set(inspect(engine).get_table_names())
+    with engine.begin() as conn:
+        for table in _OWNED + _KEPT:
+            if table not in names:
+                continue
+            gone = conn.execute(text(f"SELECT MAX(user_id) FROM {table} "
+                                     "WHERE user_id IS NOT NULL AND user_id NOT IN (SELECT id FROM users)")).scalar()
+            if gone:
+                _raise_floor(conn, int(gone))
+                if table in _OWNED:
+                    conn.execute(text(f"DELETE FROM {table} WHERE user_id NOT IN (SELECT id FROM users)"))
+
+
 _migrate()
+_retire_orphans()
 
 
 def get_db():

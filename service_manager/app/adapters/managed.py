@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from .. import config, registry
+from .. import config, registry, security
 from .base import (Adapter, clear_cooldown, cooldown_active, health_ok, port_alive,
                    read_running_port, reserve_port, set_cooldown, start_lock, write_pid)
 
@@ -94,6 +94,7 @@ class ManagedAdapter(Adapter):
                 "PORTAL_SERVICE": name,
                 "PORTAL_DATA_ROOT": str(config.DATA_ROOT),
                 "PORTAL_PORT": str(config.PORTAL_PORT),
+            "PORTAL_SERVICE_KEY": security.service_key(name),   # asks /api/delegate as itself
                 **{k: str(v) for k, v in extra_env.items()},
             }
             # Child output → data/<name>/service.log (kept across starts) instead of

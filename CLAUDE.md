@@ -172,6 +172,14 @@ build; the elog/asset frontends are served by their own backends through the pro
   `manager` for host-touching ones); `identity` alone is for whoami. The portal proxy lets
   some bearers through unchecked (service-to-service calls), so the service must check.
   Rack services bind `127.0.0.1` — only the portal reaches them.
+- **How services reach each other** (2026-11-16): (1) they READ each other through links and tags;
+  (2) what a person should hear about (inbox candidates, notifications, mentions, threads) goes UP to the
+  portal, which gathers and draws it from the services' declared `capabilities` — services do not call
+  each other for it; (3) a service that must WRITE in another service for a person asks the portal for a
+  delegated token (`lilak_portal_auth.delegate(person_auth, "svc/proj")` → `POST /api/delegate`, shown
+  the service's `PORTAL_SERVICE_KEY`): good only at that project's proxy and `/api/introspect`, for a few
+  minutes, carrying `via` (the asking service; `identity()` returns it). It never passes the person's own
+  token on. (4) A write the person makes on screen (racklist `addReference`) stays the exception.
 - **Rack services link through one project each.** The manifest's `entry_project`
   (`registry.link_project`, chosen by a manager in the project list as "대표") is the only
   project the others see: tags, tagged search, tag renames, links, reverse lists. It rides
@@ -185,6 +193,15 @@ build; the elog/asset frontends are served by their own backends through the pro
   manager saves, the sets are the manifests' `capabilities.tags` groups through the main projects.
   Each page gets its set as `__PORTAL_SERVICE__.share` (racklist `SHARE`, tags.js), and `links`
   is the main projects overlaid with that set. A project in no set reads its main project's set.
+  **Each set is also a fixed sidebar group** (`service_groups.sync_set_groups`, run on every set change):
+  named after the set, its members are the set's project cards (a service in two sets is split into
+  project cards), marked `share_set`; the group API refuses to change its members or delete it, and a
+  personal layout may move or fold it but not refill it. Sets are made from templates (`SET_TEMPLATES`:
+  jobboard, manage) by a manager or a project admin (`/api/share-sets/make`).
+  A project admin sees Share sets read-only and may only make (or fill up their own) sets from a template.
+- **One install for every rack-framed service:** the catalog's `rack` entry carries `with: [log, pipeline]`
+  (`store._chain`), so installing or updating rack services also does lilak_log (parameters) and
+  lilak_pipeline (jobboard); those entries are `part_of: rack` and not offered on their own.
 - **A multi-project service can be drawn as one card per project** (right-click its card; `home.json`
   `split_cards`, expanded by `projects.split_cards` in `/api/services`). A project card is the service with
   `project_card` + `entry_project`, its key is `svc/proj` in group members and the home order, so its projects

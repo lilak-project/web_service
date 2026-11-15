@@ -20,5 +20,6 @@
   "icon": "pulse",
   "color": "#d6336c",
   "autostart": true,
-  "live": true
+  "live": true,
+  "look": "neon"
 }

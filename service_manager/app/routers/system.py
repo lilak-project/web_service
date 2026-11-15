@@ -58,6 +58,31 @@ def set_ports(body: PortBody, _: models.User = Depends(require_portal_admin)):
     return _port_status()
 
 
+def _signup() -> dict:
+    return {"domains": settings_store.signup_domains(), "admin_codes": settings_store.admin_codes_open_signup(),
+            "env_default": list(config.SIGNUP_ALLOWED_DOMAINS)}
+
+
+@router.get("/signup")
+def get_signup(_: models.User = Depends(require_portal_admin)):
+    """Who may sign up: the email domains that need no invite code."""
+    return _signup()
+
+
+class SignupBody(BaseModel):
+    domains: list[str] = []
+    admin_codes: bool = False
+
+
+@router.put("/signup")
+def set_signup(body: SignupBody, _: models.User = Depends(require_portal_admin)):
+    try:
+        settings_store.set_signup(body.domains, body.admin_codes)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return _signup()
+
+
 def _running() -> list[tuple[str, str]]:
     """(service, project) for every process the portal runs now; project "" = the service itself."""
     out = []

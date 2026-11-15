@@ -23,6 +23,7 @@ const ANIM_MS = 260
  *   children  — revealed under the header when `open`.
  *
  * toggleable=false → header is inert (e.g. a Home card you can only "Request").
+ * oneLine=true     → the title and its badges stay on one line; a long title is cut (…).
  * manage=true      → dashed border (Home admin manage mode).
  * divider=true     → a top rule between header and children.
  * padding/titleSize → per-surface sizing (Home service cards run larger than the
@@ -34,7 +35,7 @@ export default function ExpandBox({
   padding = '8px 14px', titleSize = 'var(--fs-medium, 14px)', titleWeight = 600, radius = 12,
   // handle: rendered in the caret's place (a drag grip in manage mode); clicks on
   // it do not toggle. outerProps: spread on the box itself (drag/drop handlers).
-  handle = null, outerProps = {}, borderColor = null,
+  handle = null, outerProps = {}, borderColor = null, oneLine = false,
 }) {
   // `render` = children mounted; `grown` = grid expanded. Open: mount now, then grow
   // once the body has mounted (a frame later, so 0fr paints first and the transition
@@ -80,8 +81,10 @@ export default function ExpandBox({
         )}
         {icon != null && <div style={{ flexShrink: 0, display: 'flex' }}>{icon}</div>}
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: titleSize, fontWeight: titleWeight }}>{title}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: oneLine ? 'nowrap' : 'wrap' }}>
+            <span style={{ fontSize: titleSize, fontWeight: titleWeight,
+              ...(oneLine ? { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } : {}) }}
+              title={oneLine && typeof title === 'string' ? title : undefined}>{title}</span>
             {badges}
           </div>
           {subtitle != null && <div style={{ fontSize: 'var(--fs-small, 13px)', color: 'var(--dock-text-muted)', marginTop: 0, lineHeight: 1.25 }}>{subtitle}</div>}

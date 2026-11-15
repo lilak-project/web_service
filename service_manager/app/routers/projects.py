@@ -67,6 +67,9 @@ def raw_service(name: str) -> dict:
         "badge": caps.get("badge") or False,
         # The one project the other services see of it (registry.link_project).
         "link_project": registry.link_project(name, manifest),
+        # Which look it is drawn in, for the account menu's lists: "neon" (DAQ screens) is
+        # said by the manifest; rack is the racklist services; anything else is dock.
+        "look": manifest.get("look") or "",
         "order": manifest.get("order", 1000),      # admin-set display order (manage mode)
         "autostart": bool(manifest.get("autostart")),   # portal brings it up on ITS start
         # Answers GET /api/live with a few compact numbers for the cover's live mode.
@@ -111,6 +114,22 @@ def api_projects(user=Depends(require_portal_user), db: Session = Depends(get_db
         seen = {s["name"] for s in list_services(user, db)}
         rows = [r for r in rows if r["name"] in seen]
     return prefs.with_entries(user, rows)
+
+
+def entry_labels(rows: list[dict]) -> list[dict]:
+    """A service card that opens one project directly (open directly / main
+    project) is named after that project, the way a project card is; the
+    service's own name moves to `service_label`."""
+    from .. import project_runtime as pr
+    for r in rows:
+        proj = r.get("entry_project") if r.get("multi_project") and not r.get("project_card") else ""
+        if not proj:
+            continue
+        p = next((x for x in pr.list_projects(r["name"]) if x["name"] == proj), None)
+        if p:
+            r.update(label=p["label"] or p["name"], labels=None,
+                     service_label=r.get("label"), service_labels=r.get("labels"))
+    return rows
 
 
 def split_cards(rows: list[dict], user, db: Session) -> list[dict]:

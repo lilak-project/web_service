@@ -26,7 +26,7 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
-from . import config, registry
+from . import config, registry, security
 from .adapters.base import (clear_cooldown, cooldown_active, health_ok, port_alive,
                             read_running_port, reserve_port, set_cooldown, start_lock,
                             write_pid)
@@ -181,6 +181,7 @@ def start_project(svc: str, proj: str) -> dict:
             "PORTAL_PROJECT_DATA": str(d),
             "PORTAL_DATA_ROOT": str(config.DATA_ROOT),
             "PORTAL_PORT": str(config.PORTAL_PORT),
+            "PORTAL_SERVICE_KEY": security.service_key(svc),   # asks /api/delegate as itself
             **{k: _sub(v) for k, v in (start.get("env") or {}).items()},
         }
         # Child output → the project dir's service.log (kept across starts) instead

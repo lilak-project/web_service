@@ -9,8 +9,15 @@ so they follow the person to any browser:
     favTags [tag, …] — the tags starred, first in every tags tab
     recent  ["svc" | "svc/project", …] — last opened, newest first (home)
     density 'compact' — the narrower service bar; absent means the wide one
+    theme   'dark' — NEON's pages and the rack services in their dark theme; absent
+            means bright. Written to the origin's localStorage (`lilak.theme`) on
+            sign-in, which those pages read.
     layout  this account's own service bar (order, groups, hidden, names);
             absent means the manager's default arrangement
+    zone    the time zone a rack calendar reads and writes times in (IANA,
+            'America/Chicago'); absent means the service's own (activity: Seoul)
+    zones   [{zone, name}] — the zones that menu offers, in order (picked on its
+            map); absent means the kit's five
 """
 from __future__ import annotations
 

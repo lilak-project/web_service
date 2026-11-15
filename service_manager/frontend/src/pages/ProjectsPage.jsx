@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button, Icon, PROJECT_ICONS } from 'lilak-ui'
-import { passkeyLogin, passkeyRegister, passkeySupported, passkeyCancelled, hasPasskeyHere, passkeyAutofill } from '../passkey'
+import { passkeyOptions, passkeyAsk, passkeyRegister, passkeySupported, passkeyCancelled, hasPasskeyHere, passkeyAutofill } from '../passkey'
 import { launcher, errText, store, PORTAL_TOKEN_KEY } from '../api'
 import { useLang } from '../context/LangContext'
 import SidebarPortal from './portal/SidebarPortal'
+import MobilePortal from './portal/MobilePortal'
 import { Panel, Field, FieldActions, fieldInput, fieldMuted } from './portal/Field'
 import { notify } from './portal/settingsMsg'
 
@@ -62,7 +63,7 @@ function setPortalToken(token) {
   }
 }
 
-export function AuthCard({ t, onAuthed, needsSetup, info }) {
+export function AuthCard({ t, onAuthed, needsSetup, info, phone }) {
   const [mode, setMode] = useState('login')   // 'login' | 'signup'
   const [f, setF] = useState({ username: '', password: '', email: '', invite_code: '' })
   const [err, setErr] = useState('')
@@ -157,7 +158,40 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
     } finally { setBusy(false) }
   }
 
-  // First run: no accounts exist, so there is nothing to sign in to and no point
+  // The two modes live in the panel's own strip — the choice happens where the
+  // title would be, not as a pair of buttons wedged in beside it.
+  // Waiting quietly: the username field's autofill lists this host's passkeys,
+  // and picking one asks for Touch ID — no button press first. Browsers do not
+  // let a page listen for a finger on its own; this is the nearest they allow.
+  const quiet = useRef(null)              // the waiting request's AbortController
+  // The sign-in challenge is fetched when the card appears, not on the click: the
+  // button then asks the device inside the click itself (see passkeyAsk). The quiet
+  // wait and the button share it — whichever reaches the server first uses it up.
+  const pre = useRef(null)
+  const fresh = () => !!pre.current && !pre.current.used && Date.now() - pre.current.at < 8 * 60 * 1000
+  const prepare = async () => { if (!fresh()) pre.current = await passkeyOptions(); return pre.current }
+  const [quietRun, setQuietRun] = useState(0)
+  useEffect(() => {
+    if (signup || pending || needsSetup || offer || !passkeySupported()) return
+    const ac = new AbortController()
+    quiet.current = ac
+    prepare()
+      .then(async (p) => {
+        if (ac.signal.aborted || !(await passkeyAutofill()) || ac.signal.aborted) return
+        await finish((await passkeyAsk(p, { conditional: true, signal: ac.signal })).access_token)
+      })
+      .catch((e2) => {
+        if (ac.signal.aborted || passkeyCancelled(e2)) return
+        const detail = e2?.response?.data?.detail
+        setErr((typeof detail === 'string' && detail) || t('passkey_login_fail'))
+      })
+    // The server keeps a challenge ten minutes: a card left open starts over with a new one.
+    const again = setTimeout(() => setQuietRun((n) => n + 1), 8 * 60 * 1000)
+    return () => { clearTimeout(again); ac.abort() }
+  }, [signup, pending, needsSetup, offer, quietRun])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // First run (after every hook, so the count never changes when it flips):
+  // no accounts exist, so there is nothing to sign in to and no point
   // offering sign-up — just set the built-in superuser's password.
   if (needsSetup) {
     return (
@@ -177,36 +211,30 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
     )
   }
 
-  // The two modes live in the panel's own strip — the choice happens where the
-  // title would be, not as a pair of buttons wedged in beside it.
-  // Waiting quietly: the username field's autofill lists this host's passkeys,
-  // and picking one asks for Touch ID — no button press first. Browsers do not
-  // let a page listen for a finger on its own; this is the nearest they allow.
-  const quiet = useRef(null)
-  useEffect(() => {
-    if (signup || pending || needsSetup || offer) return
+  // No username: the device offers the passkeys it holds for this host.
+  // The quiet wait is aborted and the device asked in the same breath, as browsers
+  // document it; waiting for the abort to settle, or fetching the challenge first,
+  // put the request outside the click and Safari refused it without a word.
+  // The card is NOT locked meanwhile: a browser that never answers (Safari can hang a
+  // request) must not leave the password form dead; pressing again starts over.
+  function withPasskey() {
+    setErr('')
+    quiet.current?.abort()
     const ac = new AbortController()
     quiet.current = ac
-    passkeyAutofill().then((ok) => ok && passkeyLogin({ conditional: true, signal: ac.signal })
-      .then((r) => finish(r.access_token))
+    const t0 = Date.now()
+    const ask = fresh() ? passkeyAsk(pre.current, { signal: ac.signal }) : prepare().then((p) => passkeyAsk(p, { signal: ac.signal }))
+    ask.then((r) => finish(r.access_token))
       .catch((e2) => {
-        if (ac.signal.aborted || passkeyCancelled(e2)) return
+        // Refused before anyone could have answered: not a person's cancel but the browser
+        // itself (an app's built-in browser with no passkey sheet, a request outside a click).
+        if (ac.signal.aborted) return
+        if (e2?.name === 'NotAllowedError' && Date.now() - t0 < 1000) { setErr(`${t('passkey_blocked')} (${e2.message})`); return }
+        if (passkeyCancelled(e2)) return
         const detail = e2?.response?.data?.detail
-        setErr((typeof detail === 'string' && detail) || t('passkey_login_fail'))
-      }))
-    return () => ac.abort()
-  }, [signup, pending, needsSetup, offer])   // eslint-disable-line react-hooks/exhaustive-deps
-
-  // No username: the device offers the passkeys it holds for this host.
-  async function withPasskey() {
-    quiet.current?.abort()        // one WebAuthn request at a time
-    setBusy(true); setErr('')
-    try { await finish((await passkeyLogin()).access_token) }
-    catch (e2) {
-      if (passkeyCancelled(e2)) return
-      const detail = e2?.response?.data?.detail
-      setErr((typeof detail === 'string' && detail) || t('passkey_login_fail'))
-    } finally { setBusy(false) }
+        setErr((typeof detail === 'string' && detail) || `${t('passkey_login_fail')} (${e2?.name || ''}: ${e2?.message || ''})`)
+      })
+      .finally(() => { if (!ac.signal.aborted) setQuietRun((n) => n + 1) })   // and wait quietly again
   }
 
   const tab = (m, label) => (
@@ -298,7 +326,7 @@ export function AuthCard({ t, onAuthed, needsSetup, info }) {
           )}
           {!signup && !pending && passkeySupported() && (
             <Button variant="secondary" disabled={busy} onClick={withPasskey}>
-              <Icon name="fingerprint" size={14} /> {t('passkey_login')}
+              <Icon name="fingerprint" size={phone ? 20 : 14} /> {t(phone ? 'passkey_login_short' : 'passkey_login')}
             </Button>
           )}
           {err && <span style={{ color: 'var(--dock-danger-text)' }}>{err}</span>}
@@ -347,6 +375,19 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState(null)   // null = loading
   const [homeCfg, setHomeCfg] = useState(null)     // manager: builtin overrides + card order
   const [groups, setGroups] = useState([])
+  // A phone: narrow, and not asked for the desktop view (MobilePortal's own switch).
+  const phoneQuery = '(max-width: 640px)'
+  const [phone, setPhone] = useState(() => {
+    try { if (localStorage.getItem('lilak-desktop') === '1') return false } catch { /* private mode */ }
+    return typeof window !== 'undefined' && window.matchMedia?.(phoneQuery).matches
+  })
+  useEffect(() => {
+    const m = window.matchMedia?.(phoneQuery)
+    if (!m) return undefined
+    const on = () => { let d = false; try { d = localStorage.getItem('lilak-desktop') === '1' } catch { /* */ } setPhone(m.matches && !d) }
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [])
   const [layout, setLayout] = useState(null)              // prefs.layout: this account's own bar
   const [layoutTarget, setLayoutTarget] = useState('mine') // a manager arranges 'mine' or the shared 'default'
   const layoutRef = useRef(null)
@@ -494,7 +535,9 @@ export default function ProjectsPage() {
   // manage mode which of the two it is arranging (layoutTarget).
   const mine = !!layout && !(isManager && layoutTarget === 'default')
   const named = mine
-    ? named0.map((c) => { const k = cardKey(c); return { ...c, hidden: layout.hidden.includes(k),
+    // A card this portal hides (home.json, a set's project_manager) stays hidden in
+    // an account's own bar too; the account's list only hides more.
+    ? named0.map((c) => { const k = cardKey(c); return { ...c, hidden: !!c.hidden || layout.hidden.includes(k),
       label: layout.labels[k] || c.label, my_label: layout.labels[k] || '', default_label: c.label } })
     : named0
   const cardsAll = sortByHome(named, homeCfg?.order || [])
@@ -516,8 +559,16 @@ export default function ProjectsPage() {
   const looseG = groups.find((g) => g.loose) || { id: 'none', loose: true, name: '', members: [] }
   // The layout's groups stand in for the shared ones, and its order for the shared order;
   // anything the layout has never seen (a service added since) keeps its default place, after.
+  // A share set's group is fixed: its members follow the set, for everyone. An
+  // account's own layout may move it and fold it, never refill it.
+  const fixedGroups = groups.filter((g) => g.share_set)
+  const fixedKeys = new Set(fixedGroups.flatMap((g) => g.members || []))
+  const fixedIds = new Set(fixedGroups.map((g) => g.id))
   const shownGroups = mine
-    ? [...layout.groups.map((g) => ({ ...g, label: g.name, personal: true })), { ...looseG, hidden: !!layout.looseHidden }]
+    ? [...fixedGroups,
+      ...layout.groups.filter((g) => !g.share_set && !fixedIds.has(g.id))
+        .map((g) => ({ ...g, members: g.members.filter((k) => !fixedKeys.has(k)), label: g.name, personal: true })),
+      { ...looseG, hidden: !!layout.looseHidden }]
       .map((g) => ({ ...g, order: layout.order.indexOf(groupKey(g)) }))
     : groups
   const fullOrder = mine
@@ -531,7 +582,7 @@ export default function ProjectsPage() {
   // The first change starts from what the account was looking at: the default.
   const snapshot = () => ({
     order: fullOrder0,
-    groups: groups.filter((g) => !g.loose).map((g) => ({ id: g.id, name: g.label || g.name || '', members: [...(g.members || [])], hidden: !!g.hidden })),
+    groups: groups.filter((g) => !g.loose && !g.share_set).map((g) => ({ id: g.id, name: g.label || g.name || '', members: [...(g.members || [])], hidden: !!g.hidden })),
     hidden: named0.filter((c) => c.hidden).map(cardKey), labels: {}, looseHidden: !!looseG.hidden,
   })
   const writeMine = isManager ? layoutTarget === 'mine' : true
@@ -562,8 +613,10 @@ export default function ProjectsPage() {
   }
 
   // ── the writes the sidebar's manage mode makes ──
+  const lockedMsg = () => notify(t('p_group_fixed'), 'bad')
   async function regroup(key, gid) {
     if (!key || key.startsWith('#g:')) return
+    if (fixedKeys.has(key) || fixedIds.has(gid)) return lockedMsg()
     if (writeMine) {
       return saveLayout((L) => { dropFrom(L, key); const g = L.groups.find((x) => x.id === gid); if (g) g.members.push(key); return L })
     }
@@ -581,13 +634,21 @@ export default function ProjectsPage() {
   // A band draws its cards in its group's member order: a move inside a group
   // is that list, rewritten.
   async function setMembers(gid, members) {
+    if (fixedIds.has(gid) || members.some((k) => fixedKeys.has(k))) return lockedMsg()
     if (writeMine) {
       return saveLayout((L) => { for (const k of members) dropFrom(L, k); const g = L.groups.find((x) => x.id === gid); if (g) g.members = members; return L })
     }
     try { await launcher.put(`/admin/service-groups/${gid}`, { members }); await refresh() }
     catch { await refresh() }
   }
+  async function deleteGroup(id) {
+    if (fixedIds.has(id)) return lockedMsg()
+    if (writeMine) return personal.deleteGroup(id)
+    try { await launcher.delete(`/admin/service-groups/${id}`); await refresh() }
+    catch (e) { notify(errText(e, t('p_failed')), 'bad') }
+  }
   async function createGroup(name, members) {
+    members = (members || []).filter((k) => !fixedKeys.has(k))
     if (writeMine) {
       const id = 'm' + Math.random().toString(36).slice(2, 9)
       return saveLayout((L) => {
@@ -623,6 +684,8 @@ export default function ProjectsPage() {
   // Signed out: the bar lists the services a manager marked PUBLIC (an untouched
   // portal has none, so the bar is simply empty) and the panel is the sign-in.
   if (!user) {
+    const authCard = <AuthCard t={t} info={portalInfo} phone={phone} needsSetup={!!portalInfo?.needs_setup} onAuthed={(u) => setUser(u)} />
+    if (phone) return <MobilePortal info={portalInfo} authCard={authCard} />
     return (
       <SidebarPortal
         user={null} isManager={false} cards={publicCards.map(inLang)} iconFor={iconFor}
@@ -637,13 +700,19 @@ export default function ProjectsPage() {
   // is reachable through one route and invisible on the cover.
   const at = (c) => { const i = fullOrder.indexOf(cardKey(c)); return i < 0 ? 9999 : i }
   const sideCards = [...cardsAll].sort((a, b) => at(a) - at(b))
+  // A phone gets its own cover (MobilePortal); "Use the desktop view" there sets lilak-desktop.
+  if (phone) {
+    return (
+      <MobilePortal user={user} isManager={isManager} info={portalInfo} onLogout={logout} />
+    )
+  }
   return (
     <SidebarPortal
       user={user} isManager={isManager} cards={sideCards} iconFor={iconFor}
       groups={shownGroups.map(inLang)} liveCards={liveCards} links={links?.links || []}
       fullOrder={fullOrder} personal={personal}
       onLogout={logout} onRefresh={refresh}
-      onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup} onSetMembers={setMembers}
+      onSaveOrder={saveOrder} onRegroup={regroup} onCreateGroup={createGroup} onSetMembers={setMembers} onDeleteGroup={deleteGroup}
       settingsTab={settingsTab} onSettingsTab={setSettingsTab} info={portalInfo} homeIcon={homeIcon}
     />
   )

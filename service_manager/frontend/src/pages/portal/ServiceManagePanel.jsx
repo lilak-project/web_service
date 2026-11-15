@@ -200,11 +200,13 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
           <span style={fieldMuted}>{tr("p_what_the_card_shows_empty")}</span>
         </FieldActions>
 
-        <Field label={tr("p_order")}>
-          <Button variant="secondary" disabled={first} onClick={() => onMove(-1)}><Icon name="caret-up" size={15} /></Button>
-          <Button variant="secondary" disabled={last} onClick={() => onMove(1)}><Icon name="caret-down" size={15} /></Button>
-          <span style={fieldMuted}>{tr("p_dragging_works_too")}</span>
-        </Field>
+        {onMove && (   /* the sidebar's order; the account menu's service lists have none */
+          <Field label={tr("p_order")}>
+            <Button variant="secondary" disabled={first} onClick={() => onMove(-1)}><Icon name="caret-up" size={15} /></Button>
+            <Button variant="secondary" disabled={last} onClick={() => onMove(1)}><Icon name="caret-down" size={15} /></Button>
+            <span style={fieldMuted}>{tr("p_dragging_works_too")}</span>
+          </Field>
+        )}
       </Panel>
 
       <Panel title={tr("p_on_the_cover")}>

@@ -224,7 +224,26 @@ def _rollback(job_id: str, repo_dir: Path) -> None:
         _log(job_id, f"⚠ 정리 실패: {e}")
 
 
+def _chain(entry: dict) -> list[dict]:
+    """An entry and the ones installed with it (`with`): rack services bring the
+    other rack-framed repos (log, pipeline), so one install is every one of them."""
+    return [entry] + [e for e in (_entry(n) for n in entry.get("with") or []) if e]
+
+
 def _run_install(job_id: str, entry: dict) -> None:
+    """Install an entry and the ones it brings, in order; stop at the first failure."""
+    for e in _chain(entry):
+        if _registered(e):
+            _log(job_id, f"· {e['name']}: 이미 등록됨 — 건너뜀")
+            continue
+        _log(job_id, f"── {e.get('label') or e['name']}")
+        _install_one(job_id, e)
+        if _jobs.get(job_id, {}).get("status") == "error":
+            return
+    _set(job_id, status="done")
+
+
+def _install_one(job_id: str, entry: dict) -> None:
     repo_dir = SERVICES_ROOT / entry["dir"]
 
     # In the container the code is ALREADY here — the image bakes every catalog
@@ -240,7 +259,7 @@ def _run_install(job_id: str, entry: dict) -> None:
         _log(job_id, f"· 코드가 이미 있습니다 ({repo_dir}) — 내려받기/빌드 없이 등록만 합니다")
         if not all(_register(job_id, n, entry) for n, _ in members):
             return _set(job_id, status="error", error="서비스 등록 실패")
-        return _set(job_id, status="done")
+        return
 
     # Source install (dev machine, or a service the image does not carry).
     git = _tool("git")
@@ -282,10 +301,22 @@ def _run_install(job_id: str, entry: dict) -> None:
         return fail("백엔드 의존성 설치 실패")
     if not all(_register(job_id, n, entry) for n, _ in members):
         return fail("서비스 등록 실패")
-    _set(job_id, status="done")
 
 
 def _run_update(job_id: str, entry: dict) -> None:
+    """Update an entry and the ones installed with it."""
+    for e in _chain(entry):
+        if not (SERVICES_ROOT / e["dir"]).exists():
+            continue
+        _log(job_id, f"── {e.get('label') or e['name']}")
+        _update_one(job_id, e)
+        if _jobs.get(job_id, {}).get("status") == "error":
+            return
+    _log(job_id, "✓ 업데이트 완료 — 실행 중이면 서비스를 재시작하세요")
+    _set(job_id, status="done")
+
+
+def _update_one(job_id: str, entry: dict) -> None:
     """Refresh an installed service: git pull --ff-only, then rebuild + reinstall deps.
     ff-only so local edits/divergence are never rewritten — the operator sorts those
     out by hand. The manifest is left alone (it may carry admin edits)."""
@@ -305,8 +336,6 @@ def _run_update(job_id: str, entry: dict) -> None:
         return _set(job_id, status="error", error="프론트엔드 빌드 실패")
     if not _pip_install(job_id, repo_dir, entry):
         return _set(job_id, status="error", error="백엔드 의존성 설치 실패")
-    _log(job_id, "✓ 업데이트 완료 — 실행 중이면 서비스를 재시작하세요")
-    _set(job_id, status="done")
 
 
 def _run_build_portal(job_id: str, pull: bool) -> None:
@@ -387,6 +416,7 @@ def store_list(_: models.User = Depends(require_portal_admin)):
             "code_present": (SERVICES_ROOT / e["dir"]).exists(),
             "registered": _registered(e),
             "bundle": e.get("bundle") or [],
+            "with": e.get("with") or [], "part_of": e.get("part_of"),
         })
     return {"services": out, "stack_root": str(SERVICES_ROOT)}
 
@@ -400,7 +430,9 @@ def store_install(body: InstallBody, _: models.User = Depends(require_portal_adm
     entry = _entry((body.name or "").strip())
     if not entry:
         raise HTTPException(404, "카탈로그에 없는 서비스입니다.")
-    if _registered(entry):
+    if entry.get("part_of"):
+        entry = _entry(entry["part_of"]) or entry       # installed with its parent, as one
+    if all(_registered(e) for e in _chain(entry)):
         raise HTTPException(409, f"'{entry['name']}' 이(가) 이미 등록되어 있습니다.")
     job_id = _spawn(_run_install, entry, name=entry["name"])
     return {"job_id": job_id, "name": entry["name"]}

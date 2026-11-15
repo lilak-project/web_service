@@ -5,6 +5,9 @@ import { Field, FieldActions, Panel, fieldInput, fieldMuted } from './Field'
 /** Manage sidebar, own layout: one card — this account's name for it, and hiding it. */
 export function MyCardPanel({ card, personal }) {
   const key = card.project_card ? `${card.name}/${card.project_card}` : card.name
+  // The name this card shows by default: for a project card that is the project's
+  // name, not the service's (card.name is the service id).
+  const def = card.default_label || card.label || card.name
   const [name, setName] = useState(card.my_label || '')
   useEffect(() => { setName(card.my_label || '') }, [key, card.my_label])
   return (
@@ -12,9 +15,9 @@ export function MyCardPanel({ card, personal }) {
       <h1 className="pl-mgtitle">{card.label || card.name}</h1>
       <Panel title={tr('p_my_card')} hint={tr('p_my_layout_only_me')}>
         <Field label={tr('p_my_name')}>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={card.default_label || card.name}
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={def}
             style={{ ...fieldInput, flex: 1 }} maxLength={80} />
-          <span style={fieldMuted}>{tr('p_my_name_hint', card.default_label || card.name)}</span>
+          <span style={fieldMuted}>{tr('p_my_name_hint', def)}</span>
         </Field>
         <FieldActions>
           <Button variant="primary" disabled={name.trim() === (card.my_label || '')}

@@ -86,6 +86,7 @@ DOCK입니다. 설명은 `lilak_ui/README.md`에 있습니다.
 | `portal/HandshakeRegister.jsx` | — | 모듈 |
 | `portal/HomeView.jsx` | 설정 | 모듈·채널·표시등 |
 | `portal/IconLabView.jsx` | 도구 | 모듈·표·채널 |
+| `portal/InboxView.jsx` | 설정 | 모듈·표·채널·표시등 |
 | `portal/InvitesAdmin.jsx` | 설정 | 모듈·표·채널·표시등 |
 | `portal/LinksView.jsx` | 도구 | 모듈·채널 |
 | `portal/NewServiceView.jsx` | 도구 | 모듈·표·채널·표시등 |

@@ -28,7 +28,7 @@ from ..models import (
     VIS_ADMIN, VIS_PRIVATE, VIS_PROTECTED, VIS_PUBLIC, DEFAULT_VISIBILITY,
     AccessRequest, Service, ServicePermission,
 )
-from .projects import list_raw_services, split_cards
+from .projects import entry_labels, list_raw_services, split_cards
 
 router = APIRouter(tags=["portal-services"])
 
@@ -108,7 +108,7 @@ def list_services(
     db: Session = Depends(get_db),
 ):
     # Which project a card opens straight away is the account's own choice.
-    out = split_cards(annotate_services(db, user, prefs.with_entries(user, list_raw_services())), user, db)
+    out = entry_labels(split_cards(annotate_services(db, user, prefs.with_entries(user, list_raw_services())), user, db))
     if not _is_admin(user):
         # Hidden in manage mode, or inside a group that is hidden as a whole.
         # "No group" hidden takes every service filed nowhere with it.
@@ -135,6 +135,12 @@ def create_access_request(
 ):
     name = body.service
     proj = (body.project or "").strip()
+    # Only for what exists: a made-up name would otherwise leave a service row and a
+    # request for a manager to puzzle over.
+    from .. import project_runtime
+    if name not in registry.list_service_names() or \
+            (proj and proj not in {p["name"] for p in project_runtime.list_projects(name)}):
+        raise HTTPException(status_code=404, detail="서비스를 찾을 수 없습니다.")
     svc = get_or_create_service(db, name)
     if svc.visibility == VIS_ADMIN and not _is_admin(user):
         raise HTTPException(status_code=404, detail="서비스를 찾을 수 없습니다.")
@@ -297,7 +303,7 @@ class PermissionBody(BaseModel):
     user_id: int
     service: str
     project: Optional[str] = ""   # "" = whole-service grant
-    admin: bool = False           # also make them a scoped admin of this scope
+    admin: Optional[bool] = None  # make (or unmake) them a scoped admin of this scope; None = leave as is
 
 
 @router.post("/api/admin/permissions", status_code=201)
@@ -313,7 +319,8 @@ def admin_grant(
         ServicePermission.project == proj,
     ).first()
     if exists:
-        exists.is_admin = bool(body.admin)     # idempotent: also toggles the admin flag
+        if body.admin is not None:             # a plain re-grant must not quietly take the admin flag away
+            exists.is_admin = body.admin
     else:
         db.add(ServicePermission(user_id=body.user_id, service_name=body.service, project=proj, is_admin=bool(body.admin)))
     for r in db.query(AccessRequest).filter(
@@ -378,12 +385,40 @@ def admin_list_permissions(
             for p in db.query(ServicePermission).all()]
 
 
+def _to_resolve(db: Session, user: models.User) -> list:
+    """The pending requests this account may answer: a manager all of them, a service or
+    project admin those for what they administer."""
+    return [r for r in db.query(AccessRequest).filter(AccessRequest.status == "pending").all()
+            if permissions.is_project_admin(db, user, r.service_name, r.project)]
+
+
+@router.get("/api/access-requests")
+def my_requests(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    """What the account card counts: requests waiting for this account's answer, and the
+    answers to its own that it has not looked at yet."""
+    seen = set(prefs.get(user).get("req_seen") or [])
+    mine = db.query(AccessRequest).filter(AccessRequest.user_id == user.id).order_by(AccessRequest.id.desc()).limit(20).all()
+    rows = [{"id": r.id, "service": r.service_name, "project": r.project, "status": r.status,
+             "created_at": r.created_at.isoformat() if r.created_at else None,
+             "unseen": r.status != "pending" and r.id not in seen} for r in mine]
+    return {"mine": rows, "unseen": sum(r["unseen"] for r in rows), "to_resolve": len(_to_resolve(db, user))}
+
+
+@router.post("/api/access-requests/seen")
+def my_requests_seen(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    rows = db.query(AccessRequest.id).filter(AccessRequest.user_id == user.id, AccessRequest.status != "pending") \
+        .order_by(AccessRequest.id.desc()).limit(20).all()
+    prefs.put(user, req_seen=[r.id for r in rows])
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/api/admin/access-requests")
 def admin_list_requests(
-    _: models.User = Depends(require_portal_admin),
+    user: models.User = Depends(require_portal_user),
     db: Session = Depends(get_db),
 ):
-    rows = db.query(AccessRequest).filter(AccessRequest.status == "pending").all()
+    rows = _to_resolve(db, user)
     users = {u.id: u for u in db.query(models.User).all()}
     return [
         {"id": r.id, "user_id": r.user_id,
@@ -401,11 +436,11 @@ class ResolveBody(BaseModel):
 @router.post("/api/admin/access-requests/{rid}")
 def admin_resolve_request(
     rid: int, body: ResolveBody,
-    _: models.User = Depends(require_portal_admin),
+    user: models.User = Depends(require_portal_user),
     db: Session = Depends(get_db),
 ):
     r = db.query(AccessRequest).filter(AccessRequest.id == rid).first()
-    if not r:
+    if not r or not permissions.is_project_admin(db, user, r.service_name, r.project):
         raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다.")
     if body.action == "approve":
         exists = db.query(ServicePermission).filter(

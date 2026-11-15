@@ -81,7 +81,7 @@ export default function StoreView({ onChanged }) {
   return (
     <div className="svc-mg">
       <Panel bare title={tr("p_service_catalogue")}
-        hint={items ? String(items.length) : '…'}>
+        hint={items ? String(items.filter((x) => !x.part_of).length) : '…'}>
         {/* A grid, not a flex line: fourteen rows only read as a list if the
             state, the description and the button start at the same x on each. */}
         <Row className="cols head" style={COLS}>
@@ -92,7 +92,11 @@ export default function StoreView({ onChanged }) {
           <span />
         </Row>
         {items === null && <Row className="empty">…</Row>}
-        {(items || []).map((s) => (
+        {/* A part installed with another (log and pipeline come with rack services)
+            is that row, not one of its own; the row counts as installed when every part is. */}
+        {(items || []).filter((x) => !x.part_of).map((x) => ({
+          ...x, registered: x.registered && (x.with || []).every((n) => (items || []).find((y) => y.name === n)?.registered),
+        })).map((s) => (
           <Row key={s.name} className="cols" style={COLS}>
             {/* The icon is the service's identity — it belongs to something that
                 exists on this portal. Until it is installed the row keeps the

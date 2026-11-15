@@ -15,7 +15,45 @@ import { notify } from './settingsMsg'
  */
 const input = fieldInput
 
-export default function InvitesAdmin({ services, onChanged }) {
+// Manager-only: which email domains sign up without a code. Saved in the portal, so it
+// replaces the server's SIGNUP_ALLOWED_DOMAINS without a restart.
+function SignupDomains() {
+  const [d, setD] = useState(null)
+  const [text, setText] = useState('')
+  const [codes, setCodes] = useState(false)
+  const fail = (e) => notify(e?.response?.data?.detail || tr('p_failed'), 'bad')
+  const take = (r) => { setD(r.data); setText(r.data.domains.join(', ')); setCodes(r.data.admin_codes) }
+  useEffect(() => { launcher.get('/admin/system/signup').then(take).catch(fail) }, [])
+  if (!d) return null
+  const list = text.split(/[\s,]+/).filter(Boolean)
+  const dirty = list.join(',') !== d.domains.join(',') || codes !== d.admin_codes
+  const save = () => launcher.put('/admin/system/signup', { domains: list, admin_codes: codes })
+    .then((r) => { take(r); notify(tr('p_saved'), 'ok') }).catch(fail)
+  return (
+    <Panel title={tr('p_signup_title')}>
+      <Field label={tr('p_signup_domains')}>
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="ibs.re.kr, skku.edu"
+          style={{ ...input, flex: 1, minWidth: 260 }} aria-label={tr('p_signup_domains')} />
+      </Field>
+      <Field label={tr('p_what_this_is')}>
+        <span style={fieldMuted}>{list.length ? tr('p_signup_hint') : tr('p_signup_open')}</span>
+      </Field>
+      <Field label={tr('p_signup_admin_codes')}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+          <input type="checkbox" checked={codes} onChange={(e) => setCodes(e.target.checked)} />
+          {tr('p_signup_admin_codes_hint')}
+        </label>
+      </Field>
+      <FieldActions>
+        <Button variant="primary" disabled={!dirty} onClick={save}>{tr('p_save')}</Button>
+      </FieldActions>
+    </Panel>
+  )
+}
+
+// `scopes` (a project admin's, not a manager's): codes only for those service/project pairs —
+// no groups, no skipping email verification, and such a code does not open sign-up by itself.
+export default function InvitesAdmin({ services, onChanged, scopes }) {
   const { lang } = useLang()
   const [codes, setCodes] = useState([])
   const [groups, setGroups] = useState([])
@@ -25,7 +63,7 @@ export default function InvitesAdmin({ services, onChanged }) {
 
   async function load() {
     try {
-      const [c, g] = await Promise.all([launcher.get('/admin/invite-codes'), launcher.get('/admin/groups')])
+      const [c, g] = await Promise.all([launcher.get('/admin/invite-codes'), scopes ? { data: [] } : launcher.get('/admin/groups')])
       setCodes(c.data); setGroups(g.data)
     } catch (e) { notify(e?.response?.data?.detail || 'load failed', 'bad') }
   }
@@ -62,17 +100,26 @@ export default function InvitesAdmin({ services, onChanged }) {
 
   return (
     <div>
+      {!scopes && <SignupDomains />}
       {/* create — one aligned control per row (label column + input column) */}
       <Panel title={tr("p_new_code")}>
+        {!scopes && (
         <Field label={tr("p_kind")}>
           <Select value={f.kind} onChange={setF1('kind')} style={{ ...input, maxWidth: 220 }}>
             <option value="project">{tr("p_project_service")}</option>
             <option value="group">{tr("p_group_2")}</option>
           </Select>
         </Field>
+        )}
 
         <Field label={tr("p_target")}>
-          {f.kind === 'project' ? (
+          {scopes ? (
+            <Select value={f.service ? `${f.service}/${f.project}` : ''} style={{ ...input, maxWidth: 300 }}
+              onChange={(e) => { const [service, project = ''] = e.target.value.split('/'); setF((s) => ({ ...s, service, project })) }}>
+              <option value="">{tr("p_pick_a_target")}</option>
+              {scopes.map((a) => <option key={`${a.service}/${a.project}`} value={`${a.service}/${a.project || ''}`}>{a.service}{a.project ? '/' + a.project : ''}</option>)}
+            </Select>
+          ) : f.kind === 'project' ? (
             <>
               <Select value={f.service} onChange={(e) => pickSvc(e.target.value)} style={{ ...input, maxWidth: 150 }}>
                 <option value="">{tr("p_service_3")}</option>
@@ -113,10 +160,12 @@ export default function InvitesAdmin({ services, onChanged }) {
 
         <Field label={tr("p_how_many")}>
           <input type="number" min={1} max={100} value={f.count} onChange={setF1('count')} style={{ ...input, width: 80 }} />
+          {!scopes && (
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
             <input type="checkbox" checked={!!f.no_verify} onChange={(e) => setF((s) => ({ ...s, no_verify: e.target.checked }))} />
             {tr("p_skip_email_verify")}
           </label>
+          )}
         </Field>
 
         <FieldActions>
@@ -127,7 +176,7 @@ export default function InvitesAdmin({ services, onChanged }) {
       {/* list — one ROW per issued code, so ten codes read as a list and not as
           ten boxes. The code, what it grants, its state, what you can do to it. */}
       <Panel bare title={tr("p_issued_codes")} hint={String(codes.length)}
-        right={codes.some((c) => c.status === 'expired')
+        right={!scopes && codes.some((c) => c.status === 'expired')
           ? <Button variant="dangerSoft" onClick={pruneExpired}>{tr("p_delete_expired")}</Button>
           : null}>
         {codes.length === 0 && <Row className="empty">{tr("p_no_codes")}</Row>}

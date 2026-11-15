@@ -133,6 +133,10 @@ def _set_split(d: dict, name: str, on: bool) -> None:
     m = registry.read_manifest(name)
     if not (m.get("capabilities") or {}).get("multi_project"):
         raise HTTPException(400, "프로젝트가 여러 개인 서비스만 나눌 수 있습니다.")
+    # A service with projects in two share sets stays one card per project: each set's fixed
+    # group holds its own, and one card could sit in only one of them.
+    if not on and sum(1 for s in registry.share_sets()[0] if name in (s.get("members") or {})) > 1:
+        raise HTTPException(409, "두 공유 세트에 걸친 서비스는 프로젝트별 카드로 둡니다.")
     from .. import project_runtime as pr
     projs = [p["name"] for p in pr.list_projects(name)]
     current = set(d["split_cards"])

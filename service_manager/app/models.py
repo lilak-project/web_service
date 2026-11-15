@@ -231,3 +231,68 @@ class Passkey(Base):
     name = Column(String(64), nullable=False, default="")
     created_at = Column(DateTime, default=_now)
     last_used_at = Column(DateTime, nullable=True)
+
+
+class LlmKey(Base):
+    """An AI provider key the portal holds for platform agents. The secret is
+    encrypted (app/llm_keys.py) and never leaves the portal except to the agent
+    worker, for one run. `uses`: where it may be spent — "portal" (the default
+    for any project) and/or "svc/proj"; a project's own key wins over the default.
+    kind "login" holds no secret: the worker's machine is signed in to the CLI
+    itself (a subscription, for testing)."""
+    __tablename__ = "portal_llm_keys"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(64), nullable=False)
+    provider = Column(String(16), nullable=False)       # claude | openai
+    kind = Column(String(16), nullable=False)           # api | login
+    secret = Column(Text, nullable=True)                # Fernet token; None for login
+    hint = Column(String(16), nullable=False, default="")   # first characters, to recognise it
+    uses = Column(Text, nullable=False, default="[]")   # JSON list of "portal" | "svc/proj"
+    created_by = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=_now)
+    last_used_at = Column(DateTime, nullable=True)
+
+
+class AgentRun(Base):
+    """One job handed to a platform agent: who asked, for which project, with
+    which key, and what came of it. The worker (app/agent_worker.py) runs it."""
+    __tablename__ = "portal_agent_runs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    service = Column(String(128), nullable=False)
+    project = Column(String(128), nullable=False, default="")
+    provider = Column(String(16), nullable=False)
+    model = Column(String(64), nullable=False, default="")
+    approval = Column(String(16), nullable=False, default="human")   # human | similar | auto
+    task = Column(Text, nullable=False)
+    status = Column(String(16), nullable=False, default="queued", index=True)  # queued|running|done|failed
+    key_id = Column(Integer, nullable=True)
+    result = Column(Text, nullable=True)
+    tokens_in = Column(Integer, nullable=True)
+    tokens_out = Column(Integer, nullable=True)
+    cost_usd = Column(String(16), nullable=True)
+    created_at = Column(DateTime, default=_now)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+
+
+class ChatMessage(Base):
+    """A line in the portal chat (the speech bubbles over the cover). `room` is
+    "portal" (everyone signed in) or "svc/proj" (who may enter that project).
+    A message that asked an agent carries the run; its answer is read from it."""
+    __tablename__ = "portal_chat_messages"
+
+    id = Column(Integer, primary_key=True)
+    room = Column(String(260), nullable=False, index=True)
+    user_id = Column(Integer, nullable=True, index=True)
+    author_name = Column(String(128), nullable=False, default="")
+    body = Column(Text, nullable=False, default="")
+    reply_to_id = Column(Integer, nullable=True)
+    attachments_json = Column(Text, nullable=False, default="[]")
+    # Account ids this message @mentions, resolved when it was sent; 0 = @all.
+    mentions_json = Column(Text, nullable=False, default="[]")
+    run_id = Column(Integer, nullable=True)
+    deleted = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=_now)

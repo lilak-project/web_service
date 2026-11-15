@@ -63,3 +63,30 @@ def set_port_range(start: int, end: int) -> tuple[int, int]:
     set("service_port_start", str(start))
     set("service_port_end", str(end))
     return start, end
+
+
+# ── Who may sign up ───────────────────────────────────────────────────────────
+import re as _re
+
+_DOMAIN_RE = _re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
+
+
+def signup_domains() -> list[str]:
+    """Email domains that sign up without an invite code; none = anyone does. A manager's
+    saved list (Invite codes page) wins over SIGNUP_ALLOWED_DOMAINS, an empty one included."""
+    raw = get("signup_domains")
+    return list(config.SIGNUP_ALLOWED_DOMAINS) if raw is None else [d for d in raw.split(",") if d]
+
+
+def admin_codes_open_signup() -> bool:
+    """May a project admin's invite code let an address outside those domains sign up?"""
+    return get("signup_admin_codes") == "1"
+
+
+def set_signup(domains: list[str], admin_codes: bool) -> None:
+    clean = sorted({(d or "").strip().lower().lstrip("@") for d in domains} - {""})
+    bad = [d for d in clean if not _DOMAIN_RE.fullmatch(d)]
+    if bad:
+        raise ValueError(f"도메인 모양이 아닙니다: {', '.join(bad)}")
+    set("signup_domains", ",".join(clean))
+    set("signup_admin_codes", "1" if admin_codes else "0")

@@ -1,0 +1,80 @@
+/* MobilePortal — the cover on a phone. RACK colours, phone geometry: a top bar,
+   a scrolling body, a tab bar at the foot clear of the home indicator. */
+.mp-root {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  background: var(--dock-surface-2); color: var(--dock-text-primary);
+  font-family: var(--font-sans); font-size: var(--fs-medium);
+}
+.mp-bar {
+  flex: none; display: flex; align-items: center; gap: 10px;
+  min-height: 52px; padding: env(safe-area-inset-top, 0) 14px 0;
+  background: var(--dock-surface); border-bottom: 1px solid var(--divider);
+}
+.mp-host { display: flex; flex-direction: column; line-height: 1.2; font-weight: 600; }
+.mp-host small { font-family: var(--font-mono); font-size: var(--fs-tiny); font-weight: 400; color: var(--dock-text-muted); }
+.mp-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-plate); }
+.mp-back { display: grid; place-items: center; width: 36px; height: 36px; margin-left: -8px; border: 0; background: none; color: inherit; }
+
+.mp-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 14px 20px; }
+.mp-sec { margin-bottom: 20px; }
+.mp-sec h2 { margin: 0 0 8px; font-size: var(--fs-small); font-weight: 600; color: var(--dock-text-secondary); letter-spacing: .02em; }
+.mp-empty { color: var(--dock-text-muted); text-align: center; margin-top: 40px; }
+
+/* A list of rows: one tap each, at least 48px tall. */
+.mp-list { display: flex; flex-direction: column; background: var(--dock-surface); border: 1px solid var(--dock-border-strong); }
+.mp-row {
+  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 12px;
+  border: 0; border-top: 1px solid var(--divider); background: none; color: inherit; text-align: left; font: inherit;
+}
+.mp-row:first-child { border-top: 0; }
+.mp-row:active { background: var(--dock-surface-3); }
+.mp-rowtxt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mp-rowtxt b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-rowtxt small { color: var(--dock-text-secondary); font-size: var(--fs-small); }
+.mp-row.out { color: var(--dock-danger-text); }
+
+
+.mp-me { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.mp-me span { display: flex; flex-direction: column; }
+.mp-me small { color: var(--dock-text-secondary); }
+
+/* The foot bar: the sign-in card's folder tabs along the bottom. The chosen tab
+   is white and open into the page; the rest sit grey behind, ruled apart. */
+.mp-tabs {
+  flex: none; display: flex; padding-bottom: env(safe-area-inset-bottom, 0);
+  background: var(--dock-surface-2); border-top: 1px solid var(--dock-border-strong);
+}
+.mp-tabs > * { flex: 1 1 0; }
+.mp-tabs > * + * { border-left: 1px solid var(--dock-border-strong); }
+.mp-tabs button {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0 7px;
+  border-top: 0; border-right: 0; border-bottom: 0; border-radius: 0; background: none;
+  color: var(--dock-text-secondary); font: inherit; font-size: var(--fs-small);
+}
+.mp-tabs button[aria-pressed="true"] {
+  background: var(--dock-surface); color: var(--dock-text-emphasis);
+  margin-top: -1px; border-top: 1px solid var(--dock-surface);
+}
+
+
+/* Sign-in on a phone: the same RACK card on the grey ground, one size up.
+   min-height = the sign-up card's height at 375px, so the card is centred as sign-up and
+   sign-in starts at the same place. */
+.mp-auth {
+  display: flex; flex-direction: column;
+  --fs-medium: 18px; --fs-small: 16px; --rack-row: 48px;
+}
+.mp-auth-sp { flex: 1 0 12px; }
+.mp-auth-card { flex: none; min-height: 474px; }
+.mp-auth-host {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding-bottom: 6px;
+}
+.mp-auth-host b { font-weight: 600; font-size: 16px; }
+.mp-auth-host small { font-family: var(--font-mono); font-size: 14px; color: var(--dock-text-muted); }
+.mp-auth .set-auth { max-width: none !important; margin: 0 !important; }
+.mp-auth .set-host { display: none; }
+.mp-auth .set-panel { margin-bottom: 0; }
+.mp-root .mp-auth .set-panel .set-card input { height: 44px !important; min-height: 44px !important; font-size: 18px !important; }
+.mp-auth .set-card { grid-template-columns: 116px 1fr; }   /* 16px+: iOS does not zoom into the field */
+.mp-auth .set-card > div.set-actions button { flex: 1 1 100%; min-height: 48px; justify-content: center; font-size: var(--fs-medium) !important; }

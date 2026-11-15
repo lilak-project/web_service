@@ -89,6 +89,18 @@ def service_facts(name: str, manifest: dict, project: str = "") -> dict:
     }
 
 
+# Bright or dark (the account's, kept in this origin's localStorage `lilak.theme`
+# by the cover) on <html> before anything is drawn: a page that waited for its
+# own script to say so was drawn once in the other theme first. The rack reads
+# `data-lilak-theme="dark"`, NEON `data-neon-theme="bright"` (no attribute is
+# its dark); a page with neither theme reads neither. ("neon.theme" was NEON's
+# own key before the two shared one.) The cover also keeps a frame hidden until
+# its page has loaded (SidebarPortal `loaded`).
+THEME_JS = ("try{var d=document.documentElement,t=localStorage.getItem('lilak.theme')"
+            "||localStorage.getItem('neon.theme');"
+            "if(t==='dark')d.dataset.lilakTheme='dark';else d.dataset.neonTheme='bright'}catch(e){}")
+
+
 def inject_base(html: bytes, base_path: str, service: Optional[dict] = None) -> bytes:
     """Make a self-UI service work under a `<base_path>/` prefix: inject a
     `<base href>` (so relative assets resolve under the prefix) + `__PORTAL_BASE__`
@@ -104,7 +116,7 @@ def inject_base(html: bytes, base_path: str, service: Optional[dict] = None) -> 
     js = lambda v: json.dumps(v, ensure_ascii=False).replace("<", "\\u003c")
     extra = f'window.__PORTAL_SERVICE__={js(service)};' if service else ''
     inject = (f'<base href="{html_escape(base_path, quote=True)}/">'
-              f'<script>window.__PORTAL_BASE__={js(base_path)};{extra}</script>').encode()
+              f'<script>window.__PORTAL_BASE__={js(base_path)};{extra}{THEME_JS}</script>').encode()
     low = html.lower()
     i = low.find(b"<head>")
     if i != -1:
