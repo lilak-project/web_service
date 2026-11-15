@@ -88,6 +88,11 @@ class Chat(unittest.TestCase):
         say(self.user, "그냥 말"); say(leemin, "@lee 한 번 더"); say(lee, "@lee 내 말은 세지 않는다")
         self.assertEqual(c.get("/api/chat/unread", headers=lee).json()["rooms"], {"portal": {"unread": 2, "mentions": 1}})
         self.assertEqual(c.post("/api/chat/read", headers=lee, json={"room": "elog/exp1", "id": 1}).status_code, 403)
+        # A mention sitting in a room this account cannot enter is not counted (nor is the room looked up otherwise).
+        with SessionLocal() as db:
+            db.add(models.ChatMessage(room="elog/exp1", user_id=1, author_name="admin", body="@lee", mentions_json=f"[{ids['lee']}]"))
+            db.commit()
+        self.assertEqual(c.get("/api/chat/unread", headers=lee).json()["rooms"], {"portal": {"unread": 2, "mentions": 1}})
         # Paging back: the messages before one.
         older = c.get("/api/chat/messages", headers=lee, params={"room": "portal", "before": top["id"]}).json()["messages"]
         self.assertTrue(older and all(m["id"] < top["id"] for m in older))

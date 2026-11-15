@@ -69,8 +69,14 @@ def machine_caller(request, manifest: dict) -> bool:
     tok = security.bearer(request.headers.get("authorization"))
     # A PORTAL token that found no user here (expired, ended, or a delegated token
     # outside its scope) is refused, not handed on for the service to judge.
-    payload = security.decode_access_token(tok) if tok else None
-    return bool(tok) and not (payload or {}).get("portal")
+    # Read without checking: an expired one does not decode, and would otherwise look like
+    # some other service's bearer.
+    try:
+        from jose import jwt
+        claims = jwt.get_unverified_claims(tok) if tok else {}
+    except Exception:  # noqa: BLE001 — not a JWT at all: a service's own kind of token
+        claims = {}
+    return bool(tok) and not claims.get("portal")
 
 
 def _guard(request: Request, name: str) -> None:

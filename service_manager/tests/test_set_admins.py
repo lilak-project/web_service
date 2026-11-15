@@ -68,5 +68,38 @@ class SetAdmins(unittest.TestCase):
         self.assertEqual((len(rows), any(r.is_admin for r in rows)), (2, False))   # off as admin, way in kept
 
 
+    def test_zz_the_last_admin_stays_unless_a_manager_says(self):
+        off = lambda who, uid: c.post("/api/share-sets/admins", json={"set": "s1", "user_id": uid, "admin": False}, headers=who).status_code  # noqa: E731
+        self.assertEqual(off(self.pa, self.ids["pa"]), 409)                     # pa is the only one: not even themselves
+        c.post("/api/share-sets/admins", json={"set": "s1", "user_id": self.ids["new"], "admin": True}, headers=self.pa)
+        self.assertEqual(off(self.pa, self.ids["new"]), 200)                    # another admin remains (pa)
+        self.assertEqual(off(self.mgr, self.ids["pa"]), 200)                    # a manager may empty it
+
+    def test_zzz_a_service_a_set_hid_comes_back_when_it_leaves_every_set(self):
+        from app.routers import home, project_mgmt
+        project_mgmt._hide_joined(["project_manager"])
+        d = home._read(); d["hidden_services"].append("byhand"); home._write(d)
+        registry.write_share_sets([{"id": "s2", "name": "t", "members": {"project_manager": "p1", "note": "p1"}}])
+        project_mgmt._show_left()
+        self.assertIn("project_manager", home.hidden_services())                # still in a set
+        registry.write_share_sets([{"id": "s2", "name": "t", "members": {"note": "p1"}}])
+        project_mgmt._show_left()
+        self.assertEqual(home.hidden_services(), {"byhand"})                    # a manager's own hide is not undone
+
+    def test_zzzz_only_the_sets_project_card_is_hidden(self):
+        from app import config
+        from app.routers import home, project_mgmt, projects
+        for p in ("inset", "free"):
+            (config.DATA_ROOT / "project_manager" / "projects" / p).mkdir(parents=True, exist_ok=True)
+        registry.write_share_sets([{"id": "s3", "name": "u", "members": {"project_manager": "inset"}}])
+        project_mgmt._hide_joined(["project_manager"])
+        d = home._read(); d["split_cards"] = ["project_manager"]; home._write(d)
+        db = SessionLocal()
+        mgr = db.query(models.User).filter_by(role="manager").first()
+        cards = projects.split_cards([{"name": "project_manager", "multi_project": True, "hidden": True, "label": "p", "labels": None}], mgr, db)
+        db.close()
+        self.assertEqual({c["project_card"]: c["hidden"] for c in cards}, {"inset": True, "free": False})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

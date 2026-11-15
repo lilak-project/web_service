@@ -138,6 +138,8 @@ def split_cards(rows: list[dict], user, db: Session) -> list[dict]:
     from .home import split_cards as split_names
     from .. import project_runtime as pr
     split = split_names()
+    from .home import _read as _home
+    by_set, sets = set(_home().get("hidden_by_set") or []), registry.share_sets()[0]
     out: list[dict] = []
     for r in rows:
         ps = pr.list_projects(r["name"]) if r["name"] in split and r["multi_project"] else []
@@ -146,7 +148,11 @@ def split_cards(rows: list[dict], user, db: Session) -> list[dict]:
         if not ps:
             out.append(r)
             continue
-        out += [{**r, "project_card": p["name"], "entry_project": p["name"], "running": p["running"],
+        if r.get("hidden") and r["name"] in by_set:
+            # Hidden because it joined a set: that is the set's project; its other projects stay on the cover.
+            ps = [{**p, "shown": not any((st.get("members") or {}).get(r["name"]) == p["name"] for st in sets)} for p in ps]
+        out += [{**r, **({"hidden": False} if p.get("shown") else {}),
+                 "project_card": p["name"], "entry_project": p["name"], "running": p["running"],
                  "label": p["label"] or p["name"], "labels": None,
                  "service_label": r["label"], "service_labels": r["labels"]} for p in ps]
     return out

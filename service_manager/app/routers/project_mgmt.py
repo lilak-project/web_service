@@ -345,6 +345,7 @@ HIDDEN_IN_SETS = {"project_manager"}
 def _sync_groups():
     from . import service_groups
     service_groups.sync_set_groups()
+    _show_left()
 
 
 @router.get("/api/share-sets/templates")
@@ -454,6 +455,12 @@ def set_set_admin(body: SetAdmin, user: models.User = Depends(require_portal_use
     _set_admin_ok(db, user, st)
     if not db.get(models.User, body.user_id):
         raise HTTPException(404, "그런 계정이 없습니다.")
+    # A set's admin may not take its last admin off (themselves included): only a manager could
+    # then give the set back to anyone. A manager may.
+    if not body.admin and not permissions.is_admin(user) and not any(
+            u.id != body.user_id and all(permissions.is_project_admin(db, u, sv, pj) for sv, pj in st["members"].items())
+            for u in db.query(models.User).filter(models.User.is_active == True, models.User.role != "manager").all()):  # noqa: E712
+        raise HTTPException(409, "이 세트의 마지막 관리자는 내릴 수 없습니다. 먼저 다른 관리자를 두거나 매니저에게 맡기세요.")
     for sv, pj in st["members"].items():
         row = db.query(models.ServicePermission).filter_by(user_id=body.user_id, service_name=sv, project=pj).first()
         if row:
@@ -473,7 +480,22 @@ def _hide_joined(svcs: list[str]) -> None:
     hd = _home._read()
     hs = hd.setdefault("hidden_services", [])
     hs.extend(s for s in svcs if s not in hs)
+    by = hd.setdefault("hidden_by_set", [])          # so leaving every set can show it again
+    by.extend(s for s in svcs if s not in by)
     _home._write(hd)
+
+
+def _show_left() -> None:
+    """A service this hid when it joined a set (hidden_by_set) and that is in no set now
+    goes back on the cover; one a manager hid by hand is not in that list and stays hidden."""
+    from . import home as _home
+    hd = _home._read()
+    gone = [s for s in hd.get("hidden_by_set") or []
+            if not any(s in (st.get("members") or {}) for st in registry.share_sets()[0])]
+    if gone:
+        hd["hidden_by_set"] = [s for s in hd["hidden_by_set"] if s not in gone]
+        hd["hidden_services"] = [s for s in hd.get("hidden_services") or [] if s not in gone]
+        _home._write(hd)
 
 
 @router.post("/api/services/{svc}/projects/{proj}/start")

@@ -122,17 +122,26 @@ def read(b: ReadBody, db: Session = Depends(get_db), user: models.User = Depends
 def unread(db: Session = Depends(get_db), user: models.User = Depends(require_portal_user)):
     """Per room: messages since this account last read it, and how many of them mention
     it. A room never opened counts its mentions only — not its whole history."""
+    from sqlalchemy import or_
     seen = prefs.get(user).get("chat_read") or {}
-    keys = [r["key"] for r in rooms(db, user)]
-    # ponytail: the newest 500 unread across the rooms, counted here; a GROUP BY when rooms get busy.
+    # Asked every 20 s by every open cover: only the rooms something waits in are checked for
+    # entry (once each), not every project of every service as rooms() lists them.
+    # ponytail: the newest 500 candidates, counted here; a GROUP BY when rooms get busy.
     rows = db.query(models.ChatMessage).filter(
-        models.ChatMessage.room.in_(keys), models.ChatMessage.deleted == False,  # noqa: E712
-        models.ChatMessage.user_id != user.id,
-        models.ChatMessage.id > min([int(seen.get(k) or 0) for k in keys] or [0]),
+        models.ChatMessage.deleted == False, models.ChatMessage.user_id != user.id,  # noqa: E712
+        or_(models.ChatMessage.room.in_(list(seen)), models.ChatMessage.mentions_json != "[]"),
     ).order_by(models.ChatMessage.id.desc()).limit(500).all()
+    may: dict = {}
+
+    def enters(room: str) -> bool:
+        if room not in may:
+            svc, _, proj = room.partition("/")
+            may[room] = room == PORTAL_ROOM or (bool(proj) and permissions.can_enter_project(db, user, svc, proj))
+        return may[room]
+
     out = {}
     for m in rows:
-        if m.id <= int(seen.get(m.room) or 0):
+        if m.id <= int(seen.get(m.room) or 0) or not enters(m.room):
             continue
         at = json.loads(m.mentions_json or "[]")
         c = out.setdefault(m.room, {"unread": 0, "mentions": 0})

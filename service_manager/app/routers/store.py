@@ -168,16 +168,32 @@ def _registered(entry: dict) -> bool:
     return all(registry.manifest_path(n).exists() for n, _ in _members(entry))
 
 
+def _new_capabilities(job_id: str, name: str, seed: Path) -> None:
+    """A capability the seed declares and the registered manifest has never heard of is added
+    (e.g. `delegates`, asked for by /api/delegate); one it already has, an admin's or not, stays."""
+    try:
+        want = json.loads(seed.read_text(encoding="utf-8")).get("capabilities") or {}
+    except (OSError, ValueError):
+        return
+    m = registry.read_manifest(name)
+    caps = dict(m.get("capabilities") or {})
+    new = {k: v for k, v in want.items() if k not in caps}
+    if new:
+        registry.write_manifest(name, {**m, "capabilities": {**caps, **new}})
+        _log(job_id, f"· '{name}' 매니페스트에 더함: {', '.join(new)}")
+
+
 def _register(job_id: str, name: str, entry: dict) -> bool:
     """Write the manifest (seed re-rooted at the local stack) + the DB row. A bundle
     carries its seeds (`seed/<name>/`); a service already registered keeps its own
     manifest (it may hold an admin's edits), and a missing entry project is made."""
-    if entry.get("bundle") and registry.manifest_path(name).exists():
-        _log(job_id, f"· '{name}' 이미 등록됨 — 그대로 둡니다")
-        return True
     seed = SERVICES_ROOT / entry["dir"] / "seed" / name / "service.json"
     if not seed.exists():
         seed = SEED_ROOT / name / "service.json"
+    if entry.get("bundle") and registry.manifest_path(name).exists():
+        _new_capabilities(job_id, name, seed)
+        _log(job_id, f"· '{name}' 이미 등록됨 — 그대로 둡니다")
+        return True
     if not seed.exists():
         _log(job_id, f"! seed 매니페스트 없음: {seed}")
         return False

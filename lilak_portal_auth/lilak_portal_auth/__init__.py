@@ -147,9 +147,11 @@ def identity(request: Request, authorization: Optional[str] = Header(default=Non
         payload = decode_token(token) if token else None
     # A delegated token (scope, from the portal's /api/delegate) is good only in the
     # service it names — not here when it was minted for another one.
-    here = os.environ.get("PORTAL_SERVICE")
-    if payload and payload.get("scope") and here and payload["scope"].split("/")[0] != here:
-        payload = None
+    here, proj = os.environ.get("PORTAL_SERVICE"), os.environ.get("PORTAL_PROJECT")
+    if payload and payload.get("scope"):
+        s_svc, _, s_proj = payload["scope"].partition("/")
+        if (here and s_svc != here) or (proj and s_proj and s_proj != proj):
+            payload = None
     if not payload:
         return {"authenticated": False, "email": None, "username": None,
                 "name": None, "role": None, "color": None, "shape": None}

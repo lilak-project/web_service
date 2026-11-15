@@ -971,6 +971,10 @@ def delegate(body: DelegateBody, user: models.User = Depends(require_portal_user
     svc, _, proj = body.to.strip().partition("/")
     if not registry.valid_name(svc) or (proj and not registry.valid_name(proj)) or not registry.service_dir(svc).exists():
         raise HTTPException(400, "위임할 곳이 올바르지 않습니다.")
+    # Only where this service is registered to write (its manifest's `capabilities.delegates`):
+    # a service gone wrong reaches the few services it works with, not every project the person has.
+    if svc not in ((registry.read_manifest(x_portal_service).get("capabilities") or {}).get("delegates") or []):
+        raise HTTPException(403, f"'{x_portal_service}' 서비스는 '{svc}'에 대신 쓰도록 등록되어 있지 않습니다 (capabilities.delegates).")
     if not permissions.can_enter_project(db, user, svc, proj):
         raise HTTPException(403, "이 프로젝트에 대한 권한이 없습니다.")
     minutes = max(1, min(int(body.minutes or 5), 10))
