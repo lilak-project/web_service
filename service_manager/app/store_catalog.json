@@ -174,7 +174,8 @@
         "reference_manager",
         "asset_manager2",
         "note",
-        "project_manager"
+        "project_manager",
+        "inbox"
       ],
       "pip": [
         "rackstore"

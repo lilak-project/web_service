@@ -1,7 +1,7 @@
 """POST /mcp — the note service and the rack services as tools for Claude.
 
 Two ways to write: straight into a note, or propose_note / propose_activity,
-which leave a candidate in project_manager's inbox for the owner to approve (the
+which leave a candidate in the inbox service for the owner to approve (the
 same list and buttons as the mail task's). A read-only token may still propose.
 An activity is only ever proposed: approved ones can reach Google Calendar.
 
@@ -44,7 +44,7 @@ def _schema(required=(), **props):
 
 
 _STR = {"type": "string"}
-# As project_manager's inbox makes them (src-lilak/inbox.jsx ACTIVITY, UPDATABLE; def.jsx KINDS).
+# As the inbox makes them (lilak_rack/inbox/src-lilak/inbox.jsx ACTIVITY, UPDATABLE; def.jsx KINDS).
 ACTIVITY = ("name", "kind", "start", "startTime", "end", "endTime", "place", "link", "comment")
 UPDATABLE = ACTIVITY + ("tripKind", "tripStart", "tripEnd", "role", "title", "host", "talkDate", "talkTime")
 KINDS = ("학회", "워크샵", "학술미팅", "연구출장", "미팅", "세미나", "강연", "교육", "실험", "보고서", "제안서", "기타", "행사")
@@ -104,13 +104,13 @@ TOOLS = [
      "description": "Add text to the end of a log's body, by the id add_log or search returned.",
      "inputSchema": _schema(["id", "text"], id=_STR, text=_STR, project=_STR)},
     {"name": "propose_note", "write": False, "proposes": True,
-     "description": "Ask the owner instead of writing: leaves a candidate in project_manager's inbox, and the note "
+     "description": "Ask the owner instead of writing: leaves a candidate in the inbox, and the note "
                     "is made or added to only if they approve. Give title for a new note, or match_id to add to an "
                     "existing one. For the owner's own notes, or text you are not sure they want. "
                     "`why` is shown beside it.",
      "inputSchema": _schema(["body", "why"], body=_STR, why=_STR, title=_STR, tags=_STR, match_id=_STR)},
     {"name": "propose_activity", "write": False, "proposes": True,
-     "description": "Propose a calendar activity for the owner to approve in project_manager's inbox; nothing is "
+     "description": "Propose a calendar activity for the owner to approve in the inbox; nothing is "
                     "made until they do. New: name and start (YYYY-MM-DD) are required. To change an existing "
                     "activity, give match_id and only the fields that change. Times are HH:MM. "
                     "start/end are the event's days; tripStart/tripEnd the trip's. `why` is shown beside it.",
@@ -155,7 +155,7 @@ async def _note(request: Request, grant: Grant, method: str, path: str, **kw) ->
 
 
 async def _inbox(request: Request, grant: Grant, record: dict) -> httpx.Response:
-    return await _portal(request, grant, "project_manager", "POST", "records", json={"key": "inbox", "record": record})
+    return await _portal(request, grant, "inbox", "POST", "records", json={"key": "inbox", "record": record})
 
 
 async def _activities(request: Request, grant: Grant) -> httpx.Response:
