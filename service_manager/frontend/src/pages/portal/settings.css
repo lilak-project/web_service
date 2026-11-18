@@ -26,7 +26,7 @@
   --rack-radius: 0;
   /* A rack has a width: the ground can be 2000px wide, a line of text cannot.
      Every RACK page is this column, centred. */
-  --rack-col: 760px;
+  --rack-col: 940px;             /* Home's column: every menu page is this wide */
   /* And its slots are milled, not grown to fit: ONE height for every line the
      rack draws — nameplate, column head, record. */
   --rack-row: 36px;
@@ -367,8 +367,9 @@
    element to wrap — and this way the page's title lands on the column's edge
    instead of off at the far left of a wide screen. */
 .pl-setpage, .pl-mgpage {
-  padding-inline: max(16px, calc((100% - var(--rack-col)) / 2));
+  padding-inline: max(40px, calc((100% - var(--rack-col)) / 2));
 }
+@media (max-width: 640px) { .pl-setpage, .pl-mgpage { padding-inline: 16px; } }
 /* Both names a page can have for itself — the tool pages' and the settings
    pages' — sit centred over that column. */
 :is(.pl-mgtitle, .set-title) { text-align: center; }

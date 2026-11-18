@@ -6,6 +6,7 @@ import { Panel, Field, FieldActions, Row, Pill, fieldInput, fieldMuted } from '.
 import { notify } from './settingsMsg'
 import LogBox from './LogBox'
 import SyncPanel from './SyncPanel'
+import AdminEditor from './AdminEditor'
 import { downloadFrom } from './download'
 
 /**
@@ -19,6 +20,12 @@ import { downloadFrom } from './download'
  */
 export default function ServiceProjects({ service, canManage, manage = false, onChanged, onEnter }) {
   const { t } = useLang()
+  const [adminOf, setAdminOf] = useState('')     // the project whose admins are open
+  // Every button has a slot of fixed width, and a missing one leaves its slot empty:
+  // the buttons of every project then stand in the same columns.
+  const W = { btn: 124, icon: 44 }
+  const slot = (w) => ({ width: w, flex: 'none', justifyContent: 'center' })
+  const gap = (w) => <span style={{ width: w, flex: 'none' }} />
   const svc = service.name
   const canIE = !!service.import_export
   const [projects, setProjects] = useState(null)   // null = loading
@@ -205,56 +212,66 @@ export default function ServiceProjects({ service, canManage, manage = false, on
                   : null}
               <span className="sp" />
               {p.can_enter ? (
-                <Button variant="primary" disabled={busy === p.name}
+                <Button variant="primary" disabled={busy === p.name} style={slot(W.btn)}
                   onClick={() => (p.running ? enter(p.name) : start(p.name))}>
                   {p.running ? t('portal_proj_open') : t('portal_proj_start')}
                 </Button>
               ) : p.can_request ? (
-                <Button variant="secondary" disabled={busy === p.name || p.requested}
+                <Button variant="secondary" disabled={busy === p.name || p.requested} style={slot(W.btn)}
                   onClick={() => requestAccess(p.name)}>
                   {p.requested ? t('projects_requested') : t('projects_request')}
                 </Button>
               ) : (
-                <Button variant="primary" disabled>{t('portal_proj_open')}</Button>
+                <Button variant="primary" disabled style={slot(W.btn)}>{t('portal_proj_open')}</Button>
               )}
-              {manage && p.can_enter && p.running && (
-                <Button variant="warning" disabled={busy === p.name} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>
-              )}
+              {manage && (p.can_enter && p.running
+                ? <Button variant="warning" disabled={busy === p.name} style={slot(W.btn)} onClick={() => stop(p.name)}>{t('projects_stop')}</Button>
+                : gap(W.btn))}
               {canManage && manage && (
-                <Button variant={entry === p.name ? 'primary' : 'secondary'} disabled={busy === p.name}
+                <Button variant={entry === p.name ? 'primary' : 'secondary'} disabled={busy === p.name} style={slot(W.btn)}
                   title={t('portal_entry_hint')} onClick={() => setEntryProject(p.name)}>
-                  {entry === p.name ? `${t('portal_entry_on')} · ${t('portal_entry_clear')}` : t('portal_entry_set')}
+                  {entry === p.name ? t('p_entry_clear_short') : t('portal_entry_set')}
                 </Button>
               )}
-              {canManage && manage && rep && rep !== p.name && (
-                <Button variant="secondary" disabled={busy === p.name} title={t('portal_rep_hint')}
+              {canManage && manage && (rep && rep !== p.name
+                ? <Button variant="secondary" disabled={busy === p.name} title={t('portal_rep_hint')} style={slot(W.btn)}
                   onClick={() => askRep(p.name)}>{t('portal_rep_set')}</Button>
-              )}
-              {canManage && manage && canIE && (
-                <Button variant="secondary" disabled={busy === p.name} title={t('portal_proj_export_hint')}
+                : gap(W.btn))}
+              {canManage && manage && gap(W.icon)}
+            </Row>
+            {/* Second line: looking after the project — who runs it, moving its data, its log, removing it. */}
+            {canManage && manage && (
+            <Row className={`pl-projtools${entry === p.name ? ' entry' : ''}`}>
+              <span className="sp" />
+              <Button variant={adminOf === p.name ? 'primary' : 'secondary'} title={t('p_proj_admins_hint')} style={slot(W.btn)}
+                onClick={() => setAdminOf((x) => (x === p.name ? '' : p.name))}>{t('p_adm_title')}</Button>
+              {canIE
+                ? <Button variant="secondary" disabled={busy === p.name} title={t('portal_proj_export_hint')} style={slot(W.btn)}
                   onClick={() => exportProject(p.name)}>{t('portal_proj_export')}</Button>
-              )}
-              {canManage && manage && (
-                <Button variant={syncOf === p.name ? 'primary' : 'secondary'}
+                : gap(W.btn)}
+              {(
+                <Button variant={syncOf === p.name ? 'primary' : 'secondary'} style={slot(W.btn)}
                   className={linked.includes(p.name) ? 'set-linked' : undefined}
                   title={linked.includes(p.name) ? '이 프로젝트는 따로 다른 서버와 동기화 중' : '이 프로젝트만 따로 다른 서버와 동기화'}
                   onClick={() => { setSyncOf((x) => (x === p.name ? '' : p.name)); loadLinked() }}>
                   Sync
                 </Button>
               )}
-              {canManage && manage && (
-                <Button variant={logOf === p.name ? 'primary' : 'secondary'}
+              {(
+                <Button variant={logOf === p.name ? 'primary' : 'secondary'} style={slot(W.btn)}
                   title={t('portal_proj_log_hint')}
                   onClick={() => setLogOf((x) => (x === p.name ? '' : p.name))}>
                   {t('portal_proj_log')}
                 </Button>
               )}
-              {canManage && manage && (
-                <Button variant="dangerSoft" disabled={busy === p.name || rep === p.name}
+              {(
+                <Button variant="dangerSoft" disabled={busy === p.name || rep === p.name} style={slot(W.icon)}
                   title={rep === p.name ? t('portal_rep_no_delete') : t('portal_proj_delete')}
                   onClick={() => remove(p.name)}><Icon name="trash" size={15} /></Button>
               )}
             </Row>
+            )}
+            {adminOf === p.name && <div className="pl-projadm"><AdminEditor scopes={[{ svc, proj: p.name }]} /></div>}
             {repAsk?.to === p.name && (
               <Row className="empty">
                 <span>

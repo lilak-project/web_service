@@ -18,7 +18,7 @@ const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.project_card ? `${c.name
  * multi-project service's own list, so the per-project grants are the ones
  * the bar already uses.
  */
-export default function HomeView({ cards, groups, recent, onOpen, onInboxAll, isManager, storeOpen, onRefresh, iconFor, bands, onRackGo, view, onView, onManage, onRegroup, onCreateGroup, onRenameGroup, onSetMembers, onDeleteGroup, tab: tabProp, onTab, canSets = false }) {
+export default function HomeView({ cards, groups, recent, onOpen, onInboxAll, isManager, storeOpen, onRefresh, iconFor, bands, onRackGo, view, onView, onManage, onRegroup, onCreateGroup, onRenameGroup, onSetMembers, onDeleteGroup, onManageService, tab: tabProp, onTab, canSets = false }) {
   // The account menu picks the tab now (tab/onTab); without them Home keeps its own tab row.
   const [ownTab, setOwnTab] = useState(storeOpen ? 'store' : 'home')      // 'home' | 'map' | 'sets' | 'dock' | 'store'
   const tabWanted = tabProp ?? ownTab
@@ -297,14 +297,14 @@ export default function HomeView({ cards, groups, recent, onOpen, onInboxAll, is
       {(tab === 'map' || tab === 'dock' || tab === 'neon') && (
         <div className="pl-hrack">
           <RackView tab="map" look={{ map: 'rack', dock: 'dock', neon: 'neon' }[tab]} cards={cards}
-            bands={bands} onChanged={onRefresh} onGo={onRackGo} readOnly={!isManager} />
+            bands={bands} onChanged={onRefresh} onGo={onRackGo} onManage={onManageService} readOnly={!isManager} />
         </div>
       )}
       {tab === 'dock' && <NewServiceView onCreated={onRefresh} />}
 
       {tab === 'sets' && (
         <div className="pl-hrack">
-          <RackView tab={tab} bands={bands} onChanged={onRefresh} onGo={onRackGo} readOnly={!isManager} />
+          <RackView tab={tab} bands={bands} onChanged={onRefresh} onGo={onRackGo} onManage={onManageService} readOnly={!isManager} />
         </div>
       )}
 

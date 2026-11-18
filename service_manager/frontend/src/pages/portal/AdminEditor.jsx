@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { tr } from 'lilak-ui'
 import { launcher, errText } from '../../api'
-import { Row, Pill } from './Field'
+import { Row, Pill, Field, fieldChip, fieldInput, fieldMuted, FIELD_CARD_CLASS } from './Field'
 
 /**
  * AdminEditor — who administers a scope, and adding or taking them off.
@@ -17,7 +17,7 @@ let cache = null
 const users = (fresh) => (fresh || !cache ? (cache = launcher.get('/admin/users').then((r) => r.data || [])) : cache)
   .catch((e) => { cache = null; throw e })
 
-export default function AdminEditor({ scopes, setKey }) {
+export default function AdminEditor({ scopes, setKey, boxed = false }) {
   const [list, setList] = useState(null)
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
@@ -58,37 +58,44 @@ export default function AdminEditor({ scopes, setKey }) {
 
   if (denied) return null
   if (!list) return <Row className="sub">{err || '…'}</Row>
+  // The RACK field grid, like every other panel: a label column, then the value.
   return (
-    <>
-      <Row style={{ flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-        <span className="sub">{tr('p_adm_title')}</span>
-        {admins.length === 0 && <span className="sub">—</span>}
-        {admins.map(({ u, n }) => (
-          <span key={u.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 4px 1px 8px',
-            border: '1px solid var(--dock-border-default)', background: 'var(--dock-surface)' }}>
-            {u.username}
-            {scopes.length > 1 && <span className="sub">{n}/{scopes.length}</span>}
-            <button type="button" className="set-plain" disabled={busy} title={tr('p_adm_remove')}
-              onClick={() => set(u, false)} style={{ padding: '0 4px', cursor: 'pointer' }}>✕</button>
-          </span>
-        ))}
-        {rows.filter((r) => r.via.length).map(({ u, via }) => (
-          <span key={`g${u.id}`} className="sub">{u.username} ({via.join(', ')})</span>
-        ))}
-        {managers.length > 0 && <span className="sub">· {tr('p_adm_managers')} {managers.join(', ')}</span>}
-      </Row>
-      <Row style={{ flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+    <div className={FIELD_CARD_CLASS}>
+      {/* One line per person: the label column names the first only. */}
+      {(() => {
+        const lines = [
+          ...admins.map(({ u, n }) => (
+            <>
+              <span>{u.username}</span>
+              {u.display_name && u.display_name !== u.username && <span style={fieldMuted}>{u.display_name}</span>}
+              {scopes.length > 1 && <span style={fieldMuted}>{n}/{scopes.length}</span>}
+              <span className="sp" style={{ flex: 1 }} />
+              <button type="button" disabled={busy} title={tr('p_adm_remove')} onClick={() => set(u, false)}>{tr('p_adm_remove_short')}</button>
+            </>
+          )),
+          ...rows.filter((r) => r.via.length).map(({ u, via }) => (
+            <><span>{u.username}</span><span style={fieldMuted}>{tr('p_adm_via', via.join(', '))}</span></>
+          )),
+          ...managers.map((m) => <><span>{m}</span><span style={fieldMuted}>{tr('p_adm_manager_all')}</span></>),
+        ]
+        return (lines.length ? lines : [<span style={fieldMuted}>—</span>]).map((line, i) => (
+          <Field key={i} label={i === 0 ? tr('p_adm_title') : ''}>{line}</Field>
+        ))
+      })()}
+      <Field label={tr('p_adm_add_label')}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr('p_adm_add')} aria-label={tr('p_adm_add')}
-          style={{ minWidth: 180 }} />
+          // Enter adds the one person the search narrowed to.
+          onKeyDown={(e) => { if (e.key === 'Enter' && candidates.length === 1 && !busy) { e.preventDefault(); set(candidates[0].u, true) } }}
+          style={{ ...fieldInput, flex: '1 1 220px', maxWidth: 320 }} />
         {/* Buttons, not a <select>: in the portal frame a native menu swallowed the next click. */}
         {candidates.map(({ u, n }) => (
           <button key={u.id} type="button" disabled={busy} onClick={() => set(u, true)}>
             + {u.username}{n > 0 ? ` (${n}/${scopes.length})` : ''}
           </button>
         ))}
-        {words && !candidates.length && <span className="sub">{tr('p_adm_none')}</span>}
+        {words && !candidates.length && <span style={fieldMuted}>{tr('p_adm_none')}</span>}
         {err && <Pill tone="bad">{err}</Pill>}
-      </Row>
-    </>
+      </Field>
+    </div>
   )
 }

@@ -60,6 +60,7 @@ def _migrate() -> None:
         "project": "ALTER TABLE portal_permissions ADD COLUMN project VARCHAR(128) NOT NULL DEFAULT ''",
         "is_admin": "ALTER TABLE portal_permissions ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0",
     })
+    _per_project_unique()
     if "portal_access_requests" in names:
         add_missing("portal_access_requests", {
             "project": "ALTER TABLE portal_access_requests ADD COLUMN project VARCHAR(128) NOT NULL DEFAULT ''",
@@ -96,6 +97,27 @@ def _migrate() -> None:
         conn.execute(text(
             "UPDATE users SET email_verified_at = COALESCE(email_verified_at, created_at) "
             "WHERE email_verified = 1 AND email_verified_at IS NULL"))
+
+
+def _per_project_unique() -> None:
+    """A grant is one per (user, service, PROJECT). A DB made before projects had
+    grants still carries UNIQUE (user_id, service_name): a whole-service grant then
+    blocks every project grant for the same person (500 on POST /admin/permissions).
+    SQLite cannot drop a constraint, so the table is rebuilt once, rows kept."""
+    with engine.begin() as conn:
+        sql = conn.execute(text(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='portal_permissions'")).scalar() or ""
+        if "uq_user_service_project" in sql or "UNIQUE (user_id, service_name)" not in sql:
+            return
+        conn.execute(text("ALTER TABLE portal_permissions RENAME TO portal_permissions_old"))
+        for ix in ("ix_portal_permissions_service_name", "ix_portal_permissions_user_id"):
+            conn.execute(text(f"DROP INDEX IF EXISTS {ix}"))
+    Base.metadata.tables["portal_permissions"].create(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO portal_permissions (id, user_id, service_name, project, is_admin) "
+            "SELECT id, user_id, service_name, project, is_admin FROM portal_permissions_old"))
+        conn.execute(text("DROP TABLE portal_permissions_old"))
 
 
 # ── an account's id is never used twice ──────────────────────────────────────
