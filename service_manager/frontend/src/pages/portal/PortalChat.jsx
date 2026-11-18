@@ -56,7 +56,7 @@ function Att({ a, room }) {
   return <button type="button" className="pc-file" onClick={open}><Icon name="attach" size={12} /> {a.name}</button>
 }
 
-export default function PortalChat({ open, onClose, user, onUnread, go }) {
+export default function PortalChat({ open, onClose, user, onUnread, go, cards = [], onOpenCard }) {
   const [room, setRoom] = useState(() => {
     try { return JSON.parse(user?.preferences_json || '{}').chatRoom || 'portal' } catch { return 'portal' }
   })
@@ -69,6 +69,8 @@ export default function PortalChat({ open, onClose, user, onUnread, go }) {
   const [atts, setAtts] = useState([])
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [adding, setAdding] = useState(null)                  // projects with no room yet, while opening one
+  const [notice, setNotice] = useState('')                   // a /command's answer (not a message)
   const [members, setMembers] = useState([])                 // who can be @mentioned in this room
   const [at, setAt] = useState(null)                         // the @name being typed: { from, q, i }
   const [counts, setCounts] = useState({ rooms: {}, unread: 0, mentions: 0 })   // unread, kept on the account
@@ -86,6 +88,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go }) {
 
   const roomLabel = (k) => {
     if (k === 'portal') return tr('pc_room_all')
+    if (k === 'system') return tr('pc_room_system')
     const r = rooms.find((x) => x.key === k)
     return r ? `${r.service_label} · ${r.label}` : k
   }
@@ -114,7 +117,8 @@ export default function PortalChat({ open, onClose, user, onUnread, go }) {
       return top
     } catch (e) {
       // A project room this account can no longer enter: back to the portal room.
-      if (e?.response?.status === 403 && room !== 'portal') setRoom('portal')
+      // …or one nobody has opened (404).
+      if ([403, 404].includes(e?.response?.status) && room !== 'portal') setRoom('portal')
       else setErr(errText(e, tr('p_failed')))
       return null
     }
@@ -208,14 +212,71 @@ export default function PortalChat({ open, onClose, user, onUnread, go }) {
   }, [go?.n]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pickRoom = (k) => {
-    setPicking(false); setReply(null)
+    setPicking(false); setReply(null); setAdding(null); setNotice('')
     if (k === room) return
     setRoom(k)
     launcher.put('/account/prefs', { chatRoom: k }).catch(() => {})
   }
 
+  async function openRoom(r) {
+    try {
+      const { data } = await launcher.post('/chat/rooms', { service: r.service, project: r.project })
+      setRooms((all) => (all.some((x) => x.key === data.key) ? all : [...all, data]))
+      setAdding(null)
+      pickRoom(data.key)
+    } catch (e) { setErr(errText(e, tr('p_failed'))) }
+  }
+
+  // The system room reads `/commands` before anything is sent: they work the
+  // portal itself and are answered here, not stored.
+  const findCard = (q) => {
+    const w = q.trim().toLowerCase()
+    return cards.find((c) => [c.label, c.name, c.project_card].some((x) => x && x.toLowerCase() === w))
+      || cards.find((c) => [c.label, c.name].some((x) => x && x.toLowerCase().includes(w)))
+  }
+  const KIND = { bug: 'bug', idea: 'recommendation', recommendation: 'recommendation', ask: 'inquiry', inquiry: 'inquiry',
+    '버그': 'bug', '제안': 'recommendation', '문의': 'inquiry' }
+  async function command(line) {
+    const [cmd, ...rest] = line.slice(1).trim().split(/\s+/)
+    const arg = rest.join(' ')
+    if (cmd === 'report') {
+      // `/report [bug|idea|ask] what happened…` → Feedback; the subject is the first line, cut short.
+      const raw = line.trim().slice('/report'.length).trim()
+      const first = raw.split(/\s+/)[0]?.toLowerCase()
+      const kind = KIND[first] || 'inquiry'
+      const body = KIND[first] ? raw.slice(raw.split(/\s+/)[0].length).trim() : raw
+      if (!body) return tr('pc_cmd_report_usage')
+      const line1 = body.split('\n')[0].trim()
+      const subject = line1.length > 60 ? line1.slice(0, 59) + '…' : line1
+      try { await launcher.post('/reports', { kind, subject, body }); return tr('pc_cmd_reported', tr('pc_kind_' + kind), subject) }
+      catch (e) { return errText(e, tr('p_failed')) }
+    }
+    if (cmd === 'open' && arg) {
+      const c = findCard(arg)
+      if (!c) return tr('pc_cmd_nocard', arg)
+      onOpenCard?.(c)
+      return tr('pc_cmd_opened', c.label || c.name)
+    }
+    if (cmd === 'room' && arg) {
+      const w = arg.toLowerCase()
+      const r = rooms.find((x) => roomLabel(x.key).toLowerCase().includes(w) || x.key.toLowerCase().includes(w))
+      if (!r) return tr('pc_cmd_noroom', arg)
+      pickRoom(r.key)
+      return tr('pc_cmd_room', roomLabel(r.key))
+    }
+    return tr('pc_cmd_help')
+  }
+
   async function send() {
     if (busy || (!text.trim() && !atts.length)) return
+    // `/report` works in any room; the other /commands are the system room's.
+    if (/^\/report(\s|$)/.test(text.trim()) || (room === 'system' && text.trim().startsWith('/'))) {
+      const line = text.trim()
+      setText(''); setAt(null)
+      setNotice(await command(line))
+      return
+    }
+    setNotice('')
     setBusy(true)
     try {
       const { data } = await launcher.post('/chat/messages', { room, body: text, reply_to_id: reply?.id || null, attachments: atts })
@@ -245,7 +306,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go }) {
   }
   const picks = !at ? [] : [
     ...members.filter((u) => u.id !== me?.id).map((u) => ({ key: u.username, label: u.name, u })),
-    ...(room !== 'portal' ? [{ key: 'agent', label: tr('pc_at_agent') }] : []),
+    ...(room !== 'portal' && room !== 'system' ? [{ key: 'agent', label: tr('pc_at_agent') }] : []),
     ...(me?.admin ? [{ key: 'all', label: tr('pc_at_all') }] : []),
   ].filter((p) => p.key.toLowerCase().includes(at.q) || p.label.toLowerCase().includes(at.q)).slice(0, 6)
   const pick = (p) => {
@@ -338,12 +399,22 @@ export default function PortalChat({ open, onClose, user, onUnread, go }) {
             {(rooms.length ? rooms : [{ key: 'portal' }]).map((r) => (
               <button key={r.key} type="button" role="option" aria-selected={r.key === room}
                 className={r.key === room ? 'on' : ''} onClick={() => pickRoom(r.key)}>
-                {r.key === 'portal' ? tr('pc_room_all') : <><span className="svc">{r.service_label}</span> {r.label}</>}
+                {r.key === 'portal' ? tr('pc_room_all') : r.key === 'system' ? tr('pc_room_system') : <><span className="svc">{r.service_label}</span> {r.label}</>}
                 {counts.rooms?.[r.key] && r.key !== room && (
                   <b className="pc-n">{counts.rooms[r.key].mentions ? `@${counts.rooms[r.key].mentions} ` : ''}{counts.rooms[r.key].unread || ''}</b>
                 )}
               </button>
             ))}
+            {/* A project's room is there once someone opens it. */}
+            <button type="button" className="pc-add" onClick={() => (adding ? setAdding(null)
+              : launcher.get('/chat/rooms/new').then((r) => setAdding(r.data)).catch((e) => setErr(errText(e, tr('p_failed')))))}>
+              <Icon name="plus" size={11} /> {tr('pc_room_open')}
+            </button>
+            {adding && (adding.length ? adding.map((r) => (
+              <button key={r.key} type="button" className="pc-new" onClick={() => openRoom(r)}>
+                <span className="svc">{r.service_label}</span> {r.label}
+              </button>
+            )) : <span className="pc-new pc-none">{tr('pc_room_none')}</span>)}
           </div>
         )}
         {picks.length > 0 && (
@@ -357,6 +428,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go }) {
             ))}
           </div>
         )}
+        {notice && <div className="pc-notice">{notice}</div>}
         {reply && <div className="pc-quote">{tr('pc_replying', reply.author_name)}: {reply.body.slice(0, 80)} <button type="button" onClick={() => setReply(null)}><Icon name="x" size={10} /></button></div>}
         {atts.length > 0 && (
           <div className="pc-atts">{atts.map((a) => (
@@ -366,7 +438,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go }) {
         <div className="pc-row">
           <textarea ref={inputRef} rows={1} value={text} onChange={onText}
             onPaste={(e) => { const f = [...(e.clipboardData?.files || [])]; if (f.length) { e.preventDefault(); addFiles(f) } }}
-            placeholder={room === 'portal' ? tr('pc_ph_all') : tr('pc_ph_project')} />
+            placeholder={room === 'portal' ? tr('pc_ph_all') : room === 'system' ? tr('pc_ph_system') : tr('pc_ph_project')} />
           <button type="button" className="pc-icon" onClick={() => fileRef.current?.click()} title={tr('pc_attach')}><Icon name="attach" size={14} /></button>
           <button type="button" className="pc-icon" disabled={busy} onClick={send} title={tr('pc_send')}><Icon name="send" size={14} /></button>
           <input ref={fileRef} type="file" multiple hidden onChange={(e) => { addFiles([...e.target.files]); e.target.value = '' }} />

@@ -488,7 +488,7 @@ def update_prefs(body: PrefsBody, user: models.User = Depends(require_portal_use
         prefs.put(user, theme=None if data["theme"] == "bright" else data["theme"])
     if "chatRoom" in data:
         room = (data["chatRoom"] or "").strip()
-        if room and not re.fullmatch(r"portal|[A-Za-z0-9_\-]{1,64}/[A-Za-z0-9_\-]{1,64}", room):
+        if room and not re.fullmatch(r"portal|system|[A-Za-z0-9_\-]{1,64}/[A-Za-z0-9_\-]{1,64}", room):
             raise HTTPException(400, "채팅방 이름이 올바르지 않습니다.")
         prefs.put(user, chatRoom=room or None)
     if "layout" in data:

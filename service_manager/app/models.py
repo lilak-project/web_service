@@ -296,3 +296,15 @@ class ChatMessage(Base):
     run_id = Column(Integer, nullable=True)
     deleted = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=_now)
+
+
+class ChatRoom(Base):
+    """A project chat room someone opened. The portal room and each account's
+    system room always exist and have no row; a project's room exists from the
+    moment someone who may enter the project opens it."""
+    __tablename__ = "portal_chat_rooms"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(260), nullable=False, unique=True, index=True)     # "svc/proj"
+    created_by = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=_now)

@@ -36,6 +36,8 @@ class Chat(unittest.TestCase):
             db.add(u)
             db.commit()
             cls.user = bearer(portal_token(u))
+        # Project rooms exist once opened: the tests' project room, opened by the manager.
+        assert c.post("/api/chat/rooms", headers=cls.admin, json={"service": "elog", "project": "exp1"}).status_code == 200
 
     def test_portal_room(self):
         r = c.post("/api/chat/messages", headers=self.user, json={"room": "portal", "body": "hello @admin"})
@@ -126,6 +128,25 @@ class Chat(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         got = c.get("/api/chat/messages", headers=self.user, params={"room": "portal"}).json()["messages"]
         self.assertEqual(next(m for m in got if m["body"] == "re")["reply_to_body"], "first")
+
+    def test_rooms_are_everyone_system_and_opened_ones(self):
+        keys = [r["key"] for r in c.get("/api/chat/rooms", headers=self.user).json()]
+        self.assertEqual(keys[:2], ["portal", "system"])
+        self.assertNotIn("elog/exp1", keys)                      # opened, but kim may not enter it
+        self.assertIn("elog/exp1", [r["key"] for r in c.get("/api/chat/rooms", headers=self.admin).json()])
+        # A project nobody opened has no room yet, even for a manager.
+        self.assertEqual(c.get("/api/chat/messages", headers=self.admin, params={"room": "elog/exp2"}).status_code, 404)
+        self.assertEqual(c.post("/api/chat/rooms", headers=self.user, json={"service": "elog", "project": "exp2"}).status_code, 403)
+
+    def test_system_room_is_each_accounts_own(self):
+        with SessionLocal() as db:
+            db.add(models.ChatMessage(room="system:1", user_id=1, author_name="admin", body="mine"))
+            db.commit()
+        self.assertEqual(c.get("/api/chat/messages", headers=self.user, params={"room": "system"}).json()["messages"], [])
+        self.assertIn("mine", [m["body"] for m in c.get("/api/chat/messages", headers=self.admin, params={"room": "system"}).json()["messages"]])
+        # What an account says there goes to the agent — a manager's for now.
+        self.assertEqual(c.post("/api/chat/messages", headers=self.user, json={"room": "system", "body": "hi"}).status_code, 403)
+        self.assertEqual(c.put("/api/account/prefs", headers=self.user, json={"chatRoom": "system"}).status_code, 200)
 
     def test_agent_only_in_project_rooms(self):
         r = c.post("/api/chat/messages", headers=self.user, json={"room": "portal", "body": "@agent do it"})

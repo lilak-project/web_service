@@ -1,10 +1,13 @@
 """Portal chat — `/api/chat/*`: the speech bubbles over the cover.
 
-A room is "portal" (everyone signed in) or "svc/proj" (whoever may enter that
-project). Messages are plain text with @mentions, an optional reply, and files.
-`@agent <task>` in a project room hands the task to that project's platform
-agent (/api/agent/runs); the message keeps the run, and its answer is shown
-under it when the worker has one.
+Rooms: "portal" (everyone signed in) and "system" (each account's own: what it
+says there goes to the platform agent, and the cover reads `/commands` there
+before anything is sent) always exist. A project's room "svc/proj" exists once
+someone who may enter the project opens it (POST /api/chat/rooms); only those
+who may enter it read or write it. Messages are plain text with @mentions, an
+optional reply, and files. `@agent <task>` in a project room hands the task to
+that project's platform agent (/api/agent/runs); the message keeps the run, and
+its answer is shown under it when the worker has one.
 
 The client polls (`after=<last id>`), as the kit's community chat does.
 """
@@ -27,6 +30,7 @@ from . import agent
 router = APIRouter(tags=["portal-chat"])
 
 PORTAL_ROOM = "portal"
+SYSTEM_ROOM = "system"           # each account's own; stored as "system:<user id>"
 MAX_FILE = 20 * 1024 * 1024
 AGENT_RE = re.compile(r"(^|\s)@agent\b", re.I)
 
@@ -38,18 +42,25 @@ def _uploads() -> Path:
 
 
 def _check_room(db: Session, user: models.User, room: str) -> str:
+    """The room as stored, if this account may use it."""
     if room == PORTAL_ROOM:
         return room
+    if room == SYSTEM_ROOM:
+        return f"{SYSTEM_ROOM}:{user.id}"
     svc, _, proj = room.partition("/")
     if not (registry.valid_name(svc) and registry.valid_name(proj)):
         raise HTTPException(400, "방 이름이 올바르지 않습니다.")
     if not permissions.can_enter_project(db, user, svc, proj):
         raise HTTPException(403, "이 프로젝트 방에 들어갈 권한이 없습니다.")
+    if not db.query(models.ChatRoom).filter_by(key=room).first():
+        raise HTTPException(404, "아직 열지 않은 방입니다.")
     return room
 
 
 def _room_admin(db: Session, user: models.User, room: str) -> bool:
     """Who may clear someone else's message: a manager anywhere, a project's admin in its room."""
+    if room.startswith(SYSTEM_ROOM + ":"):
+        return room == f"{SYSTEM_ROOM}:{user.id}"
     svc, _, proj = room.partition("/")
     return permissions.is_admin(user) or (bool(proj) and permissions.is_project_admin(db, user, svc, proj))
 
@@ -61,6 +72,8 @@ def _members(db: Session, room: str) -> list:
     users = db.query(models.User).filter(models.User.is_active == True).order_by(models.User.username).all()  # noqa: E712
     if room == PORTAL_ROOM:
         return users
+    if room.startswith(SYSTEM_ROOM + ":"):
+        return [u for u in users if f"{SYSTEM_ROOM}:{u.id}" == room]
     svc, _, proj = room.partition("/")
     return [u for u in users if permissions.can_enter_project(db, u, svc, proj)]
 
@@ -136,7 +149,8 @@ def unread(db: Session = Depends(get_db), user: models.User = Depends(require_po
     def enters(room: str) -> bool:
         if room not in may:
             svc, _, proj = room.partition("/")
-            may[room] = room == PORTAL_ROOM or (bool(proj) and permissions.can_enter_project(db, user, svc, proj))
+            may[room] = (room == PORTAL_ROOM or room == f"{SYSTEM_ROOM}:{user.id}"
+                         or (bool(proj) and permissions.can_enter_project(db, user, svc, proj)))
         return may[room]
 
     out = {}
@@ -152,10 +166,9 @@ def unread(db: Session = Depends(get_db), user: models.User = Depends(require_po
             "mentions": sum(v["mentions"] for v in out.values())}
 
 
-@router.get("/api/chat/rooms")
-def rooms(db: Session = Depends(get_db), user: models.User = Depends(require_portal_user)):
-    """The portal room, then every project this account may enter."""
-    out = [{"key": PORTAL_ROOM, "service": "", "project": "", "label": ""}]
+def _project_rooms(db: Session, user: models.User) -> list[dict]:
+    """Every project this account may enter, as a room would be named."""
+    out = []
     for svc in registry.list_service_names():
         try:
             m = registry.read_manifest(svc)
@@ -168,6 +181,62 @@ def rooms(db: Session = Depends(get_db), user: models.User = Depends(require_por
                 out.append({"key": f"{svc}/{p['name']}", "service": svc, "project": p["name"],
                             "label": p.get("label") or p["name"], "service_label": m.get("label") or svc})
     return out
+
+
+def _label(db: Session, key: str) -> dict:
+    svc, _, proj = key.partition("/")
+    try:
+        sl = registry.read_manifest(svc).get("label") or svc
+    except Exception:
+        sl = svc
+    pl = next((p.get("label") for p in project_runtime.list_projects(svc) if p["name"] == proj), None) or proj
+    return {"key": key, "service": svc, "project": proj, "label": pl, "service_label": sl}
+
+
+@router.get("/api/chat/rooms")
+def rooms(db: Session = Depends(get_db), user: models.User = Depends(require_portal_user)):
+    """The portal room, this account's system room, then the project rooms opened so
+    far that it may enter. (A project with no room is offered by /api/chat/rooms/new.)"""
+    # Rooms that had messages before rooms were opened by hand count as opened.
+    have = {r.key for r in db.query(models.ChatRoom).all()}
+    for (k,) in db.query(models.ChatMessage.room).distinct().all():
+        if "/" in k and ":" not in k and k not in have:
+            db.add(models.ChatRoom(key=k))
+            have.add(k)
+    db.commit()
+    out = [{"key": PORTAL_ROOM}, {"key": SYSTEM_ROOM}]
+    for k in sorted(have):
+        svc, _, proj = k.partition("/")
+        if permissions.can_enter_project(db, user, svc, proj):
+            out.append(_label(db, k))
+    return out
+
+
+@router.get("/api/chat/rooms/new")
+def new_rooms(db: Session = Depends(get_db), user: models.User = Depends(require_portal_user)):
+    """Projects this account may enter that have no room yet."""
+    have = {r.key for r in db.query(models.ChatRoom).all()}
+    return [r for r in _project_rooms(db, user) if r["key"] not in have]
+
+
+class RoomBody(BaseModel):
+    service: str
+    project: str
+
+
+@router.post("/api/chat/rooms")
+def open_room(b: RoomBody, db: Session = Depends(get_db), user: models.User = Depends(require_portal_user)):
+    """Open a project's room. Anyone who may enter the project may; the room is then
+    there for everyone else who may enter it too."""
+    if not (registry.valid_name(b.service) and registry.valid_name(b.project)):
+        raise HTTPException(400, "방 이름이 올바르지 않습니다.")
+    if not permissions.can_enter_project(db, user, b.service, b.project):
+        raise HTTPException(403, "이 프로젝트 방에 들어갈 권한이 없습니다.")
+    key = f"{b.service}/{b.project}"
+    if not db.query(models.ChatRoom).filter_by(key=key).first():
+        db.add(models.ChatRoom(key=key, created_by=user.id))
+        db.commit()
+    return _label(db, key)
 
 
 def _out(m: models.ChatMessage, runs: dict, by_id: dict, users: dict | None = None) -> dict:
@@ -248,7 +317,17 @@ def send(b: SendBody, db: Session = Depends(get_db), user: models.User = Depends
     m = models.ChatMessage(room=room, user_id=user.id, author_name=user.display_name or user.username,
                            body=body, reply_to_id=b.reply_to_id, attachments_json=json.dumps(atts, ensure_ascii=False),
                            mentions_json=json.dumps(_mentions(db, user, room, body)))
-    if AGENT_RE.search(body):
+    if room.startswith(SYSTEM_ROOM + ":") and body:
+        # The system room is the account talking to the platform agent: every line
+        # is a task for it, under the portal's own key (llm_keys "portal").
+        try:
+            r = agent.add_run(agent.RunBody(service="portal", project="", task=body), db=db, user=user)
+        except HTTPException as e:
+            if e.status_code == 403:
+                raise HTTPException(403, "System 방의 agent는 지금은 매니저만 부를 수 있습니다.")
+            raise
+        m.run_id = r["id"]
+    elif AGENT_RE.search(body):
         if room == PORTAL_ROOM:
             raise HTTPException(400, "@agent는 프로젝트 방에서 부를 수 있습니다.")
         svc, _, proj = room.partition("/")

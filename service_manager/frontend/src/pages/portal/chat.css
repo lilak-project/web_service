@@ -86,3 +86,10 @@
 .pc-dot2 { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #dc2626; margin-left: 4px; vertical-align: middle; }
 .pc-n { float: right; color: #dc2626; font-weight: 600; font-size: var(--fs-tiny); }
 .pc-unread.at { background: var(--accent, #2563eb); }
+
+/* Opening a project's room, from the bottom of the room list. */
+.pc-rooms .pc-add { color: var(--accent, #2563eb); display: flex; align-items: center; gap: 4px; }
+.pc-rooms .pc-new { padding-left: 20px; background: var(--dock-surface-2); }
+.pc-rooms .pc-none { display: block; padding: 4px 8px 4px 20px; color: var(--dock-text-muted); }
+/* A /command's answer in the system room. */
+.pc-notice { font-size: var(--fs-tiny); color: var(--dock-text-secondary); margin: 2px 0; white-space: pre-wrap; }
