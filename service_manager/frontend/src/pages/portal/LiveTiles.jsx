@@ -89,7 +89,7 @@ export function useLive(service) {
   return { data, err, unsupported }
 }
 
-export default function LiveTiles({ service, big = false, pad, wall = false }) {
+export default function LiveTiles({ service, big = false, pad, wall = false, square = false }) {
   const { data, err, unsupported } = useLive(service)
   const items = data?.items || []
   const stack = data?.layout === 'stack' || data?.layout === 'rows'   // name / figure / big second line per item (e.g. one actuator each)
@@ -104,7 +104,7 @@ export default function LiveTiles({ service, big = false, pad, wall = false }) {
     display: 'flex', flexDirection: 'column', gap: wall ? 4 : 2,
     flex: wall ? (stack ? '1 1 170px' : '1 1 150px') : '0 0 auto',
     padding: wall ? '10px 14px' : big ? '8px 12px' : '6px 10px',
-    borderRadius: 12, background: 'var(--dock-surface-2)', border: '1px solid var(--dock-border-subtle)', minWidth: 0,
+    borderRadius: square ? 0 : 12, background: 'var(--dock-surface-2)', border: '1px solid var(--dock-border-subtle)', minWidth: 0,
   }
   const labelPx = wall ? 14 : null
   return (

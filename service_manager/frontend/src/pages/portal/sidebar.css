@@ -329,6 +329,7 @@
    the inset to get its width back. */
 .pl-main { flex: 1; min-width: 0; display: flex; }
 .pl-panel {
+  position: relative;
   flex: 1; min-width: 0;
   display: flex; flex-direction: column;
   /* Grey, not white. It is the RACK ground, so the empty panel already looks
@@ -355,7 +356,7 @@
 /* Search and tabs stay put; only what is under the tabs scrolls. */
 /* One column, as wide as a panel (940px), with 40px kept clear on each side
    so nothing runs into the scrollbar. */
-.pl-hhead { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: 1020px; margin: 0 auto; flex: none; box-sizing: border-box; padding: 0 40px; }
+.pl-hhead { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: calc(var(--rack-col, 940px) + 80px); margin: 0 auto; flex: none; box-sizing: border-box; padding: 0 40px; }
 .pl-hbody { display: flex; flex-direction: column; gap: 22px; padding: 14px 40px 20px; }
 .pl-hbodywrap { position: relative; flex: 1; min-height: 0; display: flex; margin-top: 10px; }
 .pl-hbody { scrollbar-width: none; }
@@ -366,7 +367,7 @@
 }
 .pl-hthumb.on { opacity: .55; transition: opacity .1s; }
 .pl-home .pl-hrecent .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.pl-hbody > * { width: 100%; max-width: 940px; margin: 0 auto; flex: 0 0 auto; }
+.pl-hbody > * { width: 100%; max-width: var(--rack-col, 940px); margin: 0 auto; flex: 0 0 auto; }
 .pl-hmanage { --plate: var(--plate-manage); display: flex; flex-direction: column; gap: 8px; }
 .pl-hfold {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
@@ -936,3 +937,63 @@
 /* The folded bar is drawn at 60 % (`.mini` above): what shows through it must
    be dark too, or the whole bar and its tiles wash out to grey. */
 .pl-root.neon-dark { background: #0a0a0f; }
+
+/* Back through the menu pages: top left of the panel, over the page's own margin. */
+.pl-back {
+  position: absolute; top: 10px; left: 12px; z-index: 5;
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; cursor: pointer;
+  font: inherit; font-size: var(--fs-small); color: var(--dock-text-secondary);
+  background: var(--dock-surface); border: 1px solid var(--dock-border-strong); border-radius: var(--rack-radius, 0);
+}
+.pl-back:hover { color: var(--dock-text-primary); border-color: var(--dock-border-focus); }
+
+/* A service cell in rack/dock/neon services: one press target up to its "+",
+   lit on hover and pressed in on click. */
+.pl-rsvc { cursor: pointer; margin: 0 -6px; padding: 0 6px; border-radius: var(--rack-radius, 0); transition: background .08s, box-shadow .08s; }
+.pl-rsvc:hover { background: var(--dock-surface-2); }
+.pl-rsvc:active { background: var(--dock-info-bg); box-shadow: inset 0 2px 3px rgb(0 0 0 / .18); }
+.pl-rsvc:focus-visible { outline: 2px solid var(--dock-border-focus); outline-offset: -2px; }
+
+/* A project's second line (admins, export, sync, log, delete) sits right under its
+   first and shares its tint: one project, two lines of buttons. */
+.set-row.pl-projtools { border-top: 0; padding-top: 0; margin-top: -4px; }
+
+/* A project's admins, opened under its two lines: indented, on the panel's own ground. */
+.pl-projadm { position: relative; border-top: 1px solid var(--dock-border-subtle); padding-left: 32px; background: var(--dock-surface-2); }
+/* An elbow from the project above: this box belongs to that row. */
+.pl-projadm::before {
+  content: ''; position: absolute; left: 14px; top: 0; width: 12px; height: 20px;
+  border-left: 2px solid var(--dock-border-focus); border-bottom: 2px solid var(--dock-border-focus);
+}
+
+/* A NEON service's card on the live wall (LiveWall `look === 'neon'`): the card
+   and its tiles are drawn with the cover's tokens, so re-pointing them here is
+   the whole change. NEON's two hues: cyan = running/normal, pink = warn/alarm;
+   idle is plain dim text. Bright by default, NEON dark beside a dark NEON page. */
+.pl-neon-card {
+  --dock-surface: #ffffff;
+  --dock-surface-2: #f7f7fb;
+  --dock-border-subtle: #d6d5e3;
+  --dock-border-strong: #d6d5e3;
+  --dock-text-primary: #15141f;
+  --dock-text-secondary: #5c5a72;
+  --dock-text-muted: #7d7b93;
+  --ok-text: #00a3bf;
+  --dock-info-text: #5c5a72;
+  --dock-warning-text: #e6007e;
+  --dock-danger-text: #e6007e;
+  color: var(--dock-text-primary);
+}
+.pl-root.neon-dark .pl-neon-card {
+  --dock-surface: #12121a;
+  --dock-surface-2: #1a1a25;
+  --dock-border-subtle: #3a3a52;
+  --dock-border-strong: #3a3a52;
+  --dock-text-primary: #eceaf6;
+  --dock-text-secondary: #9391a8;
+  --dock-text-muted: #6f6d85;
+  --ok-text: #19f0ff;
+  --dock-info-text: #9391a8;
+  --dock-warning-text: #ff2e97;
+  --dock-danger-text: #ff2e97;
+}

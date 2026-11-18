@@ -160,14 +160,17 @@ export default function LiveWall({ cards, big, onDone, iconFor, framed = false }
         )}
         {placed.map(({ card: p, left, top, width }) => (
           <div key={p.name} ref={observe(p.name)} data-live-key={p.name}
+            // A NEON service's card is drawn in NEON (sidebar.css .pl-neon-card): its
+            // two hues, square corners. The others keep the cover's look.
+            className={p.look === 'neon' ? 'pl-neon-card' : undefined}
             style={{ position: 'absolute', left, top, width, transition: 'left .18s ease, top .18s ease',
-              minHeight: cardMin, maxHeight: Math.max(cardMin, dims.h), overflow: 'hidden', border: '1.5px solid var(--dock-border-strong, #94a3b8)', borderRadius: 16, background: 'var(--dock-surface)', display: 'flex', flexDirection: 'column' }}>
+              minHeight: cardMin, maxHeight: Math.max(cardMin, dims.h), overflow: 'hidden', border: '1.5px solid var(--dock-border-strong, #94a3b8)', borderRadius: p.look === 'neon' ? 0 : 16, background: 'var(--dock-surface)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px 6px', flexShrink: 0 }}>
               <Icon name={iconFor(p.name, p.icon)} size={30} weight="fill" color={p.color || 'var(--dock-text-primary)'} />
               <span style={{ fontSize: 'var(--fs-xlarge)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.name}</span>
               <span style={{ marginLeft: 'auto', width: 10, height: 10, borderRadius: 999, background: dot(p), flexShrink: 0 }} />
             </div>
-            <LiveTiles service={p} big wall pad="4px 18px 16px" />
+            <LiveTiles service={p} big wall square={p.look === 'neon'} pad="4px 18px 16px" />
           </div>
         ))}
       </div>

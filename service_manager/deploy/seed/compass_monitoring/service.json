@@ -23,5 +23,6 @@
   "label": "COMPASS DAQ Monitoring",
   "order": 7,
   "autostart": true,
-  "live": true
+  "live": true,
+  "look": "neon"
 }

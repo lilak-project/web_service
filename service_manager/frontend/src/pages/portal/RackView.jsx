@@ -36,7 +36,9 @@ function Swatch({ color }) {
   return <span style={{ width: 10, height: 10, flex: 'none', background: color || 'var(--dock-border-strong)' }} />
 }
 
-export default function RackView({ tab, look = 'rack', cards: allCards, bands = [], onGo, onChanged, readOnly = false }) {
+export default function RackView({ tab, look = 'rack', cards: allCards, bands = [], onGo, onManage, onChanged, readOnly = false }) {
+  // A service's settings open as their own page (the manage panel) when the host can show it; else inline.
+  const openSvc = (name) => (onManage ? onManage(name) : flip(name))
   // readOnly: a project admin sees the sets and makes new ones from a template; only a manager rearranges them.
   const { lang } = useLang()
 
@@ -47,8 +49,7 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
   // every card (hidden ones too — this is where a manager finds them); the sets, the rack ones in the bar.
   const all = tab === 'map' && allCards ? allCards.filter((c) => !c.builtin && lookOf(c) === look) : groups.flatMap((b) => b.items)
   const services = [...new Map(all.map((s) => [s.name, s])).values()]
-  // What is unfolded: a service (`svc`) shows what Manage sidebar shows for it and its
-  // admins; a project (`svc/proj`) its admins.
+  // What is unfolded: a service (`svc`) shows what Manage sidebar shows for it and its admins.
   const [open, setOpen] = useState(() => new Set())
   const flip = (k) => setOpen((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const byName = Object.fromEntries(services.map((s) => [s.name, s]))
@@ -217,7 +218,8 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
   const slot = twoOfOne ? { tone: 'warn', text: tr('p_share_two_of_one') }
     : msg || (picked.size ? { text: tr('p_share_picked', picked.size) } : { tone: 'hint', text: tr('p_share_pick_hint') })
   const TWO = { gridTemplateColumns: 'minmax(140px, 200px) 1fr' }
-  const MAP_COLS = { gridTemplateColumns: 'minmax(120px, 1.2fr) minmax(100px, 1fr) 56px 72px minmax(90px, 1fr)' }
+  // The state column is as wide as its button ("● 실행 중 →"), so it never runs into the set's name.
+  const MAP_COLS = { gridTemplateColumns: 'minmax(120px, 1.2fr) minmax(100px, 1fr) 56px max-content minmax(90px, 1fr)', columnGap: 12 }
 
   return (
     <>
@@ -237,16 +239,20 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
               const list = s.project_card && all ? all.filter((p) => p.name === s.project_card) : all
               const at = keyOf(s)
               const head = (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                  {!readOnly && <Caret on={open.has(s.name)} onClick={() => flip(s.name)} />}
-                  <Swatch color={s.color} />
-                  <span style={{ overflowWrap: 'anywhere', cursor: readOnly ? undefined : 'pointer' }}
-                    onClick={readOnly ? undefined : () => flip(s.name)}>{label(s.name)}</span>
-                  {s.hidden && <Pill>{tr('p_map_hidden')}</Pill>}
+                <span style={{ display: 'flex', alignItems: 'stretch', gap: 7, minWidth: 0, alignSelf: 'stretch' }}>
+                  {/* The whole cell up to "+" is the way into the service's settings. */}
+                  <span className={readOnly ? undefined : 'pl-rsvc'} role={readOnly ? undefined : 'button'} tabIndex={readOnly ? undefined : 0}
+                    style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 7 }}
+                    onClick={readOnly ? undefined : () => openSvc(s.name)}
+                    onKeyDown={readOnly ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSvc(s.name) } }}>
+                    <Swatch color={s.color} />
+                    <span style={{ overflowWrap: 'anywhere' }}>{label(s.name)}</span>
+                    {s.hidden && <Pill>{tr('p_map_hidden')}</Pill>}
+                  </span>
                   {s.multi_project && (
                     <button type="button" className="set-plain" title={tr('p_map_new_project')}
                       onClick={() => setAdding(adding?.at === at ? null : { svc: s.name, at, name: '' })}
-                      style={{ marginLeft: 'auto', flex: 'none', padding: '0 6px', font: 'inherit', cursor: 'pointer', lineHeight: 1.4,
+                      style={{ alignSelf: 'center', flex: 'none', padding: '0 6px', font: 'inherit', cursor: 'pointer', lineHeight: 1.4,
                         border: '1px solid var(--dock-border-default)', background: adding?.at === at ? 'var(--dock-info-bg)' : 'var(--dock-surface)',
                         color: 'var(--dock-text-secondary)' }}>+</button>
                   )}
@@ -266,8 +272,9 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
                 </Row>
               )
               const unfolded = open.has(s.name) && (
-                <Row key={`${at}/@`} className="cols" style={MAP_COLS}>
-                  <div style={{ gridColumn: '1 / -1', minWidth: 0 }}>
+                // Not a table row (.cols is one fixed height): the open panel grows with what it holds.
+                <Row key={`${at}/@`} style={{ display: 'block', height: 'auto', padding: '8px 12px 12px' }}>
+                  <div style={{ minWidth: 0 }}>
                     <AdminEditor scopes={[{ svc: s.name, proj: '' }]} />
                     <ServiceManagePanel service={'service_label' in s ? { ...s, label: s.service_label, labels: s.service_labels } : s}
                       onChanged={onChanged} />
@@ -291,9 +298,8 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
                 return [(
                   <Row key={pk} className="cols" style={MAP_COLS}>
                     {n === 0 ? head : <span />}
-                    <span style={{ overflowWrap: 'anywhere', display: 'flex', alignItems: 'center', gap: 5,
-                      cursor: readOnly ? undefined : 'pointer' }} onClick={readOnly ? undefined : () => flip(pk)}>
-                      {!readOnly && <Caret on={open.has(pk)} />}{p.label || p.name}</span>
+                    {/* a project's admins are set in the whole Manage view now, not unfolded here */}
+                    <span style={{ overflowWrap: 'anywhere', display: 'flex', alignItems: 'center', gap: 5 }}>{p.label || p.name}</span>
                     <span>{p.name === s.link_project ? tr('p_map_main') : ''}</span>
                     {/* The state doubles as the way in: it opens this project of this service. */}
                     <button type="button" className="set-plain" disabled={!onGo} title={tr('p_map_go')}
@@ -307,12 +313,7 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
                     </button>
                     <span>{k >= 0 ? <Pill tone="ok">{sets[k].name}</Pill> : <span className="sub">—</span>}</span>
                   </Row>
-                ), n === 0 && unfolded, open.has(pk) && (
-                  <Row key={`${pk}/@`} className="cols" style={MAP_COLS}>
-                    <span />
-                    <div style={{ gridColumn: '2 / -1', minWidth: 0 }}><AdminEditor scopes={[{ svc: s.name, proj: p.name }]} /></div>
-                  </Row>
-                )]
+                ), n === 0 && unfolded]
               }), addRow]
             })}
           </Panel>
@@ -424,14 +425,5 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
       </Panel>)}
       </>}
     </>
-  )
-}
-
-function Caret({ on, onClick }) {
-  return (
-    <span role={onClick ? 'button' : undefined} aria-expanded={on} onClick={onClick}
-      style={{ flex: 'none', width: 10, color: 'var(--dock-text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-      {on ? '▾' : '▸'}
-    </span>
   )
 }

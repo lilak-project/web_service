@@ -23,5 +23,6 @@
   "label": "GANIL DAQ Monitoring",
   "order": 6,
   "autostart": true,
-  "live": true
+  "live": true,
+  "look": "neon"
 }

@@ -8,6 +8,8 @@ import { SettingsStatus, notify } from './settingsMsg'
 import LiveWall from './LiveWall'
 import ServiceManagePanel from './ServiceManagePanel'
 import ServiceProjects from './ServiceProjects'
+import AdminEditor from './AdminEditor'
+import { Panel } from './Field'
 import ServiceSingle from './ServiceSingle'
 import GroupManagePanel, { FixedGroupPanel } from './GroupManagePanel'
 import LinksView from './LinksView'
@@ -363,7 +365,8 @@ export default function SidebarPortal({
   // The old Service Manager card (?s=@store) lives on home now, opened.
   const storeLink = readSel()?.svc === '@store'
   const [sel, setSel] = useState(() => (storeLink ? null : readSel()))        // { svc, proj } — mirrored in the URL
-  const [view, setView] = useState(() => (readSel() && !storeLink ? 'service' : 'empty'))  // service|settings|live|empty
+  // Live rides in the URL as ?m=live, so a reload stays on the wall.
+  const [view, setView] = useState(() => (readMenu() === 'live' ? 'live' : readSel() && !storeLink ? 'service' : 'empty'))  // service|settings|live|empty
   // A record another service asked to open here ({ svc, proj, id }): a link in
   // one service's panel (a paper on an activity) lands on that record in its
   // own. Only the services the portal itself frames may ask.
@@ -492,7 +495,7 @@ export default function SidebarPortal({
     if (mini) setOpenSvcs(new Set())
   }, [mini])
   useEffect(() => { writeSet(SHUT_KEY, shut) }, [shut])
-  useEffect(() => { writeSel(view === 'service' ? sel : null, view === 'settings' ? settingsTab : '') }, [sel, view, settingsTab])
+  useEffect(() => { writeSel(view === 'service' ? sel : null, view === 'settings' ? settingsTab : view === 'live' ? 'live' : '') }, [sel, view, settingsTab])
 
   // What `fit` needs to know without becoming a reason for it to re-run.
   useEffect(() => { if (manage && isManager) loadArchived() }, [manage, isManager, loadArchived])  // archive: a manager's
@@ -615,6 +618,7 @@ export default function SidebarPortal({
   }
   // ⌘R / Ctrl+R with the portal focused reloads the service in the panel,
   // not the portal. (Inside the panel the service does the same itself.)
+  // ⌘F is passed into the service the same way (below).
   // ⇧⌘R is left to the browser.
   const frameRef = useRef(null)
   useEffect(() => {
@@ -622,6 +626,19 @@ export default function SidebarPortal({
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'r' && frameRef.current) {
         e.preventDefault()
         try { frameRef.current.contentWindow.location.reload() } catch { frameRef.current.src = frameRef.current.src }
+      }
+      // ⌘F / Ctrl+F right after opening a service (the focus is still on the card
+      // pressed): hand it to the service, whose own search takes it. Only if the
+      // service takes it is the browser's find held back.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'f' && frameRef.current) {
+        try {
+          const f = frameRef.current, w = f.contentWindow
+          const ev = new w.KeyboardEvent('keydown', { key: e.key, code: e.code, metaKey: e.metaKey, ctrlKey: e.ctrlKey,
+            shiftKey: e.shiftKey, bubbles: true, cancelable: true })
+          f.focus(); w.focus()
+          ;(w.document.activeElement || w.document.body).dispatchEvent(ev)
+          if (ev.defaultPrevented) e.preventDefault()
+        } catch { /* a frame we cannot reach keeps the browser's find */ }
       }
     }
     window.addEventListener('keydown', on)
@@ -666,7 +683,7 @@ export default function SidebarPortal({
    *  the service bar, the way pressing an open service card does. */
   // Nothing open is the account's Home: the settings bar on its first page.
   const firstHome = useRef(storeLink ? 'store'
-    : (readMenu() && (isManager || !MANAGER_PAGES.has(readMenu()) || ['sets', 'invites'].includes(readMenu())) ? readMenu() : 'home'))
+    : (readMenu() && readMenu() !== 'live' && (isManager || !MANAGER_PAGES.has(readMenu()) || ['sets', 'invites'].includes(readMenu())) ? readMenu() : 'home'))
   useEffect(() => {
     if (signedOut || view !== 'empty') return
     setView('settings')
@@ -1048,6 +1065,40 @@ export default function SidebarPortal({
       return next
     })
   }
+  const manageService = (name) => {
+    const c = (cards || []).find((x) => x.name === name && !x.project_card) || (cards || []).find((x) => x.name === name)
+    if (!c) return
+    viaButton.current = true
+    // `whole`: opened as the service (from rack/dock/neon services), not as one of its cards.
+    setSel({ svc: cardKey(c), proj: '', whole: true })
+    setView('manage')
+  }
+  // Back through the pages walked inside the menu (settings pages and the manage
+  // page a service row opened). Leaving the menu for a service empties it.
+  const trail = useRef([])
+  const [trailN, setTrailN] = useState(0)
+  const prevLoc = useRef(null)
+  const goingBack = useRef(false)
+  const viaButton = useRef(false)                 // set by a button on a page that leads to another page
+  useEffect(() => {
+    const loc = { view, settingsTab, sel, manage }
+    const inMenu = (l) => l && (l.view === 'settings' || l.view === 'manage')
+    const id = (l) => `${l.view}|${l.view === 'settings' ? l.settingsTab : ''}|${l.sel?.svc || ''}|${l.manage}`
+    const moved = !prevLoc.current || id(prevLoc.current) !== id(loc)
+    if (goingBack.current) goingBack.current = false
+    else if (moved && viaButton.current && inMenu(prevLoc.current) && inMenu(loc)) trail.current = [...trail.current, prevLoc.current].slice(-30)
+    else if (moved) trail.current = []            // a menu click (or leaving the menu) starts afresh: no Back
+    if (moved) viaButton.current = false
+    prevLoc.current = loc
+    setTrailN(trail.current.length)
+  }, [view, settingsTab, sel, manage])
+  const goBack = () => {
+    const p = trail.current.pop()
+    if (!p) return
+    goingBack.current = true
+    setManage(p.manage); setSel(p.sel); setView(p.view)
+    if (p.view === 'settings') onSettingsTab?.(p.settingsTab)
+  }
   const openManageGroup = (g) => { setSel({ svc: `#g:${g.id}`, proj: '' }); setView('manage') }
 
   const enterLive = () => {
@@ -1104,6 +1155,21 @@ export default function SidebarPortal({
   })
   useEffect(() => {
     try { if (localStorage.getItem('lilak.theme') !== neonPick) localStorage.setItem('lilak.theme', neonPick) } catch { /* private window */ }
+    // Safari's bar takes its colour from the page: older Safari from theme-color,
+    // Safari 26 from a fixed element at the top (the cover's root, read only as
+    // the page loads) or else from <body> (which it watches). So the root's
+    // colour moves to <body> and the root goes clear: the bar then follows the
+    // switch without a reload.
+    const root = document.querySelector('.pl-root')
+    if (root) {
+      root.style.background = ''
+      const bg = getComputedStyle(root).backgroundColor
+      root.style.background = 'transparent'
+      for (const el of [document.documentElement, document.body]) el.style.setProperty('background-color', bg, 'important')
+      let meta = document.querySelector('meta[name="theme-color"]')
+      if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta) }
+      meta.content = bg
+    }
   }, [neonPick])
   // A page's own switch (NEON's) writes the same key: the account takes it too.
   useEffect(() => {
@@ -1258,6 +1324,34 @@ export default function SidebarPortal({
   const selBand = sel?.svc?.startsWith('#g:')
     ? bands.find((b) => b.g && `#g:${b.g.id}` === sel.svc) : null
   const selGroup = selBand && !selBand.g.fixed && !selBand.g.loose ? selBand.g : null
+  /** A service's own settings — the same panels wherever they are opened from
+   *  (manage mode, My sidebar, rack/dock/neon services). Managers only. */
+  const servicePanel = (selSvc) => {
+    const key = cardKey(selSvc)
+    const i = (fullOrder || []).indexOf(key)
+    return (
+      <>
+        {/* In a box like every other part of the page; it draws nothing for a non-manager. */}
+        {!selSvc.builtin && isManager && (
+          <Panel bare title={tr('p_adm_title')}><AdminEditor boxed scopes={[{ svc: selSvc.name, proj: '' }]} /></Panel>
+        )}
+        <ServiceManagePanel service={'service_label' in selSvc ? { ...selSvc, label: selSvc.service_label, labels: selSvc.service_labels } : selSvc} builtinKey={selSvc.builtin || null}
+          initialIcon={iconFor ? iconFor(selSvc.name, selSvc.icon) : selSvc.icon}
+          first={i <= 0} last={i >= (fullOrder || []).length - 1}
+          onMove={(dir) => {
+            const keys = [...(fullOrder || [])]
+            const j = i + dir
+            if (i < 0 || j < 0 || j >= keys.length) return
+            ;[keys[i], keys[j]] = [keys[j], keys[i]]
+            onSaveOrder?.(keys)
+          }}
+          onChanged={onRefresh} />
+        {selSvc.builtin === 'links' && <LinksView links={links || []} manage onChanged={onRefresh} />}
+        {!selSvc.builtin && selSvc.multi_project && <ServiceProjects service={selSvc} canManage manage onChanged={onRefresh} />}
+        {!selSvc.builtin && !selSvc.multi_project && <ServiceSingle service={selSvc} canManage manage onChanged={onRefresh} />}
+      </>
+    )
+  }
   const managePanel = (() => {
     // Arranging one's own bar: a card has its own name and can be hidden; a group
     // has a name, can be hidden or removed. Nothing here touches anyone else's.
@@ -1277,7 +1371,22 @@ export default function SidebarPortal({
           </div></div>
         )
       }
-      return <MyCardPanel card={selSvc} personal={personal} />
+      // Opened as the service: its name, and no one card's own settings (a service
+      // split into project cards has several, and the first is not the service).
+      if (sel?.whole) {
+        return (
+          <>
+            <h1 className="pl-mgtitle">{selSvc.service_label || selSvc.label || selSvc.name}</h1>
+            {isManager && !selSvc.builtin && servicePanel(selSvc)}
+          </>
+        )
+      }
+      return (
+        <>
+          <MyCardPanel card={selSvc} personal={personal} />
+          {isManager && !selSvc.builtin && servicePanel(selSvc)}
+        </>
+      )
     }
     if (!isManager) return null
     if (sel?.svc === ARCHIVE_KEY) {
@@ -1312,25 +1421,10 @@ export default function SidebarPortal({
         </div>
       )
     }
-    const key = cardKey(selSvc)
-    const i = (fullOrder || []).indexOf(key)
     return (
       <>
-        <h1 className="pl-mgtitle">{selSvc.label || selSvc.name}</h1>
-        <ServiceManagePanel service={'service_label' in selSvc ? { ...selSvc, label: selSvc.service_label, labels: selSvc.service_labels } : selSvc} builtinKey={selSvc.builtin || null}
-          initialIcon={iconFor ? iconFor(selSvc.name, selSvc.icon) : selSvc.icon}
-          first={i <= 0} last={i >= (fullOrder || []).length - 1}
-          onMove={(dir) => {
-            const keys = [...(fullOrder || [])]
-            const j = i + dir
-            if (i < 0 || j < 0 || j >= keys.length) return
-            ;[keys[i], keys[j]] = [keys[j], keys[i]]
-            onSaveOrder?.(keys)
-          }}
-          onChanged={onRefresh} />
-        {selSvc.builtin === 'links' && <LinksView links={links || []} manage onChanged={onRefresh} />}
-        {!selSvc.builtin && selSvc.multi_project && <ServiceProjects service={selSvc} canManage manage onChanged={onRefresh} />}
-        {!selSvc.builtin && !selSvc.multi_project && <ServiceSingle service={selSvc} canManage manage onChanged={onRefresh} />}
+        <h1 className="pl-mgtitle">{(sel?.whole && selSvc.service_label) || selSvc.label || selSvc.name}</h1>
+        {servicePanel(selSvc)}
       </>
     )
   })()
@@ -1498,7 +1592,8 @@ export default function SidebarPortal({
       {/* Settings is a SECOND bar of the same shape one step in, not a page that
           replaces the first: the service bar stays, so there is always a way out
           and you can still see what is running. */}
-      <StepOut open={(manage) || view === 'settings'}
+      {/* Also over a service's page opened from a menu page: you are still in the menu. */}
+      <StepOut open={(manage) || view === 'settings' || (view === 'manage' && !manage)}
         kind={manage ? 'manage' : 'settings'}>
         {manage ? (
           <>
@@ -1598,7 +1693,7 @@ export default function SidebarPortal({
                 {/* a rule where the personal half ends, instead of naming the halves */}
                 {i > 0 && (key === 'me' || arr[i - 1][0] === 'feedback') && <div className="pl-sep" />}
                 <button type="button" className={`pl-c2${settingsTab === key ? ' on' : ''}`}
-                  onClick={() => onSettingsTab?.(key)}>
+                  onClick={() => { if (view !== 'settings') { setSel(null); setView('settings') } onSettingsTab?.(key) }}>
                   <span className="pl-txt">{label}</span>
                   {key === 'me' && reqN > 0 && <b className="pl-badge" style={{ position: 'static' }}>{reqN}</b>}
                   {key === 'feedback' && inbox.items.length > 0 && <b className="pl-badge" style={{ position: 'static' }}>{inbox.items.length}</b>}
@@ -1658,18 +1753,27 @@ export default function SidebarPortal({
 
       <main className="pl-main">
         <div className={`pl-panel${view === 'settings' && MANAGER_PAGES.has(settingsTab) ? ' mgrpage' : ''}`}>
+          {trailN > 0 && (view === 'settings' || view === 'manage') && (
+            <button type="button" className="pl-back" onClick={goBack} title={tr('p_back')}>
+              <Icon name="caret-left" size={14} /> {tr('p_back')}
+            </button>
+          )}
           {signedOut && view !== 'live' ? (
             <div className="pl-scroll pl-authpage">{authCard}</div>
           ) : view === 'settings' && HOME_TABS.includes(settingsTab) ? (
+            <>
             <HomeView cards={cards} groups={groups} recent={recent} isManager={isManager}
               onRefresh={onRefresh} iconFor={iconFor} bands={bands} onRackGo={rackGo}
               tab={settingsTab} onTab={onSettingsTab} canSets={canSets}
               view={groupView ? 'group' : 'list'} onView={saveView} onManage={toggleManage}
               onRegroup={onRegroup} onCreateGroup={() => onCreateGroup?.()}
-              onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup}
+              onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup} onManageService={manageService}
               onRenameGroup={mineOn ? personal.renameGroup : undefined}
-              onInboxAll={() => openSettings('feedback')}
+              onInboxAll={() => { viaButton.current = true; openSettings('feedback') }}
               onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
+            {/* The same message bar every other menu page has at its foot. */}
+            <SettingsStatus />
+            </>
           ) : view === 'settings' ? (
             <>
               <div className="pl-scroll pl-setpage">
@@ -1744,9 +1848,9 @@ export default function SidebarPortal({
               storeOpen={storeLink} onRefresh={onRefresh} iconFor={iconFor} bands={bands} onRackGo={rackGo}
               view={groupView ? 'group' : 'list'} onView={saveView} onManage={toggleManage}
               onRegroup={onRegroup} onCreateGroup={() => onCreateGroup?.()}
-              onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup}
+              onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup} onManageService={manageService}
               onRenameGroup={mineOn ? personal.renameGroup : undefined}
-              onInboxAll={() => openSettings('feedback')}
+              onInboxAll={() => { viaButton.current = true; openSettings('feedback') }}
               onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
           )}
           {/* The service in the panel, and any busy one kept alive behind it
@@ -1771,7 +1875,8 @@ export default function SidebarPortal({
       {ctxMenu()}
       {!signedOut && user && (
         <div style={{ display: 'contents', '--pc-left': `${mini ? 72 : (document.documentElement.dataset.portalBar === 'compact' ? 182 : 222)}px` }}>
-          <PortalChat open={chatOpen} onClose={() => setChatOpen(false)} user={user} onUnread={(n, a) => { setUnread(n); setAtMe(a) }} go={chatGo} />
+          <PortalChat open={chatOpen} onClose={() => setChatOpen(false)} user={user} onUnread={(n, a) => { setUnread(n); setAtMe(a) }} go={chatGo}
+            cards={cards || []} onOpenCard={(c) => (c.multi_project && c.entry_project ? pickProject(c, c.entry_project) : openService(c))} />
         </div>
       )}
     </div>
