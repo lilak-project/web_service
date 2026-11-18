@@ -281,6 +281,38 @@ class Gates(unittest.TestCase):
         finally:
             mcp._portal, mcp._rack = real, real_rack
 
+    def test_get_record_and_get_note_take_an_edit_tab_path_line(self):
+        asked = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            asked.append((svc, proj, path))
+            if svc == "note":
+                return httpx.Response(200, json={"id": "회의 메모", "title": "t", "date": "", "tags": [], "fields": {},
+                                                 "version": "1", "body": "b"})
+            return httpx.Response(200, json={"authors": [{"id": "dee049b9", "name": "Park"}]})
+        real, real_rack, mcp._portal, mcp._rack = mcp._portal, mcp._rack, fake, lambda: ("author_manager",)
+        try:
+            tok = self.issue()
+            r = call(tok, "get_record", path="http://testserver/pp/author_manager/authors/authors/dee049b9")
+            self.assertFalse(r["isError"], r)
+            self.assertEqual(json.loads(r["content"][0]["text"])["record"]["name"], "Park")
+            self.assertEqual(asked[-1][:2], ("author_manager", "authors"))
+            for tool in ("get_record", "get_note"):
+                r = call(tok, tool, path="http://testserver/pp/note/notes-job/notes/회의 메모")
+                self.assertFalse(r["isError"], r)
+                self.assertEqual(asked[-1], ("note", "notes-job", "notes/%ED%9A%8C%EC%9D%98%20%EB%A9%94%EB%AA%A8"))
+            self.assertFalse(call(tok, "get_note", address="/pp/note/notes-job/notes/회의 메모")["isError"], "address = path")
+            asked.clear()
+            r = call(tok, "get_record", path="https://elsewhere.example/pp/author_manager/authors/authors/dee049b9")
+            self.assertIn("다른 포털", r["content"][0]["text"])
+            for bad in ("/pp/author_manager/authors", "http://testserver/p/x/y/z/w", "/pp/note/n/notes/a%2Fb"):
+                self.assertTrue(call(tok, "get_record", path=bad)["isError"], bad)
+            self.assertTrue(call(tok, "get_note", path="/pp/author_manager/authors/authors/x")["isError"])
+            self.assertTrue(call(tok, "get_record")["isError"])
+            self.assertEqual(asked, [])
+        finally:
+            mcp._portal, mcp._rack = real, real_rack
+
     def test_get_record_reads_a_set_inbox_and_search_does_not(self):
         sets = [{"name": "manage", "members": {"note": "note", "inbox": "inbox"}},
                 {"name": "jobboard", "members": {"note": "notes-job", "inbox": "research"}}]
@@ -374,6 +406,10 @@ class Gates(unittest.TestCase):
             self.assertFalse(call(tok, "update_job", id="915d7d", files={"a.png": "", "c.png": "new"})["isError"])
             self.assertEqual(sent[0]["fields"]["files"], {"b.png": "keep", "c.png": "new"})
             sent.clear()
+            self.assertFalse(call(tok, "update_job", id="915d7d", files=json.dumps({"a.png": "", "c.png": "new"}))["isError"])
+            self.assertEqual(sent[0]["fields"]["files"], {"b.png": "keep", "c.png": "new"})
+            self.assertTrue(call(tok, "update_job", id="915d7d", files="[1]")["isError"])
+            sent.clear()
             self.assertTrue(call(tok, "update_job", id="915d7d", files={"x/a.png": "n"})["isError"])
             self.assertFalse(call(tok, "add_evaluation", id="915d7d", text="t", file="b.png")["isError"])
             self.assertEqual(sent[0]["record"]["file"], "b.png")
@@ -408,6 +444,73 @@ class Gates(unittest.TestCase):
             self.assertEqual(json.loads(r["content"][0]["text"])["files_missing"], ["c.root"])
         finally:
             mcp._portal = real
+
+    def test_evidence_links_set_references_once_each(self):
+        jobs = [{"id": "jobrun-20261112-005005-915d7d", "tags": [],
+                 "evidence": [{"svc": "reference_manager", "proj": "refs", "id": "r1", "place": "Figure 3", "state": "agent"}]}]
+        sent = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            if path == "data" and svc == "reference_manager":
+                return httpx.Response(200, json={"references": [{"id": "r1"}, {"id": "r2"}] if proj == "refs"
+                                                 else [{"id": "p9"}, {"id": "r2"}]})
+            if path == "data":
+                return httpx.Response(200, json={"jobs": jobs})
+            sent.append(kw["json"])
+            return httpx.Response(200, json={"record": {**jobs[0], **kw["json"]["fields"]}})
+        real, share, mcp._portal = mcp._portal, mcp.registry.share_for, fake
+        mcp.registry.share_for = lambda svc, proj: {"jobboard": proj, "reference_manager": "refs"}
+        link, mcp.registry.link_project = mcp.registry.link_project, lambda svc: "papers"
+        try:
+            tok = self.issue()
+            r = call(tok, "update_job", id="915d7d", add_evidence=[{"id": "r1", "place": "그림 3"},
+                     {"id": "r2", "place": "Fig. 3-5", "why": "w"}], remove_evidence=[])
+            self.assertFalse(r["isError"], r)
+            ev = sent[0]["fields"]["evidence"]
+            self.assertEqual([(e["id"], e["place"]) for e in ev], [("r1", "Figure 3"), ("r2", "Figures 3-5")])
+            self.assertEqual((ev[1]["proj"], ev[1]["why"]), ("refs", "w"))
+            self.assertTrue(ev[1]["by"] and ev[1]["at"])
+            self.assertEqual({e["state"] for e in ev[1:]}, {"agent"})
+            self.assertEqual(ev[1]["states"][0]["state"], "agent")
+            sent.clear()
+            for bad in ([{"id": "r2", "state": "approved"}], [{"id": "r2", "strength": "hunch"}]):
+                self.assertTrue(call(tok, "update_job", id="915d7d", add_evidence=bad)["isError"], bad)
+            self.assertEqual(sent, [])
+            self.assertFalse(call(tok, "update_job", id="915d7d", add_evidence=[{"id": "r2", "place": "p. 9", "strength": "measurement"}])["isError"])
+            self.assertEqual(sent[0]["fields"]["evidence"][-1]["strength"], "measurement")
+            jobs[0]["evidence"].append({"svc": "reference_manager", "proj": "refs", "id": "r2", "place": "Table 1", "state": "person"})
+            sent.clear()
+            self.assertTrue(call(tok, "update_job", id="915d7d", remove_evidence=[{"id": "r2", "place": "Table 1"}])["isError"])
+            jobs[0]["evidence"].pop()
+            jobs[0]["evidence"].append({"svc": "reference_manager", "proj": "refs", "id": "r2", "place": "Table 2", "by": "jungwoo"})
+            self.assertTrue(call(tok, "update_job", id="915d7d", remove_evidence=[{"id": "r2", "place": "Table 2"}])["isError"],
+                            "no state, a person's name: the board shows it as a person's")
+            jobs[0]["evidence"][-1]["by"] = "플랫폼 agent"
+            self.assertFalse(call(tok, "update_job", id="915d7d", remove_evidence=[{"id": "r2", "place": "Table 2"}])["isError"])
+            jobs[0]["evidence"].pop()
+            sent.clear()
+            sent.clear()
+            call(tok, "update_job", id="915d7d", remove_evidence=[{"id": "r1", "place": "Fig.3"}])
+            self.assertEqual(sent[0]["fields"]["evidence"], [])
+            sent.clear()
+            call(tok, "update_job", id="915d7d", add_evidence=json.dumps([{"id": "r2", "place": "p. 4"}]))
+            self.assertEqual([(e["id"], e["place"]) for e in sent[0]["fields"]["evidence"]], [("r1", "Figure 3"), ("r2", "Page 4")])
+            sent.clear()
+            for bad in ("[1, 2]", '["r2"]', "not json", '{"id": "r2"}'):
+                r = call(tok, "update_job", id="915d7d", add_evidence=bad)
+                self.assertTrue(r["isError"], bad)
+            self.assertIn("{id, place, why} 객체", call(tok, "update_job", id="915d7d", add_evidence=["r2"])["content"][0]["text"])
+            self.assertEqual(sent, [])
+            self.assertIn("refs에 없는", call(tok, "update_job", id="915d7d", add_evidence=[{"id": "p9"}])["content"][0]["text"],
+                          "sets stay apart: papers is not looked in")
+            self.assertTrue(call(tok, "update_job", id="915d7d", add_evidence=[{"id": "p9", "proj": "papers"}])["isError"])
+            self.assertEqual(sent, [])
+            r = call(tok, "update_job", id="915d7d", add_evidence=[{"id": "nope"}])
+            self.assertIn("refs에 없는", r["content"][0]["text"])
+            self.assertIn("먼저 reference_manager에 등록", r["content"][0]["text"])
+            self.assertEqual(sent, [])
+        finally:
+            mcp._portal, mcp.registry.share_for, mcp.registry.link_project = real, share, link
 
     def test_guide_reads_the_jobboard_guide(self):
         d = mcp.registry.service_dir("jobboard")

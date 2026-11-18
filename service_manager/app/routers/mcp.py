@@ -20,7 +20,7 @@ import uuid
 from datetime import date, datetime
 from pathlib import Path
 from typing import NamedTuple
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
@@ -29,7 +29,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import mcp_tokens, models, registry, security
+from .. import config, mcp_tokens, models, registry, security
 from ..db import SessionLocal, get_db
 from ..deps import portal_token, require_portal_admin
 
@@ -81,6 +81,9 @@ SLIDES = (" A slide deck: slide 1 is the note's title and the first line under i
           "16x9 or 1x1. A tex note cannot be slides.")
 _DECK = {"mode": {"type": "string", "enum": ["slide", "note"]},
          "ratio": {"type": "string", "enum": ["4x3", "16x9", "1x1"]}}
+# How strong a job's evidence is (jobboard's Evidence); its state is a person's to raise, never an agent's.
+STRENGTH = ("measurement", "literature", "evaluated", "calculation", "assumption", "default")
+
 TOOLS = [
     {"name": "tags", "write": False,
      "description": "The tags in use and how many records wear each, per service, most used first: look the exact "
@@ -140,8 +143,9 @@ TOOLS = [
     {"name": "get_record", "write": False,
      "description": "One whole record of a rack service, by the service and id search returned. "
                     "service inbox with the id a propose_* or submit_job returned: the candidate's status "
-                    "(waiting, approved, checked, discarded) and, once approved, made {svc, proj, id}." + DATA,
-     "inputSchema": _schema(["service", "id"], service=_STR, id=_STR, project=_STR)},
+                    "(waiting, approved, checked, discarded) and, once approved, made {svc, proj, id}."
+                    " To read by a record address: path = the record address (in full, lilak record address): the line at the top of a record's edit tab (a note's: toolbox → Common), pasted whole. It stands for service/project/id." + DATA,
+     "inputSchema": _schema([], service=_STR, id=_STR, project=_STR, path=_STR, address=_STR)},
     {"name": "by_tag", "write": False,
      "description": "Records and notes wearing a tag or a tag inside it (`agent` also finds `agent/rack`)." + DATA,
      "inputSchema": _schema(["tag"], tag=_STR, limit={"type": "integer", "minimum": 1, "maximum": 100}, **_WHERE)},
@@ -150,8 +154,9 @@ TOOLS = [
                     "Returns ids and titles, not bodies." + DATA,
      "inputSchema": _schema(query=_STR, tag=_STR, limit={"type": "integer", "minimum": 1, "maximum": 100})},
     {"name": "get_note", "write": False,
-     "description": "One note: title, date, tags, body, and the version update_note needs." + DATA,
-     "inputSchema": _schema(["id"], id=_STR)},
+     "description": "One note: title, date, tags, body, and the version update_note needs."
+                    " To read by a record address: path = the record address (in full, lilak record address): the line at the top of a record's edit tab (a note's: toolbox → Common), pasted whole. It stands for id." + DATA,
+     "inputSchema": _schema([], id=_STR, path=_STR, address=_STR)},
     {"name": "add_note", "write": True,
      "description": "Create a note dated today. Tags are `#tag` words in the body. Returns its id and version. "
                     "mode: slide makes it a slide deck." + SLIDES,
@@ -181,18 +186,28 @@ TOOLS = [
                     "Returns the set's id and value count.",
      "inputSchema": _schema(["text"], text=_STR, format=_STR, title=_STR, name=_STR, project=_STR)},
     {"name": "update_job", "write": True,
-     "description": "Write what a Jobboard job is for and what came of it: goal, why, references, report, "
+     "description": "Write what a Jobboard job is for and what came of it: goal, why, references ((old) free memo; new "
+                    "evidence goes in add_evidence), report, "
                     "briefing (the next step's proposal), note, run, the parameters ids it used, tags to add or "
                     "remove, and inputs: the jobs it was built from (ids or 6-hex short ids; [] clears), which draws "
                     "the flow. id is the job's id, its jobrun id, or its 6-hex short id. What jobrun owns (title, "
                     "status, recipe, server, ...) is refused: it is overwritten from jobrun every 30 s; so are the "
                     "inputs of a job whose jobrun parameters already name its parents. Only the fields given change. "
-                    "files: {output file name: what it is (a plot's caption)}, merged into what is there; \"\" removes one. 쓰는 법은 guide.",
+                    "files: {output file name: what it is (a plot's caption)}, merged into what is there; \"\" removes one. "
+                    "add_evidence: [{id, place, why}] links a reference record (its id, from the set's "
+                    "reference_manager), where in it (Fig. 3, p. 12, ...) and strength (measurement, literature, evaluated, "
+                    "calculation, assumption, default); remove_evidence: [{id, place}]. Evidence linked through MCP stays "
+                    "an agent's proposal (state agent): a person checks and approves it on the board. 쓰는 법은 guide.",
      "inputSchema": _schema(["id"], id=_STR, goal=_STR, why=_STR, references=_STR, report=_STR, briefing=_STR,
                             note=_STR, run=_STR, agent={"type": "string", "enum": ["사람", "Claude", "Codex", "플랫폼 agent"]},
                             params={"type": "array", "items": _STR}, inputs={"type": "array", "items": _STR},
                             add_tags={"type": "array", "items": _STR}, remove_tags={"type": "array", "items": _STR},
-                            files={"type": "object", "additionalProperties": _STR})},
+                            files={"type": "object", "additionalProperties": _STR},
+                            add_evidence={"type": "array", "items": {"type": "object", "properties":
+                                          {"id": _STR, "place": _STR, "why": _STR, "strength": {"type": "string", "enum": list(STRENGTH)}},
+                                          "required": ["id"]}},
+                            remove_evidence={"type": "array", "items": {"type": "object", "properties":
+                                             {"id": _STR, "place": _STR}, "required": ["id"]}})},
     {"name": "approve_job", "write": True,
      "description": "Approve a Jobboard job's result, or cancel an approval (action: revoke). Nothing is "
                     "removed: every approval and cancel stays in the job's list. A platform agent may approve only "
@@ -334,8 +349,32 @@ async def _search(request, grant, args):
     return list(hits.values())[:args.get("limit") or 20]
 
 
+def _from_path(request: Request, line: str) -> dict:
+    """service, project, key and id out of an edit tab's path line, `<origin>/pp/<svc>/<proj>/<key>/<id>`.
+    A line from another portal is refused: the same names there are other records."""
+    u = urlsplit(line.strip())
+    if u.netloc:
+        ours = {request.url.netloc, request.headers.get("x-forwarded-host", "")} | \
+               {urlsplit(o).netloc for o in config.CORS_ORIGINS if o != "*"}
+        if u.netloc not in ours - {""}:
+            raise ToolError(f"{u.scheme}://{u.netloc} 는 다른 포털의 항목입니다. 그 포털에 연결된 MCP로 읽으세요.")
+    parts = [unquote(x) for x in u.path.strip("/").split("/")]
+    if len(parts) != 5 or parts[0] != "pp" or not all(parts):
+        raise ToolError("path 는 <주소>/pp/<서비스>/<프로젝트>/<목록>/<id> 모양입니다.")
+    return dict(zip(("service", "project", "key", "id"), parts[1:]))
+
+
 async def _get(request, grant, args):
-    n = _ok(await _note(request, grant, "GET", _note_path(args)))
+    proj = ""
+    args = {**args, "path": args.get("path") or args.get("address") or ""}   # address: the record address' own name
+    if args.get("path"):
+        got = _from_path(request, args["path"])
+        if got["service"] != "note":
+            raise ToolError(f"노트가 아니라 {got['service']} 의 항목입니다. get_record 로 읽으세요.")
+        args, proj = {**args, "id": got["id"]}, got["project"]
+    if not args.get("id"):
+        raise ToolError("빠진 항목: id (또는 path)")
+    n = _ok(await _portal(request, grant, "note", "GET", _note_path(args), proj))
     return {k: n[k] for k in ("id", "title", "date", "tags", "fields", "version", "body")}
 
 
@@ -626,6 +665,14 @@ async def _search_rack(request, grant, args):
 
 
 async def _get_record(request, grant, args):
+    args = {**args, "path": args.get("path") or args.get("address") or ""}
+    if args.get("path"):
+        got = _from_path(request, args["path"])
+        if got["service"] == "note":
+            return await _get(request, grant, args)
+        args = {**args, **{k: got[k] for k in ("service", "project", "id")}}
+    if not (args.get("service") and args.get("id")):
+        raise ToolError("빠진 항목: service, id (또는 path)")
     if args.get("service") == "inbox":
         # A set's inbox, read here only, by the id a proposal returned: how it stands, and once
         # approved what it made (made.id). Search and by_tag do not see it; any token may ask, and
@@ -742,6 +789,8 @@ async def _update_job(request, grant, args):
     outs = [f for f in run.get("files") or [] if f != "job.log"]
     described = fields.get("files", job.get("files") or {})
     _check_file_notes(fields, outs, described, run.get("state") in JOB_ENDED)
+    if args.get("add_evidence") or args.get("remove_evidence"):
+        fields["evidence"] = await _job_evidence(request, grant, proj, job, args)
     if "inputs" in args:
         fields["inputs"] = _job_inputs(job, [r for k, r in recs if k == "jobs"], args["inputs"])
     if not fields:
@@ -759,6 +808,88 @@ async def _update_job(request, grant, args):
     out = {"id": got["id"], "project": proj, "changed": sorted(fields), "tags": got.get("tags") or []}
     if run.get("state") in JOB_ENDED:
         out["files_missing"] = [f for f in outs if f not in described]
+    return out
+
+
+# reference_manager's paper.js place(), the same table, so the same place cited twice is seen as one.
+PLACE = {
+    **dict.fromkeys(("fig", "figs", "figure", "figures", "그림"), "Figure"),
+    **dict.fromkeys(("tab", "tbl", "table", "tables", "표"), "Table"),
+    **dict.fromkeys(("eq", "eqn", "eqs", "equation", "equations", "식"), "Equation"),
+    **dict.fromkeys(("p", "pg", "page", "쪽", "페이지", "pp", "pgs", "pages"), "Page"),
+    **dict.fromkeys(("sec", "sect", "section", "sections", "절"), "Section"),
+    **dict.fromkeys(("ch", "chap", "chapter", "chapters", "장"), "Chapter"),
+    **dict.fromkeys(("app", "appendix", "appendices", "부록"), "Appendix"),
+    **dict.fromkeys(("thm", "theorem", "theorems", "정리"), "Theorem"),
+    **dict.fromkeys(("slide", "slides", "슬라이드"), "Slide"),
+}
+MANY = {"Figure": "Figures", "Table": "Tables", "Equation": "Equations", "Page": "Pages", "Section": "Sections",
+        "Chapter": "Chapters", "Appendix": "Appendices", "Theorem": "Theorems", "Slide": "Slides"}
+
+
+def place(v) -> str:
+    s = re.sub(r"\s+", " ", str(v or "").strip())
+    m = re.match(r"^([A-Za-z]+|[가-힣]+)\s*\.?\s*(.*)$", s)
+    word = m and PLACE.get(m.group(1).lower())
+    if not word or not m.group(2):
+        return s
+    rest = re.sub(r"\s+", "", m.group(2))
+    return f"{MANY[word] if re.search(r'[-–~,]', rest) else word} {rest}"
+
+
+async def _job_evidence(request, grant, proj, job, args) -> list:
+    """The job's evidence list with add_evidence merged in and remove_evidence taken out. A reference must be
+    in the set's own reference_manager project: sets stay apart (papers, the manage set's, is not looked in)."""
+    for k, shape in (("add_evidence", "{id, place, why}"), ("remove_evidence", "{id, place}")):
+        v = args.get(k) or []
+        if not isinstance(v, list) or not all(isinstance(e, dict) for e in v):
+            raise ToolError(f"{k}의 항목은 {shape} 객체여야 합니다.")
+    places = [p for p in (registry.share_for("jobboard", proj).get("reference_manager", ""),) if p]
+    if not places:
+        raise ToolError("이 잡보드의 세트에 reference_manager 프로젝트가 없습니다.")
+    key = lambda e: (e.get("svc"), e.get("proj"), str(e.get("id")), e.get("place") or "")
+    out = [e for e in job.get("evidence") or [] if isinstance(e, dict)]
+    for e in args.get("add_evidence") or []:
+        if "state" in e or "states" in e:
+            raise ToolError("근거의 state는 MCP로 정할 수 없습니다. MCP로 이은 근거는 agent 제시로 남고, 사람이 화면에서 확인·승인합니다.")
+        if e.get("strength") and e["strength"] not in STRENGTH:
+            raise ToolError(f"strength 는 {', '.join(STRENGTH)} 중 하나입니다.")
+    for d in args.get("remove_evidence") or []:
+        hit = lambda e: (e.get("svc") == "reference_manager" and str(e.get("id")) == str(d.get("id"))
+                         and (e.get("place") or "") == place(d.get("place"))
+                         and (not d.get("proj") or e.get("proj") == d["proj"]))
+        # as the board reads it (Evidence.jsx stateOf): no state = agent only when `by` names an agent
+        held = [e for e in out if hit(e) and (e.get("state") or ("agent" if "agent" in str(e.get("by") or "") else "person")) != "agent"]
+        if held:
+            raise ToolError("사람이 잇거나 확인한 근거는 MCP로 뺄 수 없습니다. 화면에서 사람이 고칩니다.")
+        out = [e for e in out if not hit(e)]
+    add = args.get("add_evidence") or []
+    if add:
+        held = {}   # project -> the reference ids it holds
+        for rp in places:
+            if not mcp_tokens.allowed(grant.scope, "reference_manager", rp):
+                continue
+            try:
+                _, refs = await _records(request, grant, "reference_manager", rp)
+            except ToolError:
+                continue
+            held[rp] = {str(r["id"]) for k, r in refs if k == "references"}
+        plat = await run_in_threadpool(_platform, grant)
+        who = {"by": AGENT, "requester": plat[1]} if plat else \
+              {"by": (security.decode_access_token(grant.jwt) or {}).get("username") or grant.who}
+        now = datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+        for e in add:
+            rid = str(e.get("id") or "")
+            rp = next((p for p in ([e["proj"]] if e.get("proj") else places) if rid in held.get(p, ())), "")
+            if not rp:
+                raise ToolError(f"{'나 '.join(places)}에 없는 레퍼런스입니다. 먼저 reference_manager에 등록하세요: {rid}")
+            item = {"svc": "reference_manager", "proj": rp, "id": rid, "place": place(e.get("place")),
+                    "why": str(e.get("why") or ""), **who, "at": now, "state": "agent",
+                    "states": [{"state": "agent", "from": "", "by": who["by"], "at": now}]}
+            if e.get("strength"):
+                item["strength"] = e["strength"]
+            if key(item) not in {key(x) for x in out}:
+                out.append(item)
     return out
 
 
@@ -1199,6 +1330,16 @@ async def _call(request: Request, grant: Grant, params: dict) -> dict:
     tool = next((t for t in TOOLS if t["name"] == name and (grant.can_write or not t["write"])), None)
     if not tool:
         return _text(f"이 토큰으로 쓸 수 없는 도구입니다: {name}", True)
+    # A client whose tool list predates an argument sends it as a JSON string; read it as what it means.
+    for k, spec in tool["inputSchema"]["properties"].items():
+        want = {"array": list, "object": dict}.get(spec.get("type"))
+        if want and isinstance(args.get(k), str):
+            try:
+                args = {**args, k: json.loads(args[k])}
+            except ValueError:
+                return _text(f"{k} 는 JSON {'배열' if want is list else '객체'}이어야 합니다.", True)
+            if not isinstance(args[k], want):
+                return _text(f"{k} 는 JSON {'배열' if want is list else '객체'}이어야 합니다.", True)
     missing = [k for k in tool["inputSchema"]["required"] if not isinstance(args.get(k), str)]
     if missing:
         return _text(f"빠진 항목: {', '.join(missing)}", True)
