@@ -108,7 +108,7 @@ def list_services(
     db: Session = Depends(get_db),
 ):
     # Which project a card opens straight away is the account's own choice.
-    out = entry_labels(split_cards(annotate_services(db, user, prefs.with_entries(user, list_raw_services())), user, db))
+    out = entry_labels(split_cards(annotate_services(db, user, prefs.with_entries(user, list_raw_services())), user, db), user)
     if not _is_admin(user):
         # Hidden in manage mode, or inside a group that is hidden as a whole.
         # "No group" hidden takes every service filed nowhere with it.

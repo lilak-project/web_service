@@ -81,6 +81,8 @@ def list_projects(svc: str, user: models.User = Depends(require_portal_user),
             "can_request": can_req,
             "requested": (can_req and _pending_proj(db, user.id, svc, proj)),
             "view_only": (has_grant and not enter),     # has access but verification lapsed
+            # May rename it, set its admins …: what the cover offers this account for it.
+            "can_manage": admin or permissions.is_project_admin(db, user, svc, proj),
         })
     return out
 

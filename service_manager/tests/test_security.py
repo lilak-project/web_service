@@ -201,8 +201,15 @@ class Accounts(unittest.TestCase):
                                              "capabilities": {"multi_project": True}, "entry_project": "main"})
         admin = bearer(self.admin)
         self.assertEqual(c.put("/api/services/entrysvc/projects/main/name", json={"name": "main-jw"}, headers=admin).status_code, 200)
-        card = next(s for s in c.get("/api/services", headers=admin).json() if s["name"] == "entrysvc")
-        self.assertEqual((card["label"], card["service_label"]), ("main-jw", "Entry svc"))
+        card = lambda: next(s for s in c.get("/api/services", headers=admin).json() if s["name"] == "entrysvc")   # noqa: E731
+        # The service's own main project does not rename the card; this account's "open directly" does.
+        self.assertEqual(card()["label"], "Entry svc")
+        from app import prefs
+        with SessionLocal() as db:
+            u = db.query(models.User).filter(models.User.username == "admin").first()
+            prefs.put(u, entry={"entrysvc": "main"})
+            db.commit()
+        self.assertEqual((card()["label"], card()["service_label"]), ("main-jw", "Entry svc"))
 
     def test_home_tabs_writes_are_a_managers(self):
         # Every call the Home tabs make beyond reading: group editing, rack services,

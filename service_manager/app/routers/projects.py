@@ -116,13 +116,15 @@ def api_projects(user=Depends(require_portal_user), db: Session = Depends(get_db
     return prefs.with_entries(user, rows)
 
 
-def entry_labels(rows: list[dict]) -> list[dict]:
-    """A service card that opens one project directly (open directly / main
-    project) is named after that project, the way a project card is; the
-    service's own name moves to `service_label`."""
-    from .. import project_runtime as pr
+def entry_labels(rows: list[dict], user=None) -> list[dict]:
+    """A service card this account set to open one project directly (its own
+    "open directly", prefs.entry) is named after that project, the way a project
+    card is; the service's own name moves to `service_label`. The service's
+    default main project (manifest entry_project) does not rename the card."""
+    from .. import prefs, project_runtime as pr
+    mine = (prefs.get(user).get("entry") or {}) if user is not None else {}
     for r in rows:
-        proj = r.get("entry_project") if r.get("multi_project") and not r.get("project_card") else ""
+        proj = mine.get(r["name"]) if r.get("multi_project") and not r.get("project_card") else ""
         if not proj:
             continue
         p = next((x for x in pr.list_projects(r["name"]) if x["name"] == proj), None)

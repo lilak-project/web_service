@@ -537,8 +537,11 @@ export default function ProjectsPage() {
   const named = mine
     // A card this portal hides (home.json, a set's project_manager) stays hidden in
     // an account's own bar too; the account's list only hides more.
-    ? named0.map((c) => { const k = cardKey(c); return { ...c, hidden: !!c.hidden || layout.hidden.includes(k),
-      label: layout.labels[k] || c.label, my_label: layout.labels[k] || '', default_label: c.label } })
+    // A project card is named by its project (one name everywhere); an account's own
+    // name is for service cards only.
+    ? named0.map((c) => { const k = cardKey(c); const own = c.project_card ? '' : layout.labels[k] || ''
+      return { ...c, hidden: !!c.hidden || layout.hidden.includes(k),
+        label: own || c.label, my_label: own, default_label: c.label } })
     : named0
   const cardsAll = sortByHome(named, homeCfg?.order || [])
   const cards = isManager ? cardsAll.filter((c) => !c.hidden) : cardsAll
