@@ -103,18 +103,23 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
   }
 
   // An MCP token bound to one set: an agent given it reads and writes that set's projects only.
-  // Shown once, with the line that registers it in Claude Code. Managers only (the token API is theirs).
+  // Shown once, with the line that registers it in Claude Code. For whoever administers every project of
+  // the set (a manager, or a project admin holding the whole set): the server says, by answering the list.
   const [tok, setTok] = useState(null)        // { i, write, made? }
-  // The tokens bound to each set (scope set:<id>), so a set shows who reaches it.
-  const [tokens, setTokens] = useState([])
-  const loadTokens = () => { if (!readOnly) launcher.get('/admin/mcp-tokens').then((r) => setTokens(r.data || [])).catch(() => {}) }
-  useEffect(loadTokens, [readOnly])
-  const boundTo = (st) => tokens.filter((t) => !t.revoked && !t.expired
-    && String(t.scope || '').split(',').some((p) => p === `set:${st.id}` || p === `set:${st.name}`))
+  // The tokens bound to each set, by set id or name; a set missing here is not the viewer's to issue for.
+  const [tokens, setTokens] = useState({})
+  const setKeys = (sets || []).map((st) => st.id || st.name).join('|')
+  const loadTokens = () => {
+    Promise.all((sets || []).map((st) => launcher.get('/share-sets/mcp-tokens', { params: { set: st.id || st.name } })
+      .then((r) => [st.id || st.name, r.data || []], () => null)))
+      .then((rows) => setTokens(Object.fromEntries(rows.filter(Boolean))))
+  }
+  useEffect(loadTokens, [setKeys])  // eslint-disable-line react-hooks/exhaustive-deps
+  const mayIssue = (st) => !!tokens[st.id || st.name]
+  const boundTo = (st) => (tokens[st.id || st.name] || []).filter((t) => !t.revoked && !t.expired)
   const issueTok = async (st) => {
     try {
-      const r = await launcher.post('/admin/mcp-tokens', { name: `set-${st.name}`, scope: `set:${st.id || st.name}`,
-        can_write: !!tok.write, days: 180 })
+      const r = await launcher.post('/share-sets/mcp-tokens', { set: st.id || st.name, can_write: !!tok.write, days: 180 })
       setTok({ ...tok, made: r.data.token })
       loadTokens()
       // The sets may have been given their ids just now: take them, so the next save keeps them.
@@ -372,13 +377,13 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
                 {/* The set's sidebar group follows it on its own (service_groups.sync_set_groups). */}
                 {!readOnly && <>
                   <button type="button" disabled={!picked.size || twoOfOne} onClick={() => moveHere(i)}>{tr('p_share_move_here')}</button>
-                  <button type="button" disabled={dirty} title={dirty ? tr('p_share_tok_save_first') : undefined}
-                    onClick={() => setTok(tok?.i === i ? null : { i, write: true })}>{tr('p_share_tok')}</button>
                   <button type="button" onClick={() => edit((s) => s.filter((_, k) => k !== i))}>{tr('p_share_delete_set')}</button>
                 </>}
+                {mayIssue(st) && <button type="button" disabled={dirty} title={dirty ? tr('p_share_tok_save_first') : undefined}
+                  onClick={() => setTok(tok?.i === i ? null : { i, write: true })}>{tr('p_share_tok')}</button>}
               </span>
             )}>
-            {!readOnly && (
+            {mayIssue(st) && (
               <Row className="sub" style={{ flexWrap: 'wrap', gap: 8 }}>
                 <span>{tr('p_share_tok_bound')}</span>
                 {boundTo(st).length ? boundTo(st).map((t) => (

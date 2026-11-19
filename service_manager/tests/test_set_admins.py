@@ -68,6 +68,20 @@ class SetAdmins(unittest.TestCase):
         self.assertEqual((len(rows), any(r.is_admin for r in rows)), (2, False))   # off as admin, way in kept
 
 
+    def test_mcp_tokens_for_a_set_admin(self):
+        u = "/api/share-sets/mcp-tokens"
+        self.assertEqual(c.get(u, params={"set": "s1"}, headers=self.other).status_code, 403)
+        self.assertEqual(c.post(u, json={"set": "s1", "can_write": True}, headers=self.other).status_code, 403)
+        r = c.post(u, json={"set": "s1", "can_write": True}, headers=self.pa)
+        self.assertEqual(r.status_code, 201, r.text)
+        self.assertTrue(r.json()["token"].startswith("lpm_"))
+        rows = c.get(u, params={"set": "s"}, headers=self.pa).json()
+        self.assertEqual([(t["scope"], t["owner"]) for t in rows], [("set:s1", "pa")])   # bound by id, the issuer's own
+        self.assertEqual(c.get("/api/admin/mcp-tokens", headers=self.pa).status_code, 403)  # the whole list stays a manager's
+        self.assertEqual(c.delete(f"{u}/{rows[0]['id']}", params={"set": "s1"}, headers=self.other).status_code, 403)
+        self.assertEqual(c.delete(f"{u}/{rows[0]['id']}", params={"set": "s1"}, headers=self.pa).status_code, 200)
+        self.assertTrue(c.get(u, params={"set": "s1"}, headers=self.mgr).json()[0]["revoked"])
+
     def test_zz_the_last_admin_stays_unless_a_manager_says(self):
         off = lambda who, uid: c.post("/api/share-sets/admins", json={"set": "s1", "user_id": uid, "admin": False}, headers=who).status_code  # noqa: E731
         self.assertEqual(off(self.pa, self.ids["pa"]), 409)                     # pa is the only one: not even themselves

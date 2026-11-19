@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from .. import config, mcp_tokens, models, registry, security
 from ..db import SessionLocal, get_db
-from ..deps import portal_token, require_portal_admin
+from ..deps import portal_token, require_portal_admin, require_portal_user
 
 router = APIRouter()
 log = logging.getLogger("uvicorn.error")
@@ -1445,6 +1445,55 @@ def revoke_token(token_id: int, _: models.User = Depends(require_portal_admin), 
     t = db.get(models.McpToken, token_id)
     if not t:
         raise HTTPException(404, "그 토큰이 없습니다.")
+    t.revoked_at = t.revoked_at or mcp_tokens._now()
+    db.commit()
+    return {"ok": True}
+
+
+# A set's own tokens, for whoever administers every project of it (the portal admin, or a project admin
+# who holds the whole set: project_mgmt._set_admin_ok). The token is theirs, so it opens no more than they may.
+class SetToken(BaseModel):
+    set: str
+    can_write: bool = False
+    days: int = 180
+
+
+def _bound(t: models.McpToken, st: dict) -> bool:
+    return any(p.strip() in (f"set:{st.get('id')}", f"set:{st['name']}") for p in (t.scope or "").split(","))
+
+
+def _admin_set(db: Session, user: models.User, key: str) -> dict:
+    from .project_mgmt import _set_admin_ok, _the_set
+    st = _the_set(key)
+    _set_admin_ok(db, user, st)
+    return st
+
+
+@router.get("/api/share-sets/mcp-tokens")
+def set_tokens(set: str, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)) -> list:
+    st = _admin_set(db, user, set)
+    return [_token_row(db, t) for t in db.query(models.McpToken).order_by(models.McpToken.id.desc()) if _bound(t, st)]
+
+
+@router.post("/api/share-sets/mcp-tokens", status_code=201)
+def new_set_token(body: SetToken, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)) -> dict:
+    st = _admin_set(db, user, body.set)
+    if not 1 <= body.days <= 3650:
+        raise HTTPException(400, "기간은 1~3650일이어야 합니다.")
+    try:   # the one time the token itself leaves the portal
+        return {"token": mcp_tokens.issue(db, f"set-{st['name']}"[:64], user, body.can_write, body.days,
+                                          f"set:{st.get('id') or st['name']}")}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.delete("/api/share-sets/mcp-tokens/{token_id}")
+def revoke_set_token(token_id: int, set: str, user: models.User = Depends(require_portal_user),
+                     db: Session = Depends(get_db)) -> dict:
+    st = _admin_set(db, user, set)
+    t = db.get(models.McpToken, token_id)
+    if not t or not _bound(t, st):
+        raise HTTPException(404, "이 세트에 묶인 그 토큰이 없습니다.")
     t.revoked_at = t.revoked_at or mcp_tokens._now()
     db.commit()
     return {"ok": True}
