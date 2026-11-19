@@ -1383,7 +1383,7 @@ export default function SidebarPortal({
       }
       return (
         <>
-          <MyCardPanel card={selSvc} personal={personal} />
+          <MyCardPanel card={selSvc} personal={personal} onChanged={onRefresh} />
           {isManager && !selSvc.builtin && servicePanel(selSvc)}
         </>
       )
