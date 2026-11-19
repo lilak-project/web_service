@@ -91,6 +91,7 @@ def _migrate() -> None:
     if "portal_chat_messages" in names:
         add_missing("portal_chat_messages", {
             "mentions_json": "ALTER TABLE portal_chat_messages ADD COLUMN mentions_json TEXT NOT NULL DEFAULT '[]'",
+            "via": "ALTER TABLE portal_chat_messages ADD COLUMN via VARCHAR(64) NOT NULL DEFAULT ''",
         })
 
     with engine.begin() as conn:

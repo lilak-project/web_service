@@ -66,6 +66,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
   const [me, setMe] = useState(null)
   const [text, setText] = useState('')
   const [reply, setReply] = useState(null)
+  const [thread, setThread] = useState(null)                 // the root message whose thread is open
   const [atts, setAtts] = useState([])
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -178,7 +179,33 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
     shown.current = n
     setMore(full || !noMore.current)
   }, [])
-  useLayoutEffect(() => { fit() }, [msgs, open, fit, skip])
+  // Threads, worked out from what is loaded: a reply belongs to the first message up its
+  // reply chain (a deleted one, or one not loaded, ends the chain there). The room shows
+  // the roots, each with how many replies it has; a thread shows its root and replies.
+  // Deleted messages are not drawn at all.
+  const live = useMemo(() => msgs.filter((m) => !m.deleted), [msgs])
+  const rootOf = useMemo(() => {
+    const by = new Map(live.map((m) => [m.id, m]))
+    const memo = new Map()
+    const up = (m) => {
+      if (memo.has(m.id)) return memo.get(m.id)
+      const p = m.reply_to_id && by.get(m.reply_to_id)
+      const r = p ? up(p) : m.id
+      memo.set(m.id, r)
+      return r
+    }
+    return (m) => up(m)
+  }, [live])
+  const replies = useMemo(() => {
+    const n = {}
+    for (const m of live) { const r = rootOf(m); if (r !== m.id) n[r] = (n[r] || 0) + 1 }
+    return n
+  }, [live, rootOf])
+  const view = thread ? live.filter((m) => m.id === thread || rootOf(m) === thread) : live.filter((m) => rootOf(m) === m.id)
+  const openThread = (m) => { setThread(rootOf(m)); setSkip(0); pages.current = []; setReply(null); setTimeout(() => inputRef.current?.focus(), 0) }
+  useEffect(() => { setThread(null) }, [room])
+
+  useLayoutEffect(() => { fit() }, [msgs, open, fit, skip, thread])
 
   // The list does not scroll (see fit): older messages are a page back, fetched as needed.
   async function older() {
@@ -279,7 +306,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
     setNotice('')
     setBusy(true)
     try {
-      const { data } = await launcher.post('/chat/messages', { room, body: text, reply_to_id: reply?.id || null, attachments: atts })
+      const { data } = await launcher.post('/chat/messages', { room, body: text, reply_to_id: reply?.id || thread || null, attachments: atts })
       setText(''); setAtts([]); setReply(null); setErr(''); setAt(null); newest()
       lastId.current = Math.max(lastId.current, data.id - 1)
       await load(false)
@@ -330,7 +357,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
     if (e.key === 'Escape') {
       // Ours, not the portal's: the portal would read it as command mode.
       e.preventDefault(); e.stopPropagation()
-      if (at) setAt(null); else if (picking) setPicking(false); else if (reply) setReply(null); else onClose?.()
+      if (at) setAt(null); else if (picking) setPicking(false); else if (reply) setReply(null); else if (thread) setThread(null); else onClose?.()
       return
     }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
@@ -340,19 +367,28 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
   return (
     <div className="pc-root" onKeyDown={onKey}>
       <div className="pc-list" ref={listRef}>
-        {msgs.length === 0 && <div className="pc-line pc-empty">{tr('pc_empty', roomLabel(room))}</div>}
-        {msgs.map((m) => {
-          const col = colourOf(m)
+        {view.length === 0 && <div className="pc-line pc-empty">{tr('pc_empty', roomLabel(room))}</div>}
+        {view.map((m) => {
+          // A line written by a program for its owner (an MCP token, e.g. Claude answering
+          // @claude) is drawn as that program, not as the person.
+          const col = m.via ? '#7f77dd' : colourOf(m)
           return (
             <div key={m.id} className="pc-group">
               <div className={`pc-line${m.user_id === me?.id ? ' mine' : ''}${m.user_id !== me?.id && (m.mentions || []).some((x) => x === 0 || x === me?.id) ? ' at-me' : ''}`} style={{ '--pc-col': col }}>
                 {/* The author's own account icon, small: the one on their account card. */}
-                <Avatar icon={m.author_shape} color={col} seed={m.author_username || m.author_name} size={14} />
-                <b className="pc-name">{m.author_name}</b>
+                {m.via
+                  ? <span className="pc-dot" title={tr('pc_via', m.via, m.author_name)}><Icon name="robot" size={9} color="#fff" /></span>
+                  : <Avatar icon={m.author_shape} color={col} seed={m.author_username || m.author_name} size={14} />}
+                <b className="pc-name" title={m.via ? tr('pc_via', m.via, m.author_name) : undefined}>{m.via || m.author_name}</b>
                 <div className="pc-body">
-                  {m.reply_to_id && <span className="pc-quote">↳ {m.reply_to_author}: {m.reply_to_body || '…'}</span>}
-                  {m.deleted ? <i className="pc-gone">{tr('pc_deleted')}</i> : <span className="pc-text"><Body text={m.body} re={atRe} /></span>}
+                  {m.reply_to_id && !thread && rootOf(m) === m.id && <span className="pc-quote">↳ {m.reply_to_author}: {m.reply_to_body || '…'}</span>}
+                  {m.deleted ? null : <span className="pc-text"><Body text={m.body} re={atRe} /></span>}
                   {(m.attachments || []).length > 0 && <div className="pc-atts">{m.attachments.map((a) => <Att key={a.id} a={a} room={room} />)}</div>}
+                  {!thread && replies[m.id] > 0 && (
+                    <button type="button" className="pc-thread" onClick={() => openThread(m)}>
+                      <Icon name="chats" size={11} /> {tr('pc_replies', replies[m.id])}
+                    </button>
+                  )}
                 </div>
                 {/* Time and the actions share one slot: on hover the icons take the
                     time's place, so nothing in the line moves or widens. */}
@@ -361,7 +397,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
                   {!m.deleted && (
                     <span className="pc-acts">
                       <button type="button" title={tr('pc_reply')} aria-label={tr('pc_reply')}
-                        onClick={() => { setReply(m); inputRef.current?.focus() }}><Icon name="reply" size={13} /></button>
+                        onClick={() => (thread ? (setReply(m), inputRef.current?.focus()) : openThread(m))}><Icon name="reply" size={13} /></button>
                       {(m.user_id === me?.id || me?.admin) && (
                         <button type="button" title={tr('pc_delete')} aria-label={tr('pc_delete')} onClick={() => del(m)}><Icon name="trash" size={13} /></button>
                       )}
@@ -391,6 +427,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
           {more && (
             <button type="button" className="pc-room" onClick={older} title="PageUp">↑ {tr('pc_older')}</button>
           )}
+          {thread && <button type="button" className="pc-room pc-inthread" onClick={() => setThread(null)} title="Esc">← {tr('pc_thread_close')}</button>}
           {skip > 0 && <button type="button" className="pc-room" onClick={newest}>↓ {tr('pc_newest')}</button>}
           <span className="pc-hint">{tr('pc_hint')}</span>
         </div>

@@ -29,7 +29,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import config, mcp_tokens, models, registry, security
+from .. import config, mcp_tokens, models, permissions, registry, security
 from ..db import SessionLocal, get_db
 from ..deps import portal_token, require_portal_admin, require_portal_user
 
@@ -248,6 +248,20 @@ TOOLS = [
      "inputSchema": _schema(["service", "task"], service=_STR, project=_STR, task=_STR,
                             provider={"type": "string", "enum": ["claude", "openai"]},
                             approval={"type": "string", "enum": ["human", "similar", "auto"]}, model=_STR)},
+    {"name": "chat_rooms", "write": False,
+     "description": "The portal chat's rooms you can use: portal (everyone), system (your own), and the project "
+                    "rooms opened so far (service/project).",
+     "inputSchema": _schema([])},
+    {"name": "chat_read", "write": False,
+     "description": "Read a portal chat room: its last messages, or those after an id (to see what is new). "
+                    "room: portal, system, or service/project. Each line: id, who, via (a program writing for "
+                    "them), text, reply_to, time.",
+     "inputSchema": _schema(["room"], room=_STR, after={"type": "integer"}, limit={"type": "integer"})},
+    {"name": "chat_send", "write": True,
+     "description": "Write in a portal chat room as yourself, marked as written by this token (shown with the "
+                    "token's name, not as typed by the person). reply_to: the id of the message answered — "
+                    "the line then sits in that message's thread.",
+     "inputSchema": _schema(["room", "text"], room=_STR, text=_STR, reply_to={"type": "integer"})},
     {"name": "agent_run", "write": False,
      "description": "How a delegated run went: status (queued, running, done, failed), its result and the tokens it "
                     "spent. Give id; without it, your last runs.",
@@ -1005,6 +1019,52 @@ async def _agent_run(request, grant, args):
     return {"runs": _ok(await _self(request, grant, "GET", "/api/agent/runs"))[:10]}
 
 
+# ── the portal chat: read and write as the token's owner, marked with the token's name ──
+def _room_ok(grant: Grant, room: str) -> str:
+    room = (room or "").strip()
+    if "/" in room:
+        svc, _, proj = room.partition("/")
+        if not mcp_tokens.allowed(grant.scope, svc, proj):
+            raise ToolError(f"이 토큰은 {room} 방을 쓸 수 없습니다.")
+    elif room not in ("portal", "system"):
+        raise ToolError("방: portal, system, 또는 서비스/프로젝트")
+    return room
+
+
+async def _chat_rooms(request, grant, args):
+    rooms = _ok(await _self(request, grant, "GET", "/api/chat/rooms"))
+    return {"rooms": [r["key"] for r in rooms if "/" not in r["key"] or mcp_tokens.allowed(grant.scope, r.get("service", ""), r.get("project", ""))]}
+
+
+async def _chat_read(request, grant, args):
+    room = _room_ok(grant, args.get("room"))
+    params = {"room": room, "after": int(args.get("after") or 0)}
+    data = _ok(await _self(request, grant, "GET", "/api/chat/messages", params=params))
+    lines = [{"id": m["id"], "who": m["author_name"], "via": m.get("via") or "", "text": m["body"],
+              "reply_to": m.get("reply_to_id"), "time": m.get("created_at"),
+              **({"agent": {"status": m["run"]["status"], "result": m["run"]["result"]}} if m.get("run") else {})}
+             for m in data["messages"] if not m.get("deleted")]
+    return {"room": room, "me": data["me"]["name"], "messages": lines[-max(1, min(int(args.get("limit") or 30), 200)):]}
+
+
+async def _chat_send(request, grant, args):
+    from ..db import SessionLocal
+    from . import chat
+    room = _room_ok(grant, args.get("room"))
+    if not (args.get("text") or "").strip():
+        raise ToolError("보낼 글이 없습니다.")
+    with SessionLocal() as db:
+        user = permissions.user_from_request(db, grant.jwt)
+        if not user:
+            raise ToolError("토큰 주인을 찾을 수 없습니다.")
+        try:
+            m = chat.post(chat.SendBody(room=room, body=args["text"], reply_to_id=args.get("reply_to")), db, user,
+                          via=grant.who or "mcp")
+        except HTTPException as e:
+            raise ToolError(str(e.detail))
+    return {"id": m["id"], "room": room}
+
+
 # ── reference finding (tags, find, related) and an agent's own work (my_tasks, job_context) ──
 DATE_KEYS = ("date", "start", "talkDate", "year", "createdAt")    # a reference has only its year
 
@@ -1307,6 +1367,7 @@ HANDLERS = {"tags": _tags, "find": _find, "related": _related, "my_tasks": _my_t
             "search_notes": _search, "get_note": _get, "add_note": _add, "update_note": _update,
             "append_note": _append, "add_file": _add_file, "update_job": _update_job,
             "add_params": _add_params, "delegate": _delegate, "agent_run": _agent_run,
+            "chat_rooms": _chat_rooms, "chat_read": _chat_read, "chat_send": _chat_send,
             "approve_job": _approve_job, "job_recipes": _job_recipes, "submit_job": _submit_job,
             "job_status": _job_status, "add_evaluation": _add_evaluation, "guide": _guide}
 PROPOSERS = {"propose_note": _propose_note, "propose_activity": _propose_activity}

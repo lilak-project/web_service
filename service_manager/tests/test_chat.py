@@ -148,6 +148,32 @@ class Chat(unittest.TestCase):
         self.assertEqual(c.post("/api/chat/messages", headers=self.user, json={"room": "system", "body": "hi"}).status_code, 403)
         self.assertEqual(c.put("/api/account/prefs", headers=self.user, json={"chatRoom": "system"}).status_code, 200)
 
+    def test_mcp_chat_tools(self):
+        import json as _json
+        def tok(scope=""):
+            return c.post("/api/admin/mcp-tokens", headers=self.admin,
+                          json={"name": "claude", "can_write": True, "scope": scope}).json()["token"]
+        def call(t, name, **args):
+            r = c.post("/mcp", headers={"Authorization": f"Bearer {t}"},
+                       json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}}).json()["result"]
+            return r["isError"], (_json.loads(r["content"][0]["text"]) if not r["isError"] else r["content"][0]["text"])
+        t = tok()
+        err, rooms = call(t, "chat_rooms")
+        self.assertFalse(err); self.assertIn("system", rooms["rooms"]); self.assertIn("elog/exp1", rooms["rooms"])
+        err, sent = call(t, "chat_send", room="elog/exp1", text="answer from claude")
+        self.assertFalse(err, sent)
+        err, got = call(t, "chat_read", room="elog/exp1", after=sent["id"] - 1)
+        line = next(m for m in got["messages"] if m["id"] == sent["id"])
+        self.assertEqual((line["via"], line["who"]), ("claude", "admin"))
+        # Shown as the token, never claimable from a page: the HTTP route ignores a "via".
+        r = c.post("/api/chat/messages", headers=self.admin, json={"room": "portal", "body": "x", "via": "claude"}).json()
+        self.assertEqual(r["via"], "")
+        # A program's line in the system room is not a task for the agent (no key here would 400).
+        self.assertFalse(call(t, "chat_send", room="system", text="note to self")[0])
+        # A token kept to note cannot use a project room outside it.
+        self.assertTrue(call(tok("note"), "chat_read", room="elog/exp1")[0])
+        self.assertTrue(call(t, "chat_read", room="../x")[0])
+
     def test_agent_only_in_project_rooms(self):
         r = c.post("/api/chat/messages", headers=self.user, json={"room": "portal", "body": "@agent do it"})
         self.assertEqual(r.status_code, 400)

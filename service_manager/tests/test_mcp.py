@@ -140,7 +140,8 @@ class Gates(unittest.TestCase):
         names = {t["name"] for t in rpc(tok, "tools/list").json()["result"]["tools"]}
         self.assertEqual(names, {"tags", "find", "related", "my_tasks", "job_context", "job_recipes", "guide", "job_status", "list_services", "search",
                                  "get_record", "by_tag",
-                                 "search_notes", "get_note", "propose_note", "propose_activity", "agent_run"})
+                                 "search_notes", "get_note", "propose_note", "propose_activity", "agent_run",
+                                 "chat_rooms", "chat_read"})
         r = call(tok, "add_note", title="x", body="y")
         self.assertTrue(r["isError"])
         self.assertEqual(self.calls, [])

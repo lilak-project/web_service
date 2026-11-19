@@ -93,3 +93,9 @@
 .pc-rooms .pc-none { display: block; padding: 4px 8px 4px 20px; color: var(--dock-text-muted); }
 /* A /command's answer in the system room. */
 .pc-notice { font-size: var(--fs-tiny); color: var(--dock-text-secondary); margin: 2px 0; white-space: pre-wrap; }
+
+/* A message's thread: how many replies, under its text; open, the room shows only it. */
+.pc-thread { display: inline-flex; align-items: center; gap: 3px; margin-top: 2px; border: 0; background: none; padding: 0;
+  font: inherit; font-size: var(--fs-tiny); color: var(--accent, #2563eb); cursor: pointer; }
+.pc-thread:hover { text-decoration: underline; }
+.pc-room.pc-inthread { color: var(--accent, #2563eb); border-color: var(--accent, #2563eb); }

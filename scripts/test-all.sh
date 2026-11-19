@@ -25,6 +25,7 @@ step "portal mcp tests"           $PY -W ignore $ROOT/service_manager/tests/test
 step "portal passkey tests"       $PY -W ignore $ROOT/service_manager/tests/test_passkeys.py
 step "portal layout tests"        $PY -W ignore $ROOT/service_manager/tests/test_layout.py
 step "portal chat tests"          $PY -W ignore $ROOT/service_manager/tests/test_chat.py
+step "chat relay selftest"        $PY $ROOT/service_manager/scripts/chat_relay.py --selftest
 step "portal agent tests"         $PY -W ignore $ROOT/service_manager/tests/test_agent.py
 step "portal delegate tests"         $PY -W ignore $ROOT/service_manager/tests/test_delegate.py
 step "portal set-admin tests"         $PY -W ignore $ROOT/service_manager/tests/test_set_admins.py

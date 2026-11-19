@@ -252,6 +252,7 @@ def _out(m: models.ChatMessage, runs: dict, by_id: dict, users: dict | None = No
         "author_shape": u.profile_shape if u else None,
         "author_color": u.profile_color if u else None,
         "author_admin": bool(u and permissions.is_admin(u)),
+        "via": getattr(m, "via", "") or "",
         "body": "" if m.deleted else m.body, "deleted": m.deleted,
         "reply_to_id": m.reply_to_id,
         "reply_to_author": reply.author_name if reply else None,
@@ -299,6 +300,12 @@ class SendBody(BaseModel):
 
 @router.post("/api/chat/messages")
 def send(b: SendBody, db: Session = Depends(get_db), user: models.User = Depends(require_portal_user)):
+    return post(b, db, user)
+
+
+def post(b: SendBody, db: Session, user: models.User, via: str = "") -> dict:
+    """Send `b` as `user`. `via`: the program writing for them (the MCP chat_send tool
+    passes its token's name) — never taken from a request, so a page cannot claim one."""
     room = _check_room(db, user, b.room)
     from datetime import datetime, timedelta
     if db.query(models.ChatMessage).filter(models.ChatMessage.user_id == user.id,
@@ -316,8 +323,8 @@ def send(b: SendBody, db: Session = Depends(get_db), user: models.User = Depends
         raise HTTPException(400, "답글을 달 메시지가 이 방에 없습니다.")
     m = models.ChatMessage(room=room, user_id=user.id, author_name=user.display_name or user.username,
                            body=body, reply_to_id=b.reply_to_id, attachments_json=json.dumps(atts, ensure_ascii=False),
-                           mentions_json=json.dumps(_mentions(db, user, room, body)))
-    if room.startswith(SYSTEM_ROOM + ":") and body:
+                           mentions_json=json.dumps(_mentions(db, user, room, body)), via=(via or "")[:64])
+    if room.startswith(SYSTEM_ROOM + ":") and body and not via:
         # The system room is the account talking to the platform agent: every line
         # is a task for it, under the portal's own key (llm_keys "portal").
         try:

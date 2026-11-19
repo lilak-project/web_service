@@ -293,6 +293,9 @@ class ChatMessage(Base):
     attachments_json = Column(Text, nullable=False, default="[]")
     # Account ids this message @mentions, resolved when it was sent; 0 = @all.
     mentions_json = Column(Text, nullable=False, default="[]")
+    # Written by a program on the account's behalf (an MCP token's name, e.g. a Claude
+    # session answering @claude), not typed by the person: drawn as that, not as them.
+    via = Column(String(64), nullable=False, default="")
     run_id = Column(Integer, nullable=True)
     deleted = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=_now)
