@@ -390,3 +390,24 @@ projects are skipped.
 - **What stops it:** revoking, expiry (180 days by default), or the owner being deactivated. **"Sign out everywhere" and a password change do not revoke tokens**, so revoke them too if an account may be compromised.
 - **Per server:** tokens do not sync.
 - **Public servers:** `/mcp` is served at the portal's address. Treat tokens like passwords and use HTTPS only. Write calls are logged with the token's name and the target id, never the token itself.
+
+## 11. Note's slide PDF needs Chrome / 노트 슬라이드 PDF에는 Chrome이 필요함
+
+**한국어** — 노트의 "슬라이드 크기 PDF"는 note 서비스가 headless Chrome으로 자기 인쇄 페이지를 찍어서 만듭니다. 도커 이미지에는 Chrome을 **넣지 않습니다**. 넣으면 400MB쯤 커지고, 이 기능 하나 때문입니다. Chrome이 없으면 그 버튼만 "Chrome이 없다"(503)고 답하고, 나머지는 그대로 동작합니다. 쓰려면 아래 가운데 하나를 고르세요.
+
+- **네이티브 설치(맥, `run-native.sh`):** Google Chrome이나 Chromium을 설치합니다. note가 `/Applications/Google Chrome.app`, `/Applications/Chromium.app`, PATH의 `chromium`·`chromium-browser`·`google-chrome`을 차례로 찾습니다.
+- **다른 위치:** 환경변수 `NOTE_CHROME`에 실행 파일 경로를 줍니다.
+- **도커:** 호스트에 깔린 Chrome은 컨테이너가 쓸 수 없습니다(라이브러리가 다름). 꼭 필요하면 이미지를 직접 확장합니다. 한글 글꼴(`fonts-noto-cjk`)과 멈춘 Chrome을 끌 `procps`도 함께 넣습니다.
+  ```dockerfile
+  FROM lilak-web-portal:latest
+  RUN apt-get update && apt-get install -y --no-install-recommends chromium fonts-noto-cjk procps \
+      && rm -rf /var/lib/apt/lists/*
+  ```
+- **주의:** 서버의 Chrome은 노트 본문에 있는 바깥 그림 주소도 가져옵니다. 공개 서버에서는 이 점을 알고 켜세요.
+
+**English** — Note's "slide-size PDF" is printed by a headless Chrome from the service's own print page. The Docker image does **not** ship Chrome (about +400 MB for this one button); without it that button answers 503 and everything else works. To enable it, pick one:
+
+- **Native install (Mac, `run-native.sh`):** install Google Chrome or Chromium. Note looks in `/Applications/Google Chrome.app`, `/Applications/Chromium.app`, then `chromium`, `chromium-browser`, `google-chrome` on PATH.
+- **Elsewhere:** set `NOTE_CHROME` to the executable.
+- **Docker:** a Chrome on the host cannot be used from the container (different libraries). If needed, extend the image yourself as above, with `fonts-noto-cjk` for Korean and `procps` to stop a Chrome that hangs.
+- **Note:** the server's Chrome also fetches outside image URLs written in the note; keep that in mind on a public server.
