@@ -1128,7 +1128,7 @@ export default {
   p_what_this_is: "설명",
   p_each_running_session_claims_one: (a0) => `실행되는 각 세션은 이 범위에서 포트를 하나씩 사용합니다. 범위가 모두 차면 "No free service port" 오류가 납니다. 넓히면 더 많은 동시 사용자를 받을 수 있습니다. 컨테이너 내부 포트이고, 재시작 없이 즉시 반영됩니다. 포탈 포트 ${a0}은 범위에서 제외해야 합니다.`,
   p_my_account: "내 계정",
-  p_feedback: "피드백",
+  p_feedback: "이슈",
   p_accounts: "계정",
   p_groups: "사용자 그룹",
   p_invite_codes: "초대 코드",
@@ -1810,7 +1810,7 @@ export default {
   p_verify_sent: (a) => `${a} 로 6자리 코드를 보냈습니다.`,
   // the account's inbox on the cover (InboxView)
   p_inbox: '받은편지함',
-  p_inbox_menu: '받은편지함 · 피드백',
+  p_inbox_menu: '받은편지함 · 이슈',
   p_inbox_none: '처리할 편지가 없습니다.',
   p_inbox_all: '전체 편지함 보러가기',
   p_inbox_more: (a) => `처리하면 나머지 ${a}건이 이어서 보입니다`,

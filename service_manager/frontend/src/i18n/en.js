@@ -1128,7 +1128,7 @@ export default {
   p_what_this_is: "What this is",
   p_each_running_session_claims_one: (a0) => `Each running session claims one port from this range. When it fills up you get "No free service port" — widen it to admit more concurrent users. These are internal container ports, applied live with no restart. Portal port ${a0} must stay outside the range.`,
   p_my_account: "My account",
-  p_feedback: "Feedback",
+  p_feedback: "Issues",
   p_accounts: "Accounts",
   p_groups: "User groups",
   p_invite_codes: "Invite codes",
@@ -1810,7 +1810,7 @@ export default {
   p_verify_sent: (a) => `A 6-digit code was sent to ${a}.`,
   // the account's inbox on the cover (InboxView)
   p_inbox: 'Inbox',
-  p_inbox_menu: 'Inbox · Feedback',
+  p_inbox_menu: 'Inbox · Issues',
   p_inbox_none: 'Nothing waiting for you.',
   p_inbox_all: 'See the whole inbox',
   p_inbox_more: (a) => `${a} more show once these are done`,
