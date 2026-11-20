@@ -563,6 +563,15 @@ class Gates(unittest.TestCase):
         self.assertEqual((e("명령모드", "#x"), e("Untitled", "words")), ("본문 없음", "제목 없음(Untitled)"))
         self.assertEqual((e("명령모드", "# 헤딩\n본문"), e("Untitle", "x")), ("", ""))
 
+    def test_empty_records_by_name_fields_and_one_id_per_thing(self):
+        from app.tidy import cand_id, empty_records
+        doc = {"authors": [{"id": "a", "korFamily": "김"}, {"id": "b", "korFamily": " ", "tags": ["x"]}],
+               "inbox": [{"id": "i"}], "places": [{"id": "p", "city": "Seoul"}], "settings": {"x": 1}}
+        self.assertEqual([(k, r["id"]) for k, r in empty_records(doc)], [("authors", "b")])  # places use no name field
+        self.assertEqual([(k, r["id"]) for k, r in empty_records(doc, {"places": ["name"]})], [("places", "p")])
+        self.assertEqual(cand_id("note", "n", "x"), cand_id("note", "n", "x"))   # both portals write the same candidate
+        self.assertNotEqual(cand_id("note", "n", "x"), cand_id("note", "n", "y"))
+
     def test_propose_tags_leaves_one_candidate(self):
         left = []
 
