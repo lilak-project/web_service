@@ -88,6 +88,11 @@ def _migrate() -> None:
             "scope": "ALTER TABLE portal_mcp_tokens ADD COLUMN scope VARCHAR(512) NOT NULL DEFAULT ''",
         })
 
+    if "portal_reports" in names:
+        add_missing("portal_reports", {
+            "attachments_json": "ALTER TABLE portal_reports ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'",
+        })
+
     if "portal_chat_messages" in names:
         add_missing("portal_chat_messages", {
             "mentions_json": "ALTER TABLE portal_chat_messages ADD COLUMN mentions_json TEXT NOT NULL DEFAULT '[]'",

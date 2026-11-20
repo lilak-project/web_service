@@ -6,6 +6,30 @@ import ExpandBox from './ExpandBox'
 import { Panel, Row, Pill, fieldInput } from './Field'
 import { notify } from './settingsMsg'
 
+/** The files sent with a report (a chat `/report` with a picture): pictures shown,
+ *  others a link — fetched with the session, as the file route asks for it. */
+function ReportFiles({ r }) {
+  const [urls, setUrls] = useState({})
+  useEffect(() => {
+    const made = []
+    let alive = true
+    for (const a of r.attachments || []) {
+      launcher.get(`/reports/${r.id}/files/${a.id}`, { responseType: 'blob' })
+        .then((res) => { if (!alive) return; const u = URL.createObjectURL(res.data); made.push(u); setUrls((m) => ({ ...m, [a.id]: u })) })
+        .catch(() => {})
+    }
+    return () => { alive = false; made.forEach((u) => URL.revokeObjectURL(u)) }
+  }, [r.id, (r.attachments || []).length])
+  if (!(r.attachments || []).length) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+      {r.attachments.map((a) => (/^image\//.test(a.type || '') && urls[a.id]
+        ? <a key={a.id} href={urls[a.id]} target="_blank" rel="noreferrer"><img src={urls[a.id]} alt={a.name} style={{ maxWidth: 240, maxHeight: 160, border: '1px solid var(--dock-border-default)' }} /></a>
+        : <a key={a.id} href={urls[a.id]} download={a.name}><Icon name="attach" size={12} /> {a.name}</a>))}
+    </div>
+  )
+}
+
 /**
  * FeedbackView — bug reports, recommendations and inquiries.
  * Everyone gets a compose box. A regular user then sees their own thread (status
@@ -68,6 +92,7 @@ export default function FeedbackView({ isManager, folded = false }) {
       >
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ whiteSpace: 'pre-wrap' }}>{r.body || '—'}</div>
+          <ReportFiles r={r} />
           {admin ? (
             <>
               <textarea value={drafts[r.id] ?? r.reply ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}

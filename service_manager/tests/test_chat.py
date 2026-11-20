@@ -174,6 +174,19 @@ class Chat(unittest.TestCase):
         self.assertTrue(call(tok("note"), "chat_read", room="elog/exp1")[0])
         self.assertTrue(call(t, "chat_read", room="../x")[0])
 
+    def test_a_report_keeps_its_files(self):
+        up = c.post("/api/chat/upload", headers=self.user, files={"file": ("bug.png", b"PNG", "image/png")}).json()
+        r = c.post("/api/reports", headers=self.user, json={"kind": "bug", "subject": "s", "body": "b",
+                                                             "attachments": [up, {"id": "f" * 32, "name": "not there"}]}).json()
+        self.assertEqual([a["id"] for a in r["attachments"]], [up["id"]])          # only files that exist
+        url = f"/api/reports/{r['id']}/files/{up['id']}"
+        self.assertEqual(c.get(url, headers=self.user).content, b"PNG")             # its writer
+        self.assertEqual(c.get(url, headers=self.admin).content, b"PNG")            # an admin
+        with SessionLocal() as db:
+            o = models.User(username="other", email="o@x.org", password_hash="x", role="user", is_active=True, email_verified=True)
+            db.add(o); db.commit(); other = bearer(portal_token(o))
+        self.assertEqual(c.get(url, headers=other).status_code, 404)                # nobody else
+
     def test_agent_only_in_project_rooms(self):
         r = c.post("/api/chat/messages", headers=self.user, json={"room": "portal", "body": "@agent do it"})
         self.assertEqual(r.status_code, 400)

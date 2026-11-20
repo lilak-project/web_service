@@ -1,18 +1,33 @@
 /* PortalChat: speech bubbles laid over the page, out of the account icon at the
    foot of the bar. The layer itself is transparent and lets clicks through;
    only the bubbles take them. */
-.pc-root {
-  position: fixed; bottom: 10px; left: var(--pc-left, 72px); z-index: 70;
-  width: min(440px, calc(100vw - var(--pc-left, 72px) - 16px));
-  display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+/* The wrapper sits in one corner (`/move`: hj bottom left, the default; lj bottom right;
+   hk top left; lk top right) and holds the chat and, beside it, an open thread. */
+.pc-wrap {
+  position: fixed; z-index: 70; display: flex; gap: 8px; align-items: flex-end; pointer-events: none;
+  --pc-w: 460px;
   font-size: var(--fs-small); color: var(--dock-text-primary);
 }
+.pc-wrap.pc-at-hj { left: var(--pc-left, 72px); bottom: 10px; }
+.pc-wrap.pc-at-lj { right: 16px; bottom: 10px; flex-direction: row-reverse; }
+.pc-wrap.pc-at-hk { left: var(--pc-left, 72px); top: 10px; align-items: flex-start; }
+.pc-wrap.pc-at-lk { right: 16px; top: 10px; flex-direction: row-reverse; align-items: flex-start; }
+/* `/size`: s m l — wider strips, larger type. */
+.pc-wrap.pc-size-s { --pc-w: 380px; font-size: var(--fs-tiny); }
+.pc-wrap.pc-size-l { --pc-w: 640px; font-size: var(--fs-medium); }
+.pc-root {
+  width: min(var(--pc-w), calc(100vw - var(--pc-left, 72px) - 16px));
+  display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+}
+/* At the top the input comes first and the history runs down from it, newest nearest. */
+.pc-at-hk .pc-root, .pc-at-lk .pc-root { flex-direction: column-reverse; }
+.pc-at-hk .pc-list, .pc-at-lk .pc-list { flex-direction: column-reverse; }
 .pc-root > * { pointer-events: auto; }
 /* The strips' outline: a step darker than the kit's strong border, so a strip
    holds its shape over any page underneath. */
 .pc-root { --pc-edge: color-mix(in srgb, var(--dock-border-strong) 55%, var(--dock-text-secondary)); }
 .pc-list {
-  max-height: 62vh; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px;
+  max-height: var(--pc-h, 62vh); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px;
   pointer-events: none; padding: 2px;
 }
 .pc-list::-webkit-scrollbar { width: 0; }
@@ -99,3 +114,37 @@
   font: inherit; font-size: var(--fs-tiny); color: var(--accent, #2563eb); cursor: pointer; }
 .pc-thread:hover { text-decoration: underline; }
 .pc-room.pc-inthread { color: var(--accent, #2563eb); border-color: var(--accent, #2563eb); }
+
+/* `/height`: how much of the screen the history may take. */
+.pc-wrap.pc-h-short { --pc-h: 30vh; }
+.pc-wrap.pc-h-full { --pc-h: calc(100vh - 150px); }
+/* The thread of a message, beside the chat rather than in place of it. */
+.pc-tpanel {
+  pointer-events: auto; width: min(var(--pc-w), 40vw); display: flex; flex-direction: column; gap: 4px;
+  background: var(--dock-surface); border: 1px solid var(--pc-edge, var(--dock-border-strong));
+  border-left: 3px solid var(--accent, #2563eb); box-shadow: 0 4px 16px rgba(15, 23, 42, .2); padding: 5px 7px;
+  --pc-edge: color-mix(in srgb, var(--dock-border-strong) 55%, var(--dock-text-secondary));
+}
+.pc-tlist { max-height: var(--pc-h, 62vh); overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.pc-tlist .pc-line { box-shadow: none; }
+.pc-tt { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.pc-tpanel .pc-bar .pc-room { margin-left: auto; }
+.pc-thread.on { font-weight: 600; }
+/* The viewer's own lines in the history: a /report sent, kept in this browser. */
+.pc-line.pc-local { --pc-col: var(--dock-text-muted); color: var(--dock-text-secondary); background: var(--dock-surface-2); align-items: center; }
+/* While a /command is typed: what fits, and what /report will send. */
+.pc-cmds b { font-family: var(--font-mono); font-weight: 600; }
+.pc-preview { font-size: var(--fs-tiny); color: var(--dock-text-secondary); border-left: 2px solid var(--accent, #2563eb);
+  padding-left: 6px; margin: 2px 0; white-space: pre-wrap; }
+/* A file dragged over the chat: it says it will take it. */
+.pc-wrap.dropping .pc-input { outline: 2px dashed var(--accent, #2563eb); outline-offset: 2px; }
+/* The dark theme (lilak.theme dark): the cover's dark greys, here too. */
+.pl-root.neon-dark .pc-wrap {
+  --dock-surface: #12121a; --dock-surface-2: #0a0a0f; --dock-surface-3: #1a1a25;
+  --dock-border-default: #2a2a3a; --dock-border-strong: #3a3a52; --dock-border-focus: #19f0ff;
+  --dock-text-primary: #eceaf6; --dock-text-secondary: #9391a8; --dock-text-muted: #6f6d85;
+  --dock-info-bg: #14264a; --dock-danger-bg: rgba(127, 29, 29, .35); --dock-danger-text: #fca5a5;
+  --accent: #7fb0ff; color-scheme: dark;
+}
+.pl-root.neon-dark .pc-agent { background: #241f45; }
+.pl-root.neon-dark .pc-line, .pl-root.neon-dark .pc-input, .pl-root.neon-dark .pc-tpanel { box-shadow: 0 4px 16px rgba(0, 0, 0, .5); }

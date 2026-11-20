@@ -21,6 +21,39 @@ const colourOf = (m) => (m.author_admin ? MANAGER_COLOR : (m.author_color || ava
  *
  * Open: Esc (command mode) then Enter. Close: Esc.
  */
+// Where the chat sits and how big it is: the viewer's own, kept in this browser.
+// Corners are named the vi way: h left, l right, k up, j down (hj = bottom left).
+const LAY_KEY = 'lilak-chat-layout'
+const LAY0 = { pos: 'hj', size: 'm', height: 'normal' }
+const OPTS = { pos: ['hj', 'lj', 'hk', 'lk'], size: ['s', 'm', 'l'], height: ['short', 'normal', 'full'] }
+const readLay = () => { try { return { ...LAY0, ...JSON.parse(localStorage.getItem(LAY_KEY) || '{}') } } catch { return LAY0 } }
+const store = {
+  get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d } catch { return d } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* private window */ } },
+}
+// The chat's /commands: listed while `/` is typed, completed with Tab or Enter.
+const CMDS = [
+  { name: 'report', opts: ['bug', 'idea', 'ask'], more: true },
+  { name: 'move', opts: OPTS.pos },
+  { name: 'size', opts: OPTS.size },
+  { name: 'height', opts: OPTS.height },
+  { name: 'clear' },
+  { name: 'room', more: true },
+  { name: 'open', more: true },
+  { name: 'help' },
+]
+const KIND = { bug: 'bug', idea: 'recommendation', recommendation: 'recommendation', ask: 'inquiry', inquiry: 'inquiry',
+  '버그': 'bug', '제안': 'recommendation', '문의': 'inquiry' }
+/** `/report [kind] text` → { kind, body, subject } (subject: the first line, cut at 60). */
+function parseReport(line) {
+  const raw = line.trim().slice('/report'.length).trim()
+  const first = raw.split(/\s+/)[0] || ''
+  const kind = KIND[first.toLowerCase()] || 'inquiry'
+  const body = KIND[first.toLowerCase()] ? raw.slice(first.length).trim() : raw
+  const line1 = body.split('\n')[0].trim()
+  return { kind, body, subject: line1.length > 60 ? line1.slice(0, 59) + '…' : line1 }
+}
+
 const POLL_OPEN = 3000
 const POLL_SHUT = 20000
 const timeOf = (iso) => { try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } catch { return '' } }
@@ -66,7 +99,15 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
   const [me, setMe] = useState(null)
   const [text, setText] = useState('')
   const [reply, setReply] = useState(null)
-  const [thread, setThread] = useState(null)                 // the root message whose thread is open
+  const [thread, setThread] = useState(null)                 // the root message whose thread is open, beside the chat
+  const [tText, setTText] = useState('')                     // what is being written in that thread
+  const [lay, setLay] = useState(readLay)
+  const [cmdI, setCmdI] = useState(0)                        // the highlighted /command
+  const [dropping, setDropping] = useState(false)
+  // This viewer's own lines in the room's history (a /report sent, a /command's answer) and
+  // where the history was cleared: kept in this browser, never sent to the room.
+  const [locals, setLocals] = useState([])
+  const [cleared, setCleared] = useState(0)
   const [atts, setAtts] = useState([])
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -86,6 +127,16 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
   const listRef = useRef(null)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
+  const tInputRef = useRef(null)
+  const tListRef = useRef(null)
+  useEffect(() => { store.set(LAY_KEY, lay) }, [lay])
+  useEffect(() => { window.dispatchEvent(new Event('resize')) }, [lay])     // re-fit to the new size
+  useEffect(() => { setLocals(store.get('lilak-chat-local:' + room, [])); setCleared(store.get('lilak-chat-cleared:' + room, 0)) }, [room])
+  const addLocal = (text) => {
+    const top = msgs.length ? msgs[msgs.length - 1].id : 0
+    const next = [...store.get('lilak-chat-local:' + room, []), { id: 'L' + Date.now(), after: top, text, time: new Date().toTimeString().slice(0, 5) }].slice(-50)
+    store.set('lilak-chat-local:' + room, next); setLocals(next)
+  }
 
   const roomLabel = (k) => {
     if (k === 'portal') return tr('pc_room_all')
@@ -183,7 +234,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
   // reply chain (a deleted one, or one not loaded, ends the chain there). The room shows
   // the roots, each with how many replies it has; a thread shows its root and replies.
   // Deleted messages are not drawn at all.
-  const live = useMemo(() => msgs.filter((m) => !m.deleted), [msgs])
+  const live = useMemo(() => msgs.filter((m) => !m.deleted && m.id > cleared), [msgs, cleared])
   const rootOf = useMemo(() => {
     const by = new Map(live.map((m) => [m.id, m]))
     const memo = new Map()
@@ -201,11 +252,24 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
     for (const m of live) { const r = rootOf(m); if (r !== m.id) n[r] = (n[r] || 0) + 1 }
     return n
   }, [live, rootOf])
-  const view = thread ? live.filter((m) => m.id === thread || rootOf(m) === thread) : live.filter((m) => rootOf(m) === m.id)
-  const openThread = (m) => { setThread(rootOf(m)); setSkip(0); pages.current = []; setReply(null); setTimeout(() => inputRef.current?.focus(), 0) }
+  const roots = live.filter((m) => rootOf(m) === m.id)
+  // The viewer's own lines go in after the message that was newest when they were made.
+  const view = useMemo(() => {
+    const out = [], ls = [...locals].sort((x, y) => x.after - y.after)
+    let i = 0
+    for (const m of roots) {
+      while (i < ls.length && ls[i].after < m.id) out.push({ ...ls[i++], local: true })
+      out.push(m)
+    }
+    while (i < ls.length) out.push({ ...ls[i++], local: true })
+    return out
+  }, [roots, locals]) // eslint-disable-line react-hooks/exhaustive-deps
+  const threadLines = thread ? live.filter((m) => m.id === thread || rootOf(m) === thread) : []
+  const openThread = (m) => { setThread(rootOf(m)); setReply(null); setTimeout(() => tInputRef.current?.focus(), 0) }
   useEffect(() => { setThread(null) }, [room])
+  useLayoutEffect(() => { const el = tListRef.current; if (el) el.scrollTop = el.scrollHeight }, [thread, threadLines.length])
 
-  useLayoutEffect(() => { fit() }, [msgs, open, fit, skip, thread])
+  useLayoutEffect(() => { fit() }, [msgs, open, fit, skip, locals, cleared])
 
   // The list does not scroll (see fit): older messages are a page back, fetched as needed.
   async function older() {
@@ -261,22 +325,36 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
     return cards.find((c) => [c.label, c.name, c.project_card].some((x) => x && x.toLowerCase() === w))
       || cards.find((c) => [c.label, c.name].some((x) => x && x.toLowerCase().includes(w)))
   }
-  const KIND = { bug: 'bug', idea: 'recommendation', recommendation: 'recommendation', ask: 'inquiry', inquiry: 'inquiry',
-    '버그': 'bug', '제안': 'recommendation', '문의': 'inquiry' }
   async function command(line) {
     const [cmd, ...rest] = line.slice(1).trim().split(/\s+/)
-    const arg = rest.join(' ')
+    const arg = rest.join(' ').trim()
     if (cmd === 'report') {
-      // `/report [bug|idea|ask] what happened…` → Feedback; the subject is the first line, cut short.
-      const raw = line.trim().slice('/report'.length).trim()
-      const first = raw.split(/\s+/)[0]?.toLowerCase()
-      const kind = KIND[first] || 'inquiry'
-      const body = KIND[first] ? raw.slice(raw.split(/\s+/)[0].length).trim() : raw
-      if (!body) return tr('pc_cmd_report_usage')
-      const line1 = body.split('\n')[0].trim()
-      const subject = line1.length > 60 ? line1.slice(0, 59) + '…' : line1
-      try { await launcher.post('/reports', { kind, subject, body }); return tr('pc_cmd_reported', tr('pc_kind_' + kind), subject) }
-      catch (e) { return errText(e, tr('p_failed')) }
+      // `/report [bug|idea|ask] what happened…` → Feedback, with what is attached; the
+      // subject is the first line. It stays in this room's history, for this viewer.
+      const r = parseReport(line)
+      if (!r.body) return tr('pc_cmd_report_usage')
+      try {
+        await launcher.post('/reports', { kind: r.kind, subject: r.subject, body: r.body, attachments: atts })
+        const n = atts.length
+        setAtts([])
+        addLocal(tr('pc_cmd_reported', tr('pc_kind_' + r.kind), r.subject) + (n ? ` · ${tr('pc_att_n', n)}` : ''))
+        return ''
+      } catch (e) { return errText(e, tr('p_failed')) }
+    }
+    if (cmd in OPTS && cmd !== 'pos') {
+      if (!OPTS[cmd].includes(arg)) return tr('pc_cmd_opts', cmd, OPTS[cmd].join(' | '))
+      setLay((l) => ({ ...l, [cmd]: arg })); return ''
+    }
+    if (cmd === 'move') {
+      if (!OPTS.pos.includes(arg)) return tr('pc_cmd_opts', 'move', OPTS.pos.join(' | '))
+      setLay((l) => ({ ...l, pos: arg })); return ''
+    }
+    if (cmd === 'clear') {
+      // The history, for this viewer: messages up to now and their own lines go from view.
+      const top = msgs.length ? msgs[msgs.length - 1].id : 0
+      store.set('lilak-chat-cleared:' + room, top); setCleared(top)
+      store.set('lilak-chat-local:' + room, []); setLocals([])
+      return ''
     }
     if (cmd === 'open' && arg) {
       const c = findCard(arg)
@@ -291,13 +369,13 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
       pickRoom(r.key)
       return tr('pc_cmd_room', roomLabel(r.key))
     }
-    return tr('pc_cmd_help')
+    return CMDS.map((c) => `/${c.name} — ${tr('pc_cmd_d_' + c.name)}`).join('\n')
   }
 
   async function send() {
     if (busy || (!text.trim() && !atts.length)) return
-    // `/report` works in any room; the other /commands are the system room's.
-    if (/^\/report(\s|$)/.test(text.trim()) || (room === 'system' && text.trim().startsWith('/'))) {
+    // A /command, in any room: worked here, never sent as a message.
+    if (text.trim().startsWith('/')) {
       const line = text.trim()
       setText(''); setAt(null)
       setNotice(await command(line))
@@ -306,9 +384,18 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
     setNotice('')
     setBusy(true)
     try {
-      const { data } = await launcher.post('/chat/messages', { room, body: text, reply_to_id: reply?.id || thread || null, attachments: atts })
+      const { data } = await launcher.post('/chat/messages', { room, body: text, reply_to_id: reply?.id || null, attachments: atts })
       setText(''); setAtts([]); setReply(null); setErr(''); setAt(null); newest()
       lastId.current = Math.max(lastId.current, data.id - 1)
+      await load(false)
+    } catch (e) { setErr(errText(e, tr('p_failed'))) } finally { setBusy(false) }
+  }
+  async function sendThread() {
+    if (busy || !tText.trim() || !thread) return
+    setBusy(true)
+    try {
+      await launcher.post('/chat/messages', { room, body: tText, reply_to_id: thread, attachments: [] })
+      setTText(''); setErr('')
       await load(false)
     } catch (e) { setErr(errText(e, tr('p_failed'))) } finally { setBusy(false) }
   }
@@ -343,7 +430,31 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
     setTimeout(() => { el?.focus(); el?.setSelectionRange(head.length, head.length) }, 0)
   }
 
+  // While a /command is typed: the commands (or its options) that fit, and for /report what
+  // will be sent — so it is plain before Enter whether the command is right.
+  const cmdPicks = useMemo(() => {
+    const t = text
+    if (!t.startsWith('/') || t.includes('\n')) return []
+    const m = /^\/(\S*)(\s+(\S*))?$/.exec(t)
+    if (!m) return []
+    if (m[2] === undefined) return CMDS.filter((c) => c.name.startsWith(m[1].toLowerCase()))
+      .map((c) => ({ key: c.name, fill: '/' + c.name + (c.opts || c.more ? ' ' : ''), label: tr('pc_cmd_d_' + c.name) }))
+    const c = CMDS.find((x) => x.name === m[1].toLowerCase())
+    return (c?.opts || []).filter((o) => o.startsWith((m[3] || '').toLowerCase()) && o !== m[3])
+      .map((o) => ({ key: `${c.name} ${o}`, fill: `/${c.name} ${o}${c.more ? ' ' : ''}`, label: tr(`pc_opt_${c.name}_${o}`) }))
+  }, [text])
+  useEffect(() => { setCmdI(0) }, [cmdPicks.length])
+  const reportPreview = /^\/report\s+\S/.test(text) ? parseReport(text) : null
+  const fill = (p) => { setText(p.fill); setTimeout(() => { const el = inputRef.current; el?.focus(); el?.setSelectionRange(p.fill.length, p.fill.length) }, 0) }
+
   const onKey = (e) => {
+    if (cmdPicks.length && !e.nativeEvent.isComposing) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault(); setCmdI((i) => (i + (e.key === 'ArrowDown' ? 1 : cmdPicks.length - 1)) % cmdPicks.length); return
+      }
+      const p = cmdPicks[Math.min(cmdI, cmdPicks.length - 1)]
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && p.fill.trim() !== text.trim())) { e.preventDefault(); fill(p); return }
+    }
     if (picks.length && !e.nativeEvent.isComposing) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
@@ -357,67 +468,77 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
     if (e.key === 'Escape') {
       // Ours, not the portal's: the portal would read it as command mode.
       e.preventDefault(); e.stopPropagation()
-      if (at) setAt(null); else if (picking) setPicking(false); else if (reply) setReply(null); else if (thread) setThread(null); else onClose?.()
+      if (cmdPicks.length && text.length > 1) setText('/'); else if (at) setAt(null); else if (picking) setPicking(false); else if (reply) setReply(null); else if (thread) setThread(null); else onClose?.()
       return
     }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
   }
 
+  // One message as a strip (C4). `inThread`: drawn in the thread beside the chat.
+  const strip = (m, inThread) => {
+    // A line written by a program for its owner (an MCP token, e.g. Claude answering
+    // @claude) is drawn as that program, not as the person.
+    const col = m.via ? '#7f77dd' : colourOf(m)
+    return (
+      <div key={m.id} className="pc-group">
+        <div className={`pc-line${m.user_id === me?.id ? ' mine' : ''}${m.user_id !== me?.id && (m.mentions || []).some((x) => x === 0 || x === me?.id) ? ' at-me' : ''}`} style={{ '--pc-col': col }}>
+          {m.via
+            ? <span className="pc-dot" title={tr('pc_via', m.via, m.author_name)}><Icon name="robot" size={9} color="#fff" /></span>
+            : <Avatar icon={m.author_shape} color={col} seed={m.author_username || m.author_name} size={14} />}
+          <b className="pc-name" title={m.via ? tr('pc_via', m.via, m.author_name) : undefined}>{m.via || m.author_name}</b>
+          <div className="pc-body">
+            {m.reply_to_id && !inThread && rootOf(m) === m.id && <span className="pc-quote">↳ {m.reply_to_author}: {m.reply_to_body || '…'}</span>}
+            <span className="pc-text"><Body text={m.body} re={atRe} /></span>
+            {(m.attachments || []).length > 0 && <div className="pc-atts">{m.attachments.map((a) => <Att key={a.id} a={a} room={room} />)}</div>}
+            {!inThread && replies[m.id] > 0 && (
+              <button type="button" className={`pc-thread${thread === m.id ? ' on' : ''}`} onClick={() => (thread === m.id ? setThread(null) : openThread(m))}>
+                <Icon name="chats" size={11} /> {tr('pc_replies', replies[m.id])}
+              </button>
+            )}
+          </div>
+          {/* Time and the actions share one slot: on hover the icons take the
+              time's place, so nothing in the line moves or widens. */}
+          <span className="pc-side">
+            <span className="pc-time">{timeOf(m.created_at)}</span>
+            <span className="pc-acts">
+              {!inThread && (
+                <button type="button" title={tr('pc_reply')} aria-label={tr('pc_reply')} onClick={() => openThread(m)}><Icon name="reply" size={13} /></button>
+              )}
+              {(m.user_id === me?.id || me?.admin) && (
+                <button type="button" title={tr('pc_delete')} aria-label={tr('pc_delete')} onClick={() => del(m)}><Icon name="trash" size={13} /></button>
+              )}
+            </span>
+          </span>
+        </div>
+        {m.run && (
+          <div className={`pc-line pc-agent ${m.run.status}`}>
+            <span className="pc-dot"><Icon name="robot" size={9} color="#fff" /></span>
+            <b className="pc-name">agent</b>
+            <div className="pc-body"><span className="pc-text">{m.run.result || '…'}</span></div>
+            <span className="pc-side"><span className="pc-time">{tr('pc_run_' + m.run.status)}</span></span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Files dropped anywhere on the chat are attached, as the clip button does.
+  const dropProps = {
+    onDragOver: (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); setDropping(true) } },
+    onDragLeave: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropping(false) },
+    onDrop: (e) => { e.preventDefault(); setDropping(false); const f = [...(e.dataTransfer?.files || [])]; if (f.length) addFiles(f) },
+  }
+
   if (!open) return null
   return (
-    <div className="pc-root" onKeyDown={onKey}>
+    <div className={`pc-wrap pc-at-${lay.pos} pc-size-${lay.size} pc-h-${lay.height}${dropping ? ' dropping' : ''}`} onKeyDown={onKey} {...dropProps}>
+    <div className="pc-root">
       <div className="pc-list" ref={listRef}>
         {view.length === 0 && <div className="pc-line pc-empty">{tr('pc_empty', roomLabel(room))}</div>}
-        {view.map((m) => {
-          // A line written by a program for its owner (an MCP token, e.g. Claude answering
-          // @claude) is drawn as that program, not as the person.
-          const col = m.via ? '#7f77dd' : colourOf(m)
-          return (
-            <div key={m.id} className="pc-group">
-              <div className={`pc-line${m.user_id === me?.id ? ' mine' : ''}${m.user_id !== me?.id && (m.mentions || []).some((x) => x === 0 || x === me?.id) ? ' at-me' : ''}`} style={{ '--pc-col': col }}>
-                {/* The author's own account icon, small: the one on their account card. */}
-                {m.via
-                  ? <span className="pc-dot" title={tr('pc_via', m.via, m.author_name)}><Icon name="robot" size={9} color="#fff" /></span>
-                  : <Avatar icon={m.author_shape} color={col} seed={m.author_username || m.author_name} size={14} />}
-                <b className="pc-name" title={m.via ? tr('pc_via', m.via, m.author_name) : undefined}>{m.via || m.author_name}</b>
-                <div className="pc-body">
-                  {m.reply_to_id && !thread && rootOf(m) === m.id && <span className="pc-quote">↳ {m.reply_to_author}: {m.reply_to_body || '…'}</span>}
-                  {m.deleted ? null : <span className="pc-text"><Body text={m.body} re={atRe} /></span>}
-                  {(m.attachments || []).length > 0 && <div className="pc-atts">{m.attachments.map((a) => <Att key={a.id} a={a} room={room} />)}</div>}
-                  {!thread && replies[m.id] > 0 && (
-                    <button type="button" className="pc-thread" onClick={() => openThread(m)}>
-                      <Icon name="chats" size={11} /> {tr('pc_replies', replies[m.id])}
-                    </button>
-                  )}
-                </div>
-                {/* Time and the actions share one slot: on hover the icons take the
-                    time's place, so nothing in the line moves or widens. */}
-                <span className="pc-side">
-                  <span className="pc-time">{timeOf(m.created_at)}</span>
-                  {!m.deleted && (
-                    <span className="pc-acts">
-                      <button type="button" title={tr('pc_reply')} aria-label={tr('pc_reply')}
-                        onClick={() => (thread ? (setReply(m), inputRef.current?.focus()) : openThread(m))}><Icon name="reply" size={13} /></button>
-                      {(m.user_id === me?.id || me?.admin) && (
-                        <button type="button" title={tr('pc_delete')} aria-label={tr('pc_delete')} onClick={() => del(m)}><Icon name="trash" size={13} /></button>
-                      )}
-                    </span>
-                  )}
-                </span>
-              </div>
-              {m.run && (
-                <div className={`pc-line pc-agent ${m.run.status}`}>
-                  <span className="pc-dot"><Icon name="robot" size={9} color="#fff" /></span>
-                  <b className="pc-name">agent</b>
-                  <div className="pc-body"><span className="pc-text">{m.run.result || '…'}</span></div>
-                  <span className="pc-side"><span className="pc-time">{tr('pc_run_' + m.run.status)}</span></span>
-                </div>
-              )}
-            </div>
-          )
-        })}
+        {view.map((m) => (m.local
+          ? <div key={m.id} className="pc-group"><div className="pc-line pc-local"><Icon name="info" size={12} /><span className="pc-text">{m.text}</span><span className="pc-side"><span className="pc-time">{m.time}</span></span></div></div>
+          : strip(m, false)))}
       </div>
-
       <div className="pc-input">
         <div className="pc-bar">
           <button type="button" className="pc-room" onClick={() => setPicking((p) => !p)} title={tr('pc_room_pick')}>
@@ -427,7 +548,6 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
           {more && (
             <button type="button" className="pc-room" onClick={older} title="PageUp">↑ {tr('pc_older')}</button>
           )}
-          {thread && <button type="button" className="pc-room pc-inthread" onClick={() => setThread(null)} title="Esc">← {tr('pc_thread_close')}</button>}
           {skip > 0 && <button type="button" className="pc-room" onClick={newest}>↓ {tr('pc_newest')}</button>}
           <span className="pc-hint">{tr('pc_hint')}</span>
         </div>
@@ -465,6 +585,23 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
             ))}
           </div>
         )}
+        {cmdPicks.length > 0 && (
+          <div className="pc-rooms pc-cmds" role="listbox">
+            {cmdPicks.map((p, i) => (
+              <button key={p.key} type="button" role="option" aria-selected={i === cmdI} className={i === cmdI ? 'on' : ''}
+                onMouseDown={(e) => { e.preventDefault(); fill(p) }}>
+                <b>/{p.key}</b> <span className="svc">{p.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {reportPreview && (
+          <div className="pc-preview">
+            {reportPreview.body
+              ? tr('pc_report_preview', tr('pc_kind_' + reportPreview.kind), reportPreview.subject, atts.length)
+              : tr('pc_cmd_report_usage')}
+          </div>
+        )}
         {notice && <div className="pc-notice">{notice}</div>}
         {reply && <div className="pc-quote">{tr('pc_replying', reply.author_name)}: {reply.body.slice(0, 80)} <button type="button" onClick={() => setReply(null)}><Icon name="x" size={10} /></button></div>}
         {atts.length > 0 && (
@@ -482,6 +619,24 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
         </div>
         {err && <div className="pc-err">{err}</div>}
       </div>
+    </div>
+    {thread && (
+      <div className="pc-tpanel">
+        <div className="pc-bar">
+          <b className="pc-tt"><Icon name="chats" size={12} /> {tr('pc_thread')}</b>
+          <button type="button" className="pc-room" onClick={() => setThread(null)} title="Esc">× {tr('pc_thread_close')}</button>
+        </div>
+        <div className="pc-tlist" ref={tListRef}>{threadLines.map((m) => strip(m, true))}</div>
+        <div className="pc-row">
+          <textarea ref={tInputRef} rows={1} value={tText} onChange={(e) => setTText(e.target.value)} placeholder={tr('pc_thread_ph')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.stopPropagation(); sendThread() }
+              if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setThread(null); inputRef.current?.focus() }
+            }} />
+          <button type="button" className="pc-icon" disabled={busy} onClick={sendThread} title={tr('pc_send')}><Icon name="send" size={14} /></button>
+        </div>
+      </div>
+    )}
     </div>
   )
 }

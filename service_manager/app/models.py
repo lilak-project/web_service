@@ -193,6 +193,9 @@ class Report(Base):
     body = Column(Text, nullable=False, default="")
     status = Column(String(16), nullable=False, default="open")    # open | resolved
     reply = Column(Text, nullable=True)                            # admin's answer
+    # Files sent with it (a chat `/report` with a picture): [{id, name, type, size}], the
+    # files kept in _portal/chat_uploads; seen by its writer and the admins.
+    attachments_json = Column(Text, nullable=False, default="[]")
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
