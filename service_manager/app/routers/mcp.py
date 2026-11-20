@@ -84,6 +84,9 @@ _DECK = {"mode": {"type": "string", "enum": ["slide", "note"]},
 # How strong a job's evidence is (jobboard's Evidence); its state is a person's to raise, never an agent's.
 STRENGTH = ("measurement", "literature", "evaluated", "calculation", "assumption", "default")
 
+# The units a note is reviewed by (the note service cuts them).
+LEVELS = ("sentence", "paragraph", "line", "doc")
+
 TOOLS = [
     {"name": "tags", "write": False,
      "description": "The tags in use and how many records wear each, per service, most used first: look the exact "
@@ -157,6 +160,23 @@ TOOLS = [
      "description": "One note: title, date, tags, body, and the version update_note needs."
                     " To read by a record address: path = the record address (in full, lilak record address): the line at the top of a record's edit tab (a note's: toolbox → Common), pasted whole. It stands for id." + DATA,
      "inputSchema": _schema([], id=_STR, path=_STR, address=_STR)},
+    {"name": "note_units", "write": False,
+     "description": "A note cut into units for review (level: sentence (default), paragraph, line, doc): each "
+                    "unit's n, text, [@citeKey] keys, needs (states a number, so needs evidence) and the review "
+                    "comments on it; moved: comments whose place was rewritten away. Read the open comments here, "
+                    "fix the note with update_note, then answer each with reply_review (\"고침: ...\"). Only a person "
+                    "resolves a comment, on the screen. id, or path = the note's record address." + DATA,
+     "inputSchema": _schema([], id=_STR, path=_STR, address=_STR,
+                            level={"type": "string", "enum": list(LEVELS)})},
+    {"name": "add_review", "write": True,
+     "description": "Leave a review comment on one unit of a note (level and n from note_units), or on the whole "
+                    "note (level doc). Marked as written through this token.",
+     "inputSchema": _schema(["text"], id=_STR, path=_STR, address=_STR, text=_STR, n={"type": "integer"},
+                            level={"type": "string", "enum": list(LEVELS)})},
+    {"name": "reply_review", "write": True,
+     "description": "Answer a review comment (rid, its id from note_units), e.g. \"고침: ...\" after fixing what it "
+                    "asked. Resolving it stays a person's, on the screen.",
+     "inputSchema": _schema(["rid", "text"], id=_STR, path=_STR, address=_STR, rid=_STR, text=_STR)},
     {"name": "add_note", "write": True,
      "description": "Create a note dated today. Tags are `#tag` words in the body. Returns its id and version. "
                     "mode: slide makes it a slide deck." + SLIDES,
@@ -197,7 +217,9 @@ TOOLS = [
                     "add_evidence: [{id, place, why}] links a reference record (its id, from the set's "
                     "reference_manager), where in it (Fig. 3, p. 12, ...) and strength (measurement, literature, evaluated, "
                     "calculation, assumption, default); remove_evidence: [{id, place}]. Evidence linked through MCP stays "
-                    "an agent's proposal (state agent): a person checks and approves it on the board. 쓰는 법은 guide.",
+                    "an agent's proposal (state agent): a person checks and approves it on the board. With report, the reply carries "
+                    "report_check: the [@citeKey] it names with each link's state, and unknown_keys (named but not among this "
+                    "job's evidence: fix those). Put [@key] only where there is evidence; a sentence without stays as it is. 쓰는 법은 guide.",
      "inputSchema": _schema(["id"], id=_STR, goal=_STR, why=_STR, references=_STR, report=_STR, briefing=_STR,
                             note=_STR, run=_STR, agent={"type": "string", "enum": ["사람", "Claude", "Codex", "플랫폼 agent"]},
                             params={"type": "array", "items": _STR}, inputs={"type": "array", "items": _STR},
@@ -231,6 +253,14 @@ TOOLS = [
                     "existing one. For the owner's own notes, or text you are not sure they want. "
                     "`why` is shown beside it.",
      "inputSchema": _schema(["body", "why"], body=_STR, why=_STR, title=_STR, tags=_STR, match_id=_STR, set=_SET)},
+    {"name": "propose_tags", "write": False, "proposes": True,
+     "description": "Propose tags for records and notes, as ONE inbox candidate the owner approves item by item; "
+                    "nothing is tagged until they do. items: [{service, id, project?, add: [tag, ...]}] (note "
+                    "included; tags without #). Look the tags up with `tags` first and prefer ones in use. "
+                    "`why` is shown beside it.",
+     "inputSchema": _schema(["why"], why=_STR, set=_SET, items={"type": "array", "items": {
+         "type": "object", "properties": {"service": _STR, "id": _STR, "project": _STR,
+                                          "add": {"type": "array", "items": _STR}}, "required": ["service", "id", "add"]}})},
     {"name": "propose_activity", "write": False, "proposes": True,
      "description": "Propose a calendar activity for the owner to approve in the inbox; nothing is "
                     "made until they do. New: name and start (YYYY-MM-DD) are required. To change an existing "
@@ -378,18 +408,60 @@ def _from_path(request: Request, line: str) -> dict:
     return dict(zip(("service", "project", "key", "id"), parts[1:]))
 
 
-async def _get(request, grant, args):
-    proj = ""
-    args = {**args, "path": args.get("path") or args.get("address") or ""}   # address: the record address' own name
-    if args.get("path"):
-        got = _from_path(request, args["path"])
+def _note_ref(request, args) -> tuple:
+    """(note path, project) of a note named by id, or by its record address (path / address)."""
+    proj, line = "", args.get("path") or args.get("address") or ""   # address: the record address' own name
+    if line:
+        got = _from_path(request, line)
         if got["service"] != "note":
             raise ToolError(f"노트가 아니라 {got['service']} 의 항목입니다. get_record 로 읽으세요.")
         args, proj = {**args, "id": got["id"]}, got["project"]
     if not args.get("id"):
         raise ToolError("빠진 항목: id (또는 path)")
-    n = _ok(await _portal(request, grant, "note", "GET", _note_path(args), proj))
-    return {k: n[k] for k in ("id", "title", "date", "tags", "fields", "version", "body")}
+    return _note_path(args), proj
+
+
+async def _get(request, grant, args):
+    path, proj = _note_ref(request, args)
+    n = _ok(await _portal(request, grant, "note", "GET", path, proj))
+    out = {k: n[k] for k in ("id", "title", "date", "tags", "fields", "version", "body")}
+    if (out["fields"] or {}).get("reviews"):   # read through note_units, where each sits on its unit
+        out["fields"] = {k: v for k, v in out["fields"].items() if k != "reviews"}
+        out["reviews"] = len(n["fields"]["reviews"])
+    return out
+
+
+# The note's Review mode: its units, hashes and anchors are the note service's (one place, the screen's too).
+
+
+async def _note_units(request, grant, args):
+    path, proj = _note_ref(request, args)
+    level = args.get("level") or "sentence"
+    if level not in LEVELS:
+        raise ToolError(f"level 은 {', '.join(LEVELS)} 중 하나입니다.")
+    return _ok(await _portal(request, grant, "note", "GET", f"{path}/units", proj, params={"level": level}))
+
+
+async def _add_review(request, grant, args):
+    path, proj = _note_ref(request, args)
+    level = args.get("level") or "sentence"
+    if level not in LEVELS:
+        raise ToolError(f"level 은 {', '.join(LEVELS)} 중 하나입니다.")
+    if level != "doc" and not isinstance(args.get("n"), int):
+        raise ToolError("n(note_units 의 칸 번호)이 필요합니다. 문서 전체에는 level doc.")
+    body = {"level": level, "text": str(args.get("text") or ""), "via": grant.who or "mcp",
+            **({"n": args["n"]} if level != "doc" else {})}
+    if not body["text"].strip():
+        raise ToolError("코멘트가 비어 있습니다.")
+    return _ok(await _portal(request, grant, "note", "POST", f"{path}/reviews", proj, json=body))
+
+
+async def _reply_review(request, grant, args):
+    path, proj = _note_ref(request, args)
+    if not str(args.get("text") or "").strip() or not args.get("rid") or "/" in str(args["rid"]):
+        raise ToolError("rid(코멘트 id)와 답글 text 가 필요합니다.")
+    return _ok(await _portal(request, grant, "note", "POST", f"{path}/reviews/{quote(str(args['rid']), safe='')}/replies",
+                             proj, json={"text": str(args["text"]), "via": grant.who or "mcp"}))
 
 
 def _deck(args: dict, fields: dict) -> dict:
@@ -525,6 +597,29 @@ async def _propose_note(request, grant, args):
     else:
         fields.update(title=title, noteTags=args.get("tags") or "")
     return await _leave(request, grant, "note", args, fields, home.get("note") or _main(grant, "note"), home)
+
+
+async def _propose_tags(request, grant, args):
+    items = args.get("items")
+    if not isinstance(items, list) or not items or not all(isinstance(x, dict) for x in items):
+        raise ToolError("items 는 [{service, id, add: [태그]}] 목록입니다.")
+    if len(items) > 100:
+        raise ToolError("한 후보에 100개까지입니다.")
+    home, out = _set_home(args), []
+    for x in items:
+        svc, rid = str(x.get("service") or ""), str(x.get("id") or "")
+        add = [str(t).strip().lstrip("#") for t in x.get("add") or [] if str(t).strip().lstrip("#")]
+        if not (svc and rid and add) or any(re.search(r"\s", t) for t in add):
+            raise ToolError(f"항목마다 service, id, 빈칸 없는 태그(add)가 필요합니다: {x}")
+        proj = str(x.get("project") or home.get(svc) or _main(grant, svc))
+        # The record must be there (and readable with this token); its name goes on the card.
+        if svc == "note":
+            title = _ok(await _portal(request, grant, "note", "GET", _note_path({"id": rid}), proj))["title"]
+        else:
+            got = await _get_record(request, grant, {"service": svc, "project": proj, "id": rid})
+            title = _name_of(got["record"]) or rid
+        out.append({"service": svc, "project": proj, "id": rid, "title": title, "add": add})
+    return await _leave(request, grant, "tags", args, {"items": out}, "", home)
 
 
 async def _propose_activity(request, grant, args):
@@ -822,7 +917,49 @@ async def _update_job(request, grant, args):
     out = {"id": got["id"], "project": proj, "changed": sorted(fields), "tags": got.get("tags") or []}
     if run.get("state") in JOB_ENDED:
         out["files_missing"] = [f for f in outs if f not in described]
+    if "report" in fields:   # told, never refused (the user's call): a refusal would leave no report at all
+        keys, unread = await _cite_keys(request, grant, got.get("evidence") or [])
+        out["report_check"] = check_report(fields["report"], keys, unread)
     return out
+
+
+def _ev_state(e: dict) -> str:
+    """An evidence link's state as the board reads it (Evidence.jsx stateOf)."""
+    return e.get("state") or ("agent" if "agent" in str(e.get("by") or "") else "person")
+
+
+async def _cite_keys(request, grant, evidence) -> tuple:
+    """citeKey -> the state of this job's link to it, and the projects that could not be read."""
+    recs, unread = {}, []
+    for rp in dict.fromkeys(e.get("proj") for e in evidence if e.get("svc") == "reference_manager" and e.get("proj")):
+        try:
+            if not mcp_tokens.allowed(grant.scope, "reference_manager", rp):
+                raise ToolError(rp)
+            _, rows = await _records(request, grant, "reference_manager", rp)
+            recs.update({(rp, str(r["id"])): r for k, r in rows if k == "references"})
+        except ToolError:
+            unread.append(rp)
+    keys = {}
+    for e in evidence:
+        r = recs.get((e.get("proj"), str(e.get("id"))))
+        if r and r.get("citeKey"):
+            keys[r["citeKey"]] = _ev_state(e)
+    return keys, unread
+
+
+# jobboard's flow/reportcheck.js (feedback #22): a [@citeKey] the report names must be one of this job's evidence;
+# a sentence without one is left as it is, not flagged.
+MARK = re.compile(r"\[@([^\]\s]+)\]")
+
+
+def check_report(text: str, keys: dict, unread=()) -> dict:
+    """The keys the report names that are not among the job's evidence (unknown_keys); while some evidence sits in a
+    project this token cannot read, those keys may be there, so they are unreadable_keys instead, not a warning."""
+    named = list(dict.fromkeys(MARK.findall(text or "")))
+    missing = [k for k in named if k not in keys]
+    out = {"keys": [{"key": k, "state": keys[k]} for k in named if k in keys]}
+    out["unreadable_keys" if unread else "unknown_keys"] = missing
+    return {**out, **({"unread_projects": list(unread)} if unread else {})}
 
 
 # reference_manager's paper.js place(), the same table, so the same place cited twice is seen as one.
@@ -873,7 +1010,7 @@ async def _job_evidence(request, grant, proj, job, args) -> list:
                          and (e.get("place") or "") == place(d.get("place"))
                          and (not d.get("proj") or e.get("proj") == d["proj"]))
         # as the board reads it (Evidence.jsx stateOf): no state = agent only when `by` names an agent
-        held = [e for e in out if hit(e) and (e.get("state") or ("agent" if "agent" in str(e.get("by") or "") else "person")) != "agent"]
+        held = [e for e in out if hit(e) and _ev_state(e) != "agent"]
         if held:
             raise ToolError("사람이 잇거나 확인한 근거는 MCP로 뺄 수 없습니다. 화면에서 사람이 고칩니다.")
         out = [e for e in out if not hit(e)]
@@ -1369,8 +1506,9 @@ HANDLERS = {"tags": _tags, "find": _find, "related": _related, "my_tasks": _my_t
             "add_params": _add_params, "delegate": _delegate, "agent_run": _agent_run,
             "chat_rooms": _chat_rooms, "chat_read": _chat_read, "chat_send": _chat_send,
             "approve_job": _approve_job, "job_recipes": _job_recipes, "submit_job": _submit_job,
-            "job_status": _job_status, "add_evaluation": _add_evaluation, "guide": _guide}
-PROPOSERS = {"propose_note": _propose_note, "propose_activity": _propose_activity}
+            "job_status": _job_status, "add_evaluation": _add_evaluation,
+            "note_units": _note_units, "add_review": _add_review, "reply_review": _reply_review, "guide": _guide}
+PROPOSERS = {"propose_note": _propose_note, "propose_activity": _propose_activity, "propose_tags": _propose_tags}
 
 
 def _authorize(token: str):
@@ -1558,3 +1696,10 @@ def revoke_set_token(token_id: int, set: str, user: models.User = Depends(requir
     t.revoked_at = t.revoked_at or mcp_tokens._now()
     db.commit()
     return {"ok": True}
+
+
+@router.post("/api/admin/tidy/empty-notes")
+async def tidy_empty_notes(request: Request, dry_run: bool = True, _: models.User = Depends(require_portal_admin)) -> dict:
+    """The empty-note sweep now (app/tidy.py); dry_run (the default) only lists what it would ask."""
+    from .. import tidy
+    return {"dry_run": dry_run, "found": await tidy.sweep(request.app, dry_run)}

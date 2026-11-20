@@ -140,7 +140,7 @@ class Gates(unittest.TestCase):
         names = {t["name"] for t in rpc(tok, "tools/list").json()["result"]["tools"]}
         self.assertEqual(names, {"tags", "find", "related", "my_tasks", "job_context", "job_recipes", "guide", "job_status", "list_services", "search",
                                  "get_record", "by_tag",
-                                 "search_notes", "get_note", "propose_note", "propose_activity", "agent_run",
+                                 "search_notes", "get_note", "note_units", "propose_note", "propose_tags", "propose_activity", "agent_run",
                                  "chat_rooms", "chat_read"})
         r = call(tok, "add_note", title="x", body="y")
         self.assertTrue(r["isError"])
@@ -512,6 +512,88 @@ class Gates(unittest.TestCase):
             self.assertEqual(sent, [])
         finally:
             mcp._portal, mcp.registry.share_for, mcp.registry.link_project = real, share, link
+
+    def test_report_check_warns_only_of_unknown_keys(self):
+        t = "Gain is 80 [@K1]. Width 3 [@K2] [@K1]. Peak 550 ADC. Seen 4 [@NOPE]. Job ::abc123 done."
+        r = mcp.check_report(t, {"K1": "approved", "K2": "agent"})
+        self.assertEqual(r, {"keys": [{"key": "K1", "state": "approved"}, {"key": "K2", "state": "agent"}],
+                             "unknown_keys": ["NOPE"]})
+        r = mcp.check_report("Seen 4 [@X].", {}, ["papers"])
+        self.assertEqual(r, {"keys": [], "unreadable_keys": ["X"], "unread_projects": ["papers"]})
+
+    def test_review_tools_go_through_the_note_service(self):
+        asked = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            asked.append((svc, method, path, proj, kw.get("params"), kw.get("json")))
+            if path.endswith("/units"):
+                return httpx.Response(200, json={"units": [{"n": 1, "text": "Gain 80."}], "moved": []})
+            if method == "GET":
+                return httpx.Response(200, json={"id": "r", "title": "t", "date": "", "tags": [], "version": "1", "body": "b",
+                                                 "fields": {"reviews": [{"id": "x"}], "mode": "note"}})
+            return httpx.Response(201, json={"id": "rv1"})
+        real, mcp._portal = mcp._portal, fake
+        try:
+            tok = self.issue()
+            r = call(tok, "note_units", path="/pp/note/notes-job/notes/보고서 1", level="paragraph")
+            self.assertFalse(r["isError"], r)
+            self.assertEqual(asked[-1][2:5], ("notes/%EB%B3%B4%EA%B3%A0%EC%84%9C%201/units", "notes-job", {"level": "paragraph"}))
+            g = json.loads(call(tok, "get_note", id="r")["content"][0]["text"])
+            self.assertEqual((g["fields"], g["reviews"]), ({"mode": "note"}, 1), "reviews are read through note_units")
+            self.assertFalse(call(tok, "add_review", id="r", n=2, text="근거?")["isError"])
+            self.assertEqual(asked[-1][5], {"level": "sentence", "text": "근거?", "via": "t", "n": 2})
+            self.assertFalse(call(tok, "add_review", id="r", level="doc", text="전체")["isError"])
+            self.assertNotIn("n", asked[-1][5])
+            self.assertFalse(call(tok, "reply_review", id="r", rid="rv1", text="고침: 근거 달았음")["isError"])
+            self.assertEqual(asked[-1][2], "notes/r/reviews/rv1/replies")
+            asked.clear()
+            for bad in ({"id": "r", "text": "x"}, {"id": "r", "n": 1, "text": " "}, {"id": "r", "n": 1, "level": "word", "text": "x"}):
+                self.assertTrue(call(tok, "add_review", **bad)["isError"], bad)
+            self.assertTrue(call(tok, "reply_review", id="r", rid="a/b", text="x")["isError"])
+            self.assertTrue(call(self.issue(write=False), "add_review", id="r", n=1, text="x")["isError"])
+            self.assertNotIn("resolve_review", [t["name"] for t in mcp.TOOLS])
+            self.assertEqual(asked, [])
+        finally:
+            mcp._portal = real
+
+    def test_empty_notes_by_title_and_body_not_id(self):
+        from app.tidy import empty_reason as e
+        self.assertEqual(e("", ""), "제목도 본문도 없음")
+        self.assertEqual(e("Untitled-5", "#a +B\n\n"), "제목도 본문도 없음")
+        self.assertEqual((e("명령모드", "#x"), e("Untitled", "words")), ("본문 없음", "제목 없음(Untitled)"))
+        self.assertEqual((e("명령모드", "# 헤딩\n본문"), e("Untitle", "x")), ("", ""))
+
+    def test_propose_tags_leaves_one_candidate(self):
+        left = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            if svc == "note":
+                return httpx.Response(200, json={"title": "회의"})
+            if path == "data":
+                return httpx.Response(200, json={"authors": [{"id": "a1", "name": "Kim"}]})
+            return httpx.Response(404)
+
+        async def inbox(request, grant, record, proj):
+            left.append((proj, record))
+            return httpx.Response(200, json={"record": record})
+        real, real_rack, real_inbox = mcp._portal, mcp._rack, mcp._inbox
+        mcp._portal, mcp._rack, mcp._inbox, real_of = fake, lambda: ("author_manager",), inbox, mcp._inbox_of
+        mcp._inbox_of = lambda grant, home: home.get("inbox", "")
+        mcp.registry.write_share_sets([{"id": "m1", "name": "m", "members": {"note": "n1", "author_manager": "authors", "inbox": "ib"}}])
+        try:
+            tok = self.issue(write=False)
+            r = call(tok, "propose_tags", why="오늘 정리", set="m",
+                     items=[{"service": "note", "id": "x", "add": ["#STARK"]}, {"service": "author_manager", "id": "a1", "add": ["gain"]}])
+            self.assertFalse(r["isError"], r)
+            self.assertEqual(len(left), 1)
+            rec = left[0][1]
+            self.assertEqual((rec["target"], [(i["project"], i["title"], i["add"]) for i in rec["items"]]),
+                             ("tags", [("n1", "회의", ["STARK"]), ("authors", "Kim", ["gain"])]))
+            for bad in ([], [{"service": "note", "id": "x", "add": ["two words"]}], [{"service": "note", "id": "x", "add": []}]):
+                self.assertTrue(call(tok, "propose_tags", why="w", set="m", items=bad)["isError"], bad)
+        finally:
+            mcp._portal, mcp._rack, mcp._inbox, mcp._inbox_of = real, real_rack, real_inbox, real_of
+            mcp.registry.write_share_sets([])
 
     def test_guide_reads_the_jobboard_guide(self):
         d = mcp.registry.service_dir("jobboard")

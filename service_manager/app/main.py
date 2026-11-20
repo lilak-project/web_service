@@ -127,6 +127,9 @@ async def _security_preflight():
     # Start the cross-portal sync poller (no-op unless a service is a 'sub' with an
     # interval set).
     sync_router.start_scheduler()
+    # Twice a day, empty notes are put to their owner in the inbox (app/tidy.py).
+    from . import tidy
+    tidy.start_scheduler(app)
 
     # Bring up the services that asked to be running. Spawning them HERE is what
     # puts them in the portal's cgroup — and so under its memory ceiling — instead
