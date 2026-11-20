@@ -162,8 +162,8 @@ TOOLS = [
      "inputSchema": _schema([], id=_STR, path=_STR, address=_STR)},
     {"name": "note_units", "write": False,
      "description": "A note cut into units for review (level: sentence (default), paragraph, line, doc): each "
-                    "unit's n, text, [@citeKey] keys, needs (states a number, so needs evidence) and the review "
-                    "comments on it; moved: comments whose place was rewritten away. Read the open comments here, "
+                    "unit's n, text, [@citeKey] keys and the review comments on it (put [@key] only where there is "
+                    "evidence; a unit without stays as it is); moved: comments whose place was rewritten away. Read the open comments here, "
                     "fix the note with update_note, then answer each with reply_review (\"고침: ...\"). Only a person "
                     "resolves a comment, on the screen. id, or path = the note's record address." + DATA,
      "inputSchema": _schema([], id=_STR, path=_STR, address=_STR,
