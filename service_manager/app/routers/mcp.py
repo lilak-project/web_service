@@ -177,6 +177,18 @@ TOOLS = [
      "description": "Answer a review comment (rid, its id from note_units), e.g. \"고침: ...\" after fixing what it "
                     "asked. Resolving it stays a person's, on the screen.",
      "inputSchema": _schema(["rid", "text"], id=_STR, path=_STR, address=_STR, rid=_STR, text=_STR)},
+    {"name": "list_reports", "write": False,
+     "description": "The portal's issues (Issues: bugs, suggestions, questions people sent): id, who, kind, status, "
+                    "subject, body, reply, attachments (name, size, where to fetch: never the file) and times. A "
+                    "manager's token sees everyone's, any other only its owner's. status: open (default), resolved, "
+                    "all. The flow: read them, hand each to where it belongs, and once fixed answer with what "
+                    "changed (the commit) and resolve it with reply_report." + DATA,
+     "inputSchema": _schema([], status={"type": "string", "enum": ["open", "resolved", "all"]},
+                            limit={"type": "integer", "minimum": 1, "maximum": 200})},
+    {"name": "reply_report", "write": True,
+     "description": "Answer a portal issue (reply, shown to who sent it) and/or mark it resolved (resolved: true) "
+                    "or open again (false). A manager's token only, as on the Issues screen.",
+     "inputSchema": _schema([], id={"type": "integer"}, reply=_STR, resolved={"type": "boolean"})},
     {"name": "add_note", "write": True,
      "description": "Create a note dated today. Tags are `#tag` words in the body. Returns its id and version. "
                     "mode: slide makes it a slide deck." + SLIDES,
@@ -432,6 +444,38 @@ async def _get(request, grant, args):
 
 
 # The note's Review mode: its units, hashes and anchors are the note service's (one place, the screen's too).
+
+
+# ── the portal's issues (routers/reports.py): through its own API, so who may do what is decided there ──
+async def _list_reports(request, grant, args):
+    status = args.get("status") or "open"
+    if status not in ("open", "resolved", "all"):
+        raise ToolError("status 는 open, resolved, all 중 하나입니다.")
+    r = await _self(request, grant, "GET", "/api/admin/reports", params={"status": status} if status != "all" else {})
+    if r.status_code == 403:                       # not a manager: their own only
+        r = await _self(request, grant, "GET", "/api/reports/mine")
+    rows = [x for x in _ok(r) if status == "all" or x.get("status") == status]
+    for x in rows:
+        x["attachments"] = [{"name": a.get("name"), "size": a.get("size"), "type": a.get("type"),
+                             "path": f"/api/reports/{x['id']}/files/{a.get('id')}"} for a in x.get("attachments") or []]
+        for k in ("user_shape", "user_color"):
+            x.pop(k, None)
+    return {"reports": rows[:max(1, min(int(args.get("limit") or 50), 200))], "count": len(rows)}
+
+
+async def _reply_report(request, grant, args):
+    rid = args.get("id")
+    if not isinstance(rid, int) or isinstance(rid, bool):
+        raise ToolError("id 는 이슈 번호(정수)입니다.")
+    if "reply" not in args and "resolved" not in args:
+        raise ToolError("reply 나 resolved 중 하나는 있어야 합니다.")
+    out = None
+    if "reply" in args:
+        out = _ok(await _self(request, grant, "POST", f"/api/admin/reports/{rid}/reply", json={"reply": str(args["reply"])}))
+    if "resolved" in args:
+        out = _ok(await _self(request, grant, "POST", f"/api/admin/reports/{rid}/resolve",
+                              json={"resolved": bool(args["resolved"])}))
+    return {"id": out["id"], "status": out["status"], "reply": out.get("reply")}
 
 
 async def _note_units(request, grant, args):
@@ -1507,7 +1551,7 @@ HANDLERS = {"tags": _tags, "find": _find, "related": _related, "my_tasks": _my_t
             "chat_rooms": _chat_rooms, "chat_read": _chat_read, "chat_send": _chat_send,
             "approve_job": _approve_job, "job_recipes": _job_recipes, "submit_job": _submit_job,
             "job_status": _job_status, "add_evaluation": _add_evaluation,
-            "note_units": _note_units, "add_review": _add_review, "reply_review": _reply_review, "guide": _guide}
+            "note_units": _note_units, "list_reports": _list_reports, "reply_report": _reply_report, "add_review": _add_review, "reply_review": _reply_review, "guide": _guide}
 PROPOSERS = {"propose_note": _propose_note, "propose_activity": _propose_activity, "propose_tags": _propose_tags}
 
 
