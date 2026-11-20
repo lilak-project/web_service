@@ -15,6 +15,7 @@ PORTAL_TIDY_NOTES=0 turns the timer off; POST /api/admin/tidy/empty-notes runs i
 """
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import re
@@ -24,7 +25,7 @@ from urllib.parse import quote
 
 import httpx
 
-from . import models, registry
+from . import config, models, registry
 from .db import SessionLocal
 from .deps import portal_token
 
@@ -71,6 +72,25 @@ def cand_id(*about) -> str:
     return "tidy-" + hashlib.sha1("/".join(map(str, about)).encode()).hexdigest()[:16]
 
 
+# Every candidate id this portal has seen, kept past the inbox's own memory (it drops a discarded one
+# after 10 days), so a no stays a no. ponytail: grows by one line per empty thing ever found; prune if huge.
+ASKED = config.DATA_ROOT / "_portal" / "tidy_asked.json"
+
+
+def _asked() -> set:
+    try:
+        return set(json.loads(ASKED.read_text()))
+    except (OSError, ValueError):
+        return set()
+
+
+def _remember(ids: set) -> None:
+    ASKED.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ASKED.with_suffix(".tmp")
+    tmp.write_text(json.dumps(sorted(i for i in ids if str(i).startswith("tidy-"))))
+    tmp.replace(ASKED)
+
+
 def _admin_jwt() -> str:
     with SessionLocal() as db:
         u = db.query(models.User).filter(models.User.role == "manager", models.User.is_active.is_(True)) \
@@ -105,6 +125,7 @@ async def sweep(app, dry_run: bool = False) -> list:
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://portal", timeout=60,
                                  headers={"Authorization": f"Bearer {jwt}", "Accept": "application/json"}) as c:
         asked_in: dict = {}
+        seen = _asked()
         for svc, proj, iproj, rule in _targets():
             if iproj not in asked_in:
                 i = await c.get(f"/pp/inbox/{iproj}/api/data")
@@ -114,6 +135,7 @@ async def sweep(app, dry_run: bool = False) -> list:
                 rows = i.json().get("inbox") or []
                 asked_in[iproj] = {x.get("id") for x in rows} | \
                     {cand_id("note", x.get("destProj"), x.get("noteId")) for x in rows if x.get("target") == "note_delete"}
+            asked_in[iproj] |= seen
             asked = asked_in[iproj]
             for rec in await (_notes(c, proj) if svc == "note" else _records(c, svc, proj, rule)):
                 if rec["id"] in asked:
@@ -128,6 +150,8 @@ async def sweep(app, dry_run: bool = False) -> list:
                 if w.status_code >= 400:
                     log.warning("tidy: inbox %s refused (%s)", iproj, w.status_code)
                 asked.add(rec["id"])
+        if not dry_run:
+            _remember(seen.union(*asked_in.values()) if asked_in else seen)
     return found
 
 

@@ -571,6 +571,9 @@ class Gates(unittest.TestCase):
         self.assertEqual([(k, r["id"]) for k, r in empty_records(doc, {"places": ["name"]})], [("places", "p")])
         self.assertEqual(cand_id("note", "n", "x"), cand_id("note", "n", "x"))   # both portals write the same candidate
         self.assertNotEqual(cand_id("note", "n", "x"), cand_id("note", "n", "y"))
+        from app import tidy
+        tidy._remember({"tidy-a", "mcp-b"})
+        self.assertEqual(tidy._asked(), {"tidy-a"})                                # a no outlives the inbox's 10 days
 
     def test_propose_tags_leaves_one_candidate(self):
         left = []
