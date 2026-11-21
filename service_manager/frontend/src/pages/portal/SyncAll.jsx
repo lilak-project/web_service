@@ -163,6 +163,28 @@ export default function SyncAll() {
           <Field key={x.svc} label={x.svc}><span style={{ color: 'var(--dock-danger-text)' }}>{x.error}</span></Field>
         ))}
       </Panel>
+      <History />
     </>
+  )
+}
+
+/** Link requests sent and received, kept folded: what was asked, of whom, how it went. */
+function History() {
+  const [rows, setRows] = useState(null)
+  useEffect(() => { launcher.get('/admin/sync-all/history').then((r) => setRows(r.data)).catch(() => setRows([])) }, [])
+  if (!rows) return null
+  const when = (t) => (t ? new Date(t * 1000).toLocaleString() : '—')
+  return (
+    <Panel fold open={false} title={tr('p_sa_history')} hint={String(rows.length)}>
+      {rows.length === 0 && <Field label="">{tr('p_sa_no_requests')}</Field>}
+      {rows.map((r, i) => (
+        <Field key={i} label={`${r.dir === 'sent' ? '→' : '←'} ${r.svc}${r.project ? '/' + r.project : ''}`}>
+          <span style={{ ...fieldMuted, ...mono }}>{when(r.at)}</span>
+          <span style={mono}>{r.url}{r.name ? ` (${r.name})` : ''}{r.by ? ` · ${r.by}` : ''}</span>
+          <Pill tone={['joined', 'approved'].includes(r.status) ? 'ok' : r.status === 'pending' ? 'warn' : undefined}>{r.status}</Pill>
+          {r.pin && <span style={fieldMuted}>{tr('p_pin')} <b style={mono}>{r.pin}</b></span>}
+          {r.error && <span style={{ color: 'var(--dock-danger-text)' }}>{r.error}</span>}
+        </Field>))}
+    </Panel>
   )
 }

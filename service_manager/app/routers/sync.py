@@ -542,6 +542,7 @@ def pair_request(svc: str, body: PairRequest, user: models.User = Depends(requir
 
 def _ask(svc: str, body: PairRequest, by: str, batch: str = "") -> dict:
     import json as _json
+    import time as _time
     import socket
     url = body.url.strip().rstrip("/")
     if not url.startswith(("http://", "https://")):
@@ -568,7 +569,7 @@ def _ask(svc: str, body: PairRequest, by: str, batch: str = "") -> dict:
             if not (p["url"] == url and p["project"] == proj)]
     row = {"id": got["id"], "claim": got["claim"], "pin": got["pin"], "url": url, "project": proj,
            "two_way": body.two_way, "live": body.live, "status": "pending",
-           "bpin": sync.pin(batch) if batch else ""}
+           "bpin": sync.pin(batch) if batch else "", "at": _time.time()}
     sync.write_list(svc, "sync-pending.json", rows + [row])
     return {k: row[k] for k in ("id", "pin", "url", "project", "status")}
 
@@ -1235,6 +1236,23 @@ def all_asked(_: models.User = Depends(require_portal_admin)):
             g["items"].append({"svc": svc, "id": r["id"], "project": r.get("project") or "",
                                "two_way": bool(r.get("two_way"))})
     return sorted(groups.values(), key=lambda g: -(g["at"] or 0))
+
+
+@router.get("/api/admin/sync-all/history")
+def all_history(_: models.User = Depends(require_portal_admin)):
+    """Every link request this server sent and was sent (what is still kept), newest first."""
+    out = []
+    for svc in registry.list_service_names():
+        for p in sync.read_list(svc, "sync-pending.json"):
+            out.append({"dir": "sent", "svc": svc, "url": p.get("url"), "project": p.get("project") or "",
+                        "status": p.get("status"), "pin": p.get("bpin") or p.get("pin"), "at": p.get("at"),
+                        "two_way": bool(p.get("two_way")), "error": p.get("error")})
+        for r in sync.read_list(svc, "sync-requests.json"):
+            out.append({"dir": "got", "svc": svc, "url": r.get("from_url"), "name": r.get("from_name"),
+                        "by": r.get("by"), "project": r.get("project") or "", "status": r.get("status"),
+                        "pin": sync.pin(r.get("batch") or r.get("claim", "")), "at": r.get("at"),
+                        "two_way": bool(r.get("two_way"))})
+    return sorted(out, key=lambda x: -(x["at"] or 0))
 
 
 class AllDecide(BaseModel):
