@@ -309,6 +309,14 @@ def _pull(db, up: _Main) -> None:
     mine = {r.ext_id: r for r in db.query(models.Report).filter(models.Report.ext_id.isnot(None))}
     for x in u.get("reports") or []:
         r = mine.get(str(x.get("id")))
+        if not r and x.get("external"):             # opened on GitHub: made here as it is there
+            r = models.Report(user_id=0, kind=x.get("kind") if x.get("kind") in KINDS else "inquiry",
+                              subject=str(x.get("subject") or "")[:200], body=str(x.get("body") or ""),
+                              author=str(x.get("author") or "?")[:80], origin="github", ext_id=str(x["id"]),
+                              labels_json=json.dumps(rp.clean_labels(x.get("labels") or []), ensure_ascii=False))
+            db.add(r)
+            db.flush()
+            mine[r.ext_id] = r
         if r:
             r.number = x.get("number") or r.number
             apply_state(db, r, x, up.name)
@@ -462,8 +470,9 @@ class RelayComment(BaseModel):
 
 
 def _theirs(db, sub: str, rid: int) -> models.Report:
+    """An issue the sub may act on: its own, or an external one (opened on GitHub), which every sub sees."""
     r = db.get(models.Report, rid)
-    if not r or r.origin != sub:
+    if not r or r.origin not in (sub, "github"):
         raise HTTPException(404, "없음")
     return r
 
@@ -563,20 +572,23 @@ def relay_delete_comment(rid: int, cid: int, authorization: Optional[str] = Head
 
 @router.get("/api/issues/relay/updates")
 def relay_updates(since: str = "", authorization: Optional[str] = Header(default=None)):
-    """What the sub takes back: its issues' whole state, and the comments on them changed since `since`
-    (deletions included; its own come back too, matched there by id, so a deletion on GitHub reaches it)."""
+    """What the sub takes back: the whole state of its issues and of the external ones (opened on GitHub, so
+    every portal sees them; `external` tells the sub to make one it does not have), and the comments on them
+    changed since `since` (deletions included; its own come back too, matched there by id, so a deletion on
+    GitHub reaches it)."""
     sub = _sub(authorization)
     try:
         t = datetime.fromisoformat(since) if since else None
     except ValueError:
         t = None
     with SessionLocal() as db:
-        rows = db.query(models.Report).filter(models.Report.origin == sub).all()
+        rows = db.query(models.Report).filter(models.Report.origin.in_((sub, "github"))).all()
         ids = [r.id for r in rows]
         q = db.query(models.ReportComment).filter(models.ReportComment.report_id.in_(ids))
         cs = (q.filter(models.ReportComment.updated_at >= t) if t else q).order_by(models.ReportComment.id).all() if ids else []
         return {"reports": [{"id": r.id, "number": r.number, "subject": r.subject, "body": r.body, "status": r.status,
                              "state_reason": r.state_reason, "closed_by": r.closed_by, "labels": rp.labels_of(r)}
+                            | ({"external": True, "kind": r.kind, "author": r.author} if r.origin == "github" else {})
                             for r in rows],
                 "comments": [{"id": c.id, "report_id": c.report_id, "author": c.author, "body": c.body,
                               "origin": c.origin or server_name(), "deleted": bool(c.deleted)} for c in cs],

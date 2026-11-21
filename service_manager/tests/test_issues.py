@@ -213,6 +213,22 @@ class Issues(unittest.TestCase):
         self.assertEqual((r["username"], r["origin"], [x["body"] for x in r["comments"]]), ("kim", "sub1", ["main 답"]))
         self.assertIn("a.png", r["body"])
 
+        # an issue opened on GitHub reaches every sub, which may comment on it and close it
+        with SessionLocal() as db:
+            ext = models.Report(user_id=0, kind="bug", subject="밖에서", body="x", author="octo", origin="github",
+                                ext_id="900", number=900)
+            db.add(ext)
+            db.commit()
+            eid = ext.id
+        u = c.get("/api/issues/relay/updates", headers=sub).json()
+        self.assertEqual([(x["id"], x.get("external"), x.get("author")) for x in u["reports"] if x["id"] == eid],
+                         [(eid, True, "octo")])
+        self.assertEqual(c.post(f"/api/issues/relay/reports/{eid}/comments", headers=sub,
+                                json={"id": 9, "author": "kim", "body": "여기서도 봄"}).status_code, 200)
+        c.put(f"/api/issues/relay/reports/{eid}", headers=sub, json={"status": "resolved", "by": "kim"})
+        self.assertEqual(self.get(eid)["status"], "resolved")
+        c.delete(f"/api/admin/reports/{eid}", headers=self.h)                     # not for the other tests to send
+
         c.delete("/api/admin/issues/subs/sub1", headers=self.h)
         self.assertEqual(c.get("/api/issues/relay/updates", headers=sub).status_code, 401)
 
@@ -248,6 +264,24 @@ class Issues(unittest.TestCase):
             issues._pull(db, up)
         self.assertEqual(self.get(rid)["comments"], [])
         self.assertEqual(issues._read()["since"], "2026-11-20T00:00:00")
+
+    def test_sub_makes_external_issues(self):
+        state = {"id": 77, "number": 31, "subject": "깃허브에서", "body": "직접", "status": "open", "labels": ["bug"],
+                 "external": True, "kind": "bug", "author": "octo"}
+
+        class Up:
+            name = "main.lab"
+
+            def updates(self, since):
+                return {"reports": [state], "cursor": "", "comments": [
+                    {"id": 5, "report_id": 77, "author": "octo", "origin": "github", "body": "첫 댓글"}]}
+        with SessionLocal() as db:
+            issues._pull(db, Up())
+            issues._pull(db, Up())
+        got = [x for x in c.get("/api/admin/reports", headers=self.h).json() if x["subject"] == "깃허브에서"]
+        self.assertEqual([(x["number"], x["origin"], x["username"], [m["body"] for m in x["comments"]]) for x in got],
+                         [(31, "github", "octo", ["첫 댓글"])])
+        self.assertEqual(got[0]["events"], [])                                     # made, not relabeled
 
 
 if __name__ == "__main__":
