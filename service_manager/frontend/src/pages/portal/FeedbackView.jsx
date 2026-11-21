@@ -40,7 +40,8 @@ function ReportFiles({ r }) {
 const KIND = {
   bug:            { icon: 'warning-circle', color: '#dc2626', ko: '버그 신고', en: 'Bug' },
   recommendation: { icon: 'lightbulb',      color: '#ca8a04', ko: '제안',      en: 'Recommendation' },
-  inquiry:        { icon: 'chats',          color: '#2563eb', ko: '문의',      en: 'Inquiry' } }
+  inquiry:        { icon: 'chats',          color: '#2563eb', ko: '문의',      en: 'Inquiry' },
+  local:          { icon: 'home',           color: '#64748b', ko: '이 서버만',  en: 'Local only' } }
 const input = fieldInput
 const textarea = { ...fieldInput, width: '100%', height: 'auto', minHeight: 0, padding: '9px 10px', resize: 'vertical', lineHeight: 1.5 }
 
@@ -51,7 +52,7 @@ export default function FeedbackView({ isManager, folded = false }) {
   const [mine, setMine] = useState([])
   const [all, setAll] = useState([])
   const [open, setOpen] = useState(null)
-  const [drafts, setDrafts] = useState({})   // report id -> reply text being edited
+  const [drafts, setDrafts] = useState({})   // report id -> comment being written
 
   async function load() {
     try {
@@ -66,7 +67,10 @@ export default function FeedbackView({ isManager, folded = false }) {
     if (!f.subject.trim() && !f.body.trim()) { notify(tr("p_write_something_first"), 'bad'); return }
     run(launcher.post('/reports', f), () => { setF({ kind: 'inquiry', subject: '', body: '' }); return tr("p_sent_thank_you") })
   }
-  const sendReply = (r) => run(launcher.post(`/admin/reports/${r.id}/reply`, { reply: drafts[r.id] ?? r.reply ?? '' }), () => tr("p_reply_saved"))
+  const sendComment = (r) => {
+    if (!(drafts[r.id] || '').trim()) return
+    run(launcher.post(`/reports/${r.id}/comments`, { body: drafts[r.id] }), () => { setDrafts((d) => ({ ...d, [r.id]: '' })); return L('댓글을 남겼습니다', 'Comment added') })
+  }
   const toggleResolve = (r) => run(launcher.post(`/admin/reports/${r.id}/resolve`, { resolved: r.status !== 'resolved' }), () => r.status === 'resolved' ? tr("p_reopened") : tr("p_resolved"))
   const del = (r) => { if (window.confirm(tr("p_delete_this_report"))) run(launcher.delete(`/admin/reports/${r.id}`), () => tr("p_deleted")) }
 
@@ -88,30 +92,36 @@ export default function FeedbackView({ isManager, folded = false }) {
           <span className="set-pill" style={{ color: m.color }}>{L(m.ko, m.en)}</span>
           {statusBadge(r.status)}
         </>}
-        subtitle={(admin ? (r.username + ' · ') : '') + fmt(r.created_at)}
+        subtitle={(admin ? (r.username + (r.origin ? ` (${r.origin})` : '') + ' · ') : '') + fmt(r.created_at)}
       >
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ whiteSpace: 'pre-wrap' }}>{r.body || '—'}</div>
           <ReportFiles r={r} />
-          {admin ? (
-            <>
-              <textarea value={drafts[r.id] ?? r.reply ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
-                rows={3} placeholder={tr("p_write_a_reply")} style={textarea} />
-              <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--dock-border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
-                <Button variant="secondary" onClick={() => sendReply(r)}>{tr("p_save_reply")}</Button>
-                <Button variant={r.status === 'resolved' ? 'ghost' : 'primary'} onClick={() => toggleResolve(r)}>
-                  {r.status === 'resolved' ? tr("p_reopen") : tr("p_mark_resolved")}
-                </Button>
-                <div style={{ flex: 1 }} />
-                <Button variant="dangerSoft" onClick={() => del(r)}><Icon name="trash" size={14} /> {tr("p_delete")}</Button>
+          {(r.comments || []).map((c) => (
+            <div key={c.id} style={{ borderTop: '1px solid var(--dock-border-subtle)', paddingTop: 8 }}>
+              <div style={{ fontSize: 12, color: 'var(--dock-text-secondary)' }}>
+                {c.origin === 'github' ? <><Icon name="github-logo" size={12} /> {c.author}</> : c.author}
+                {c.origin && c.origin !== 'github' ? ` · ${c.origin}` : ''} · {fmt(c.created_at)}
               </div>
-            </>
-          ) : (
-            <div style={{ whiteSpace: 'pre-wrap', borderTop: '1px solid var(--dock-border-default)', paddingTop: 10,
-              color: r.reply ? 'var(--dock-text-primary)' : 'var(--dock-text-secondary)' }}>
-              {r.reply || tr("p_no_reply_yet")}
+              <div style={{ whiteSpace: 'pre-wrap' }}>{c.body}</div>
             </div>
-          )}
+          ))}
+          {!(r.comments || []).length && !admin &&
+            <div style={{ color: 'var(--dock-text-secondary)' }}>{tr("p_no_reply_yet")}</div>}
+          {r.upstream && <a href={r.upstream.url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
+            <Icon name={r.upstream.where === 'github' ? 'github-logo' : 'link'} size={12} /> {r.upstream.where} #{r.upstream.id}</a>}
+          <textarea value={drafts[r.id] ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
+            rows={2} placeholder={L('댓글', 'Comment')} style={textarea} />
+          <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--dock-border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
+            <Button variant="secondary" onClick={() => sendComment(r)}>{L('댓글 달기', 'Comment')}</Button>
+            {admin && <>
+              <Button variant={r.status === 'resolved' ? 'ghost' : 'primary'} onClick={() => toggleResolve(r)}>
+                {r.status === 'resolved' ? tr("p_reopen") : tr("p_mark_resolved")}
+              </Button>
+              <div style={{ flex: 1 }} />
+              <Button variant="dangerSoft" onClick={() => del(r)}><Icon name="trash" size={14} /> {tr("p_delete")}</Button>
+            </>}
+          </div>
         </div>
       </ExpandBox>
     )
@@ -153,6 +163,56 @@ export default function FeedbackView({ isManager, folded = false }) {
           ? <Row className="empty">{tr("p_nothing_yet")}</Row>
           : <div className="set-list">{rows.map((r) => item(r, isManager))}</div>}
       </Panel>
+      {isManager && <IssueSync L={L} folded={folded} />}
     </>
+  )
+}
+
+/** Admin: where issues go — GitHub (this is the main portal: token in the server's env) or a main portal
+ *  (paired by address + pin, as in HANDSHAKE.md) — and which kinds go. */
+function IssueSync({ L, folded }) {
+  const [st, setSt] = useState(null)
+  const [url, setUrl] = useState('')
+  const load = () => launcher.get('/admin/issues').then((r) => setSt(r.data)).catch(() => {})
+  useEffect(() => { load() }, [])
+  async function run(p, ok) { try { await p; if (ok) notify(ok, 'ok'); await load() } catch (e) { notify(e?.response?.data?.detail || 'failed', 'bad') } }
+  if (!st) return null
+  const KL = { bug: L('버그', 'Bug'), recommendation: L('제안', 'Recommendation'), inquiry: L('문의', 'Inquiry'), local: L('이 서버만', 'Local only') }
+  const where = st.mode === 'github' ? `GitHub ${st.repo}` : st.mode === 'sub' ? `main ${st.main.url}` : L('꺼짐', 'off')
+  return (
+    <Panel bare fold open={!folded} title={L('이슈 동기화', 'Issue sync')} hint={where}>
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span>{L('올리는 종류', 'Kinds sent')}:</span>
+          {Object.entries(st.kinds).map(([k, on]) => (
+            <label key={k} style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+              <input type="checkbox" checked={on} onChange={() => run(launcher.put('/admin/issues/kinds', { kinds: { [k]: !on } }))} /> {KL[k] || k}
+            </label>))}
+        </div>
+        {st.mode === 'github' && <div style={{ fontSize: 13, color: 'var(--dock-text-secondary)' }}>
+          webhook: <code>{st.webhook_url}</code> {st.webhook ? '✓' : L('— GITHUB_WEBHOOK_SECRET 없음: GitHub 쪽 소식은 안 들어옴', '— no GITHUB_WEBHOOK_SECRET: nothing comes back from GitHub')}
+        </div>}
+        {st.mode !== 'github' && (st.main
+          ? <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{L('이 포털의 이슈는 main 으로 갑니다', 'Issues go to main')}: {st.main.url}
+              <Button variant="dangerSoft" onClick={() => run(launcher.delete('/admin/issues/link'), L('연결을 끊었습니다', 'Unlinked'))}>{L('끊기', 'Unlink')}</Button></div>
+          : <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://portal.stellarpiece.com" style={{ ...fieldInput, flex: 1, minWidth: 220 }} />
+              <Button variant="primary" onClick={() => run(launcher.post('/admin/issues/link', { url }), L('요청했습니다 — main 관리자에게 확인 번호를 알려 주세요', 'Asked — tell main\'s admin the pin'))}>{L('main 에 연결 요청', 'Ask main')}</Button>
+              {st.pending && <span>{st.pending.url} · {L('확인 번호', 'pin')} <b>{st.pending.pin}</b> · {st.pending.status}</span>}
+            </div>)}
+        {st.requests.map((r) => (
+          <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {L('연결 요청', 'Link request')} · {r.from_name} · {r.from_url} · {r.by} · {L('확인 번호', 'pin')} <b>{r.pin}</b>
+            <Button variant="primary" onClick={() => run(launcher.post(`/admin/issues/requests/${r.id}`, { action: 'approve' }), L('승인했습니다', 'Approved'))}>{L('승인', 'Approve')}</Button>
+            <Button variant="ghost" onClick={() => run(launcher.post(`/admin/issues/requests/${r.id}`, { action: 'reject' }))}>{L('거절', 'Reject')}</Button>
+          </div>))}
+        {st.subs.map((s) => (
+          <div key={s.name} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {L('이슈를 보내는 포털', 'Sends issues here')}: <b>{s.name}</b> {s.url}
+            <Button variant="dangerSoft" onClick={() => run(launcher.delete(`/admin/issues/subs/${encodeURIComponent(s.name)}`), L('끊었습니다', 'Removed'))}>{L('끊기', 'Remove')}</Button>
+          </div>))}
+        <div><Button variant="ghost" onClick={() => run(launcher.post('/admin/issues/sync'), L('보냈습니다', 'Synced'))}>{L('지금 동기화', 'Sync now')}</Button></div>
+      </div>
+    </Panel>
   )
 }

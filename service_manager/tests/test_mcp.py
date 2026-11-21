@@ -596,7 +596,7 @@ class Gates(unittest.TestCase):
         self.assertTrue(call(plain, "reply_report", id=mine.id, reply="x")["isError"])  # answering is a manager's
         self.assertTrue(call(self.issue(write=False), "reply_report", id=mine.id, resolved=True)["isError"])
         r = json.loads(call(mgr, "reply_report", id=mine.id, reply="고침: abc123", resolved=True)["content"][0]["text"])
-        self.assertEqual((r["status"], r["reply"]), ("resolved", "고침: abc123"))
+        self.assertEqual((r["status"], r["comments"]), ("resolved", 1))
         got = json.loads(call(mgr, "list_reports")["content"][0]["text"])
         self.assertNotIn(mine.id, [x["id"] for x in got["reports"]])                    # open only, by default
         self.assertTrue(call(mgr, "reply_report", id=mine.id)["isError"])

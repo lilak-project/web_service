@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from . import config
 from . import autostart
 from .routers import service_groups  # noqa: E402
-from .routers import accounts, agent, auth, chat, passkeys, home, iconlab, inbox, links, mcp, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
+from .routers import accounts, agent, auth, chat, passkeys, home, iconlab, inbox, issues, links, mcp, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
 
 config.ensure_dirs()
 
@@ -95,6 +95,7 @@ app.include_router(home.router)            # /api/admin/home (builtin overrides 
 app.include_router(service_groups.router)  # /api/service-groups (+ admin: home cover groups)
 app.include_router(iconlab.router)
 app.include_router(reports.router)         # /api/reports + /api/admin/reports (feedback)
+app.include_router(issues.router)          # /api/github/webhook + /api/issues/* (reports ↔ GitHub / main portal)
 app.include_router(inbox.router)           # /api/inbox/sources (the caller's inbox projects, for the cover)
 app.include_router(system.router)          # /api/admin/system/ports (managed-service port window)
 app.include_router(project_mgmt.router)   # /api/services/{svc}/projects… + /pp/…
@@ -130,6 +131,8 @@ async def _security_preflight():
     # Twice a day, empty notes are put to their owner in the inbox (app/tidy.py).
     from . import tidy
     tidy.start_scheduler(app)
+    # Portal issues ↔ GitHub (main) or ↔ the main portal (a paired sub); idle when neither is set.
+    issues.start_scheduler()
 
     # Bring up the services that asked to be running. Spawning them HERE is what
     # puts them in the portal's cgroup — and so under its memory ceiling — instead

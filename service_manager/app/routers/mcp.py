@@ -179,14 +179,14 @@ TOOLS = [
      "inputSchema": _schema(["rid", "text"], id=_STR, path=_STR, address=_STR, rid=_STR, text=_STR)},
     {"name": "list_reports", "write": False,
      "description": "The portal's issues (Issues: bugs, suggestions, questions people sent): id, who, kind, status, "
-                    "subject, body, reply, attachments (name, size, where to fetch: never the file) and times. A "
+                    "subject, body, comments (the thread: who, where from, text), upstream (its GitHub issue, if any), attachments (name, size, where to fetch: never the file) and times. A "
                     "manager's token sees everyone's, any other only its owner's. status: open (default), resolved, "
                     "all. The flow: read them, hand each to where it belongs, and once fixed answer with what "
                     "changed (the commit) and resolve it with reply_report." + DATA,
      "inputSchema": _schema([], status={"type": "string", "enum": ["open", "resolved", "all"]},
                             limit={"type": "integer", "minimum": 1, "maximum": 200})},
     {"name": "reply_report", "write": True,
-     "description": "Answer a portal issue (reply, shown to who sent it) and/or mark it resolved (resolved: true) "
+     "description": "Answer a portal issue (reply: one more comment in its thread, shown to who sent it and sent on to GitHub with it) and/or mark it resolved (resolved: true) "
                     "or open again (false). A manager's token only, as on the Issues screen.",
      "inputSchema": _schema([], id={"type": "integer"}, reply=_STR, resolved={"type": "boolean"})},
     {"name": "add_note", "write": True,
@@ -475,7 +475,7 @@ async def _reply_report(request, grant, args):
     if "resolved" in args:
         out = _ok(await _self(request, grant, "POST", f"/api/admin/reports/{rid}/resolve",
                               json={"resolved": bool(args["resolved"])}))
-    return {"id": out["id"], "status": out["status"], "reply": out.get("reply")}
+    return {"id": out["id"], "status": out["status"], "comments": len(out.get("comments") or [])}
 
 
 async def _note_units(request, grant, args):

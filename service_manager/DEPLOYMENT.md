@@ -413,3 +413,27 @@ projects are skipped.
 - **Elsewhere:** set `NOTE_CHROME` to the executable.
 - **Docker:** a Chrome on the host cannot be used from the container (different libraries). If needed, extend the image yourself as above, with `fonts-noto-cjk` for Korean and `procps` to stop a Chrome that hangs.
 - **Note:** the server's Chrome also fetches outside image URLs written in the note; keep that in mind on a public server.
+
+## 12. Portal issues ↔ GitHub / 포털 이슈와 GitHub 이슈 동기화
+
+**한국어** — 포털 이슈(버그·제안·문의)를 공개 저장소 `lilak-project/web_service` 의 issue 와 양쪽으로 맞춥니다 (`app/routers/issues.py`). 본 포털(portal.stellarpiece.com)만 GitHub 와 직접 주고받고, 다른 서버의 포털은 본 포털에 짝지어 올립니다. 설정이 없으면 조용히 꺼져 있습니다.
+
+- **무엇이 오가나:** 포털 이슈 → GitHub issue, 포털 댓글 → GitHub 댓글, 완료/다시 열기 → close/reopen. GitHub 의 댓글·close·reopen → 포털 댓글(GitHub 아이디로 표시)·완료·다시 열기. GitHub 에서 처음 만든 issue 는 가져오지 않습니다.
+- **공개 저장소:** 글 맨 앞은 `**포털 이름** (서버):` 뿐이고 이메일·계정 정보는 넣지 않습니다. 첨부는 올리지 않고 포털 링크만(로그인해야 열림). 연결을 처음 켠 **뒤에** 들어온 이슈만 올라가고, 그 전 이슈는 포털에 남습니다.
+- **종류:** 버그·제안·문의는 기본으로 올라가고 새 종류 `이 서버만`(local)은 올라가지 않습니다. 관리자가 이슈 화면의 "이슈 동기화"에서 종류마다 바꿉니다.
+- **본 포털 환경변수** (값은 직접 만들어 `.env` 에 넣고, 코드·노트·커밋에 쓰지 않습니다):
+  - `GITHUB_ISSUES_REPO=lilak-project/web_service`
+  - `GITHUB_ISSUES_TOKEN` — fine-grained personal access token. Repository access: **Only select repositories → lilak-project/web_service**, Permissions: **Issues: Read and write** 하나만(Metadata: Read 는 자동). 조직 저장소라 조직이 fine-grained 토큰을 승인해야 할 수 있습니다. 만료일을 두고 만료 전에 바꿉니다.
+  - `GITHUB_WEBHOOK_SECRET` — 긴 임의 문자열(예: `openssl rand -hex 32`).
+- **webhook 등록:** GitHub 저장소 → Settings → Webhooks → Add webhook. Payload URL `https://portal.stellarpiece.com/api/github/webhook` (이슈 화면에 그대로 나옴), Content type `application/json`, Secret 은 위 값, "Let me select individual events" → **Issues**, **Issue comments** 만. 서명이 맞지 않는 요청은 401 로 거절합니다.
+- **다른 서버의 포털:** GitHub 토큰 없이 이슈 화면 "이슈 동기화"에 본 포털 주소를 넣고 **main 에 연결 요청** → 본 포털 관리자가 같은 화면에서 확인 번호가 같은지 보고 **승인**(HANDSHAKE.md §4.1 과 같은 방식). 하위 포털은 1분마다 자기 이슈를 올리고 본 포털 쪽 댓글·상태를 받아 옵니다. 본 포털이 하위 포털에 닿을 필요는 없습니다. 끊기는 양쪽 화면에서 합니다.
+- 바꾼 뒤에는 1분 안에 반영되고, "지금 동기화" 로 바로 돌릴 수 있습니다. 실패한 것은 다음 차례에 다시 보냅니다.
+
+**English** — Portal issues stay in step with issues of the public repository `lilak-project/web_service`, both ways (`app/routers/issues.py`). Only the main portal talks to GitHub; other portals pair with it. Unconfigured, it is silently off.
+
+- Portal issue/comment/resolve ↔ GitHub issue/comment/close (and reopen both ways); GitHub comments show under the GitHub login. Issues opened on GitHub itself are not imported.
+- Public repository: a post starts with `**portal name** (server):` only — no e-mail or account detail; attachments stay on the portal as links. Only issues filed **after** the link is first made are sent.
+- Kinds: bug, recommendation, inquiry go by default; the new `local` kind never does unless an admin turns it on (Issues → Issue sync).
+- Main portal env (create the values yourself; never in code, notes or commits): `GITHUB_ISSUES_REPO=lilak-project/web_service`; `GITHUB_ISSUES_TOKEN`, a fine-grained token limited to that one repository with **Issues: Read and write** only (the organisation may have to approve it; give it an expiry); `GITHUB_WEBHOOK_SECRET`, a long random string.
+- Webhook: repository Settings → Webhooks → Add: payload URL `https://portal.stellarpiece.com/api/github/webhook`, content type `application/json`, the secret above, events **Issues** and **Issue comments** only. Unsigned or wrongly signed calls get 401.
+- Other portals: Issues → Issue sync → main's address → ask; main's admin approves after matching the pin (as HANDSHAKE.md §4.1). The sub sends and fetches every minute; main never has to reach it.

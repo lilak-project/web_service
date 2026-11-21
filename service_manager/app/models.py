@@ -196,8 +196,32 @@ class Report(Base):
     # Files sent with it (a chat `/report` with a picture): [{id, name, type, size}], the
     # files kept in _portal/chat_uploads; seen by its writer and the admins.
     attachments_json = Column(Text, nullable=False, default="[]")
+    # Upstream (routers/issues.py): ext_id is its number there (the GitHub issue on the main portal, main's
+    # report id on a sub), ext_state the status both last agreed on. A report relayed from a sub portal has
+    # user_id 0, its writer's name in author and the sub in origin (its id there in origin_id).
+    ext_id = Column(String(64), nullable=True)
+    ext_state = Column(String(16), nullable=True)
+    author = Column(String(80), nullable=False, default="")
+    origin = Column(String(80), nullable=False, default="")
+    origin_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
+class ReportComment(Base):
+    """One message in a report's thread (the admin's old single reply became the first). origin: '' written
+    here, 'github', or the portal it came from; ext_id its id upstream once sent (or where it came from)."""
+    __tablename__ = "portal_report_comments"
+
+    id = Column(Integer, primary_key=True)
+    report_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, nullable=True)
+    author = Column(String(80), nullable=False, default="")
+    origin = Column(String(80), nullable=False, default="")
+    origin_id = Column(Integer, nullable=True)
+    body = Column(Text, nullable=False, default="")
+    ext_id = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=_now)
 
 
 class McpToken(Base):

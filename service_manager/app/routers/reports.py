@@ -1,9 +1,10 @@
 """
 Feedback — bug reports, recommendations and inquiries.
 
-Any signed-in user can file a report and see the thread of their own reports
-(with the admin's reply + status). Admins see everyone's reports, can reply, and
-can flip a report between open and resolved.
+Any signed-in user can file a report and follow its thread (comments + status).
+Admins see everyone's reports, comment, and flip a report between open and
+resolved. Kinds other than `local` travel upstream (routers/issues.py): to GitHub
+on the main portal, to the main portal on a paired sub.
 """
 from __future__ import annotations
 
@@ -23,20 +24,29 @@ from ..deps import require_portal_admin, require_portal_user
 
 router = APIRouter(tags=["reports"])
 
-KINDS = {"bug", "recommendation", "inquiry"}
+KINDS = {"bug", "recommendation", "inquiry", "local"}
+
+
+def _comments(db: Session, rid: int) -> list:
+    rows = (db.query(models.ReportComment).filter(models.ReportComment.report_id == rid)
+            .order_by(models.ReportComment.id).all())
+    return [{"id": c.id, "author": c.author, "origin": c.origin, "body": c.body,
+             "created_at": c.created_at.isoformat() if c.created_at else None} for c in rows]
 
 
 def _view(db: Session, r: models.Report, with_user: bool = False) -> dict:
+    from . import issues
     d = {
         "id": r.id, "kind": r.kind, "subject": r.subject, "body": r.body,
-        "status": r.status, "reply": r.reply,
+        "status": r.status, "comments": _comments(db, r.id),
         "attachments": json.loads(getattr(r, "attachments_json", None) or "[]"),
+        "origin": r.origin or "", "upstream": issues.link_of(r),
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at else None,
     }
     if with_user:
-        u = db.query(models.User).filter(models.User.id == r.user_id).first()
-        d["username"] = u.username if u else "(deleted)"
+        u = db.query(models.User).filter(models.User.id == r.user_id).first() if r.user_id else None
+        d["username"] = u.username if u else (r.author or "(deleted)")
         d["user_shape"] = u.profile_shape if u else None
         d["user_color"] = u.profile_color if u else None
     return d
@@ -58,6 +68,21 @@ def _uploads() -> Path:
 
 class ReplyBody(BaseModel):
     reply: str = ""
+
+
+class CommentBody(BaseModel):
+    body: str = ""
+
+
+def add_comment(db: Session, r: models.Report, user: models.User, text: str) -> models.ReportComment:
+    text = (text or "").strip()
+    if not text:
+        raise HTTPException(400, "내용을 입력하세요.")
+    c = models.ReportComment(report_id=r.id, user_id=user.id, author=user.username, body=text[:20000])
+    db.add(c)
+    r.updated_at = models._now()
+    db.commit()
+    return c
 
 
 class ResolveBody(BaseModel):
@@ -83,7 +108,26 @@ def create_report(body: ReportCreate, user: models.User = Depends(require_portal
     db.add(r)
     db.commit()
     db.refresh(r)
+    _kick()
     return _view(db, r)
+
+
+def _kick() -> None:
+    from . import issues
+    issues.kick()
+
+
+@router.post("/api/reports/{rid}/comments")
+def comment(rid: int, body: CommentBody, user: models.User = Depends(require_portal_user),
+            db: Session = Depends(get_db)):
+    """A comment in the thread: by its writer or an admin."""
+    r = db.get(models.Report, rid)
+    if not r or (r.user_id != user.id and not permissions.is_admin(user)):
+        raise HTTPException(404, "없음")
+    add_comment(db, r, user, body.body)
+    _kick()
+    db.refresh(r)
+    return _view(db, r, with_user=permissions.is_admin(user))
 
 
 @router.get("/api/reports/{rid}/files/{fid}")
@@ -127,9 +171,10 @@ def _get(db: Session, rid: int) -> models.Report:
 @router.post("/api/admin/reports/{rid}/reply")
 def reply_report(rid: int, body: ReplyBody, admin: models.User = Depends(require_portal_admin),
                  db: Session = Depends(get_db)):
+    """Kept for older clients: a reply is now one more comment."""
     r = _get(db, rid)
-    r.reply = (body.reply or "").strip() or None
-    db.commit()
+    add_comment(db, r, admin, body.reply)
+    _kick()
     db.refresh(r)
     return _view(db, r, with_user=True)
 
@@ -141,6 +186,7 @@ def resolve_report(rid: int, body: ResolveBody, admin: models.User = Depends(req
     r.status = "resolved" if body.resolved else "open"
     db.commit()
     db.refresh(r)
+    _kick()
     return _view(db, r, with_user=True)
 
 
@@ -148,6 +194,7 @@ def resolve_report(rid: int, body: ResolveBody, admin: models.User = Depends(req
 def delete_report(rid: int, admin: models.User = Depends(require_portal_admin),
                   db: Session = Depends(get_db)):
     r = _get(db, rid)
-    db.delete(r)
+    db.query(models.ReportComment).filter(models.ReportComment.report_id == rid).delete()
+    db.delete(r)       # its GitHub issue (if any) stays; it is public record there
     db.commit()
     return {"ok": True}

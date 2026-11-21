@@ -91,7 +91,18 @@ def _migrate() -> None:
     if "portal_reports" in names:
         add_missing("portal_reports", {
             "attachments_json": "ALTER TABLE portal_reports ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'",
+            "ext_id": "ALTER TABLE portal_reports ADD COLUMN ext_id VARCHAR(64)",
+            "ext_state": "ALTER TABLE portal_reports ADD COLUMN ext_state VARCHAR(16)",
+            "author": "ALTER TABLE portal_reports ADD COLUMN author VARCHAR(80) NOT NULL DEFAULT ''",
+            "origin": "ALTER TABLE portal_reports ADD COLUMN origin VARCHAR(80) NOT NULL DEFAULT ''",
+            "origin_id": "ALTER TABLE portal_reports ADD COLUMN origin_id INTEGER",
         })
+        with engine.begin() as conn:            # the single admin reply becomes the thread's first comment
+            conn.execute(text(
+                "INSERT INTO portal_report_comments (report_id, author, origin, body, created_at) "
+                "SELECT id, '관리자', '', reply, COALESCE(updated_at, created_at) FROM portal_reports "
+                "WHERE reply IS NOT NULL AND reply != ''"))
+            conn.execute(text("UPDATE portal_reports SET reply = NULL WHERE reply IS NOT NULL"))
 
     if "portal_chat_messages" in names:
         add_missing("portal_chat_messages", {
