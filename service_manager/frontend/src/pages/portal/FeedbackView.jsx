@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon, tr } from 'lilak-ui'
+import { Button, Icon, Markdown, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import ExpandBox from './ExpandBox'
@@ -31,11 +31,11 @@ function ReportFiles({ r }) {
 }
 
 /**
- * FeedbackView — bug reports, recommendations and inquiries.
- * Everyone gets a compose box. A regular user then sees their own thread (status
- * + admin reply, read-only). An admin instead sees every report and can reply,
- * flip open↔resolved, or delete. Report rows reuse the shared ExpandBox so they
- * match the Home / Accounts / Groups boxes.
+ * FeedbackView — the portal's issues, shaped like GitHub's so they travel 1:1 (routers/issues.py):
+ * an Open / Closed list with search and label filters; each issue a Markdown body and a timeline of
+ * comments and events (closed as completed / not planned, reopened, labeled, renamed). Writers edit
+ * what they wrote; an admin closes, reopens, labels and deletes. `#n` in a text links to issue n
+ * (its GitHub number). Rows reuse the shared ExpandBox so they match the other boxes.
  */
 const KIND = {
   bug:            { icon: 'warning-circle', color: '#dc2626', ko: '버그 신고', en: 'Bug' },
@@ -44,24 +44,28 @@ const KIND = {
   local:          { icon: 'home',           color: '#64748b', ko: '이 서버만',  en: 'Local only' } }
 const input = fieldInput
 const textarea = { ...fieldInput, width: '100%', height: 'auto', minHeight: 0, padding: '9px 10px', resize: 'vertical', lineHeight: 1.5 }
+const small = { fontSize: 12, color: 'var(--dock-text-secondary)' }
+const refs = (s) => (s || '').replace(/(^|[\s(])#(\d+)\b/g, '$1[#$2](#issue-$2)')   // #n → a link to issue n
 
 export default function FeedbackView({ isManager, folded = false }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [f, setF] = useState({ kind: 'inquiry', subject: '', body: '' })
-  const [mine, setMine] = useState([])
-  const [all, setAll] = useState([])
+  const [rows, setRows] = useState([])
   const [open, setOpen] = useState(null)
+  const [tab, setTab] = useState('open')
+  const [q, setQ] = useState('')
+  const [label, setLabel] = useState('')
   const [drafts, setDrafts] = useState({})   // report id -> comment being written
+  const [editing, setEditing] = useState(null)   // {rid, cid?, subject?, body}
+  const [newLabel, setNewLabel] = useState('')
 
   async function load() {
-    try {
-      setMine((await launcher.get('/reports/mine')).data)
-      if (isManager) setAll((await launcher.get('/admin/reports')).data)
-    } catch (e) { notify(e?.response?.data?.detail || 'load failed', 'bad') }
+    try { setRows((await launcher.get(isManager ? '/admin/reports' : '/reports/mine')).data) }
+    catch (e) { notify(e?.response?.data?.detail || 'load failed', 'bad') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
-  async function run(p, ok) { try { const r = await p; if (ok) notify(ok(r), 'ok'); await load() } catch (e) { notify(e?.response?.data?.detail || tr("p_failed"), 'bad') } }
+  async function run(p, ok) { try { const r = await p; if (ok) notify(ok(r), 'ok'); await load(); return true } catch (e) { notify(e?.response?.data?.detail || tr("p_failed"), 'bad'); return false } }
 
   const submit = () => {
     if (!f.subject.trim() && !f.body.trim()) { notify(tr("p_write_something_first"), 'bad'); return }
@@ -71,63 +75,136 @@ export default function FeedbackView({ isManager, folded = false }) {
     if (!(drafts[r.id] || '').trim()) return
     run(launcher.post(`/reports/${r.id}/comments`, { body: drafts[r.id] }), () => { setDrafts((d) => ({ ...d, [r.id]: '' })); return L('댓글을 남겼습니다', 'Comment added') })
   }
-  const toggleResolve = (r) => run(launcher.post(`/admin/reports/${r.id}/resolve`, { resolved: r.status !== 'resolved' }), () => r.status === 'resolved' ? tr("p_reopened") : tr("p_resolved"))
+  const close = (r, reason) => run(launcher.post(`/admin/reports/${r.id}/resolve`, { resolved: true, reason }), () => L('닫았습니다', 'Closed'))
+  const reopen = (r) => run(launcher.post(`/admin/reports/${r.id}/resolve`, { resolved: false }), () => tr("p_reopened"))
+  const setLabels = (r, labels) => run(launcher.put(`/admin/reports/${r.id}/labels`, { labels }))
   const del = (r) => { if (window.confirm(tr("p_delete_this_report"))) run(launcher.delete(`/admin/reports/${r.id}`), () => tr("p_deleted")) }
+  const delComment = (r, c) => { if (window.confirm(L('이 댓글을 지울까요?', 'Delete this comment?'))) run(launcher.delete(`/reports/${r.id}/comments/${c.id}`)) }
+  const saveEdit = async () => {
+    const e = editing
+    const p = e.cid ? launcher.put(`/reports/${e.rid}/comments/${e.cid}`, { body: e.body })
+      : launcher.put(`/reports/${e.rid}`, { subject: e.subject, body: e.body })
+    if (await run(p)) setEditing(null)
+  }
 
-  const fmt = (iso) => { try { return new Date(iso).toLocaleString() } catch { return iso } }
+  const fmt = (iso) => { try { return new Date(iso + (/[zZ+]/.test(iso.slice(19)) ? '' : 'Z')).toLocaleString() } catch { return iso } }
   const km = (k) => KIND[k] || KIND.inquiry
-  const statusBadge = (s) => s === 'resolved'
-    ? <Pill tone="ok">{tr("p_resolved_2")}</Pill>
-    : <Pill tone="warn">{tr("p_open")}</Pill>
+  const num = (r) => (r.number ? `#${r.number}` : `P${r.id}`)
+  const jump = (e) => {   // a #n link inside a text
+    const a = e.target.closest?.('a[href^="#issue-"]')
+    if (!a) return
+    e.preventDefault()
+    const t = rows.find((x) => String(x.number) === a.getAttribute('href').slice(7))
+    if (t) { setTab(t.status === 'resolved' ? 'closed' : 'open'); setOpen(t.id) }
+    else notify(L('이 포털에 없는 이슈입니다', 'Not an issue on this portal'), 'bad')
+  }
+  const md = (text) => <div onClick={jump} style={{ minWidth: 0 }}><Markdown>{refs(text) || '—'}</Markdown></div>
+  const labelPill = (x, onX) => {
+    const k = KIND[x]
+    return (
+      <span key={x} className="set-pill" style={{ color: k?.color, cursor: onX ? 'default' : 'pointer' }}
+        onClick={onX ? undefined : (e) => { e.stopPropagation(); setLabel(label === x ? '' : x) }}>
+        {k ? L(k.ko, k.en) : x}
+        {onX && <span role="button" tabIndex={0} onClick={onX} onKeyDown={(e) => { if (e.key === 'Enter') onX() }} aria-label="remove" style={{ cursor: 'pointer', paddingLeft: 5 }}>×</span>}
+      </span>)
+  }
+  const statusBadge = (r) => r.status === 'resolved'
+    ? <Pill tone={r.state_reason === 'not_planned' ? undefined : 'ok'}>{r.state_reason === 'not_planned' ? L('닫힘 · 안 함', 'Closed · not planned') : L('닫힘 · 완료', 'Closed · completed')}</Pill>
+    : <Pill tone="warn">{L('열림', 'Open')}</Pill>
+  const eventText = (e) => ({
+    closed: e.detail === 'not_planned' ? L('안 하기로 하고 닫음', 'closed this as not planned') : L('완료로 닫음', 'closed this as completed'),
+    reopened: L('다시 엶', 'reopened this'),
+    labeled: L(`라벨 ${e.detail} 붙임`, `added the ${e.detail} label`),
+    unlabeled: L(`라벨 ${e.detail} 뗌`, `removed the ${e.detail} label`),
+    renamed: L(`제목을 바꿈 (전: ${e.detail})`, `changed the title (was: ${e.detail})`),
+  }[e.kind] || e.kind)
 
-  const item = (r, admin) => {
+  const editor = (rows_ = 4) => (
+    <>
+      {editing.cid == null && <input value={editing.subject} onChange={(e) => setEditing((s) => ({ ...s, subject: e.target.value }))} style={{ ...input, width: '100%' }} />}
+      <textarea value={editing.body} onChange={(e) => setEditing((s) => ({ ...s, body: e.target.value }))} rows={rows_} style={textarea} />
+      <div style={{ display: 'flex', gap: 6 }}>
+        <Button variant="primary" onClick={saveEdit}>{L('저장', 'Save')}</Button>
+        <Button variant="ghost" onClick={() => setEditing(null)}>{L('취소', 'Cancel')}</Button>
+      </div>
+    </>)
+
+  const item = (r) => {
     const m = km(r.kind)
+    const timeline = [...(r.comments || []).map((c) => ({ ...c, t: 'c' })), ...(r.events || []).map((e) => ({ ...e, t: 'e' }))]
+      .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
+    const editingIssue = editing && editing.rid === r.id && editing.cid == null
     return (
       <ExpandBox key={r.id} open={open === r.id} onToggle={() => setOpen(open === r.id ? null : r.id)}
         outerProps={{ className: open === r.id ? 'on' : undefined }}
         style={{ opacity: r.status === 'resolved' ? 0.72 : 1 }}
         icon={<Icon name={m.icon} size={22} color={m.color} weight="duotone" />}
-        title={r.subject || tr("p_no_subject")}
-        badges={<>
-          <span className="set-pill" style={{ color: m.color }}>{L(m.ko, m.en)}</span>
-          {statusBadge(r.status)}
-        </>}
-        subtitle={(admin ? (r.username + (r.origin ? ` (${r.origin})` : '') + ' · ') : '') + fmt(r.created_at)}
+        title={<><span style={{ color: 'var(--dock-text-secondary)' }}>{num(r)}</span> {r.subject || tr("p_no_subject")}</>}
+        badges={<>{(r.labels || []).map((x) => labelPill(x))}{statusBadge(r)}</>}
+        subtitle={`${r.username}${r.origin ? ` (${r.origin})` : ''} · ${fmt(r.created_at)}${(r.comments || []).length ? ` · 💬 ${r.comments.length}` : ''}`}
       >
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{r.body || '—'}</div>
-          <ReportFiles r={r} />
-          {(r.comments || []).map((c) => (
-            <div key={c.id} style={{ borderTop: '1px solid var(--dock-border-subtle)', paddingTop: 8 }}>
-              <div style={{ fontSize: 12, color: 'var(--dock-text-secondary)' }}>
-                {c.origin === 'github' ? <><Icon name="github-logo" size={12} /> {c.author}</> : c.author}
-                {c.origin && c.origin !== 'github' ? ` · ${c.origin}` : ''} · {fmt(c.created_at)}
-              </div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{c.body}</div>
-            </div>
-          ))}
-          {!(r.comments || []).length && !admin &&
-            <div style={{ color: 'var(--dock-text-secondary)' }}>{tr("p_no_reply_yet")}</div>}
-          {r.upstream && <a href={r.upstream.url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
-            <Icon name={r.upstream.where === 'github' ? 'github-logo' : 'link'} size={12} /> {r.upstream.where} #{r.upstream.id}</a>}
-          <textarea value={drafts[r.id] ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
-            rows={2} placeholder={L('댓글', 'Comment')} style={textarea} />
-          <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--dock-border-subtle)', paddingTop: 8, flexWrap: 'wrap' }}>
-            <Button variant="secondary" onClick={() => sendComment(r)}>{L('댓글 달기', 'Comment')}</Button>
-            {admin && <>
-              <Button variant={r.status === 'resolved' ? 'ghost' : 'primary'} onClick={() => toggleResolve(r)}>
-                {r.status === 'resolved' ? tr("p_reopen") : tr("p_mark_resolved")}
-              </Button>
-              <div style={{ flex: 1 }} />
-              <Button variant="dangerSoft" onClick={() => del(r)}><Icon name="trash" size={14} /> {tr("p_delete")}</Button>
-            </>}
+          <div style={small}>
+            {r.username}{r.origin ? ` (${r.origin})` : ''} · {fmt(r.created_at)}{r.edited_at ? ` · ${L('수정됨', 'edited')}` : ''}
+            {r.upstream && <> · <a href={r.upstream.url} target="_blank" rel="noreferrer">
+              <Icon name={r.upstream.where === 'github' ? 'github-logo' : 'link'} size={12} /> {r.upstream.where} #{r.upstream.id}</a></>}
+            {(r.mine || isManager) && !editingIssue &&
+              <> · <a href="#" onClick={(e) => { e.preventDefault(); setEditing({ rid: r.id, subject: r.subject, body: r.body }) }}>{L('수정', 'Edit')}</a></>}
           </div>
+          {editingIssue ? editor(6) : md(r.body)}
+          <ReportFiles r={r} />
+
+          {timeline.map((x) => x.t === 'e'
+            ? <div key={`e${x.created_at}${x.kind}${x.detail}`} style={{ ...small, paddingLeft: 10, borderLeft: '2px solid var(--dock-border-subtle)' }}>
+                <b>{x.actor}</b> {eventText(x)} · {fmt(x.created_at)}</div>
+            : <div key={`c${x.id}`} style={{ borderTop: '1px solid var(--dock-border-subtle)', paddingTop: 8 }}>
+                <div style={small}>
+                  {x.origin === 'github' ? <><Icon name="github-logo" size={12} /> {x.author}</> : x.author}
+                  {x.origin && x.origin !== 'github' ? ` · ${x.origin}` : ''} · {fmt(x.created_at)}{x.edited_at ? ` · ${L('수정됨', 'edited')}` : ''}
+                  {x.mine && !(editing && editing.cid === x.id) && <> · <a href="#" onClick={(e) => { e.preventDefault(); setEditing({ rid: r.id, cid: x.id, body: x.body }) }}>{L('수정', 'Edit')}</a></>}
+                  {(x.mine || isManager) && <> · <a href="#" onClick={(e) => { e.preventDefault(); delComment(r, x) }}>{L('삭제', 'Delete')}</a></>}
+                </div>
+                {editing && editing.cid === x.id ? editor(3) : md(x.body)}
+              </div>)}
+
+          <textarea value={drafts[r.id] ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
+            rows={2} placeholder={L('댓글 (Markdown, #번호로 다른 이슈)', 'Comment (Markdown, #n for another issue)')} style={textarea} />
+          <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--dock-border-subtle)', paddingTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Button variant="secondary" onClick={() => sendComment(r)}>{L('댓글 달기', 'Comment')}</Button>
+            {isManager && (r.status === 'resolved'
+              ? <Button variant="ghost" onClick={() => reopen(r)}>{tr("p_reopen")}</Button>
+              : <>
+                  <Button variant="primary" onClick={() => close(r, 'completed')}>{L('완료로 닫기', 'Close as completed')}</Button>
+                  <Button variant="ghost" onClick={() => close(r, 'not_planned')}>{L('안 함으로 닫기', 'Close as not planned')}</Button>
+                </>)}
+            <div style={{ flex: 1 }} />
+            {isManager && <Button variant="dangerSoft" onClick={() => del(r)}><Icon name="trash" size={14} /> {tr("p_delete")}</Button>}
+          </div>
+          {isManager && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={small}>{L('라벨', 'Labels')}</span>
+              {(r.labels || []).map((x) => labelPill(x, () => setLabels(r, r.labels.filter((y) => y !== x))))}
+              <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder={L('라벨 추가 ↵', 'add label ↵')}
+                onKeyDown={(e) => { if (e.key === 'Enter' && newLabel.trim()) { setLabels(r, [...(r.labels || []), newLabel.trim()]); setNewLabel('') } }}
+                style={{ ...input, width: 140 }} />
+            </div>)}
         </div>
       </ExpandBox>
     )
   }
 
-  const rows = isManager ? all : mine
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const hit = (r) => (!label || (r.labels || []).includes(label)) && words.every((w) =>
+    [num(r), r.subject, r.body, r.username, r.origin, ...(r.comments || []).map((c) => c.body)].join(' ').toLowerCase().includes(w))
+  const shown = rows.filter(hit)
+  const counts = { open: shown.filter((r) => r.status !== 'resolved').length, closed: shown.filter((r) => r.status === 'resolved').length }
+  const list = shown.filter((r) => (tab === 'closed') === (r.status === 'resolved'))
+  const tabBtn = (k, text) => (
+    <button key={k} type="button" onClick={() => setTab(k)}
+      style={{ border: 0, cursor: 'pointer', padding: '2px 8px', fontWeight: tab === k ? 700 : 400,
+        color: tab === k ? 'var(--dock-text-primary)' : 'var(--dock-text-secondary)',
+        background: tab === k ? 'var(--dock-border-subtle)' : 'none' }}>
+      {text} {counts[k]}</button>)
   return (
     <>
       {/* compose — everyone */}
@@ -149,19 +226,25 @@ export default function FeedbackView({ isManager, folded = false }) {
           <input value={f.subject} onChange={(e) => setF((s) => ({ ...s, subject: e.target.value }))}
             placeholder={tr("p_subject")} style={{ ...input, width: '100%' }} />
           <textarea value={f.body} onChange={(e) => setF((s) => ({ ...s, body: e.target.value }))}
-            rows={4} placeholder={tr("p_describe_it_in_detail")} style={textarea} />
+            rows={4} placeholder={L('자세히 적어 주세요 (Markdown)', 'Describe it (Markdown)')} style={textarea} />
           <div style={{ display: 'flex' }}><div style={{ flex: 1 }} />
             <Button variant="primary" onClick={submit}>{tr("p_send")}</Button>
           </div>
         </div>
       </Panel>
 
-      {/* thread */}
+      {/* the list */}
       <Panel bare fold open={!folded} title={isManager ? tr("p_received_reports") : tr("p_my_reports")}
         hint={String(rows.length)}>
-        {rows.length === 0
+        <div style={{ padding: '10px 14px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {tabBtn('open', L('열림', 'Open'))}{tabBtn('closed', L('닫힘', 'Closed'))}
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L('검색 (제목·본문·작성자·#번호)', 'Search (title, body, author, #n)')}
+            style={{ ...input, flex: 1, minWidth: 160 }} />
+          {label && <span style={small}>{L('라벨', 'label')}: {labelPill(label)} <a href="#" onClick={(e) => { e.preventDefault(); setLabel('') }}>{L('해제', 'clear')}</a></span>}
+        </div>
+        {list.length === 0
           ? <Row className="empty">{tr("p_nothing_yet")}</Row>
-          : <div className="set-list">{rows.map((r) => item(r, isManager))}</div>}
+          : <div className="set-list">{list.map(item)}</div>}
       </Panel>
       {isManager && <IssueSync L={L} folded={folded} />}
     </>

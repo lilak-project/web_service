@@ -1,23 +1,27 @@
 """
-The portal's issues (routers/reports.py) kept in step with upstream, both ways.
+The portal's issues (routers/reports.py) kept 1:1 with upstream, both ways.
 
-main portal (GITHUB_ISSUES_TOKEN + GITHUB_ISSUES_REPO set): each report whose kind goes up becomes a GitHub
-  issue, each comment a GitHub comment, resolved/open a close/reopen. GitHub answers through the webhook
-  (POST /api/github/webhook, signed with GITHUB_WEBHOOK_SECRET): a comment there becomes a comment here (shown
-  by GitHub login), a close/reopen there resolves/reopens here.
+main portal (GITHUB_ISSUES_TOKEN + GITHUB_ISSUES_REPO set): each issue whose kind goes up becomes a GitHub
+  issue with the same title, body, labels and state (closed with its reason); comments, comment edits and
+  deletions follow. GitHub answers through the webhook (POST /api/github/webhook, signed with
+  GITHUB_WEBHOOK_SECRET): issues opened, edited, closed, reopened, labeled, unlabeled and comments created,
+  edited, deleted there land here (shown under the GitHub login).
 sub portal (no GitHub token): paired with a main portal the HANDSHAKE.md way (address in, main's admin
-  approves after matching the pin, the sub collects its token once) and relays its reports, comments and
-  states there (/api/issues/relay/*); it pulls main's side back (comments, states) every minute. Main never
-  has to reach a sub.
+  approves after matching the pin, the sub collects its token once) and relays to it (/api/issues/relay/*);
+  every minute it pulls main's side back (state, labels, text, GitHub numbers, comments). Main never has to
+  reach a sub.
 
-Nothing goes twice: a report remembers its number upstream (ext_id) and the state both last agreed on
-(ext_state); a comment its id upstream (ext_id), set when sent or when it arrived from there. What we post
-to GitHub carries MARK, so its webhook echo is dropped. Public repository: a post names only the writer's
-portal name and the server, never an e-mail or account detail; attachments go as portal links.
+Nothing goes twice: an issue remembers its id upstream (ext_id) and whether it changed here since
+(ext_dirty: the next sweep sends its whole state, as one GitHub PATCH); a comment its id upstream, a
+deletion stays as a tombstone until sent. Where both sides changed, this side's unsent change wins. What we
+post to GitHub carries MARK, so its webhook echo is recognised and our prefix is taken off what comes back.
+Public repository: a post names only the writer's portal name and the server, never an e-mail or account
+detail; attachments go as portal links. Assignees are left out: portal accounts are not tied to GitHub ones.
 
-Only reports filed after the link was first made go up (after_id): the older ones were written for this
-portal's admins, not for a public repository. Kinds: bug, recommendation, inquiry go up by default, local never; an admin changes that (data/_portal/
-issues.json, which also holds the pairing). Nothing configured: every sweep returns at once.
+Only issues filed after the link was first made go up (after_id): the older ones were written for this
+portal's admins, not for a public repository. Kinds: bug, recommendation, inquiry go up by default, local
+never; an admin changes that (data/_portal/issues.json, which also holds the pairing). Nothing configured:
+every sweep returns at once.
 """
 from __future__ import annotations
 
@@ -26,11 +30,13 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import socket
 import threading
 import time
 import uuid
+from datetime import datetime
 from typing import Optional
 from urllib.parse import urlsplit
 
@@ -42,11 +48,13 @@ from sqlalchemy import func
 from .. import config, models, registry, security, sync
 from ..db import SessionLocal
 from ..deps import require_portal_admin
+from . import reports as rp
 
 router = APIRouter(tags=["issues"])
 log = logging.getLogger("issues")
 FILE = config.DATA_ROOT / "_portal" / "issues.json"
 MARK = "<!-- lilak-portal -->"
+FILES = "<!-- lilak-files -->"
 KINDS = ("bug", "recommendation", "inquiry", "local")
 DEFAULT_KINDS = {"bug": True, "recommendation": True, "inquiry": True, "local": False}
 UA = {"User-Agent": "lilak-portal-issues/1"}      # Cloudflare refuses Python's default (see sync.py)
@@ -95,23 +103,51 @@ def _host(url: str) -> str:
     return urlsplit(url).hostname or url
 
 
-def _server() -> str:
+def server_name() -> str:
     return _host(config.BASE_URL) if "localhost" not in config.BASE_URL else socket.gethostname()
 
 
 def link_of(r: models.Report) -> Optional[dict]:
-    """Where a report lives upstream, for the screen."""
-    if not r.ext_id:
-        return None
+    """Where an issue lives upstream, for the screen."""
     m = mode()
-    if m == "github":
+    if m == "github" and r.ext_id:
         return {"where": "github", "id": r.ext_id, "url": f"https://github.com/{_gh()[1]}/issues/{r.ext_id}"}
-    if m == "sub":
+    if m == "sub" and r.ext_id:
         return {"where": _host(_main()["url"]), "id": r.ext_id, "url": _main()["url"]}
     return None
 
 
-# ── the sweep: send what is new, then (a sub) take main's side back ──────────
+# ── what GitHub shows, and taking it off again ───────────────────────────────
+def _who(db, r: models.Report) -> str:
+    if r.origin:
+        return r.author or "?"
+    u = db.get(models.User, r.user_id) if r.user_id else None
+    return u.username if u else (r.author or "?")
+
+
+def _files(r: models.Report) -> str:
+    atts = json.loads(r.attachments_json or "[]")
+    return "".join(f"\n- [{a.get('name')}]({config.BASE_URL}/api/reports/{r.id}/files/{a.get('id')})" for a in atts)
+
+
+def _post_text(who: str, where: str, body: str, files: str = "") -> str:
+    tail = f"\n\n{FILES}\n첨부 (포털 로그인 필요):{files}" if files else ""
+    return f"**{who}** ({where}):\n\n{body}{tail}\n\n{MARK}"
+
+
+_PREFIX = re.compile(r"^\*\*[^*\n]+\*\* \([^)\n]*\):\n\n")
+
+
+def strip_post(text: str) -> str:
+    """GitHub's text without what _post_text put around it."""
+    text = (text or "").replace("\r\n", "\n")
+    ours = MARK in text
+    text = text.split(FILES)[0].replace(MARK, "").strip()
+    text = _PREFIX.sub("", text, count=1).strip() if ours else text
+    return "" if text == "—" else text                 # what an empty body is sent as
+
+
+# ── the sweep: send what is new or changed, then (a sub) take main's side back ──
 _wake = threading.Event()
 _sweeping = threading.Lock()
 
@@ -121,45 +157,47 @@ def kick() -> None:
     _wake.set()
 
 
-def _files(r: models.Report) -> str:
-    atts = json.loads(r.attachments_json or "[]")
-    return "".join(f"\n- [{a.get('name')}]({config.BASE_URL}/api/reports/{r.id}/files/{a.get('id')})" for a in atts)
-
-
-def _who(db, r: models.Report) -> str:
-    if r.origin:
-        return r.author or "?"
-    u = db.get(models.User, r.user_id) if r.user_id else None
-    return u.username if u else (r.author or "?")
-
-
-def _post_text(who: str, where: str, body: str) -> str:
-    return f"**{who}** ({where}):\n\n{body}\n\n{MARK}"
-
-
 class _GitHub:
     def __init__(self, token: str, repo: str):
         self.c = httpx.Client(base_url=f"https://api.github.com/repos/{repo}", timeout=20, headers={
             "Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28", **UA})
 
-    def _send(self, method, path, body) -> dict:
+    def _send(self, method, path, body=None) -> dict:
         r = self.c.request(method, path, json=body)
         r.raise_for_status()
-        return r.json()
+        return r.json() if r.content else {}
 
-    def open(self, db, r):
-        files = _files(r) if not r.origin else ""
-        body = _post_text(_who(db, r), r.origin or _server(), (r.body or "—") + (f"\n\n첨부:{files}" if files else ""))
-        title = f"[{r.kind}] " + (r.subject or (r.body or "")[:60] or f"#{r.id}")
-        return self._send("POST", "/issues", {"title": title[:250], "body": body})["number"]
+    def _issue(self, db, r) -> dict:
+        return {"title": r.subject or (r.body or "")[:60] or f"#{r.id}",
+                "body": _post_text(_who(db, r), r.origin or server_name(), r.body or "—", "" if r.origin else _files(r)),
+                "labels": rp.labels_of(r)}
+
+    def open(self, db, r) -> tuple:
+        n = self._send("POST", "/issues", self._issue(db, r))["number"]
+        return n, n
+
+    def update(self, db, r) -> None:
+        body = self._issue(db, r)
+        closed = r.status == "resolved"
+        body |= {"state": "closed" if closed else "open"} | ({"state_reason": r.state_reason or "completed"} if closed else {})
+        self._send("PATCH", f"/issues/{r.ext_id}", body)
+
+    def _comment_text(self, c) -> str:
+        return _post_text(c.author, c.origin if c.origin not in ("", "github") else server_name(), c.body)
 
     def comment(self, db, r, c):
-        where = c.origin if c.origin not in ("", "github") else _server()
-        return self._send("POST", f"/issues/{r.ext_id}/comments", {"body": _post_text(c.author, where, c.body)})["id"]
+        return self._send("POST", f"/issues/{r.ext_id}/comments", {"body": self._comment_text(c)})["id"]
 
-    def state(self, r):
-        self._send("PATCH", f"/issues/{r.ext_id}", {"state": "closed" if r.status == "resolved" else "open"})
+    def edit_comment(self, r, c) -> None:
+        self._send("PATCH", f"/issues/comments/{c.ext_id}", {"body": self._comment_text(c)})
+
+    def delete_comment(self, r, c) -> None:
+        try:
+            self._send("DELETE", f"/issues/comments/{c.ext_id}")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != 404:    # already gone there
+                raise
 
 
 class _Main:
@@ -173,64 +211,109 @@ class _Main:
         r.raise_for_status()
         return r.json()
 
-    def open(self, db, r):
+    def _state(self, r) -> dict:
+        return {"subject": r.subject, "body": r.body, "status": r.status, "state_reason": r.state_reason,
+                "labels": rp.labels_of(r)}
+
+    def open(self, db, r) -> tuple:
         atts = [{"name": a.get("name"), "url": f"{config.BASE_URL}/api/reports/{r.id}/files/{a.get('id')}"}
                 for a in json.loads(r.attachments_json or "[]")]
-        return self._send("POST", "/reports", {"id": r.id, "kind": r.kind, "subject": r.subject, "body": r.body,
-                                               "author": _who(db, r), "attachments": atts})["id"]
+        got = self._send("POST", "/reports", {"id": r.id, "kind": r.kind, "author": _who(db, r), "attachments": atts,
+                                              **self._state(r)})
+        return got["id"], got.get("number")
+
+    def update(self, db, r) -> None:
+        self._send("PUT", f"/reports/{r.ext_id}", {**self._state(r), "by": _who(db, r)})
 
     def comment(self, db, r, c):
         return self._send("POST", f"/reports/{r.ext_id}/comments", {"id": c.id, "author": c.author, "body": c.body})["id"]
 
-    def state(self, r):
-        self._send("POST", f"/reports/{r.ext_id}/state", {"resolved": r.status == "resolved"})
+    def edit_comment(self, r, c) -> None:
+        self._send("PUT", f"/reports/{r.ext_id}/comments/{c.ext_id}", {"id": c.id, "author": c.author, "body": c.body})
 
-    def updates(self, after: int) -> dict:
-        return self._send("GET", "/updates", params={"after": after})
+    def delete_comment(self, r, c) -> None:
+        self._send("DELETE", f"/reports/{r.ext_id}/comments/{c.ext_id}")
+
+    def updates(self, since: str) -> dict:
+        return self._send("GET", "/updates", params={"since": since})
 
 
 def _push(db, up, goes: dict, after_id: int = 0) -> None:
-    # ponytail: looks at every report each sweep; filter by updated_at once there are thousands.
+    # ponytail: looks at every issue each sweep; filter by updated_at once there are thousands.
     # A request that reached upstream but whose answer was lost is sent again next sweep (a duplicate there).
     for r in db.query(models.Report).order_by(models.Report.id).all():
         try:
             if not r.ext_id:
                 if r.id <= after_id or not goes.get(r.kind, r.kind != "local"):
                     continue
-                r.ext_id, r.ext_state = str(up.open(db, r)), "open"
+                ext, num = up.open(db, r)
+                r.ext_id, r.number = str(ext), num
+                r.ext_dirty = r.status != "open"         # opening cannot close; the update after it does
                 db.commit()
-            for c in (db.query(models.ReportComment).filter(models.ReportComment.report_id == r.id,
-                                                             models.ReportComment.ext_id.is_(None))
+            for c in (db.query(models.ReportComment).filter(models.ReportComment.report_id == r.id)
+                      .filter((models.ReportComment.ext_id.is_(None)) | (models.ReportComment.ext_dirty.is_(True)))
                       .order_by(models.ReportComment.id).all()):
-                c.ext_id = str(up.comment(db, r, c))
+                if c.deleted:
+                    if c.ext_id:
+                        up.delete_comment(r, c)
+                elif not c.ext_id:
+                    c.ext_id = str(up.comment(db, r, c))
+                else:
+                    up.edit_comment(r, c)
+                c.ext_dirty = False
                 db.commit()
-            if r.status != (r.ext_state or "open"):
-                up.state(r)
-                r.ext_state = r.status
+            if r.ext_dirty:
+                up.update(db, r)
+                r.ext_dirty = False
                 db.commit()
         except Exception as e:                     # noqa: BLE001 — the next sweep tries again
             db.rollback()
             log.warning("issues: report %s not sent: %s", r.id, e)
 
 
+def apply_state(db, r: models.Report, x: dict, actor: str) -> None:
+    """Upstream's state of an issue, unless this side has a change of its own not yet sent."""
+    if r.ext_dirty:
+        return
+    rp.set_text(db, r, x.get("subject"), x.get("body"), actor)
+    if x.get("status") in ("open", "resolved"):
+        rp.set_state(db, r, x["status"], x.get("state_reason"), x.get("closed_by") or actor)
+    if isinstance(x.get("labels"), list):
+        rp.set_labels(db, r, x["labels"], actor)
+
+
+def apply_comment(db, r: models.Report, ext_id: str, author: str, origin: str, body: str, deleted: bool) -> None:
+    """Create, edit or delete the comment upstream knows as ext_id."""
+    c = db.query(models.ReportComment).filter(models.ReportComment.report_id == r.id,
+                                              models.ReportComment.ext_id == ext_id).first()
+    if c and c.ext_dirty:
+        return
+    if deleted:
+        if c:
+            c.deleted, c.body = True, ""
+    elif not c:
+        db.add(models.ReportComment(report_id=r.id, author=author[:80], origin=origin[:80], body=body, ext_id=ext_id))
+    elif c.body != body:
+        c.body, c.edited_at = body, models._now()
+
+
 def _pull(db, up: _Main) -> None:
-    after = int(_read().get("cursor") or 0)
-    u = up.updates(after)
+    since = _read().get("since") or ""
+    u = up.updates(since)
     mine = {r.ext_id: r for r in db.query(models.Report).filter(models.Report.ext_id.isnot(None))}
     for x in u.get("reports") or []:
         r = mine.get(str(x.get("id")))
-        if r and x.get("status") in ("open", "resolved") and x["status"] != (r.ext_state or "open"):
-            r.status = r.ext_state = x["status"]
+        if r:
+            r.number = x.get("number") or r.number
+            apply_state(db, r, x, up.name)
     for c in u.get("comments") or []:
         r = mine.get(str(c.get("report_id")))
-        if r and not db.query(models.ReportComment).filter(models.ReportComment.report_id == r.id,
-                                                           models.ReportComment.ext_id == str(c["id"])).first():
-            db.add(models.ReportComment(report_id=r.id, author=str(c.get("author") or "")[:80],
-                                        origin=str(c.get("origin") or up.name)[:80], body=str(c.get("body") or ""),
-                                        ext_id=str(c["id"])))
+        if r:
+            apply_comment(db, r, str(c["id"]), str(c.get("author") or ""), str(c.get("origin") or up.name),
+                          str(c.get("body") or ""), bool(c.get("deleted")))
     db.commit()
-    if int(u.get("cursor") or 0) > after:
-        _edit(lambda d: d.update(cursor=int(u["cursor"])))
+    if u.get("cursor") and u["cursor"] != since:
+        _edit(lambda d: d.update(since=u["cursor"]))
 
 
 def sweep() -> str:
@@ -277,6 +360,17 @@ def start_scheduler() -> None:
 
 
 # ── GitHub → here ─────────────────────────────────────────────────────────────
+def _import(db, issue: dict) -> None:
+    """An issue opened on GitHub itself becomes one here (never sent back: it has its ext_id)."""
+    labels = [str(x.get("name")) for x in issue.get("labels") or [] if isinstance(x, dict)]
+    r = models.Report(user_id=0, kind=next((k for k in KINDS[:3] if k in labels), "inquiry"),
+                      subject=str(issue.get("title") or "")[:200], body=strip_post(issue.get("body") or ""),
+                      author=str((issue.get("user") or {}).get("login") or "?")[:80], origin="github",
+                      ext_id=str(issue["number"]), number=issue["number"],
+                      labels_json=json.dumps(rp.clean_labels(labels), ensure_ascii=False))
+    db.add(r)
+
+
 @router.post("/api/github/webhook")
 async def github_webhook(request: Request, x_hub_signature_256: str = Header(default=""),
                          x_github_event: str = Header(default="")):
@@ -290,23 +384,36 @@ async def github_webhook(request: Request, x_hub_signature_256: str = Header(def
     ev = json.loads(raw or b"{}")
     if ((ev.get("repository") or {}).get("full_name") or "").lower() != gh[1].lower():
         return {"ok": True, "skipped": "repository"}
-    num, action = str((ev.get("issue") or {}).get("number") or ""), ev.get("action")
+    issue, action = ev.get("issue") or {}, ev.get("action")
+    if issue.get("pull_request"):
+        return {"ok": True, "skipped": "pull request"}
+    num, actor = str(issue.get("number") or ""), str((ev.get("sender") or {}).get("login") or "github")
     with SessionLocal() as db:
         r = db.query(models.Report).filter(models.Report.ext_id == num).first() if num else None
-        if not r:
+        if x_github_event == "issues" and action == "opened":
+            if r or MARK in (issue.get("body") or ""):
+                return {"ok": True, "skipped": "ours"}            # one we opened; its number is recorded
+            _import(db, issue)
+        elif not r:
             return {"ok": True, "skipped": "not ours"}
-        if x_github_event == "issue_comment" and action == "created":
+        elif x_github_event == "issues" and action in ("edited", "closed", "reopened", "labeled", "unlabeled"):
+            apply_state(db, r, {"subject": issue.get("title"), "body": strip_post(issue.get("body") or ""),
+                                "status": "resolved" if issue.get("state") == "closed" else "open",
+                                "state_reason": issue.get("state_reason"),
+                                "labels": [x.get("name") for x in issue.get("labels") or [] if isinstance(x, dict)]},
+                        actor)
+        elif x_github_event == "issue_comment" and action in ("created", "edited", "deleted"):
             c = ev.get("comment") or {}
-            if MARK in (c.get("body") or "") or db.query(models.ReportComment).filter(
-                    models.ReportComment.report_id == r.id, models.ReportComment.ext_id == str(c.get("id"))).first():
-                return {"ok": True, "skipped": "ours"}
-            db.add(models.ReportComment(report_id=r.id, author=str((c.get("user") or {}).get("login") or "?")[:80],
-                                        origin="github", body=c.get("body") or "", ext_id=str(c.get("id"))))
-        elif x_github_event == "issues" and action in ("closed", "reopened"):
-            r.status = r.ext_state = "resolved" if action == "closed" else "open"
+            if action == "created" and MARK in (c.get("body") or ""):
+                return {"ok": True, "skipped": "ours"}            # its id is recorded when we sent it
+            known = db.query(models.ReportComment).filter(models.ReportComment.report_id == r.id,
+                                                          models.ReportComment.ext_id == str(c.get("id"))).first()
+            apply_comment(db, r, str(c.get("id")), str((c.get("user") or {}).get("login") or "?"),
+                          known.origin if known else "github", strip_post(c.get("body") or ""), action == "deleted")
         else:
             return {"ok": True, "skipped": f"{x_github_event} {action}"}
-        r.updated_at = models._now()
+        if r:
+            r.updated_at = models._now()
         db.commit()
     return {"ok": True}
 
@@ -324,11 +431,18 @@ def _sub(authorization: Optional[str]) -> str:
     raise HTTPException(401, "이슈 연결 토큰이 올바르지 않습니다.")
 
 
-class RelayReport(BaseModel):
+class RelayState(BaseModel):
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    status: Optional[str] = None
+    state_reason: Optional[str] = None
+    labels: Optional[list] = None
+    by: str = ""
+
+
+class RelayReport(RelayState):
     id: int
     kind: str = "inquiry"
-    subject: str = ""
-    body: str = ""
     author: str = ""
     attachments: list[dict] = []
 
@@ -339,15 +453,23 @@ class RelayComment(BaseModel):
     body: str = ""
 
 
-class RelayState(BaseModel):
-    resolved: bool = True
-
-
 def _theirs(db, sub: str, rid: int) -> models.Report:
     r = db.get(models.Report, rid)
     if not r or r.origin != sub:
         raise HTTPException(404, "없음")
     return r
+
+
+def _their_comment(db, sub: str, rid: int, cid: int) -> tuple:
+    r = _theirs(db, sub, rid)
+    c = db.get(models.ReportComment, cid)
+    if not c or c.report_id != r.id or c.origin != sub:
+        raise HTTPException(404, "없음")
+    return r, c
+
+
+def _actor(sub: str, who: str) -> str:
+    return f"{who[:60]} ({sub})" if who else sub
 
 
 @router.post("/api/issues/relay/reports")
@@ -358,13 +480,36 @@ def relay_report(b: RelayReport, authorization: Optional[str] = Header(default=N
         if not r:
             files = "".join(f"\n- [{str(a.get('name'))[:200]}]({str(a.get('url'))[:500]})"
                             for a in b.attachments[:10] if isinstance(a, dict))
-            r = models.Report(user_id=0, kind=b.kind if b.kind in KINDS[:3] else "inquiry", subject=b.subject[:200],
-                              body=b.body[:20000] + (f"\n\n첨부:{files}" if files else ""), author=b.author[:80],
-                              origin=sub, origin_id=b.id)
+            r = models.Report(user_id=0, kind=b.kind if b.kind in KINDS[:3] else "inquiry",
+                              subject=(b.subject or "")[:200], body=(b.body or "")[:20000] + (f"\n\n첨부:{files}" if files else ""),
+                              author=b.author[:80], origin=sub, origin_id=b.id,
+                              labels_json=json.dumps(rp.clean_labels(b.labels or [b.kind]), ensure_ascii=False))
             db.add(r)
+            db.flush()
+            if b.status == "resolved":
+                rp.set_state(db, r, "resolved", b.state_reason, _actor(sub, b.author))
             db.commit()
             kick()
-        return {"id": r.id}
+        return {"id": r.id, "number": r.number}
+
+
+@router.put("/api/issues/relay/reports/{rid}")
+def relay_update(rid: int, b: RelayState, authorization: Optional[str] = Header(default=None)):
+    """The sub's whole state of one of its issues; what changed goes on to GitHub."""
+    sub = _sub(authorization)
+    with SessionLocal() as db:
+        r = _theirs(db, sub, rid)
+        actor = _actor(sub, b.by)
+        changed = rp.set_text(db, r, b.subject, b.body, actor)
+        if b.status in ("open", "resolved"):
+            changed = rp.set_state(db, r, b.status, b.state_reason, actor) or changed
+        if b.labels is not None:
+            changed = rp.set_labels(db, r, b.labels, actor) or changed
+        if changed:
+            r.ext_dirty = True
+            db.commit()
+            kick()
+        return {"id": r.id, "status": r.status}
 
 
 @router.post("/api/issues/relay/reports/{rid}/comments")
@@ -384,31 +529,50 @@ def relay_comment(rid: int, b: RelayComment, authorization: Optional[str] = Head
         return {"id": c.id}
 
 
-@router.post("/api/issues/relay/reports/{rid}/state")
-def relay_state(rid: int, b: RelayState, authorization: Optional[str] = Header(default=None)):
+@router.put("/api/issues/relay/reports/{rid}/comments/{cid}")
+def relay_edit_comment(rid: int, cid: int, b: RelayComment, authorization: Optional[str] = Header(default=None)):
     sub = _sub(authorization)
     with SessionLocal() as db:
-        r = _theirs(db, sub, rid)
-        r.status = "resolved" if b.resolved else "open"
-        db.commit()
-        kick()
-        return {"id": r.id, "status": r.status}
+        _, c = _their_comment(db, sub, rid, cid)
+        if not c.deleted and c.body != b.body[:20000]:
+            c.body, c.edited_at, c.ext_dirty = b.body[:20000], models._now(), bool(c.ext_id)
+            db.commit()
+            kick()
+        return {"id": c.id}
+
+
+@router.delete("/api/issues/relay/reports/{rid}/comments/{cid}")
+def relay_delete_comment(rid: int, cid: int, authorization: Optional[str] = Header(default=None)):
+    sub = _sub(authorization)
+    with SessionLocal() as db:
+        _, c = _their_comment(db, sub, rid, cid)
+        if not c.deleted:
+            c.deleted, c.body, c.ext_dirty = True, "", bool(c.ext_id)
+            db.commit()
+            kick()
+        return {"ok": True}
 
 
 @router.get("/api/issues/relay/updates")
-def relay_updates(after: int = 0, authorization: Optional[str] = Header(default=None)):
-    """What the sub should take back: its reports' states and the comments on them it did not write."""
+def relay_updates(since: str = "", authorization: Optional[str] = Header(default=None)):
+    """What the sub takes back: its issues' whole state, and the comments on them changed since `since`
+    (deletions included; its own come back too, matched there by id, so a deletion on GitHub reaches it)."""
     sub = _sub(authorization)
+    try:
+        t = datetime.fromisoformat(since) if since else None
+    except ValueError:
+        t = None
     with SessionLocal() as db:
         rows = db.query(models.Report).filter(models.Report.origin == sub).all()
         ids = [r.id for r in rows]
-        cs = (db.query(models.ReportComment).filter(models.ReportComment.report_id.in_(ids),
-                                                    models.ReportComment.id > after)
-              .order_by(models.ReportComment.id).all()) if ids else []
-        return {"reports": [{"id": r.id, "status": r.status} for r in rows],
-                "comments": [{"id": c.id, "report_id": c.report_id, "author": c.author,
-                              "origin": c.origin or _server(), "body": c.body} for c in cs if c.origin != sub],
-                "cursor": max([after] + [c.id for c in cs])}
+        q = db.query(models.ReportComment).filter(models.ReportComment.report_id.in_(ids))
+        cs = (q.filter(models.ReportComment.updated_at >= t) if t else q).order_by(models.ReportComment.id).all() if ids else []
+        return {"reports": [{"id": r.id, "number": r.number, "subject": r.subject, "body": r.body, "status": r.status,
+                             "state_reason": r.state_reason, "closed_by": r.closed_by, "labels": rp.labels_of(r)}
+                            for r in rows],
+                "comments": [{"id": c.id, "report_id": c.report_id, "author": c.author, "body": c.body,
+                              "origin": c.origin or server_name(), "deleted": bool(c.deleted)} for c in cs],
+                "cursor": max([c.updated_at for c in cs if c.updated_at], default=t).isoformat() if (cs or t) else ""}
 
 
 # ── pairing (HANDSHAKE.md §4.1, portal-wide): sub asks with an address, main approves ──
@@ -470,7 +634,7 @@ def _check_pending() -> None:
     def put(d):
         d["pending"] = {k: v for k, v in (d.get("pending") or {}).items() if k != "claim"} | {"status": st["status"]}
         if "main" in st:
-            d["main"], d["cursor"] = st["main"], 0
+            d["main"], d["since"] = st["main"], ""
     _edit(put)
 
 
@@ -515,7 +679,7 @@ def admin_decide(rid: str, b: LinkDecide, _: models.User = Depends(require_porta
         if b.action == "reject":
             r["status"] = "rejected"
             return
-        names = {s["name"] for s in d.get("subs") or []}
+        names = {s["name"] for s in d.get("subs") or []} | {"github", ""}
         base = name = (r.get("from_name") or _host(r.get("from_url") or "") or "sub")[:70]
         n = 2
         while name in names:
@@ -558,7 +722,7 @@ def admin_link(b: LinkRequest, user: models.User = Depends(require_portal_admin)
 
 @router.delete("/api/admin/issues/link")
 def admin_unlink(_: models.User = Depends(require_portal_admin)):
-    _edit(lambda d: [d.pop(k, None) for k in ("main", "pending", "cursor", "after_id")])
+    _edit(lambda d: [d.pop(k, None) for k in ("main", "pending", "since", "after_id")])
     return {"ok": True}
 
 

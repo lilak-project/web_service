@@ -196,11 +196,20 @@ class Report(Base):
     # Files sent with it (a chat `/report` with a picture): [{id, name, type, size}], the
     # files kept in _portal/chat_uploads; seen by its writer and the admins.
     attachments_json = Column(Text, nullable=False, default="[]")
-    # Upstream (routers/issues.py): ext_id is its number there (the GitHub issue on the main portal, main's
-    # report id on a sub), ext_state the status both last agreed on. A report relayed from a sub portal has
-    # user_id 0, its writer's name in author and the sub in origin (its id there in origin_id).
+    # Shaped as a GitHub issue: labels (the kind is one), closed with a reason (completed | not_planned) by
+    # someone at a time, edited_at once its title or body changed.
+    labels_json = Column(Text, nullable=False, default="[]")
+    state_reason = Column(String(16), nullable=True)
+    closed_by = Column(String(80), nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+    edited_at = Column(DateTime, nullable=True)
+    # Upstream (routers/issues.py): ext_id is its id there (the GitHub issue on the main portal, main's
+    # report id on a sub), number its GitHub number (known on a sub too), ext_dirty a change here not yet
+    # sent. A report relayed from a sub portal (or opened on GitHub) has user_id 0, its writer's name in
+    # author and where it came from in origin (its id there in origin_id).
     ext_id = Column(String(64), nullable=True)
-    ext_state = Column(String(16), nullable=True)
+    number = Column(Integer, nullable=True)
+    ext_dirty = Column(Boolean, nullable=False, default=False)
     author = Column(String(80), nullable=False, default="")
     origin = Column(String(80), nullable=False, default="")
     origin_id = Column(Integer, nullable=True)
@@ -221,6 +230,23 @@ class ReportComment(Base):
     origin_id = Column(Integer, nullable=True)
     body = Column(Text, nullable=False, default="")
     ext_id = Column(String(64), nullable=True)
+    ext_dirty = Column(Boolean, nullable=False, default=False)   # edited or deleted here, not yet sent
+    deleted = Column(Boolean, nullable=False, default=False)     # kept as a tombstone so the deletion travels
+    edited_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
+class ReportEvent(Base):
+    """A line in a report's timeline that is not a comment: closed (detail: the reason), reopened, labeled,
+    unlabeled (detail: the label), renamed (detail: the old title). Each side records its own."""
+    __tablename__ = "portal_report_events"
+
+    id = Column(Integer, primary_key=True)
+    report_id = Column(Integer, nullable=False, index=True)
+    kind = Column(String(16), nullable=False)
+    actor = Column(String(80), nullable=False, default="")
+    detail = Column(String(200), nullable=False, default="")
     created_at = Column(DateTime, default=_now)
 
 

@@ -89,20 +89,37 @@ def _migrate() -> None:
         })
 
     if "portal_reports" in names:
+        had_labels = "labels_json" in {c["name"] for c in insp.get_columns("portal_reports")}
         add_missing("portal_reports", {
             "attachments_json": "ALTER TABLE portal_reports ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'",
             "ext_id": "ALTER TABLE portal_reports ADD COLUMN ext_id VARCHAR(64)",
-            "ext_state": "ALTER TABLE portal_reports ADD COLUMN ext_state VARCHAR(16)",
+            "labels_json": "ALTER TABLE portal_reports ADD COLUMN labels_json TEXT NOT NULL DEFAULT '[]'",
+            "state_reason": "ALTER TABLE portal_reports ADD COLUMN state_reason VARCHAR(16)",
+            "closed_by": "ALTER TABLE portal_reports ADD COLUMN closed_by VARCHAR(80)",
+            "closed_at": "ALTER TABLE portal_reports ADD COLUMN closed_at DATETIME",
+            "edited_at": "ALTER TABLE portal_reports ADD COLUMN edited_at DATETIME",
+            "number": "ALTER TABLE portal_reports ADD COLUMN number INTEGER",
+            "ext_dirty": "ALTER TABLE portal_reports ADD COLUMN ext_dirty BOOLEAN NOT NULL DEFAULT 0",
             "author": "ALTER TABLE portal_reports ADD COLUMN author VARCHAR(80) NOT NULL DEFAULT ''",
             "origin": "ALTER TABLE portal_reports ADD COLUMN origin VARCHAR(80) NOT NULL DEFAULT ''",
             "origin_id": "ALTER TABLE portal_reports ADD COLUMN origin_id INTEGER",
         })
+        add_missing("portal_report_comments", {
+            "ext_dirty": "ALTER TABLE portal_report_comments ADD COLUMN ext_dirty BOOLEAN NOT NULL DEFAULT 0",
+            "deleted": "ALTER TABLE portal_report_comments ADD COLUMN deleted BOOLEAN NOT NULL DEFAULT 0",
+            "edited_at": "ALTER TABLE portal_report_comments ADD COLUMN edited_at DATETIME",
+            "updated_at": "ALTER TABLE portal_report_comments ADD COLUMN updated_at DATETIME",
+        })
+        if not had_labels:
+            with engine.begin() as conn:        # the kind is the first label (GitHub has no kinds)
+                conn.execute(text("UPDATE portal_reports SET labels_json = '[\"' || kind || '\"]' WHERE labels_json = '[]'"))
         with engine.begin() as conn:            # the single admin reply becomes the thread's first comment
             conn.execute(text(
                 "INSERT INTO portal_report_comments (report_id, author, origin, body, created_at) "
                 "SELECT id, '관리자', '', reply, COALESCE(updated_at, created_at) FROM portal_reports "
                 "WHERE reply IS NOT NULL AND reply != ''"))
             conn.execute(text("UPDATE portal_reports SET reply = NULL WHERE reply IS NOT NULL"))
+            conn.execute(text("UPDATE portal_report_comments SET updated_at = created_at WHERE updated_at IS NULL"))
 
     if "portal_chat_messages" in names:
         add_missing("portal_chat_messages", {

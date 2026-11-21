@@ -178,17 +178,24 @@ TOOLS = [
                     "asked. Resolving it stays a person's, on the screen.",
      "inputSchema": _schema(["rid", "text"], id=_STR, path=_STR, address=_STR, rid=_STR, text=_STR)},
     {"name": "list_reports", "write": False,
-     "description": "The portal's issues (Issues: bugs, suggestions, questions people sent): id, who, kind, status, "
-                    "subject, body, comments (the thread: who, where from, text), upstream (its GitHub issue, if any), attachments (name, size, where to fetch: never the file) and times. A "
-                    "manager's token sees everyone's, any other only its owner's. status: open (default), resolved, "
-                    "all. The flow: read them, hand each to where it belongs, and once fixed answer with what "
-                    "changed (the commit) and resolve it with reply_report." + DATA,
-     "inputSchema": _schema([], status={"type": "string", "enum": ["open", "resolved", "all"]},
+     "description": "The portal's issues (Issues: bugs, suggestions, questions people sent), shaped like GitHub "
+                    "issues: id, number (its GitHub #, once there), who, kind, labels, status (open | resolved = "
+                    "closed) with state_reason (completed | not_planned) and closed_by, subject, body (Markdown), "
+                    "comments (who, where from, text, edited_at), events (closed, reopened, labeled, renamed), "
+                    "upstream, attachments (name, size, where to fetch: never the file) and times. A manager's token "
+                    "sees everyone's, any other only its owner's. status: open (default), resolved, all; label: only "
+                    "those with it. The flow: read them, hand each to where it belongs, and once fixed answer with "
+                    "what changed (the commit) and close it with reply_report." + DATA,
+     "inputSchema": _schema([], status={"type": "string", "enum": ["open", "resolved", "all"]}, label=_STR,
                             limit={"type": "integer", "minimum": 1, "maximum": 200})},
     {"name": "reply_report", "write": True,
-     "description": "Answer a portal issue (reply: one more comment in its thread, shown to who sent it and sent on to GitHub with it) and/or mark it resolved (resolved: true) "
-                    "or open again (false). A manager's token only, as on the Issues screen.",
-     "inputSchema": _schema([], id={"type": "integer"}, reply=_STR, resolved={"type": "boolean"})},
+     "description": "Answer a portal issue (reply: one more comment, shown to who sent it and sent on to GitHub "
+                    "with it), close it (resolved: true, reason: completed (default) or not_planned) or open it again "
+                    "(resolved: false), and/or set its labels (the whole list; the kind is one). A manager's token "
+                    "only, as on the Issues screen.",
+     "inputSchema": _schema([], id={"type": "integer"}, reply=_STR, resolved={"type": "boolean"},
+                            reason={"type": "string", "enum": ["completed", "not_planned"]},
+                            labels={"type": "array", "items": _STR})},
     {"name": "add_note", "write": True,
      "description": "Create a note dated today. Tags are `#tag` words in the body. Returns its id and version. "
                     "mode: slide makes it a slide deck." + SLIDES,
@@ -454,7 +461,8 @@ async def _list_reports(request, grant, args):
     r = await _self(request, grant, "GET", "/api/admin/reports", params={"status": status} if status != "all" else {})
     if r.status_code == 403:                       # not a manager: their own only
         r = await _self(request, grant, "GET", "/api/reports/mine")
-    rows = [x for x in _ok(r) if status == "all" or x.get("status") == status]
+    rows = [x for x in _ok(r) if (status == "all" or x.get("status") == status)
+            and (not args.get("label") or args["label"] in (x.get("labels") or []))]
     for x in rows:
         x["attachments"] = [{"name": a.get("name"), "size": a.get("size"), "type": a.get("type"),
                              "path": f"/api/reports/{x['id']}/files/{a.get('id')}"} for a in x.get("attachments") or []]
@@ -467,15 +475,20 @@ async def _reply_report(request, grant, args):
     rid = args.get("id")
     if not isinstance(rid, int) or isinstance(rid, bool):
         raise ToolError("id 는 이슈 번호(정수)입니다.")
-    if "reply" not in args and "resolved" not in args:
-        raise ToolError("reply 나 resolved 중 하나는 있어야 합니다.")
+    if not {"reply", "resolved", "labels"} & set(args):
+        raise ToolError("reply, resolved, labels 중 하나는 있어야 합니다.")
+    if "labels" in args and not isinstance(args["labels"], list):
+        raise ToolError("labels 는 라벨 이름의 목록입니다.")
     out = None
     if "reply" in args:
         out = _ok(await _self(request, grant, "POST", f"/api/admin/reports/{rid}/reply", json={"reply": str(args["reply"])}))
     if "resolved" in args:
         out = _ok(await _self(request, grant, "POST", f"/api/admin/reports/{rid}/resolve",
-                              json={"resolved": bool(args["resolved"])}))
-    return {"id": out["id"], "status": out["status"], "comments": len(out.get("comments") or [])}
+                              json={"resolved": bool(args["resolved"]), "reason": args.get("reason") or "completed"}))
+    if "labels" in args:
+        out = _ok(await _self(request, grant, "PUT", f"/api/admin/reports/{rid}/labels",
+                              json={"labels": [str(x) for x in args["labels"]]}))
+    return {k: out.get(k) for k in ("id", "number", "status", "state_reason", "labels")} | {"comments": len(out.get("comments") or [])}
 
 
 async def _note_units(request, grant, args):

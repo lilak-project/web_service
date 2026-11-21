@@ -418,22 +418,22 @@ projects are skipped.
 
 **한국어** — 포털 이슈(버그·제안·문의)를 공개 저장소 `lilak-project/web_service` 의 issue 와 양쪽으로 맞춥니다 (`app/routers/issues.py`). 본 포털(portal.stellarpiece.com)만 GitHub 와 직접 주고받고, 다른 서버의 포털은 본 포털에 짝지어 올립니다. 설정이 없으면 조용히 꺼져 있습니다.
 
-- **무엇이 오가나:** 포털 이슈 → GitHub issue, 포털 댓글 → GitHub 댓글, 완료/다시 열기 → close/reopen. GitHub 의 댓글·close·reopen → 포털 댓글(GitHub 아이디로 표시)·완료·다시 열기. GitHub 에서 처음 만든 issue 는 가져오지 않습니다.
+- **무엇이 오가나 (1:1):** 포털 이슈는 GitHub issue 와 같은 모양입니다. 제목·본문(Markdown)·라벨(종류가 라벨 하나, `server:<서버>` 라벨)·상태(열림 / 닫힘 + 이유 completed·not planned)·댓글, 그리고 제목·본문·댓글 수정과 댓글 삭제가 양쪽으로 오갑니다. GitHub 에서 직접 연 issue 도 포털로 들어옵니다(GitHub 아이디로 표시). 포털은 GitHub 번호(#n)를 보여 주고, 글 속 `#n` 은 그 이슈로 이어집니다. 닫기·다시 열기·라벨·제목 바꿈은 양쪽에 타임라인 줄로 남습니다. 담당자(assignee)는 포털 계정과 GitHub 아이디를 잇는 곳이 없어 옮기지 않고, 반응·마일스톤도 옮기지 않습니다. 양쪽이 같은 때 고쳤으면 아직 안 보낸 포털 쪽 변경이 이깁니다.
 - **공개 저장소:** 글 맨 앞은 `**포털 이름** (서버):` 뿐이고 이메일·계정 정보는 넣지 않습니다. 첨부는 올리지 않고 포털 링크만(로그인해야 열림). 연결을 처음 켠 **뒤에** 들어온 이슈만 올라가고, 그 전 이슈는 포털에 남습니다.
 - **종류:** 버그·제안·문의는 기본으로 올라가고 새 종류 `이 서버만`(local)은 올라가지 않습니다. 관리자가 이슈 화면의 "이슈 동기화"에서 종류마다 바꿉니다.
 - **본 포털 환경변수** (값은 직접 만들어 `.env` 에 넣고, 코드·노트·커밋에 쓰지 않습니다):
   - `GITHUB_ISSUES_REPO=lilak-project/web_service`
   - `GITHUB_ISSUES_TOKEN` — fine-grained personal access token. Repository access: **Only select repositories → lilak-project/web_service**, Permissions: **Issues: Read and write** 하나만(Metadata: Read 는 자동). 조직 저장소라 조직이 fine-grained 토큰을 승인해야 할 수 있습니다. 만료일을 두고 만료 전에 바꿉니다.
   - `GITHUB_WEBHOOK_SECRET` — 긴 임의 문자열(예: `openssl rand -hex 32`).
-- **webhook 등록:** GitHub 저장소 → Settings → Webhooks → Add webhook. Payload URL `https://portal.stellarpiece.com/api/github/webhook` (이슈 화면에 그대로 나옴), Content type `application/json`, Secret 은 위 값, "Let me select individual events" → **Issues**, **Issue comments** 만. 서명이 맞지 않는 요청은 401 로 거절합니다.
+- **webhook 등록:** GitHub 저장소 → Settings → Webhooks → Add webhook. Payload URL `https://portal.stellarpiece.com/api/github/webhook` (이슈 화면에 그대로 나옴), Content type `application/json`, Secret 은 위 값, "Let me select individual events" → **Issues**, **Issue comments** 만. 서명이 맞지 않는 요청은 401 로 거절합니다. 공개 저장소라 누구나 issue 를 열 수 있고, 연 것은 포털 이슈로 들어옵니다.
 - **다른 서버의 포털:** GitHub 토큰 없이 이슈 화면 "이슈 동기화"에 본 포털 주소를 넣고 **main 에 연결 요청** → 본 포털 관리자가 같은 화면에서 확인 번호가 같은지 보고 **승인**(HANDSHAKE.md §4.1 과 같은 방식). 하위 포털은 1분마다 자기 이슈를 올리고 본 포털 쪽 댓글·상태를 받아 옵니다. 본 포털이 하위 포털에 닿을 필요는 없습니다. 끊기는 양쪽 화면에서 합니다.
 - 바꾼 뒤에는 1분 안에 반영되고, "지금 동기화" 로 바로 돌릴 수 있습니다. 실패한 것은 다음 차례에 다시 보냅니다.
 
 **English** — Portal issues stay in step with issues of the public repository `lilak-project/web_service`, both ways (`app/routers/issues.py`). Only the main portal talks to GitHub; other portals pair with it. Unconfigured, it is silently off.
 
-- Portal issue/comment/resolve ↔ GitHub issue/comment/close (and reopen both ways); GitHub comments show under the GitHub login. Issues opened on GitHub itself are not imported.
+- 1:1 with GitHub: title, Markdown body, labels (the kind is one, plus `server:<host>`), open / closed with its reason (completed, not planned), comments, edits of title, body and comments, and comment deletions travel both ways; issues opened on GitHub come in under the GitHub login. The portal shows the GitHub number, `#n` links to that issue, and close / reopen / label / rename are timeline events on both sides. Assignees (no portal↔GitHub account link), reactions and milestones are not carried. When both sides changed, the portal's unsent change wins.
 - Public repository: a post starts with `**portal name** (server):` only — no e-mail or account detail; attachments stay on the portal as links. Only issues filed **after** the link is first made are sent.
 - Kinds: bug, recommendation, inquiry go by default; the new `local` kind never does unless an admin turns it on (Issues → Issue sync).
 - Main portal env (create the values yourself; never in code, notes or commits): `GITHUB_ISSUES_REPO=lilak-project/web_service`; `GITHUB_ISSUES_TOKEN`, a fine-grained token limited to that one repository with **Issues: Read and write** only (the organisation may have to approve it; give it an expiry); `GITHUB_WEBHOOK_SECRET`, a long random string.
-- Webhook: repository Settings → Webhooks → Add: payload URL `https://portal.stellarpiece.com/api/github/webhook`, content type `application/json`, the secret above, events **Issues** and **Issue comments** only. Unsigned or wrongly signed calls get 401.
+- Webhook: repository Settings → Webhooks → Add: payload URL `https://portal.stellarpiece.com/api/github/webhook`, content type `application/json`, the secret above, events **Issues** and **Issue comments** only. Unsigned or wrongly signed calls get 401. Anyone can open an issue on a public repository, and what they open lands in the portal.
 - Other portals: Issues → Issue sync → main's address → ask; main's admin approves after matching the pin (as HANDSHAKE.md §4.1). The sub sends and fetches every minute; main never has to reach it.
