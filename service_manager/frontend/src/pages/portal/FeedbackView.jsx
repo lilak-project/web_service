@@ -56,6 +56,7 @@ export default function FeedbackView({ isManager, folded = false }) {
   const [tab, setTab] = useState('open')
   const [q, setQ] = useState('')
   const [label, setLabel] = useState('')
+  const [author, setAuthor] = useState('')
   const [drafts, setDrafts] = useState({})   // report id -> comment being written
   const [editing, setEditing] = useState(null)   // {rid, cid?, subject?, body}
   const [newLabel, setNewLabel] = useState('')
@@ -145,7 +146,7 @@ export default function FeedbackView({ isManager, folded = false }) {
       >
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={small}>
-            {r.username}{r.origin ? ` (${r.origin})` : ''} · {fmt(r.created_at)}{r.edited_at ? ` · ${L('수정됨', 'edited')}` : ''}
+            <a href="#" title={L('이 작성자만 보기', 'Only this author')} onClick={(e) => { e.preventDefault(); setAuthor(author === r.username ? '' : r.username) }}>{r.username}</a>{r.origin ? ` (${r.origin})` : ''} · {fmt(r.created_at)}{r.edited_at ? ` · ${L('수정됨', 'edited')}` : ''}
             {r.upstream && <> · <a href={r.upstream.url} target="_blank" rel="noreferrer">
               <Icon name={r.upstream.where === 'github' ? 'github-logo' : 'link'} size={12} /> {r.upstream.where} #{r.upstream.id}</a></>}
             {(r.mine || isManager) && !editingIssue &&
@@ -194,7 +195,7 @@ export default function FeedbackView({ isManager, folded = false }) {
   }
 
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const hit = (r) => (!label || (r.labels || []).includes(label)) && words.every((w) =>
+  const hit = (r) => (!label || (r.labels || []).includes(label)) && (!author || r.username === author) && words.every((w) =>
     [num(r), r.subject, r.body, r.username, r.origin, ...(r.comments || []).map((c) => c.body)].join(' ').toLowerCase().includes(w))
   const shown = rows.filter(hit)
   const counts = { open: shown.filter((r) => r.status !== 'resolved').length, closed: shown.filter((r) => r.status === 'resolved').length }
@@ -241,6 +242,7 @@ export default function FeedbackView({ isManager, folded = false }) {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L('검색 (제목·본문·작성자·#번호)', 'Search (title, body, author, #n)')}
             style={{ ...input, flex: 1, minWidth: 160 }} />
           {label && <span style={small}>{L('라벨', 'label')}: {labelPill(label)} <a href="#" onClick={(e) => { e.preventDefault(); setLabel('') }}>{L('해제', 'clear')}</a></span>}
+          {author && <span style={small}>{L('작성자', 'author')}: <b>{author}</b> <a href="#" onClick={(e) => { e.preventDefault(); setAuthor('') }}>{L('해제', 'clear')}</a></span>}
         </div>
         {list.length === 0
           ? <Row className="empty">{tr("p_nothing_yet")}</Row>
