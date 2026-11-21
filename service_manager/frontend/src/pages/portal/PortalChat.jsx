@@ -19,7 +19,7 @@ const colourOf = (m) => (m.author_admin ? MANAGER_COLOR : (m.author_color || ava
  * `@agent <task>` in a project room asks that project's platform agent; its
  * answer appears under the message when the worker has one.
  *
- * Open: Esc (command mode) then Enter. Close: Esc.
+ * Open: Space in command mode (the portal's foldKey). Close: Esc.
  */
 // Where the chat sits and how big it is: the viewer's own, kept in this browser.
 // Corners are named the vi way: h left, l right, k up, j down (hj = bottom left).
@@ -34,6 +34,7 @@ const store = {
 // The chat's /commands: listed while `/` is typed, completed with Tab or Enter.
 const CMDS = [
   { name: 'report', opts: ['bug', 'idea', 'ask'], more: true },
+  { name: 'todo', more: true },
   { name: 'move', opts: OPTS.pos },
   { name: 'size', opts: OPTS.size },
   { name: 'height', opts: OPTS.height },
@@ -52,6 +53,49 @@ function parseReport(line) {
   const body = KIND[first.toLowerCase()] ? raw.slice(first.length).trim() : raw
   const line1 = body.split('\n')[0].trim()
   return { kind, body, subject: line1.length > 60 ? line1.slice(0, 59) + '…' : line1 }
+}
+
+/** `/todo`: a to-do line at the end of today's Daily note in the note service, made the way
+ *  the note page's `daily` button makes it when there is none yet. A `>> day` in `text` becomes
+ *  its due day (see dueMark). */
+const WDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+/** `>> 2026-11-5`, `>>today`, `>> .`, `>> 오늘` → `» 2026-11-05`: the form the note page
+ *  draws as a due chip (its editor makes the same change as you type). */
+export const dueMark = (text, day) => text.replace(/(^|\s)(?:>>|»|📅)\s*(today|\.|오늘|\d{4}-\d{1,2}-\d{1,2})(?=\s|$)/i,
+  (_, sp, d) => {
+    if (/^(today|\.|오늘)$/i.test(d)) return `${sp}» ${day}`
+    const [y, m, dd] = d.split('-')
+    return `${sp}» ${y}-${m.padStart(2, '0')}-${dd.padStart(2, '0')}`
+  })
+async function addTodo(proj, text) {
+  const api = async (path, opt = {}) => {
+    const r = await fetch(`/pp/note/${encodeURIComponent(proj)}/api${path}`,
+      { credentials: 'same-origin', ...opt, headers: { 'Content-Type': 'application/json', ...(opt.headers || {}) } })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) throw Object.assign(new Error(d.detail || `note ${r.status}`), { status: r.status })
+    return d
+  }
+  const now = new Date()
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const list = await api('/notes')
+  let note = (list.notes || []).find((n) => (n.title || '').startsWith(`Daily ${day}`))
+  if (!note) {
+    const title = `Daily ${day} (${WDAY[now.getDay()]})`
+    note = await api('/notes', { method: 'POST', body: JSON.stringify({ title, template: (list.templates || []).includes('daily') ? 'daily' : null }) })
+    if (!/(^|\s)#daily\b/.test(note.body || '')) {
+      note = await api(`/notes/${note.id}`, { method: 'PUT', body: JSON.stringify({ baseVersion: note.version,
+        body: note.body ? `${note.body.replace(/\n+$/, '')}\n\n#daily` : '#daily' }) })
+    }
+  }
+  // Read, add to the end, write on that version; a note changed in between is read again.
+  for (let i = 0; i < 3; i++) {
+    const n = await api(`/notes/${note.id}`)
+    try {
+      await api(`/notes/${note.id}`, { method: 'PUT', body: JSON.stringify({ baseVersion: n.version, body: `${(n.body || '').replace(/\s+$/, '')}\n- [ ] ${dueMark(text, day)}\n` }) })
+      return n.title
+    } catch (e) { if (e.status !== 409) throw e }
+  }
+  throw new Error('note busy')
 }
 
 const POLL_OPEN = 3000
@@ -328,6 +372,17 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
   async function command(line) {
     const [cmd, ...rest] = line.slice(1).trim().split(/\s+/)
     const arg = rest.join(' ').trim()
+    if (cmd === 'todo') {
+      if (!arg) return tr('pc_cmd_todo_usage')
+      // The note project this account opens (its card's), else the service's main one.
+      const c = cards.find((x) => x.name === 'note')
+      const proj = c?.entry_project || c?.project_card || 'note'
+      try {
+        const title = await addTodo(proj, arg)
+        addLocal(tr('pc_cmd_todo_done', title, arg))
+        return ''
+      } catch (e) { return tr('pc_cmd_todo_fail', String(e.message || e)) }
+    }
     if (cmd === 'report') {
       // `/report [bug|idea|ask] what happened…` → Feedback, with what is attached; the
       // subject is the first line. It stays in this room's history, for this viewer.

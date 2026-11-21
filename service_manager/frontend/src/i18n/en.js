@@ -1888,4 +1888,8 @@ export default {
   pc_cmd_opts: (c, o) => `After /${c}: ${o}`,
   pc_report_preview: (k, s, n) => `Will send: a ${k} report · subject "${s}"${n ? ` · ${n} attached` : ''}`,
   pc_att_n: (n) => `${n} attached`,
+  pc_cmd_d_todo: 'Add a to-do to today\u2019s Daily note; >> 2026-11-20 (or >> . for today) sets its due day',
+  pc_cmd_todo_usage: '/todo what to do [>> due day]',
+  pc_cmd_todo_done: (t, x) => `To-do added to ${t}: ${x}`,
+  pc_cmd_todo_fail: (e) => `Could not add the to-do: ${e}`,
 }
