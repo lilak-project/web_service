@@ -33,7 +33,7 @@ const store = {
 }
 // The chat's /commands: listed while `/` is typed, completed with Tab or Enter.
 const CMDS = [
-  { name: 'report', opts: ['bug', 'idea', 'ask'], more: true },
+  { name: 'issue', opts: ['bug', 'idea', 'ask', 'local'], more: true },
   { name: 'todo', more: true },
   { name: 'move', opts: OPTS.pos },
   { name: 'size', opts: OPTS.size },
@@ -44,10 +44,10 @@ const CMDS = [
   { name: 'help' },
 ]
 const KIND = { bug: 'bug', idea: 'recommendation', recommendation: 'recommendation', ask: 'inquiry', inquiry: 'inquiry',
-  '버그': 'bug', '제안': 'recommendation', '문의': 'inquiry' }
-/** `/report [kind] text` → { kind, body, subject } (subject: the first line, cut at 60). */
+  '버그': 'bug', '제안': 'recommendation', '문의': 'inquiry', local: 'local' }
+/** `/issue [kind] text` (old name `/report`) → { kind, body, subject } (subject: the first line, cut at 60). */
 function parseReport(line) {
-  const raw = line.trim().slice('/report'.length).trim()
+  const raw = line.trim().replace(/^\/(issue|report)/, '').trim()
   const first = raw.split(/\s+/)[0] || ''
   const kind = KIND[first.toLowerCase()] || 'inquiry'
   const body = KIND[first.toLowerCase()] ? raw.slice(first.length).trim() : raw
@@ -372,19 +372,8 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
   async function command(line) {
     const [cmd, ...rest] = line.slice(1).trim().split(/\s+/)
     const arg = rest.join(' ').trim()
-    if (cmd === 'todo') {
-      if (!arg) return tr('pc_cmd_todo_usage')
-      // The note project this account opens (its card's), else the service's main one.
-      const c = cards.find((x) => x.name === 'note')
-      const proj = c?.entry_project || c?.project_card || 'note'
-      try {
-        const title = await addTodo(proj, arg)
-        addLocal(tr('pc_cmd_todo_done', title, arg))
-        return ''
-      } catch (e) { return tr('pc_cmd_todo_fail', String(e.message || e)) }
-    }
-    if (cmd === 'report') {
-      // `/report [bug|idea|ask] what happened…` → Feedback, with what is attached; the
+    if (cmd === 'issue' || cmd === 'report') {
+      // `/issue [bug|idea|ask|local] what happened…` → Issues, with what is attached; the
       // subject is the first line. It stays in this room's history, for this viewer.
       const r = parseReport(line)
       if (!r.body) return tr('pc_cmd_report_usage')
@@ -395,6 +384,17 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
         addLocal(tr('pc_cmd_reported', tr('pc_kind_' + r.kind), r.subject) + (n ? ` · ${tr('pc_att_n', n)}` : ''))
         return ''
       } catch (e) { return errText(e, tr('p_failed')) }
+    }
+    if (cmd === 'todo') {
+      if (!arg) return tr('pc_cmd_todo_usage')
+      // The note project this account opens (its card's), else the service's main one.
+      const c = cards.find((x) => x.name === 'note')
+      const proj = c?.entry_project || c?.project_card || 'note'
+      try {
+        const title = await addTodo(proj, arg)
+        addLocal(tr('pc_cmd_todo_done', title, arg))
+        return ''
+      } catch (e) { return tr('pc_cmd_todo_fail', String(e.message || e)) }
     }
     if (cmd in OPTS && cmd !== 'pos') {
       if (!OPTS[cmd].includes(arg)) return tr('pc_cmd_opts', cmd, OPTS[cmd].join(' | '))
@@ -499,7 +499,7 @@ export default function PortalChat({ open, onClose, user, onUnread, go, cards = 
       .map((o) => ({ key: `${c.name} ${o}`, fill: `/${c.name} ${o}${c.more ? ' ' : ''}`, label: tr(`pc_opt_${c.name}_${o}`) }))
   }, [text])
   useEffect(() => { setCmdI(0) }, [cmdPicks.length])
-  const reportPreview = /^\/report\s+\S/.test(text) ? parseReport(text) : null
+  const reportPreview = /^\/(issue|report)\s+\S/.test(text) ? parseReport(text) : null
   const fill = (p) => { setText(p.fill); setTimeout(() => { const el = inputRef.current; el?.focus(); el?.setSelectionRange(p.fill.length, p.fill.length) }, 0) }
 
   const onKey = (e) => {

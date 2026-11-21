@@ -997,3 +997,12 @@
   --dock-warning-text: #ff2e97;
   --dock-danger-text: #ff2e97;
 }
+
+/* Command mode's highlight: the card (or settings item) Enter would open. */
+.pl-card.cmd-at > .pl-row, .pl-c2.cmd-at { box-shadow: inset 0 0 0 2px var(--dock-border-focus); }
+/* Which command mode is on, told by the lilak mark alone (no words over the page):
+   blue = the sidebar's, amber = the service's. */
+.pl-mark { transition: color .15s; }
+.pl-root.cmd .pl-mark { color: var(--dock-border-focus); }
+.pl-root.svc-cmd .pl-mark { color: var(--dock-warning-text, #d97706); }
+.pl-badge.pl-issues { background: #7c3aed; }   /* issues: violet, apart from the inbox's red */

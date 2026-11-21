@@ -355,7 +355,7 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
           {/* Buttons, not a <select>: in the portal frame a native menu swallowed the next click. */}
           {tpls.map((t, k) => (
             <button key={k} type="button" aria-pressed={mk.tpl === k} onClick={() => setMk({ ...mk, tpl: k })}
-              style={mk.tpl === k ? { fontWeight: 600, borderColor: 'var(--border-focus)' } : undefined}>
+              style={mk.tpl === k ? { fontWeight: 600, borderColor: 'var(--dock-border-focus)' } : undefined}>
               {t.name}
             </button>
           ))}

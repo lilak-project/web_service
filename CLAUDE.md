@@ -138,7 +138,7 @@ build; the elog/asset frontends are served by their own backends through the pro
   (`service_manager/frontend/src/pages/portal/RACK.md`, `--rk-*`, `.rl-*`); the kit's own
   `AppShell` look (elog, nptoy, analysis, stark_planner …) is DOCK (`lilak_ui/README.md`),
   coloured with `--dock-<name>` tokens. Write `--dock-surface`, not `--surface` — the bare
-  names are only aliases until `scripts/dock.py --check` is clean. DAQ screens (MTE first) are
+  names no longer exist (`scripts/dock.py --check` must stay clean). DAQ screens (MTE first) are
   NEON (`neon_ui/NEON.md`, `@neon`, `--neon-*`, `.neon-*`): two hues only, cyan normal/picked
   and pink wrong, themes bright (default) and dark.
 - **Type is decided in one place:** `lilak_ui/src/fonts/fonts.css` — the font files

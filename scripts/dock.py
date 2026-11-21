@@ -18,11 +18,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TOKENS = ROOT / "lilak_ui/src/theme/tokens.js"
 REPOS = ["lilak_ui", "service_manager", "lilak_elog", "asset_manager", "stark_planner",
-         "nptoy", "analysis", "lilak_pipeline", "dummytest", "lilak_rack", "lilak_log", "scripts"]
+         "nptoy", "analysis", "lilak_analysis", "lilak_pipeline", "dummytest", "lilak_rack", "lilak_log", "scripts"]
 SKIP = {"node_modules", "dist", "build", "static", ".venv", "venv", ".git", "data", "__pycache__"}
 KINDS = {".js", ".jsx", ".mjs", ".ts", ".tsx", ".css", ".html", ".md", ".py"}
-# The kit writes the old names itself while they are aliases; the docs name them.
-KEEP = {"lilak_ui/src/theme/applyTheme.js", "scripts/dock.py", "lilak_ui/README.md", "scripts/README.md"}
+# The docs name the old names; a standalone page that defines its own (not the kit's) is not a use.
+KEEP = {"scripts/dock.py", "lilak_ui/README.md", "scripts/README.md", "actuator_control/docs/init-speed.html"}
 
 
 def names():

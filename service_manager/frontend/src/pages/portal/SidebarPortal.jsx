@@ -1,4 +1,5 @@
 import { useInbox } from './InboxView'
+import { useIssues } from './FeedbackView'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Avatar, Icon, MANAGER_COLOR, tr } from 'lilak-ui'
 import { launcher, errText, store } from '../../api'
@@ -328,6 +329,7 @@ export default function SidebarPortal({
   const signedOut = !!authCard
   const badges = useBadges(cards || [])
   const inbox = useInbox()                         // its count on the account menu's inbox
+  const issuesN = useIssues(user?.username, isManager)   // issues with something new, in their own colour
 
   // Logging out takes the settings bar with it — it belongs to an account, and
   // the cover would otherwise keep showing yesterday's menu beside the sign-in
@@ -560,13 +562,81 @@ export default function SidebarPortal({
   const chatRef = useRef(false)
   chatRef.current = chatOpen
   const sideRef = useRef(null)
+  const offRef = useRef(() => {})
+  // ── command mode (the user's note "명령모드") ──────────────────────────────
+  // Esc once: the SERVICE's command mode (the page in the panel takes the keys;
+  // told by `lilak:cmd`). Esc again, or `: the SIDEBAR's — vi keys move a
+  // highlight (j/k, gg/G; l into the settings menu, h back), Enter opens it,
+  // Space opens the chat, 1-4 the services opened last, t theme, o/u open/fold
+  // every group, 0 the account. ` again folds the bar and leaves.
+  const [svcCmd, setSvcCmd] = useState(false)
+  const svcCmdRef = useRef(false)
+  svcCmdRef.current = svcCmd
+  const tellCmd = useCallback((on) => {
+    try { frameRef.current?.contentWindow?.postMessage({ type: 'lilak:cmd', on }, window.location.origin) } catch { /* gone */ }
+  }, [])
+  const at = useRef({ zone: 'side', key: '', i: 0 })   // the highlight: a card (side) or a menu item (menu)
+  const gPending = useRef(0)                           // the first g of gg
+  const sideItems = () => [...(sideRef.current?.querySelectorAll('.pl-card[data-key]') || [])].filter((n) => n.offsetParent)
+  const menuItems = () => [...(document.querySelectorAll('.pl-bar2 .pl-c2') || [])].filter((n) => n.offsetParent)
+  const paint = () => {
+    document.querySelectorAll('.cmd-at').forEach((n) => n.classList.remove('cmd-at'))
+    const a = at.current
+    const n = a.zone === 'menu' ? menuItems()[a.i] : sideItems().find((x) => x.dataset.key === a.key)
+    if (n) { n.classList.add('cmd-at'); n.scrollIntoView?.({ block: 'nearest' }) }
+  }
+  // The bar's fold as it was before either command mode: going back to the
+  // service puts it back, whatever ` did to it in between.
+  const cmdRef = useRef(false)
+  cmdRef.current = cmd
+  const miniNow = useRef(mini)
+  miniNow.current = mini
+  const foldBase = useRef(null)
+  // Only a ` pressed inside a mode is undone: Esc alone never opens or folds the
+  // bar (a fold read while the pointer peeked had the bar open and stuck it open).
+  const markFold = () => { if (!cmdRef.current && !svcCmdRef.current) foldBase.current = null }
+  const setFold = (m) => { endPeek(); setPinned(!m); setMini(m) }
+  const restoreFold = () => { const b = foldBase.current; foldBase.current = null; if (b != null && b !== miniNow.current) setFold(b) }
   const enterCmd = useCallback(() => {
-    const nodes = [...(navRef.current?.querySelectorAll('.pl-card[data-key]') || [])]
+    markFold()
+    const nodes = sideItems()
     setCmdKeys(nodes.map((n) => n.dataset.key))
+    // Start on the card in the panel, else the first.
+    const here = nodes.find((n) => n.classList.contains('on')) || nodes[0]
+    at.current = { zone: 'side', key: here?.dataset.key || '', i: 0 }
+    if (svcCmdRef.current) { setSvcCmd(false); tellCmd(false) }
     setCmd(true)
     // Take the focus back from the service, or the next key goes to it again.
     try { window.focus(); sideRef.current?.focus({ preventScroll: true }) } catch { /* no focus */ }
-  }, [])
+  }, [tellCmd])   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (cmd) paint(); else document.querySelectorAll('.cmd-at').forEach((n) => n.classList.remove('cmd-at')) })
+  const leaveCmd = () => { setCmd(false) }
+  const enterSvcCmd = () => {
+    if (cmdRef.current) restoreFold()     // back from the sidebar's mode: the bar as it was
+    else markFold()
+    setCmd(false); setSvcCmd(true); tellCmd(true)
+    try { frameRef.current?.focus(); frameRef.current?.contentWindow?.focus() } catch { /* gone */ }
+  }
+  // The services opened last, newest first: what 1-4 press. A recent entry is a
+  // card key, or svc/proj of a service drawn as one card.
+  const recentOpen = (n) => {
+    const k = (recent || [])[n]
+    if (!k) return false
+    const [svc, proj = ''] = k.split('/')
+    const c = (cards || []).find((x) => cardKey(x) === k) || (cards || []).find((x) => x.name === svc && x.project_card === proj)
+      || (cards || []).find((x) => x.name === svc && !x.project_card)
+    if (!c) return false
+    if (proj && c.multi_project) pickProject(c, proj); else openService(c)
+    return true
+  }
+  const recentKeyOf = (n) => {
+    const k = (recent || [])[n]
+    if (!k) return ''
+    const [svc, proj = ''] = k.split('/')
+    const c = (cards || []).find((x) => cardKey(x) === k) || (cards || []).find((x) => x.name === svc && x.project_card === proj)
+      || (cards || []).find((x) => x.name === svc && !x.project_card)
+    return c ? cardKey(c) : ''
+  }
   foldKey.current = (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return
     const el = (e.target?.ownerDocument || document).activeElement
@@ -580,7 +650,10 @@ export default function SidebarPortal({
       // and the keys mean the bar again.
       if (typing) { try { el.blur() } catch { /* gone already */ } }
       if (chatRef.current) { setChatOpen(false); return }   // Esc closes the chat first
-      if (cmd) { setCmd(false); return }
+      // From the sidebar's mode Esc goes back to the service's (or out, with none).
+      if (cmd) { if (frameRef.current && view === 'service') enterSvcCmd(); else { leaveCmd(); restoreFold() } return }
+      // A service in the panel takes the first Esc; the second (or none) is the bar's.
+      if (frameRef.current && !svcCmdRef.current && view === 'service') { enterSvcCmd(); return }
       enterCmd()
       return
     }
@@ -588,32 +661,94 @@ export default function SidebarPortal({
     if (e.key === '`' || e.key === '₩') {
       if (manageRef.current) return               // managing holds the bar open
       e.preventDefault()
-      setMini((m) => !m)
+      // In either command mode (or none): fold the bar if it is open, open it if
+      // folded. The mode stays; going back to the service restores the fold.
+      if ((cmd || svcCmdRef.current) && foldBase.current == null) foldBase.current = peek.current ? true : miniNow.current
+      setFold(!miniNow.current)
+      if (cmd) setTimeout(paint, 0)
       return
     }
-    if (!cmd) return
-    // Enter in command mode: the chat, out of the account icon at the foot of the folded bar.
-    if (e.key === 'Enter') {
+    // i (vi's insert): out of either command mode, the bar as it was.
+    if (e.key === 'i' && (cmd || svcCmdRef.current)) {
       e.preventDefault()
-      setCmd(false)
+      setCmd(false); setSvcCmd(false); tellCmd(false)
+      restoreFold()
+      try { frameRef.current?.focus() } catch { /* none */ }
+      return
+    }
+    // Space: the chat, from either command mode.
+    if (e.key === ' ' && (cmd || svcCmdRef.current)) {
+      e.preventDefault()
+      setCmd(false); setSvcCmd(false); tellCmd(false)
       endPeek()
       setMini(true)
       setChatOpen(true)
       return
     }
+    if (!cmd) return
+    const a = at.current
+    const list = a.zone === 'menu' ? menuItems() : sideItems()
+    const idx = a.zone === 'menu' ? a.i : Math.max(0, list.findIndex((n) => n.dataset.key === a.key))
+    const go = (i) => {
+      const j = Math.max(0, Math.min(list.length - 1, i))
+      if (a.zone === 'menu') at.current = { ...a, i: j }
+      else at.current = { ...a, key: list[j]?.dataset.key || '' }
+      paint()
+    }
+    const k = e.key
+    if (k === 'g') { e.preventDefault(); if (Date.now() - gPending.current < 600) { gPending.current = 0; go(0) } else gPending.current = Date.now(); return }
+    gPending.current = 0
+    if (k === 'j' || k === 'ArrowDown') { e.preventDefault(); go(idx + 1); return }
+    if (k === 'k' || k === 'ArrowUp') { e.preventDefault(); go(idx - 1); return }
+    if (k === 'G') { e.preventDefault(); go(list.length - 1); return }
+    if ((k === 'l' || k === 'ArrowRight') && a.zone === 'side' && menuItems().length) {
+      e.preventDefault()
+      const m = menuItems()
+      at.current = { zone: 'menu', key: '', i: Math.max(0, m.findIndex((n) => n.classList.contains('on'))) }
+      paint(); return
+    }
+    if ((k === 'h' || k === 'ArrowLeft') && a.zone === 'menu') {
+      e.preventDefault()
+      at.current = { zone: 'side', key: a.key || sideItems()[0]?.dataset.key || '', i: 0 }
+      paint(); return
+    }
+    if (k === 'Enter') {
+      e.preventDefault()
+      const n = list[idx]
+      if (!n) return
+      if (a.zone === 'menu') { n.click(); setTimeout(paint, 0); return }   // the menu stays: pick, look, pick again
+      setCmd(false)
+      ;(n.querySelector('.pl-row') || n).click()
+      // A service opened from here comes up in its own command mode.
+      setTimeout(() => { if (frameRef.current) enterSvcCmd() }, 0)
+      return
+    }
+    if (k === 't') {
+      e.preventDefault()
+      const next = neonPick === 'dark' ? 'bright' : 'dark'
+      setNeonPick(next)
+      launcher.put('/account/prefs', { theme: next }).catch(() => {})
+      return
+    }
+    if (k === 'o') { e.preventDefault(); setShut(new Set()); setTimeout(paint, 0); return }
+    if (k === 'u') { e.preventDefault(); setShut(new Set(bands.map((b) => b.g?.id).filter(Boolean))); setOpenSvcs(new Set()); setTimeout(paint, 0); return }
     const press = (sel2) => {
       // The whole bar, not the card list: the account card sits outside it, and
       // looking only in .pl-nav found nothing and did nothing.
       const n = sideRef.current?.querySelector(sel2)
       if (!n) return
       e.preventDefault()
-      setCmd(false)
       n.click()
     }
-    if (e.key === '0') press('.pl-user .pl-row')
-    else if (/^[1-9]$/.test(e.key)) {
-      const key = cmdKeys[Number(e.key) - 1]
-      if (key) press(`.pl-card[data-key="${CSS.escape(key)}"] .pl-row`)
+    if (k === '0') {
+      // The account's menu, and the keys move on into it.
+      press('.pl-user .pl-row')
+      setTimeout(() => { const m = menuItems(); at.current = { zone: 'menu', key: a.key, i: Math.max(0, m.findIndex((n) => n.classList.contains('on'))) }; paint() }, 50)
+      return
+    }
+    if (/^[1-4]$/.test(k)) {
+      e.preventDefault()
+      if (recentOpen(Number(k) - 1)) { setCmd(false); setTimeout(() => { if (frameRef.current) enterSvcCmd() }, 0) }
     }
   }
   // ⌘R / Ctrl+R with the portal focused reloads the service in the panel,
@@ -648,10 +783,31 @@ export default function SidebarPortal({
     const on = (e) => foldKey.current(e)
     window.addEventListener('keydown', on)
     // A click is you pointing at what you want; the keys are not needed for it.
-    const off = () => setCmd(false)
+    const off = () => { setCmd(false); if (svcCmdRef.current) { setSvcCmd(false); tellCmd(false) } }
+    offRef.current = off
     window.addEventListener('mousedown', off)
     return () => { window.removeEventListener('keydown', on); window.removeEventListener('mousedown', off) }
   }, [])
+
+  /** Keys and clicks from a frame (and every same-origin frame inside it, now or
+   *  later) come to the cover's handlers. A frame of another origin, or a
+   *  browser PDF plugin, cannot be reached and keeps its keys. */
+  const hookKeys = (frame) => {
+    let doc
+    try { doc = frame.contentDocument } catch { return }
+    if (!doc || doc.__lilakKeys) return
+    doc.__lilakKeys = true
+    doc.addEventListener('keydown', (ev) => foldKey.current(ev))
+    doc.addEventListener('mousedown', () => offRef.current())
+    const inner = (fr) => { hookKeys(fr); fr.addEventListener('load', () => hookKeys(fr)) }
+    doc.querySelectorAll('iframe').forEach(inner)
+    try {
+      new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => {
+        if (n.tagName === 'IFRAME') inner(n)
+        else n.querySelectorAll?.('iframe').forEach(inner)
+      }))).observe(doc.documentElement, { childList: true, subtree: true })
+    } catch { /* no observer */ }
+  }
 
   const leaveSettings = useCallback(() => {
     // At phone width settings takes the screen and the bar was folded for it;
@@ -1239,7 +1395,8 @@ export default function SidebarPortal({
 
   const serviceCard = (s) => {
     const key = cardKey(s)
-    const hot = cmd ? cmdKeys.indexOf(key) : -1     // its key while command mode is on
+    // its key while command mode is on: 1-4 are the services opened last
+    const hot = cmd ? [0, 1, 2, 3].findIndex((n) => recentKeyOf(n) === key) : -1
     // Opening a service's projects counts as picking it: its tile fills, and the
     // card takes the selected border while the bar is expanded (collapsed, every
     // card's border is transparent, so the tile carries it alone).
@@ -1303,7 +1460,7 @@ export default function SidebarPortal({
               {s.label || s.name}
               {multi && s.projects_count != null && <small>({s.projects_count})</small>}
             </span>
-            {hot >= 0 && hot < 9 && <kbd className="pl-key">{hot + 1}</kbd>}
+            {hot >= 0 && <kbd className="pl-key">{hot + 1}</kbd>}
             {multi && <span className="pl-chev"><Icon name="caret-right" size={13} color="var(--dock-text-muted)" /></span>}
           </button>
         </div>
@@ -1448,7 +1605,7 @@ export default function SidebarPortal({
 
   return (
     <div className={`pl-root${mini ? ' mini' : ''}${view === 'settings' ? ' settings' : ''}`
-      + `${manage ? ' managing' : ''}${cmd ? ' cmd' : ''}${neonDark ? ' neon-dark' : ''}${neonPick === 'dark' ? ' theme-dark' : ''}`}>
+      + `${manage ? ' managing' : ''}${cmd ? ' cmd' : ''}${svcCmd && view === 'service' ? ' svc-cmd' : ''}${neonDark ? ' neon-dark' : ''}${neonPick === 'dark' ? ' theme-dark' : ''}`}>
       <aside className="pl-side" ref={sideRef} tabIndex={-1}
         onMouseEnter={onSideEnter} onMouseLeave={onSideLeave} onMouseDown={endPeek}>
         <div className="pl-brand">
@@ -1575,6 +1732,7 @@ export default function SidebarPortal({
                 {reqN + inbox.items.length > 0 && <b className="pc-unread pc-reqs"
                   title={[reqN > 0 && `${tr('p_access_requests')} ${reqN}`, inbox.items.length > 0 && `Inbox ${inbox.items.length}`].filter(Boolean).join(' · ')}>
                   {reqN + inbox.items.length > 99 ? '99+' : reqN + inbox.items.length}</b>}
+                {issuesN > 0 && <b className="pc-unread pc-issues" title={`${tr('p_feedback')} ${issuesN}`}>{issuesN > 99 ? '99+' : issuesN}</b>}
               </span>
               <span className="pl-txt">{user?.username}</span>
               {/* INSIDE the row, like a service card's: folded, the key is
@@ -1696,7 +1854,8 @@ export default function SidebarPortal({
                   onClick={() => { if (view !== 'settings') { setSel(null); setView('settings') } onSettingsTab?.(key) }}>
                   <span className="pl-txt">{label}</span>
                   {key === 'me' && reqN > 0 && <b className="pl-badge" style={{ position: 'static' }}>{reqN}</b>}
-                  {key === 'feedback' && inbox.items.length > 0 && <b className="pl-badge" style={{ position: 'static' }}>{inbox.items.length}</b>}
+                  {key === 'inbox' && inbox.items.length > 0 && <b className="pl-badge" style={{ position: 'static' }}>{inbox.items.length}</b>}
+                  {key === 'feedback' && issuesN > 0 && <b className="pl-badge pl-issues" style={{ position: 'static' }}>{issuesN}</b>}
                   {MANAGER_PAGES.has(key) && <Icon name="crown" size={13} className="pl-c2mgr" aria-label={tr('p_manager')} />}
                 </button>
               </div>
@@ -1769,7 +1928,7 @@ export default function SidebarPortal({
               onRegroup={onRegroup} onCreateGroup={() => onCreateGroup?.()}
               onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup} onManageService={manageService}
               onRenameGroup={mineOn ? personal.renameGroup : undefined}
-              onInboxAll={() => { viaButton.current = true; openSettings('feedback') }}
+              onInboxAll={() => { viaButton.current = true; openSettings('inbox') }}
               onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
             {/* The same message bar every other menu page has at its foot. */}
             <SettingsStatus />
@@ -1850,7 +2009,7 @@ export default function SidebarPortal({
               onRegroup={onRegroup} onCreateGroup={() => onCreateGroup?.()}
               onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup} onManageService={manageService}
               onRenameGroup={mineOn ? personal.renameGroup : undefined}
-              onInboxAll={() => { viaButton.current = true; openSettings('feedback') }}
+              onInboxAll={() => { viaButton.current = true; openSettings('inbox') }}
               onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
           )}
           {/* The service in the panel, and any busy one kept alive behind it
@@ -1866,8 +2025,10 @@ export default function SidebarPortal({
                 tellShown(e.target, f === shownFrame)
                 // Same origin for a proxied service; an external one throws and
                 // simply does not get the shortcut.
-                try { e.target.contentDocument.addEventListener('keydown', (ev) => foldKey.current(ev)) }
-                catch { /* another origin */ }
+                // Same origin all the way down: the service's own inner frames (a PDF
+                // viewer, a preview) pass their keys on too, so Esc works from them.
+                hookKeys(e.target)
+                if (f === shownFrame && svcCmdRef.current) tellCmd(true)
               }} />
           ))}
         </div>

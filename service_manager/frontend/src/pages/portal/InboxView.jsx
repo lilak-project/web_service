@@ -23,7 +23,7 @@ const pp = (src, path, opts = {}) => fetch(`/pp/${src.svc}/${src.proj}/api/${pat
   if (!r.ok) throw new Error(j.detail || `${r.status}`)
   return j
 })
-const KIND = { activity: 'calendar', note: 'notebook', job: 'play' }
+const KIND = { activity: 'calendar', note: 'notebook', job: 'play', note_delete: 'trash', record_delete: 'trash', tags: 'tag' }
 
 /** Every waiting candidate of the caller's inboxes (and, with `withDone`, what was decided,
  *  the latest first); read again each minute, when the page comes back in sight, and when a
@@ -62,12 +62,25 @@ export function useInbox(withDone = false) {
 const TEXT = { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 320, overflow: 'auto' }
 const MONO = { ...TEXT, fontFamily: 'var(--font-mono)' }
 const DIM = { color: 'var(--dock-text-secondary)' }
-function Sections({ list }) {
+function Sections({ list, off, onPick }) {
   return (
     <div className="set-card">
       {list.map((s, i) => (
         <Field key={i} label={tr(`p_ib_s_${s.k}`)} align="start">
-          {s.k === 'change' ? (
+          {s.k === 'items' ? (
+            // Where it would go, one line each; a waiting one's can be left out (unticked).
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {s.rows.map((r) => (
+                <label key={r.i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', cursor: s.pick ? 'pointer' : 'default' }}>
+                  {s.pick && <input type="checkbox" checked={!off?.has(r.i)} onChange={() => onPick?.(r.i)} />}
+                  <span>{r.title}</span>
+                  <span style={DIM}>{r.where}</span>
+                  <span style={{ background: 'var(--dock-info-bg)', color: 'var(--dock-info-text)', padding: '0 4px' }}>
+                    {r.add.map((a) => `#${a}`).join(' ')}</span>
+                </label>
+              ))}
+            </div>
+          ) : s.k === 'change' ? (
             <div>
               {s.title && <div style={DIM}>{s.title}</div>}
               <div style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr 1fr', gap: '0 13px', alignItems: 'baseline' }}>
@@ -89,7 +102,7 @@ function Sections({ list }) {
               {s.text && <div style={{ ...TEXT, marginTop: 4 }}>{s.text}</div>}
             </div>
           ) : (
-            <div style={s.k === 'error' ? { color: 'var(--dock-danger-text, #b91c1c)' } : s.k === 'makes' || s.k === 'adds' ? MONO : TEXT}>
+            <div style={s.k === 'error' ? { color: 'var(--dock-danger-text, #b91c1c)' } : s.k === 'makes' || s.k === 'adds' || s.k === 'deletes' ? MONO : TEXT}>
               {s.title && <div style={DIM}>{s.title}</div>}
               {s.text}
             </div>
@@ -105,27 +118,49 @@ const day = (iso) => String(iso || '').slice(0, 10)
 
 export default function InboxView({ limit, onAll, decided = false }) {
   const { items, done, sources, ready } = useInbox(decided)
-  const [open, setOpen] = useState(null)
+  const [open, setOpen] = useState(() => new Set())     // the cards open (several at once)
   const [detail, setDetail] = useState({})
   const [busy, setBusy] = useState(null)
+  const [off, setOff] = useState({})                      // per candidate: the items left out (tags)
   const keyOf = (c) => `${c.src.svc}/${c.src.proj}/${c.id}`
   const shown = limit ? items.slice(0, limit) : items
   const many = sources.length > 1
 
-  const toggle = (c) => {
+  const load = (c) => {
     const k = keyOf(c)
-    if (open === k) { setOpen(null); return }
-    setOpen(k)
+    if (detail[k]) return
     pp(c.src, `inbox/${encodeURIComponent(c.id)}`)
       .then((d) => setDetail((m) => ({ ...m, [k]: d.sections || [] })),
         (e) => setDetail((m) => ({ ...m, [k]: [{ k: 'error', text: String(e.message || e) }] })))
   }
-  const decide = async (c, action) => {
+  const toggle = (c) => {
+    const k = keyOf(c)
+    setOpen((o) => { const n = new Set(o); if (n.has(k)) n.delete(k); else { n.add(k); load(c) } return n })
+  }
+  // Every card open at once (or all shut): read the whole inbox without pressing each.
+  const allOpen = shown.length > 0 && shown.every((c) => open.has(keyOf(c)))
+  const openAll = () => {
+    if (allOpen) { setOpen(new Set()); return }
+    shown.forEach(load)
+    setOpen(new Set(shown.map(keyOf)))
+  }
+  const pickOf = (k) => {
+    const rows = (detail[k] || []).find((s) => s.k === 'items' && s.pick)?.rows
+    return rows && off[k]?.size ? rows.map((r) => r.i).filter((i) => !off[k].has(i)) : undefined
+  }
+  const flip = (k) => (i) => setOff((m) => {
+    const s = new Set(m[k] || [])
+    if (s.has(i)) s.delete(i); else s.add(i)
+    return { ...m, [k]: s }
+  })
+  const [titling, setTitling] = useState(null)           // { k, v }: naming an untitled note instead of binning it
+  const decide = async (c, action, extra = {}) => {
     setBusy(keyOf(c))
     try {
-      await pp(c.src, `inbox/${encodeURIComponent(c.id)}/decide`, { method: 'POST', body: JSON.stringify({ action }) })
+      const pick = pickOf(keyOf(c))
+      await pp(c.src, `inbox/${encodeURIComponent(c.id)}/decide`, { method: 'POST', body: JSON.stringify({ action, ...(pick ? { pick } : {}), ...extra }) })
       notify(tr('p_ib_done', c.title || c.subject || ''), 'ok')
-      setOpen(null)
+      setOpen((o) => { const n = new Set(o); n.delete(keyOf(c)); return n })
       window.dispatchEvent(new Event(CHANGED))
     } catch (e) { notify(String(e.message || e), 'bad') }
     setBusy(null)
@@ -136,7 +171,7 @@ export default function InboxView({ limit, onAll, decided = false }) {
     const icon = KIND[c.kind] || 'bell'
     const go = c.actions.find((a) => a !== 'discard' && a !== 'restore')
     return (
-      <ExpandBox key={k} open={open === k} onToggle={() => toggle(c)} outerProps={{ className: open === k ? 'on' : undefined }}
+      <ExpandBox key={k} open={open.has(k)} onToggle={() => toggle(c)} outerProps={{ className: open.has(k) ? 'on' : undefined }}
         padding="6px 13px" titleWeight="var(--rack-weight)"
         icon={<Icon name={icon} size={18} color="var(--dock-text-secondary)" />}
         // One line, as every RACK row: a long name (a job's parameters) is cut, whole on hover.
@@ -148,18 +183,34 @@ export default function InboxView({ limit, onAll, decided = false }) {
           {many && <Pill>{c.src.set}</Pill>}
         </span>}
         subtitle={(c.status === 'waiting' ? [c.from, c.date, c.blocked]
-          : [c.from, day(c.decidedAt), c.made && tr('p_ib_made', `${c.made.svc}/${c.made.proj}`)]).filter(Boolean).join(' · ')}
+          : [c.from, day(c.decidedAt), c.made && tr('p_ib_made', c.made.label || `${c.made.svc}/${c.made.proj}`)]).filter(Boolean).join(' · ')}
         right={(
-          <span style={{ display: 'inline-flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
-            {go && <Button variant="primary" disabled={!!c.blocked || busy === k} title={c.blocked || undefined}
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+            {/* An untitled note matters: give it a title and keep it, rather than bin it. */}
+            {c.retitle && (titling?.k === k ? (<>
+              <input autoFocus value={titling.v} placeholder={tr('p_ib_title_ph')} aria-label={tr('p_ib_title_ph')}
+                onChange={(e) => setTitling({ k, v: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && titling.v.trim()) { decide(c, 'retitle', { title: titling.v.trim() }); setTitling(null) }
+                  if (e.key === 'Escape') { e.stopPropagation(); setTitling(null) }
+                }}
+                style={{ height: 30, minWidth: 200, padding: '0 8px', font: 'inherit', border: '1px solid var(--dock-input-border)',
+                  background: 'var(--dock-input-bg)', color: 'var(--dock-text-primary)', borderRadius: 'var(--rack-radius, 0)' }} />
+              <Button variant="primary" disabled={!titling.v.trim() || busy === k}
+                onClick={() => { decide(c, 'retitle', { title: titling.v.trim() }); setTitling(null) }}>{tr('p_ib_a_retitle_save')}</Button>
+              <Button variant="secondary" onClick={() => setTitling(null)}>{tr('p_cancel')}</Button>
+            </>) : (
+              <Button variant="secondary" disabled={busy === k} onClick={() => setTitling({ k, v: '' })}>{tr('p_ib_a_retitle')}</Button>
+            ))}
+            {titling?.k !== k && go && <Button variant="primary" disabled={!!c.blocked || busy === k} title={c.blocked || undefined}
               onClick={() => decide(c, go)}>{tr(`p_ib_a_${go}`)}</Button>}
-            {c.actions.includes('discard') && <Button variant="dangerSoft" disabled={busy === k}
+            {titling?.k !== k && c.actions.includes('discard') && <Button variant="dangerSoft" disabled={busy === k}
               onClick={() => decide(c, 'discard')}>{tr('p_ib_a_discard')}</Button>}
             {c.actions.includes('restore') && <Button variant="secondary" disabled={busy === k}
               onClick={() => decide(c, 'restore')}>{tr('p_ib_a_restore')}</Button>}
           </span>
         )}>
-        {detail[k] ? <Sections list={detail[k]} /> : <Row className="empty">{tr('p_ib_loading')}</Row>}
+        {detail[k] ? <Sections list={detail[k]} off={off[k]} onPick={flip(k)} /> : <Row className="empty">{tr('p_ib_loading')}</Row>}
       </ExpandBox>
     )
   }
@@ -167,7 +218,12 @@ export default function InboxView({ limit, onAll, decided = false }) {
   return (
     <>
       <Panel bare title={tr('p_inbox')} hint={items.length ? `${items.length}` : undefined}
-        right={onAll ? <Button variant="secondary" onClick={onAll}>{tr('p_inbox_all')}</Button> : null}>
+        right={(shown.length > 0 || onAll) ? (
+          <span style={{ display: 'inline-flex', gap: 6 }}>
+            {shown.length > 0 && <Button variant="secondary" onClick={openAll}>{tr(allOpen ? 'p_ib_close_all' : 'p_ib_open_all')}</Button>}
+            {onAll && <Button variant="secondary" onClick={onAll}>{tr('p_inbox_all')}</Button>}
+          </span>
+        ) : null}>
         {shown.length > 0 && <div className="set-list">{shown.map(row)}</div>}
         {ready && !items.length && <Row className="empty">{tr('p_inbox_none')}</Row>}
         {limit && items.length > limit && <Row className="empty">{tr('p_inbox_more', items.length - limit)}</Row>}
