@@ -59,7 +59,7 @@ export default function FeedbackView({ isManager, folded = false }) {
   const [author, setAuthor] = useState('')
   const [drafts, setDrafts] = useState({})   // report id -> comment being written
   const [editing, setEditing] = useState(null)   // {rid, cid?, subject?, body}
-  const [newLabel, setNewLabel] = useState('')
+  const [newLabel, setNewLabel] = useState({})   // report id -> label being typed
 
   async function load() {
     try { setRows((await launcher.get(isManager ? '/admin/reports' : '/reports/mine')).data) }
@@ -123,7 +123,7 @@ export default function FeedbackView({ isManager, folded = false }) {
   const editor = (rows_ = 4) => (
     <>
       {editing.cid == null && <input value={editing.subject} onChange={(e) => setEditing((s) => ({ ...s, subject: e.target.value }))} style={{ ...input, width: '100%' }} />}
-      <textarea value={editing.body} onChange={(e) => setEditing((s) => ({ ...s, body: e.target.value }))} rows={rows_} style={textarea} />
+      <textarea value={editing.body} onChange={(e) => setEditing((s) => ({ ...s, body: e.target.value }))} rows={rows_} style={textarea} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit() }} />
       <div style={{ display: 'flex', gap: 6 }}>
         <Button variant="primary" onClick={saveEdit}>{L('저장', 'Save')}</Button>
         <Button variant="ghost" onClick={() => setEditing(null)}>{L('취소', 'Cancel')}</Button>
@@ -169,7 +169,8 @@ export default function FeedbackView({ isManager, folded = false }) {
               </div>)}
 
           <textarea value={drafts[r.id] ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
-            rows={2} placeholder={L('댓글 (Markdown, #번호로 다른 이슈)', 'Comment (Markdown, #n for another issue)')} style={textarea} />
+            rows={2} placeholder={L('댓글 (Markdown, #번호로 다른 이슈, ⌘↵ 보내기)', 'Comment (Markdown, #n for another issue, ⌘↵ sends)')} style={textarea}
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendComment(r) }} />
           <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--dock-border-subtle)', paddingTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <Button variant="secondary" onClick={() => sendComment(r)}>{L('댓글 달기', 'Comment')}</Button>
             {isManager && (r.status === 'resolved'
@@ -185,8 +186,8 @@ export default function FeedbackView({ isManager, folded = false }) {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={small}>{L('라벨', 'Labels')}</span>
               {(r.labels || []).map((x) => labelPill(x, () => setLabels(r, r.labels.filter((y) => y !== x))))}
-              <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder={L('라벨 추가 ↵', 'add label ↵')}
-                onKeyDown={(e) => { if (e.key === 'Enter' && newLabel.trim()) { setLabels(r, [...(r.labels || []), newLabel.trim()]); setNewLabel('') } }}
+              <input value={newLabel[r.id] || ''} onChange={(e) => setNewLabel((d) => ({ ...d, [r.id]: e.target.value }))} placeholder={L('라벨 추가 ↵', 'add label ↵')}
+                list="issue-labels" onKeyDown={(e) => { const v = (newLabel[r.id] || '').trim(); if (e.key === 'Enter' && v) { setLabels(r, [...(r.labels || []), v]); setNewLabel((d) => ({ ...d, [r.id]: '' })) } }}
                 style={{ ...input, width: 140 }} />
             </div>)}
         </div>
@@ -248,6 +249,7 @@ export default function FeedbackView({ isManager, folded = false }) {
           ? <Row className="empty">{tr("p_nothing_yet")}</Row>
           : <div className="set-list">{list.map(item)}</div>}
       </Panel>
+      {isManager && <datalist id="issue-labels">{[...new Set([...Object.keys(KIND), ...rows.flatMap((r) => r.labels || [])])].map((x) => <option key={x} value={x} />)}</datalist>}
       {isManager && <IssueSync L={L} folded={folded} />}
     </>
   )
