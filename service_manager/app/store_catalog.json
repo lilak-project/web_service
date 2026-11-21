@@ -221,15 +221,15 @@
       "en": "Analysis pipeline — jobboard (job records and the flow board around a job) (installed with rack services)"
     },
     {
-      "name": "analysis-v2",
+      "name": "lilak_flow",
       "dir": "lilak_analysis",
       "repo": "https://github.com/lilak-project/lilak_analysis.git",
-      "label": "analysis-v2",
+      "label": "lilak flow",
       "icon": "flow",
       "color": "#003180",
       "needs_kit": true,
       "bundle": [
-        "analysis-v2"
+        "lilak_flow"
       ],
       "ko": "LILAK 소프트웨어 묶음 — 매크로를 flow map으로 (rack 화면으로 그리므로 rack services를 먼저 설치, LILAK과 ROOT가 있는 곳에서)",
       "en": "LILAK software — macros as flow maps (drawn with the rack frame: install rack services first; needs LILAK and ROOT on the host)"
