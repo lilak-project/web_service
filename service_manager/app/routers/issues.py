@@ -94,6 +94,12 @@ def mode() -> str:
     return "github" if _gh() else "sub" if _main() else "off"
 
 
+def accepts_external() -> bool:
+    """Issues opened on GitHub itself (by anyone: the repository is public) come in as reports with
+    origin 'github'. An admin can turn that off; what came in before stays."""
+    return bool(_read().get("accept_external", True))
+
+
 def kinds() -> dict:
     k = _read().get("kinds") or {}
     return {x: bool(k.get(x, DEFAULT_KINDS[x])) for x in KINDS}
@@ -393,6 +399,8 @@ async def github_webhook(request: Request, x_hub_signature_256: str = Header(def
         if x_github_event == "issues" and action == "opened":
             if r or MARK in (issue.get("body") or ""):
                 return {"ok": True, "skipped": "ours"}            # one we opened; its number is recorded
+            if not accepts_external():
+                return {"ok": True, "skipped": "external issues are off"}
             _import(db, issue)
         elif not r:
             return {"ok": True, "skipped": "not ours"}
@@ -645,6 +653,7 @@ def admin_state(_: models.User = Depends(require_portal_admin)):
     d, gh = _read(), _gh()
     return {"mode": mode(), "repo": gh[1] if gh else None, "webhook": bool(os.environ.get("GITHUB_WEBHOOK_SECRET")),
             "webhook_url": f"{config.BASE_URL}/api/github/webhook", "kinds": kinds(),
+            "accept_external": accepts_external(),
             "main": {"url": d["main"]["url"]} if _main() else None,
             "pending": {k: (d.get("pending") or {}).get(k) for k in ("url", "pin", "status")} if d.get("pending") else None,
             "requests": [{k: r.get(k) for k in ("id", "at", "from_url", "from_name", "by")} | {"pin": sync.pin(r["claim"])}
@@ -661,6 +670,17 @@ def admin_kinds(b: KindsBody, _: models.User = Depends(require_portal_admin)):
     _edit(lambda d: d.update(kinds={**kinds(), **{k: bool(v) for k, v in b.kinds.items() if k in KINDS}}))
     kick()
     return kinds()
+
+
+class ExternalBody(BaseModel):
+    accept: bool
+
+
+@router.put("/api/admin/issues/external")
+def admin_external(b: ExternalBody, _: models.User = Depends(require_portal_admin)):
+    """Take in issues opened on GitHub itself, or not."""
+    _edit(lambda d: d.update(accept_external=bool(b.accept)))
+    return {"accept_external": accepts_external()}
 
 
 class LinkDecide(BaseModel):

@@ -276,6 +276,10 @@ function IssueSync({ L, folded }) {
               <input type="checkbox" checked={on} onChange={() => run(launcher.put('/admin/issues/kinds', { kinds: { [k]: !on } }))} /> {KL[k] || k}
             </label>))}
         </div>
+        {st.mode === 'github' && <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+          <input type="checkbox" checked={st.accept_external} onChange={() => run(launcher.put('/admin/issues/external', { accept: !st.accept_external }))} />
+          {L('GitHub 에서 직접 연 이슈(외부)도 받기', 'Take in issues opened on GitHub (external)')}
+        </label>}
         {st.mode === 'github' && <div style={{ fontSize: 13, color: 'var(--dock-text-secondary)' }}>
           webhook: <code>{st.webhook_url}</code> {st.webhook ? '✓' : L('— GITHUB_WEBHOOK_SECRET 없음: GitHub 쪽 소식은 안 들어옴', '— no GITHUB_WEBHOOK_SECRET: nothing comes back from GitHub')}
         </div>}

@@ -165,6 +165,16 @@ class Issues(unittest.TestCase):
         self.assertEqual([(x["subject"], x["kind"], x["username"], x["origin"]) for x in got],
                          [("깃허브에서", "recommendation", "octo", "github")])
 
+        # an admin can refuse issues opened on GitHub; what came in before stays
+        c.put("/api/admin/issues/external", headers=self.h, json={"accept": False})
+        self.assertFalse(c.get("/api/admin/issues", headers=self.h).json()["accept_external"])
+        hook("issues", {"action": "opened", "issue": {"number": 557, "title": "막힘", "body": "x", "state": "open",
+                                                      "user": {"login": "octo"}}})
+        nums = [x["number"] for x in c.get("/api/admin/reports", headers=self.h).json()]
+        self.assertIn(555, nums)
+        self.assertNotIn(557, nums)
+        c.put("/api/admin/issues/external", headers=self.h, json={"accept": True})
+
         c.put("/api/admin/issues/kinds", headers=self.h, json={"kinds": {"local": True, "inquiry": False}})
         self.gh.sent.clear()
         issues.sweep()
