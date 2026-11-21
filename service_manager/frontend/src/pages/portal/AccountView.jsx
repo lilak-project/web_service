@@ -72,8 +72,9 @@ export function settingsMenu(isManager, lang, canSets = false) {
       ['store', 'gear', tr("p_home_tab_store")],
     ] : canSets ? [['sets', 'link', tr("p_rack_tab_sets")], ['invites', 'key', tr("p_invite_codes")]] : []),   // a project admin: sets, and codes for their projects
     ['me', 'user', tr("p_my_account")],
-    // The inbox first, feedback under it (the page keeps its old key, so a remembered menu still opens it).
-    ['feedback', 'bell', tr("p_inbox_menu")],
+    // The inbox, then the issues (the issues page keeps its old key, so a remembered menu still opens it).
+    ['inbox', 'bell', tr("p_inbox")],
+    ['feedback', 'warning-circle', tr("p_feedback")],
     // ['agents', 'robot', tr("ag_title")],   // hidden until an AI API key is registered; the page (AgentsView) stays
     ...(isManager ? [
       ['accounts', 'users', tr("p_accounts")],
@@ -553,7 +554,8 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   )
 
   const content = tab === 'me' ? MyAccount
-    : tab === 'feedback' ? <><InboxView decided /><FeedbackView isManager={isManager} folded /></>
+    : tab === 'inbox' ? <InboxView decided />
+    : tab === 'feedback' ? <FeedbackView isManager={isManager} me={me?.username} />
     : tab === 'agents' ? <AgentsView isManager={isManager} focus={agentFocus} />
     : tab === 'accounts' ? Accounts
     : tab === 'groups' ? <GroupsAdmin users={users} services={services} onChanged={load} />

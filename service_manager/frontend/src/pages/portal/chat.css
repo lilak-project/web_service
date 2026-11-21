@@ -93,6 +93,7 @@
 /* Unread messages while the chat is shut: a dot with the count on the account icon. */
 .pl-user .pl-av { position: relative; }
 .pc-unread.pc-reqs { top: auto; bottom: -5px; background: #d97706; }   /* requests, not messages */
+.pc-unread.pc-issues { top: auto; bottom: -5px; right: auto; left: -5px; background: #7c3aed; }   /* issues with something new */
 .pc-unread { position: absolute; right: -5px; top: -5px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;
   background: #dc2626; color: #fff; font-size: 10px; line-height: 15px; text-align: center; font-weight: 600; }
 

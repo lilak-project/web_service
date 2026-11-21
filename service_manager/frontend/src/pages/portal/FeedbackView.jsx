@@ -1,10 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button, Icon, Markdown, tr } from 'lilak-ui'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import ExpandBox from './ExpandBox'
 import { Panel, Row, Pill, fieldInput } from './Field'
 import { notify } from './settingsMsg'
+
+/** Issues with something new for this person since they last opened the Issues page: an issue, a comment
+ *  or an event by someone else, newer than the newest one seen then. Read each minute and when seen.
+ *  ponytail: "seen" is kept in this browser (localStorage), so another device counts again; move it to the
+ *  account's prefs if that matters. */
+const SEEN = (u) => `lilak-issues-seen:${u}`
+const SEEN_EV = 'lilak:issues-seen'
+const stamps = (r, me) => [{ t: r.created_at, mine: r.mine }, ...(r.comments || []).map((c) => ({ t: c.created_at, mine: c.mine })),
+  ...(r.events || []).map((e) => ({ t: e.created_at, mine: e.actor === me }))].filter((x) => x.t)
+const newest = (rows, me) => rows.flatMap((r) => stamps(r, me)).reduce((m, x) => (x.t > m ? x.t : m), '')
+function seenGet(me) { try { return localStorage.getItem(SEEN(me)) } catch { return null } }
+function seenSet(me, t) { try { localStorage.setItem(SEEN(me), t) } catch { /* private window */ } window.dispatchEvent(new Event(SEEN_EV)) }
+export function useIssues(me, isManager) {
+  const [n, setN] = useState(0)
+  const read = useCallback(async () => {
+    if (!me || document.visibilityState !== 'visible') return
+    try {
+      const rows = (await launcher.get(isManager ? '/admin/reports' : '/reports/mine')).data || []
+      const seen = seenGet(me)
+      if (seen == null) { seenSet(me, newest(rows, me)); return }     // first time: what is there now counts as seen
+      setN(rows.filter((r) => stamps(r, me).some((x) => !x.mine && x.t > seen)).length)
+    } catch { /* signed out or offline: keep the last count */ }
+  }, [me, isManager])
+  useEffect(() => {
+    read()
+    const timer = setInterval(read, 60 * 1000)
+    window.addEventListener(SEEN_EV, read)
+    document.addEventListener('visibilitychange', read)
+    return () => { clearInterval(timer); window.removeEventListener(SEEN_EV, read); document.removeEventListener('visibilitychange', read) }
+  }, [read])
+  return n
+}
 
 /** The files sent with a report (a chat `/report` with a picture): pictures shown,
  *  others a link — fetched with the session, as the file route asks for it. */
@@ -48,7 +80,7 @@ const small = { fontSize: 12, color: 'var(--dock-text-secondary)' }
 const isExt = (r) => r.origin === 'github'   // opened on GitHub, no account here
 const refs = (s) => (s || '').replace(/(^|[\s(])#(\d+)\b/g, '$1[#$2](#issue-$2)')   // #n → a link to issue n
 
-export default function FeedbackView({ isManager, folded = false }) {
+export default function FeedbackView({ isManager, folded = false, me = '' }) {
   const { lang } = useLang()
   const L = (ko, en) => (lang === 'ko' ? ko : en)
   const [f, setF] = useState({ kind: 'inquiry', subject: '', body: '' })
@@ -58,16 +90,36 @@ export default function FeedbackView({ isManager, folded = false }) {
   const [q, setQ] = useState('')
   const [label, setLabel] = useState('')
   const [author, setAuthor] = useState('')
+  const [pad, setPad] = useState(0)   // room under the list, only while an opened issue needs it to reach the top
   const [ext, setExt] = useState(false)   // only issues opened outside (on GitHub)
   const [drafts, setDrafts] = useState({})   // report id -> comment being written
   const [editing, setEditing] = useState(null)   // {rid, cid?, subject?, body}
   const [newLabel, setNewLabel] = useState({})   // report id -> label being typed
 
   async function load() {
-    try { setRows((await launcher.get(isManager ? '/admin/reports' : '/reports/mine')).data) }
+    try {
+      const d = (await launcher.get(isManager ? '/admin/reports' : '/reports/mine')).data
+      setRows(d)
+      if (me) { const t = newest(d, me); if (t && t !== seenGet(me)) seenSet(me, t) }   // opened here: all of it is seen
+    }
     catch (e) { notify(e?.response?.data?.detail || 'load failed', 'bad') }
   }
   useEffect(() => { load() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  // An issue opened (by its row or a #n link) moves up to the top of the page.
+  useEffect(() => {
+    if (open == null) { setPad(0); return }
+    let id = requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-issue="${open}"]`)
+      if (!el) return
+      let sc = el.parentElement   // the box that scrolls
+      while (sc && !/auto|scroll/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement   // even one with nothing to scroll yet
+      sc = sc || document.scrollingElement
+      const need = el.getBoundingClientRect().top - (sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top) - 12
+      setPad(Math.max(0, Math.ceil(need - (sc.scrollHeight - sc.clientHeight - sc.scrollTop))))
+      id = requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    })
+    return () => cancelAnimationFrame(id)
+  }, [open, tab])
   async function run(p, ok) { try { const r = await p; if (ok) notify(ok(r), 'ok'); await load(); return true } catch (e) { notify(e?.response?.data?.detail || tr("p_failed"), 'bad'); return false } }
 
   const submit = () => {
@@ -139,12 +191,14 @@ export default function FeedbackView({ isManager, folded = false }) {
     const editingIssue = editing && editing.rid === r.id && editing.cid == null
     return (
       <ExpandBox key={r.id} open={open === r.id} onToggle={() => setOpen(open === r.id ? null : r.id)}
-        outerProps={{ className: open === r.id ? 'on' : undefined }}
-        style={{ opacity: r.status === 'resolved' ? 0.72 : 1 }}
+        outerProps={{ className: open === r.id ? 'on' : undefined, 'data-issue': r.id }}
+        style={{ opacity: r.status === 'resolved' ? 0.72 : 1, scrollMarginTop: 12 }}
         icon={<Icon name={m.icon} size={22} color={m.color} weight="duotone" />}
         title={<><span style={{ color: 'var(--dock-text-secondary)' }}>{num(r)}</span> {r.subject || tr("p_no_subject")}</>}
         badges={<>{isExt(r) && <span className="set-pill" title={L('GitHub에서 연 이슈', 'Opened on GitHub')}><Icon name="github-logo" size={12} /> {L('외부', 'external')}</span>}{(r.labels || []).map((x) => labelPill(x))}{statusBadge(r)}</>}
-        subtitle={`${r.username}${r.origin ? ` (${r.origin})` : ''} · ${fmt(r.created_at)}${(r.comments || []).length ? ` · 💬 ${r.comments.length}` : ''}`}
+        subtitle={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          {r.username}{r.origin ? ` (${r.origin})` : ''} · {fmt(r.created_at)}
+          {(r.comments || []).length > 0 && <> · <Icon name="chat-circle" size={13} /> {r.comments.length}</>}</span>}
       >
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={small}>
@@ -257,6 +311,7 @@ export default function FeedbackView({ isManager, folded = false }) {
       </Panel>
       {isManager && <datalist id="issue-labels">{[...new Set([...Object.keys(KIND), ...rows.flatMap((r) => r.labels || [])])].map((x) => <option key={x} value={x} />)}</datalist>}
       {isManager && <IssueSync L={L} folded={folded} />}
+      {pad > 0 && <div style={{ height: pad }} aria-hidden />}
     </>
   )
 }
