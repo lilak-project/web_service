@@ -177,7 +177,7 @@ TOOLS = [
      "description": "Answer a review comment (rid, its id from note_units), e.g. \"고침: ...\" after fixing what it "
                     "asked. Resolving it stays a person's, on the screen.",
      "inputSchema": _schema(["rid", "text"], id=_STR, path=_STR, address=_STR, rid=_STR, text=_STR)},
-    {"name": "list_reports", "write": False,
+    {"name": "list_issues", "write": False,
      "description": "The portal's issues (Issues: bugs, suggestions, questions people sent), shaped like GitHub "
                     "issues: id, number (its GitHub #, once there), who, kind, labels, status (open | resolved = "
                     "closed) with state_reason (completed | not_planned) and closed_by, subject, body (Markdown), "
@@ -185,10 +185,10 @@ TOOLS = [
                     "upstream, attachments (name, size, where to fetch: never the file) and times. A manager's token "
                     "sees everyone's, any other only its owner's. status: open (default), resolved, all; label: only "
                     "those with it. The flow: read them, hand each to where it belongs, and once fixed answer with "
-                    "what changed (the commit) and close it with reply_report." + DATA,
+                    "what changed (the commit) and close it with reply_issue." + DATA,
      "inputSchema": _schema([], status={"type": "string", "enum": ["open", "resolved", "all"]}, label=_STR,
                             limit={"type": "integer", "minimum": 1, "maximum": 200})},
-    {"name": "reply_report", "write": True,
+    {"name": "reply_issue", "write": True,
      "description": "Answer a portal issue (reply: one more comment, shown to who sent it and sent on to GitHub "
                     "with it), close it (resolved: true, reason: completed (default) or not_planned) or open it again "
                     "(resolved: false), and/or set its labels (the whole list; the kind is one). A manager's token "
@@ -454,7 +454,7 @@ async def _get(request, grant, args):
 
 
 # ── the portal's issues (routers/reports.py): through its own API, so who may do what is decided there ──
-async def _list_reports(request, grant, args):
+async def _list_issues(request, grant, args):
     status = args.get("status") or "open"
     if status not in ("open", "resolved", "all"):
         raise ToolError("status 는 open, resolved, all 중 하나입니다.")
@@ -471,7 +471,7 @@ async def _list_reports(request, grant, args):
     return {"reports": rows[:max(1, min(int(args.get("limit") or 50), 200))], "count": len(rows)}
 
 
-async def _reply_report(request, grant, args):
+async def _reply_issue(request, grant, args):
     rid = args.get("id")
     if not isinstance(rid, int) or isinstance(rid, bool):
         raise ToolError("id 는 이슈 번호(정수)입니다.")
@@ -1564,7 +1564,7 @@ HANDLERS = {"tags": _tags, "find": _find, "related": _related, "my_tasks": _my_t
             "chat_rooms": _chat_rooms, "chat_read": _chat_read, "chat_send": _chat_send,
             "approve_job": _approve_job, "job_recipes": _job_recipes, "submit_job": _submit_job,
             "job_status": _job_status, "add_evaluation": _add_evaluation,
-            "note_units": _note_units, "list_reports": _list_reports, "reply_report": _reply_report, "add_review": _add_review, "reply_review": _reply_review, "guide": _guide}
+            "note_units": _note_units, "list_issues": _list_issues, "reply_issue": _reply_issue, "add_review": _add_review, "reply_review": _reply_review, "guide": _guide}
 PROPOSERS = {"propose_note": _propose_note, "propose_activity": _propose_activity, "propose_tags": _propose_tags}
 
 
@@ -1579,8 +1579,12 @@ def _authorize(token: str):
         db.close()
 
 
+RENAMED = {"list_reports": "list_issues", "reply_report": "reply_issue"}   # old names, for sessions listed before
+
+
 async def _call(request: Request, grant: Grant, params: dict) -> dict:
     name, args = params.get("name"), params.get("arguments") or {}
+    name = RENAMED.get(name, name)
     if not isinstance(args, dict):
         return _text("arguments 는 객체여야 합니다.", True)
     tool = next((t for t in TOOLS if t["name"] == name and (grant.can_write or not t["write"])), None)

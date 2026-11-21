@@ -376,7 +376,7 @@ projects are skipped.
 - **저장:** 해시만 저장합니다. 토큰 원문은 발급할 때 한 번만 보이고, 관리자도 다시 볼 수 없습니다. 잃어버리면 끊고 새로 발급합니다.
 - **권한:** 주인 계정이 들어갈 수 있는 곳 안에서만 동작합니다. 범위(`note`, `author_manager/authors`처럼 쉼표로 구분)를 주면 그 안으로 더 좁혀집니다. 비우면 주인 계정의 권한 전체입니다.
 - **쓰기:** 읽기 토큰은 조회와 받은편지함 제안만 합니다. 쓰기 토큰은 노트에 바로 씁니다. 랙 기록을 바로 고치는 도구는 없고, 일정은 제안만 할 수 있습니다.
-- **이슈:** `list_reports`는 관리자 토큰이면 모든 이슈를, 다른 토큰이면 주인의 이슈만 읽습니다. `reply_report`(답과 완료)는 관리자의 쓰기 토큰만 합니다. 첨부 파일은 이름, 크기, 받을 경로만 넘깁니다.
+- **이슈:** `list_issues`는 관리자 토큰이면 모든 이슈를, 다른 토큰이면 주인의 이슈만 읽습니다. `reply_issue`(답과 완료)는 관리자의 쓰기 토큰만 합니다. 첨부 파일은 이름, 크기, 받을 경로만 넘깁니다.
 - **통하는 곳:** `/mcp`에서만 통합니다. `/api`와 `/pp`에서는 인증되지 않습니다.
 - **멈추는 경우:** 끊거나, 만료되거나(기본 180일), 주인 계정이 비활성화되면 멈춥니다. **"모든 기기에서 로그아웃"과 비밀번호 변경은 토큰을 끊지 않으니**, 계정이 샜다고 의심되면 토큰도 따로 끊으세요.
 - **서버마다 따로:** 토큰은 동기화되지 않습니다.
@@ -387,7 +387,7 @@ projects are skipped.
 - **Storage:** only a hash is kept. The token is shown once when issued and nobody can read it back; if it is lost, revoke it and issue another.
 - **Reach:** a token reaches only what its owner's account can. A scope (comma-separated, such as `note,author_manager/authors`) narrows that further; empty means all of the owner's access.
 - **Writing:** a read token can look things up and leave proposals in the inbox. A write token also writes notes directly. No tool changes rack records directly, and activities can only be proposed.
-- **Issues:** `list_reports` shows a manager's token every issue and any other token its owner's own; `reply_report` (answer, resolve) is a manager's write token only. Attachments come as name, size and fetch path, never the file.
+- **Issues:** `list_issues` shows a manager's token every issue and any other token its owner's own; `reply_issue` (answer, resolve) is a manager's write token only. Attachments come as name, size and fetch path, never the file.
 - **Where it works:** at `/mcp` only. `/api` and `/pp` do not accept it.
 - **What stops it:** revoking, expiry (180 days by default), or the owner being deactivated. **"Sign out everywhere" and a password change do not revoke tokens**, so revoke them too if an account may be compromised.
 - **Per server:** tokens do not sync.

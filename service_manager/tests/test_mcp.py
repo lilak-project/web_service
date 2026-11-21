@@ -140,7 +140,7 @@ class Gates(unittest.TestCase):
         names = {t["name"] for t in rpc(tok, "tools/list").json()["result"]["tools"]}
         self.assertEqual(names, {"tags", "find", "related", "my_tasks", "job_context", "job_recipes", "guide", "job_status", "list_services", "search",
                                  "get_record", "by_tag",
-                                 "search_notes", "get_note", "note_units", "list_reports", "propose_note", "propose_tags", "propose_activity", "agent_run",
+                                 "search_notes", "get_note", "note_units", "list_issues", "propose_note", "propose_tags", "propose_activity", "agent_run",
                                  "chat_rooms", "chat_read"})
         r = call(tok, "add_note", title="x", body="y")
         self.assertTrue(r["isError"])
@@ -587,19 +587,20 @@ class Gates(unittest.TestCase):
         self.db.add_all([mine, other])
         self.db.commit()
         mgr, plain = self.issue(), mcp_tokens.issue(self.db, "p", u, True, 30)
-        got = json.loads(call(mgr, "list_reports")["content"][0]["text"])
+        got = json.loads(call(mgr, "list_issues")["content"][0]["text"])
         self.assertEqual({r["subject"] for r in got["reports"]} >= {"깨짐", "관리자 것"}, True)
         att = next(r for r in got["reports"] if r["id"] == mine.id)["attachments"][0]
         self.assertEqual(att, {"name": "s.png", "size": 9, "type": None, "path": f"/api/reports/{mine.id}/files/{'f' * 32}"})
-        got = json.loads(call(plain, "list_reports", status="all")["content"][0]["text"])
+        got = json.loads(call(plain, "list_issues", status="all")["content"][0]["text"])
         self.assertEqual([r["id"] for r in got["reports"]], [mine.id])                 # their own only
-        self.assertTrue(call(plain, "reply_report", id=mine.id, reply="x")["isError"])  # answering is a manager's
-        self.assertTrue(call(self.issue(write=False), "reply_report", id=mine.id, resolved=True)["isError"])
-        r = json.loads(call(mgr, "reply_report", id=mine.id, reply="고침: abc123", resolved=True)["content"][0]["text"])
+        self.assertTrue(call(plain, "reply_issue", id=mine.id, reply="x")["isError"])  # answering is a manager's
+        self.assertTrue(call(self.issue(write=False), "reply_issue", id=mine.id, resolved=True)["isError"])
+        r = json.loads(call(mgr, "reply_issue", id=mine.id, reply="고침: abc123", resolved=True)["content"][0]["text"])
         self.assertEqual((r["status"], r["comments"]), ("resolved", 1))
-        got = json.loads(call(mgr, "list_reports")["content"][0]["text"])
+        got = json.loads(call(mgr, "list_issues")["content"][0]["text"])
         self.assertNotIn(mine.id, [x["id"] for x in got["reports"]])                    # open only, by default
-        self.assertTrue(call(mgr, "reply_report", id=mine.id)["isError"])
+        self.assertTrue(call(mgr, "reply_issue", id=mine.id)["isError"])
+        self.assertFalse(call(mgr, "list_reports")["isError"])                          # the old name still answers
 
     def test_propose_tags_leaves_one_candidate(self):
         left = []
