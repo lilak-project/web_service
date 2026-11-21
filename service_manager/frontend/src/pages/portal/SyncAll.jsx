@@ -56,7 +56,7 @@ export default function SyncAll() {
     try {
       const { data } = await launcher.post('/admin/sync-all/request',
         { url: url.trim(), live, services: [...chosen] })
-      setSent(data); setPick(null)
+      setSent(data); setPick(new Set())   // sent: tick nothing again until the next pick
       const bad = data.results.filter((x) => !x.ok).length
       flash(tr('p_sa_sent', data.results.length - bad, data.pin), bad ? 'warn' : 'ok')
       load()
