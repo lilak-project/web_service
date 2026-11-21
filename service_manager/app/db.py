@@ -115,8 +115,8 @@ def _migrate() -> None:
                 conn.execute(text("UPDATE portal_reports SET labels_json = '[\"' || kind || '\"]' WHERE labels_json = '[]'"))
         with engine.begin() as conn:            # the single admin reply becomes the thread's first comment
             conn.execute(text(
-                "INSERT INTO portal_report_comments (report_id, author, origin, body, created_at) "
-                "SELECT id, '관리자', '', reply, COALESCE(updated_at, created_at) FROM portal_reports "
+                "INSERT INTO portal_report_comments (report_id, author, origin, body, ext_dirty, deleted, created_at) "
+                "SELECT id, '관리자', '', reply, 0, 0, COALESCE(updated_at, created_at) FROM portal_reports "
                 "WHERE reply IS NOT NULL AND reply != ''"))
             conn.execute(text("UPDATE portal_reports SET reply = NULL WHERE reply IS NOT NULL"))
             conn.execute(text("UPDATE portal_report_comments SET updated_at = created_at WHERE updated_at IS NULL"))
