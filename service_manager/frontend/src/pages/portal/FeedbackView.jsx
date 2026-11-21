@@ -45,6 +45,7 @@ const KIND = {
 const input = fieldInput
 const textarea = { ...fieldInput, width: '100%', height: 'auto', minHeight: 0, padding: '9px 10px', resize: 'vertical', lineHeight: 1.5 }
 const small = { fontSize: 12, color: 'var(--dock-text-secondary)' }
+const isExt = (r) => r.origin === 'github'   // opened on GitHub, no account here
 const refs = (s) => (s || '').replace(/(^|[\s(])#(\d+)\b/g, '$1[#$2](#issue-$2)')   // #n → a link to issue n
 
 export default function FeedbackView({ isManager, folded = false }) {
@@ -57,6 +58,7 @@ export default function FeedbackView({ isManager, folded = false }) {
   const [q, setQ] = useState('')
   const [label, setLabel] = useState('')
   const [author, setAuthor] = useState('')
+  const [ext, setExt] = useState(false)   // only issues opened outside (on GitHub)
   const [drafts, setDrafts] = useState({})   // report id -> comment being written
   const [editing, setEditing] = useState(null)   // {rid, cid?, subject?, body}
   const [newLabel, setNewLabel] = useState({})   // report id -> label being typed
@@ -141,7 +143,7 @@ export default function FeedbackView({ isManager, folded = false }) {
         style={{ opacity: r.status === 'resolved' ? 0.72 : 1 }}
         icon={<Icon name={m.icon} size={22} color={m.color} weight="duotone" />}
         title={<><span style={{ color: 'var(--dock-text-secondary)' }}>{num(r)}</span> {r.subject || tr("p_no_subject")}</>}
-        badges={<>{(r.labels || []).map((x) => labelPill(x))}{statusBadge(r)}</>}
+        badges={<>{isExt(r) && <span className="set-pill" title={L('GitHub에서 연 이슈', 'Opened on GitHub')}><Icon name="github-logo" size={12} /> {L('외부', 'external')}</span>}{(r.labels || []).map((x) => labelPill(x))}{statusBadge(r)}</>}
         subtitle={`${r.username}${r.origin ? ` (${r.origin})` : ''} · ${fmt(r.created_at)}${(r.comments || []).length ? ` · 💬 ${r.comments.length}` : ''}`}
       >
         <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -196,7 +198,7 @@ export default function FeedbackView({ isManager, folded = false }) {
   }
 
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const hit = (r) => (!label || (r.labels || []).includes(label)) && (!author || r.username === author) && words.every((w) =>
+  const hit = (r) => (!label || (r.labels || []).includes(label)) && (!author || r.username === author) && (!ext || isExt(r)) && words.every((w) =>
     [num(r), r.subject, r.body, r.username, r.origin, ...(r.comments || []).map((c) => c.body)].join(' ').toLowerCase().includes(w))
   const shown = rows.filter(hit)
   const counts = { open: shown.filter((r) => r.status !== 'resolved').length, closed: shown.filter((r) => r.status === 'resolved').length }
@@ -240,6 +242,10 @@ export default function FeedbackView({ isManager, folded = false }) {
         hint={String(rows.length)}>
         <div style={{ padding: '10px 14px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           {tabBtn('open', L('열림', 'Open'))}{tabBtn('closed', L('닫힘', 'Closed'))}
+          {rows.some(isExt) && <button type="button" onClick={() => setExt(!ext)} title={L('GitHub에서 연 이슈만', 'Only issues opened on GitHub')}
+            style={{ border: 0, cursor: 'pointer', padding: '2px 8px', display: 'inline-flex', gap: 4, alignItems: 'center', fontWeight: ext ? 700 : 400,
+              color: ext ? 'var(--dock-text-primary)' : 'var(--dock-text-secondary)', background: ext ? 'var(--dock-border-subtle)' : 'none' }}>
+            <Icon name="github-logo" size={13} /> {L('외부', 'External')} {rows.filter(isExt).length}</button>}
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L('검색 (제목·본문·작성자·#번호)', 'Search (title, body, author, #n)')}
             style={{ ...input, flex: 1, minWidth: 160 }} />
           {label && <span style={small}>{L('라벨', 'label')}: {labelPill(label)} <a href="#" onClick={(e) => { e.preventDefault(); setLabel('') }}>{L('해제', 'clear')}</a></span>}
