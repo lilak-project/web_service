@@ -225,8 +225,10 @@ class Issues(unittest.TestCase):
                          [(eid, True, "octo")])
         self.assertEqual(c.post(f"/api/issues/relay/reports/{eid}/comments", headers=sub,
                                 json={"id": 9, "author": "kim", "body": "여기서도 봄"}).status_code, 200)
-        c.put(f"/api/issues/relay/reports/{eid}", headers=sub, json={"status": "resolved", "by": "kim"})
-        self.assertEqual(self.get(eid)["status"], "resolved")
+        c.put(f"/api/issues/relay/reports/{eid}", headers=sub,
+              json={"status": "resolved", "by": "kim", "subject": "덮어씀", "body": "덮어씀"})
+        e = self.get(eid)
+        self.assertEqual((e["status"], e["subject"], e["body"]), ("resolved", "밖에서", "x"))   # its words stay GitHub's
         c.delete(f"/api/admin/reports/{eid}", headers=self.h)                     # not for the other tests to send
 
         c.delete("/api/admin/issues/subs/sub1", headers=self.h)
@@ -282,6 +284,23 @@ class Issues(unittest.TestCase):
         self.assertEqual([(x["number"], x["origin"], x["username"], [m["body"] for m in x["comments"]]) for x in got],
                          [(31, "github", "octo", ["첫 댓글"])])
         self.assertEqual(got[0]["events"], [])                                     # made, not relabeled
+
+    def test_sub_keeps_external_off(self):
+        state = {"id": 78, "number": 32, "subject": "막힘", "body": "x", "status": "open", "labels": ["bug"],
+                 "external": True, "kind": "bug", "author": "octo"}
+
+        class Up:
+            name = "main.lab"
+
+            def updates(self, since):
+                return {"reports": [state], "cursor": "", "comments": []}
+        issues._edit(lambda d: d.update(accept_external=False))
+        try:
+            with SessionLocal() as db:
+                issues._pull(db, Up())
+        finally:
+            issues._edit(lambda d: d.update(accept_external=True))
+        self.assertEqual([x for x in c.get("/api/admin/reports", headers=self.h).json() if x["subject"] == "막힘"], [])
 
 
 if __name__ == "__main__":

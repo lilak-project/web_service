@@ -310,6 +310,8 @@ def _pull(db, up: _Main) -> None:
     for x in u.get("reports") or []:
         r = mine.get(str(x.get("id")))
         if not r and x.get("external"):             # opened on GitHub: made here as it is there
+            if not accepts_external():
+                continue
             r = models.Report(user_id=0, kind=x.get("kind") if x.get("kind") in KINDS else "inquiry",
                               subject=str(x.get("subject") or "")[:200], body=str(x.get("body") or ""),
                               author=str(x.get("author") or "?")[:80], origin="github", ext_id=str(x["id"]),
@@ -517,7 +519,8 @@ def relay_update(rid: int, b: RelayState, authorization: Optional[str] = Header(
     with SessionLocal() as db:
         r = _theirs(db, sub, rid)
         actor = _actor(sub, b.by)
-        changed = rp.set_text(db, r, b.subject, b.body, actor)
+        # an external issue's words are its GitHub author's: a sub never rewrites them
+        changed = rp.set_text(db, r, b.subject, b.body, actor) if r.origin != "github" else False
         if b.status in ("open", "resolved"):
             changed = rp.set_state(db, r, b.status, b.state_reason, actor) or changed
         if b.labels is not None:
