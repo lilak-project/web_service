@@ -55,6 +55,22 @@ class Delegate(unittest.TestCase):
         caps = registry.read_manifest("older")["capabilities"]
         self.assertEqual((caps["badge"], caps["delegates"]), (False, ["note"]))   # what it had stays; the new one is added
 
+    def test_an_update_adds_the_services_the_seed_now_delegates_to(self):
+        import json
+        from app.routers import store
+        registry.write_manifest("older2", {"kind": "rack", "mode": "managed", "capabilities": {"delegates": ["note", "mine"]}})
+        seed = TMP / "seed2.json"
+        seed.write_text(json.dumps({"capabilities": {"delegates": ["note", "authors"]}}))
+        store._jobs["job"] = {"log": []}
+        store._new_capabilities("job", "older2", seed)
+        self.assertEqual(registry.read_manifest("older2")["capabilities"]["delegates"], ["note", "mine", "authors"])
+
+    def test_inbox_seed_delegates_to_every_rack_service_it_can_tag(self):
+        import json
+        seed = json.loads((Path(__file__).resolve().parents[2] / "lilak_rack/seed/inbox/service.json").read_text())
+        for svc in ("note", "activities", "jobboard", "project_manager", "reference_manager", "authors", "inventory", "parameters"):
+            self.assertIn(svc, seed["capabilities"]["delegates"])
+
     def test_an_expired_portal_token_is_not_a_machine_bearer(self):
         from app.routers.proxy import machine_caller
         old = security.create_access_token(1, "admin", "manager", extra={"portal": True}, minutes=-5)

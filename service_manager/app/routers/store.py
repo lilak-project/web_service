@@ -170,7 +170,8 @@ def _registered(entry: dict) -> bool:
 
 def _new_capabilities(job_id: str, name: str, seed: Path) -> None:
     """A capability the seed declares and the registered manifest has never heard of is added
-    (e.g. `delegates`, asked for by /api/delegate); one it already has, an admin's or not, stays."""
+    (e.g. `delegates`, asked for by /api/delegate); one it already has, an admin's or not, stays —
+    except that a list gains the seed's new entries."""
     try:
         want = json.loads(seed.read_text(encoding="utf-8")).get("capabilities") or {}
     except (OSError, ValueError):
@@ -178,6 +179,9 @@ def _new_capabilities(job_id: str, name: str, seed: Path) -> None:
     m = registry.read_manifest(name)
     caps = dict(m.get("capabilities") or {})
     new = {k: v for k, v in want.items() if k not in caps}
+    # a list it has (e.g. `delegates`) gains the entries the seed added since; none are taken away
+    new |= {k: caps[k] + [x for x in v if x not in caps[k]] for k, v in want.items()
+            if isinstance(v, list) and isinstance(caps.get(k), list) and set(v) - set(caps[k])}
     if new:
         registry.write_manifest(name, {**m, "capabilities": {**caps, **new}})
         _log(job_id, f"· '{name}' 매니페스트에 더함: {', '.join(new)}")
