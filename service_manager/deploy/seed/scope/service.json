@@ -1,0 +1,28 @@
+{
+  "kind": "monitor",
+  "mode": "managed",
+  "start": {
+    "cmd": "/app/scope/target/release/scope --host 127.0.0.1 --port {port}",
+    "cwd": "/app/scope",
+    "env": {
+      "SCOPE_BROWSE_PATH": "{project_data}"
+    }
+  },
+  "health": "/api/health",
+  "entry": "/",
+  "url": null,
+  "token": null,
+  "identity": {
+    "accepts_portal_token": false,
+    "link_by": "email"
+  },
+  "capabilities": {
+    "multi_project": true,
+    "import_export": false
+  },
+  "icon": "activity",
+  "color": "#0c8599",
+  "label": "Scope",
+  "live": true,
+  "look": "neon"
+}

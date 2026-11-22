@@ -2031,6 +2031,10 @@ export default function SidebarPortal({
                 // viewer, a preview) pass their keys on too, so Esc works from them.
                 hookKeys(e.target)
                 if (f === shownFrame && svcCmdRef.current) tellCmd(true)
+                // A fresh load with nothing else focused: the keyboard goes to the
+                // service, so its own keys (Scope's Space = next event) work at once.
+                const idle = !document.activeElement || document.activeElement === document.body
+                if (f === shownFrame && idle) { try { e.target.focus(); e.target.contentWindow.focus() } catch { /* external */ } }
               }} />
           ))}
         </div>

@@ -156,6 +156,17 @@ def _pip_install(job_id: str, repo_dir: Path, entry: dict) -> bool:
     return _stream(job_id, [sys.executable, "-m", "pip", "install", "-q", "-r", str(req)]) == 0
 
 
+def _cargo_build(job_id: str, repo_dir: Path) -> bool:
+    """`cargo build --release --locked` for a Rust service (scope); none = skip."""
+    if not (repo_dir / "Cargo.toml").exists():
+        return True
+    cargo = _tool("cargo") or next((str(c) for c in [Path.home() / ".cargo/bin/cargo"] if c.exists()), None)
+    if not cargo:
+        _log(job_id, "! cargo를 찾을 수 없습니다 (Rust 설치 필요)")
+        return False
+    return _stream(job_id, [cargo, "build", "--release", "--locked"], cwd=repo_dir) == 0
+
+
 def _members(entry: dict) -> list[tuple[str, Path]]:
     """(service name, its code dir) for every service the entry installs: one, or —
     for a bundle (lilak_rack: the rack services and the racklist frame they are all
@@ -319,6 +330,8 @@ def _install_one(job_id: str, entry: dict) -> None:
         return fail("프론트엔드 빌드 실패")
     if not _pip_install(job_id, repo_dir, entry):
         return fail("백엔드 의존성 설치 실패")
+    if not _cargo_build(job_id, repo_dir):
+        return fail("Rust 빌드 실패")
     if not all(_register(job_id, n, entry) for n, _ in members):
         return fail("서비스 등록 실패")
 
@@ -356,6 +369,8 @@ def _update_one(job_id: str, entry: dict) -> None:
         return _set(job_id, status="error", error="프론트엔드 빌드 실패")
     if not _pip_install(job_id, repo_dir, entry):
         return _set(job_id, status="error", error="백엔드 의존성 설치 실패")
+    if not _cargo_build(job_id, repo_dir):
+        return _set(job_id, status="error", error="Rust 빌드 실패")
 
 
 def _run_build_portal(job_id: str, pull: bool) -> None:

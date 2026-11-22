@@ -95,6 +95,18 @@
       "en": "Vacuum gauge readout, logged to CSV"
     },
     {
+      "name": "scope",
+      "dir": "scope",
+      "repo": "git@github.com:lilak-project/scope.git",
+      "private": true,
+      "label": "Scope",
+      "icon": "activity",
+      "color": "#0c8599",
+      "needs_kit": false,
+      "ko": "GET 원본 파형 뷰어 (프로젝트 = 공유 뷰어 하나)",
+      "en": "GET raw waveform viewer (a project = one shared viewer)"
+    },
+    {
       "name": "minicom",
       "dir": "minicom_monitoring",
       "repo": "",
