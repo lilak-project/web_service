@@ -109,7 +109,7 @@ export default function SyncAll() {
                 <input type="checkbox" checked={allowTwo} onChange={(e) => setAllowTwo(e.target.checked)} />
                 {tr('p_allow_two_way')}
               </label>
-              <Button variant="primary" onClick={() => decide(g, 'approve')}>{tr('p_sa_approve_all', g.items.length)}</Button>
+              <Button variant="primary" style={{ minWidth: 150 }} onClick={() => decide(g, 'approve')}>{tr('p_sa_approve_all', g.items.length)}</Button>
               <Button variant="dangerSoft" onClick={() => decide(g, 'reject')}>{tr('p_reject')}</Button>
             </FieldActions>
           </Fragment>
@@ -154,7 +154,7 @@ export default function SyncAll() {
         </Field>
         <Field label={tr('p_what_this_is')}>{tr('p_sa_link_hint')}</Field>
         <FieldActions>
-          <Button variant="primary" disabled={!url.trim() || !chosen.size} onClick={request}>
+          <Button style={{ minWidth: 190 }} variant="primary" disabled={!url.trim() || !chosen.size} onClick={request}>
             {tr('p_sa_ask', chosen.size)}
           </Button>
           {sent && <span style={fieldMuted}>{tr('p_pin')} <b style={mono}>{sent.pin}</b></span>}

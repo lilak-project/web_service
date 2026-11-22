@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Icon, Markdown, tr } from 'lilak-ui'
+import Select from 'lilak-ui/components/Select.jsx'
 import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import ExpandBox from './ExpandBox'
@@ -91,7 +92,7 @@ export default function FeedbackView({ isManager, folded = false, me = '' }) {
   const [label, setLabel] = useState('')
   const [author, setAuthor] = useState('')
   const [pad, setPad] = useState(0)   // room under the list, only while an opened issue needs it to reach the top
-  const [ext, setExt] = useState(false)   // only issues opened outside (on GitHub)
+  const [ext, setExt] = useState('all')   // where it was opened: all | external (GitHub) | here
   const [drafts, setDrafts] = useState({})   // report id -> comment being written
   const [editing, setEditing] = useState(null)   // {rid, cid?, subject?, body}
   const [newLabel, setNewLabel] = useState({})   // report id -> label being typed
@@ -252,17 +253,18 @@ export default function FeedbackView({ isManager, folded = false, me = '' }) {
   }
 
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const hit = (r) => (!label || (r.labels || []).includes(label)) && (!author || r.username === author) && (!ext || isExt(r)) && words.every((w) =>
+  const hit = (r) => (!label || (r.labels || []).includes(label)) && (!author || r.username === author) && (ext === 'all' || (ext === 'external') === isExt(r)) && words.every((w) =>
     [num(r), r.subject, r.body, r.username, r.origin, ...(r.comments || []).map((c) => c.body)].join(' ').toLowerCase().includes(w))
   const shown = rows.filter(hit)
   const counts = { open: shown.filter((r) => r.status !== 'resolved').length, closed: shown.filter((r) => r.status === 'resolved').length }
   const list = shown.filter((r) => (tab === 'closed') === (r.status === 'resolved'))
+  // One width whatever the count: two digits, then 99+ (no bold on the picked one either — that widened it).
   const tabBtn = (k, text) => (
     <button key={k} type="button" onClick={() => setTab(k)}
-      style={{ border: 0, cursor: 'pointer', padding: '2px 8px', fontWeight: tab === k ? 700 : 400,
+      style={{ border: 0, cursor: 'pointer', padding: '2px 8px',
         color: tab === k ? 'var(--dock-text-primary)' : 'var(--dock-text-secondary)',
         background: tab === k ? 'var(--dock-border-subtle)' : 'none' }}>
-      {text} {counts[k]}</button>)
+      {text} <Count n={counts[k]} /></button>)
   return (
     <>
       {/* compose — everyone */}
@@ -296,10 +298,12 @@ export default function FeedbackView({ isManager, folded = false, me = '' }) {
         hint={String(rows.length)}>
         <div style={{ padding: '10px 14px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           {tabBtn('open', L('열림', 'Open'))}{tabBtn('closed', L('닫힘', 'Closed'))}
-          {rows.some(isExt) && <button type="button" onClick={() => setExt(!ext)} title={L('GitHub에서 연 이슈만', 'Only issues opened on GitHub')}
-            style={{ border: 0, cursor: 'pointer', padding: '2px 8px', display: 'inline-flex', gap: 4, alignItems: 'center', fontWeight: ext ? 700 : 400,
-              color: ext ? 'var(--dock-text-primary)' : 'var(--dock-text-secondary)', background: ext ? 'var(--dock-border-subtle)' : 'none' }}>
-            <Icon name="github-logo" size={13} /> {L('외부', 'External')} {rows.filter(isExt).length}</button>}
+          {/* A filter, not a third tab: where the issue was opened. */}
+          <Select value={ext} onChange={(e) => setExt(e.target.value)} title={L('어디서 연 이슈', 'Where it was opened')} style={{ ...input, width: 150 }}>
+            <option value="all">{L('출처: 전부', 'From: all')}</option>
+            <option value="external">{L('출처: GitHub', 'From: GitHub')}</option>
+            <option value="local">{L('출처: 이 포털', 'From: this portal')}</option>
+          </Select>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L('검색 (제목·본문·작성자·#번호)', 'Search (title, body, author, #n)')}
             style={{ ...input, flex: 1, minWidth: 160 }} />
           {label && <span style={small}>{L('라벨', 'label')}: {labelPill(label)} <a href="#" onClick={(e) => { e.preventDefault(); setLabel('') }}>{L('해제', 'clear')}</a></span>}
@@ -367,4 +371,9 @@ function IssueSync({ L, folded }) {
       </div>
     </Panel>
   )
+}
+
+/** A count that never changes the width of what holds it: two digits, then 99+. */
+export function Count({ n }) {
+  return <span style={{ display: 'inline-block', minWidth: '3ch', textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>{n > 99 ? '99+' : n}</span>
 }

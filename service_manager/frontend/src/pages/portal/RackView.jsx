@@ -45,9 +45,10 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
   const groups = bands
     .map((b) => ({ g: b.g, items: b.items.filter(isRack) }))
     .filter((b) => b.items.length)
-  // A service split into project cards is still one service here. The list tabs take
-  // every card (hidden ones too — this is where a manager finds them); the sets, the rack ones in the bar.
-  const all = tab === 'map' && allCards ? allCards.filter((c) => !c.builtin && lookOf(c) === look) : groups.flatMap((b) => b.items)
+  // A service split into project cards is still one service here. The list and set tabs take
+  // every card (hidden ones too — this is where a manager finds them).
+  // Sets too: a set holds a project whether or not its card is hidden in the bar (the inbox, say).
+  const all = (tab === 'map' || tab === 'sets') && allCards ? allCards.filter((c) => !c.builtin && lookOf(c) === look) : groups.flatMap((b) => b.items)
   const services = [...new Map(all.map((s) => [s.name, s])).values()]
   // What is unfolded: a service (`svc`) shows what Manage sidebar shows for it and its admins.
   const [open, setOpen] = useState(() => new Set())

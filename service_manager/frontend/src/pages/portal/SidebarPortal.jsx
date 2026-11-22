@@ -1679,7 +1679,7 @@ export default function SidebarPortal({
                       <Icon name="link" size={13} weight="bold" />
                     </span>
                   )}
-                  <span className="pl-gcount">{items.length}</span>
+                  <span className="pl-gcount">{items.length > 99 ? '99+' : items.length}</span>
                 </button>
               </div>
               {/* A shut group hides everything in it, the selected service
@@ -1853,9 +1853,9 @@ export default function SidebarPortal({
                 <button type="button" className={`pl-c2${settingsTab === key ? ' on' : ''}`}
                   onClick={() => { if (view !== 'settings') { setSel(null); setView('settings') } onSettingsTab?.(key) }}>
                   <span className="pl-txt">{label}</span>
-                  {key === 'me' && reqN > 0 && <b className="pl-badge" style={{ position: 'static' }}>{reqN}</b>}
-                  {key === 'inbox' && inbox.items.length > 0 && <b className="pl-badge" style={{ position: 'static' }}>{inbox.items.length}</b>}
-                  {key === 'feedback' && issuesN > 0 && <b className="pl-badge pl-issues" style={{ position: 'static' }}>{issuesN}</b>}
+                  {key === 'me' && reqN > 0 && <b className="pl-badge" style={{ position: 'static' }}>{reqN > 99 ? '99+' : reqN}</b>}
+                  {key === 'inbox' && inbox.items.length > 0 && <b className="pl-badge" style={{ position: 'static' }}>{inbox.items.length > 99 ? '99+' : inbox.items.length}</b>}
+                  {key === 'feedback' && issuesN > 0 && <b className="pl-badge pl-issues" style={{ position: 'static' }}>{issuesN > 99 ? '99+' : issuesN}</b>}
                   {MANAGER_PAGES.has(key) && <Icon name="crown" size={13} className="pl-c2mgr" aria-label={tr('p_manager')} />}
                 </button>
               </div>
@@ -2021,7 +2021,7 @@ export default function SidebarPortal({
             <iframe key={f} ref={f === shownFrame ? frameRef : undefined} src={f} title={kept[f] || sel?.svc}
               className="pl-frame"
               style={f !== shownFrame ? { display: 'none' } : loaded[f] ? undefined : { visibility: 'hidden' }}
-              allow="clipboard-read; clipboard-write; fullscreen; microphone"
+              allow="clipboard-read; clipboard-write; fullscreen; microphone; camera"
               onLoad={(e) => {
                 setLoaded((l) => (l[f] ? l : { ...l, [f]: true }))
                 tellShown(e.target, f === shownFrame)

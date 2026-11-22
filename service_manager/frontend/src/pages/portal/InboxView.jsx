@@ -220,7 +220,7 @@ export default function InboxView({ limit, onAll, decided = false }) {
       <Panel bare title={tr('p_inbox')} hint={items.length ? `${items.length}` : undefined}
         right={(shown.length > 0 || onAll) ? (
           <span style={{ display: 'inline-flex', gap: 6 }}>
-            {shown.length > 0 && <Button variant="secondary" onClick={openAll}>{tr(allOpen ? 'p_ib_close_all' : 'p_ib_open_all')}</Button>}
+            {shown.length > 0 && <Button variant="secondary" style={{ minWidth: 96 }} onClick={openAll}>{tr(allOpen ? 'p_ib_close_all' : 'p_ib_open_all')}</Button>}
             {onAll && <Button variant="secondary" onClick={onAll}>{tr('p_inbox_all')}</Button>}
           </span>
         ) : null}>
