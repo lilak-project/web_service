@@ -373,7 +373,7 @@ async def _inbox(request: Request, grant: Grant, record: dict, proj: str) -> htt
 
 
 async def _activities(request: Request, grant: Grant) -> httpx.Response:
-    return await _portal(request, grant, "academic_activities", "GET", "data")
+    return await _portal(request, grant, "activities", "GET", "data")
 
 
 def _ok(r: httpx.Response) -> dict:
@@ -706,7 +706,7 @@ async def _propose_activity(request, grant, args):
             raise ToolError("새 활동에는 name 과 start 가 있어야 합니다.")
     home = _set_home(args)
     return await _leave(request, grant, "activity", args, fields,
-                        home.get("academic_activities") or _main(grant, "academic_activities"), home)
+                        home.get("activities") or _main(grant, "activities"), home)
 
 
 async def _add_params(request, grant, args):

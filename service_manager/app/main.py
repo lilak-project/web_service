@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from . import config
 from . import autostart
@@ -43,7 +43,18 @@ async def _strip_launcher_prefix(request: Request, call_next):
         new = p[len("/launcher"):] or "/"
         request.scope["path"] = new
         request.scope["raw_path"] = new.encode("utf-8")
+        p = new
+    # Services renamed 2026-11-21 (scripts/rename-services.py): a bookmark or a
+    # link written before goes on to the same page under the new name.
+    parts = p.split("/", 3)
+    if len(parts) > 2 and parts[1] in ("p", "pp") and parts[2] in RENAMED:
+        parts[2] = RENAMED[parts[2]]
+        q = request.url.query
+        return RedirectResponse("/".join(parts) + (f"?{q}" if q else ""), status_code=307)
     return await call_next(request)
+
+
+RENAMED = {"academic_activities": "activities", "author_manager": "authors", "asset_manager2": "inventory"}
 
 
 # A browser NAVIGATING into a proxied service (/p, /pp) that errors used to get a

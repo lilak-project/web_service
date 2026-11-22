@@ -294,6 +294,13 @@ class Proxy(unittest.TestCase):
         self.assertNotIn("</script><img>", out)
         self.assertIn('&quot;', out)
 
+    def test_a_renamed_service_goes_on_under_its_new_name(self):
+        r = c.get("/pp/author_manager/authors/?solo=x", follow_redirects=False)
+        self.assertEqual((r.status_code, r.headers["location"]), (307, "/pp/authors/authors/?solo=x"))
+        r = c.get("/launcher/p/asset_manager2/api/data", follow_redirects=False)
+        self.assertEqual(r.headers["location"], "/p/inventory/api/data")
+        self.assertNotEqual(c.get("/pp/asset_manager/x/", follow_redirects=False).status_code, 307)   # the old one stays
+
     def test_theme_is_set_before_the_page_draws(self):
         """A page opened in the panel is in the account's theme from its first
         paint: the script that says so is in <head>, before the page's own CSS."""
@@ -664,10 +671,10 @@ class StoreChain(unittest.TestCase):
 class SetGroups(unittest.TestCase):
     def test_a_set_has_one_fixed_group_that_follows_it(self):
         from app.routers import service_groups as sg
-        registry.write_share_sets([{"name": "manage", "members": {"author_manager": "authors", "note": "note"}}])
+        registry.write_share_sets([{"name": "manage", "members": {"authors": "authors", "note": "note"}}])
         sg.sync_set_groups()
         g = next(x for x in sg.all_groups() if x.get("share_set") == "manage")
-        self.assertEqual((g["name"], g["members"]), ("manage", ["author_manager", "note"]))
+        self.assertEqual((g["name"], g["members"]), ("manage", ["authors", "note"]))
         # The set changes, the group follows; a set that is gone leaves an ordinary group.
         registry.write_share_sets([{"name": "manage", "members": {"note": "note"}}])
         sg.sync_set_groups()
@@ -701,6 +708,21 @@ class SetGroups(unittest.TestCase):
         registry.write_share_sets([])
         sg.sync_set_groups()
         self.assertNotIn("share_set", next(x for x in sg.all_groups() if x["id"] == g["id"]))
+
+    def test_a_set_holding_a_non_main_project_gets_that_project_card(self):
+        from app.routers import service_groups as sg
+        for proj in ("flows", "team"):
+            (registry.service_dir("onemain") / "projects" / proj).mkdir(parents=True, exist_ok=True)
+        registry.write_manifest("onemain", {**registry.default_manifest("rack", "managed"),
+                                            "capabilities": {"multi_project": True, "tags": True}, "entry_project": "flows"})
+        # In one set only, but not through its main project: the whole-service card would open
+        # flows, so the group holds the team project's own card.
+        registry.write_share_sets([{"name": "crew", "members": {"note": "note", "onemain": "team"}}])
+        sg.sync_set_groups()
+        g = next(x for x in sg.all_groups() if x.get("share_set") == "crew")
+        self.assertEqual(g["members"], ["note", "onemain/team"])
+        registry.write_share_sets([])
+        sg.sync_set_groups()
 
 
 if __name__ == "__main__":

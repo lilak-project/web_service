@@ -228,16 +228,16 @@ class Gates(unittest.TestCase):
         allowed = mcp_tokens.allowed
         self.assertTrue(allowed("", "note", "note"))
         self.assertTrue(allowed("note", "note", "note"))
-        self.assertFalse(allowed("note", "author_manager", "authors"))
-        self.assertTrue(allowed("note, author_manager/authors", "author_manager", "authors"))
-        self.assertFalse(allowed("author_manager/authors", "author_manager", "other"))
-        self.assertTrue(allowed("author_manager/authors", "author_manager"))
-        self.assertFalse(allowed("author_manager/authors", "note"))
+        self.assertFalse(allowed("note", "authors", "authors"))
+        self.assertTrue(allowed("note, authors/authors", "authors", "authors"))
+        self.assertFalse(allowed("authors/authors", "authors", "other"))
+        self.assertTrue(allowed("authors/authors", "authors"))
+        self.assertFalse(allowed("authors/authors", "note"))
 
     def test_a_scoped_token_cannot_reach_past_its_scope(self):
         grant = mcp.Grant("jwt", True, "t", "note")
         with self.assertRaises(mcp.ToolError):
-            asyncio.run(mcp._portal(None, grant, "author_manager", "GET", "data", "authors"))
+            asyncio.run(mcp._portal(None, grant, "authors", "GET", "data", "authors"))
 
     def test_a_parameter_set_is_registered(self):
         sent = []
@@ -261,23 +261,23 @@ class Gates(unittest.TestCase):
 
     def test_records_leave_out_settings_and_the_inbox(self):
         async def fake(request, grant, svc, method, path, proj="", **kw):
-            self.assertEqual((svc, path), ("author_manager", "data"))
+            self.assertEqual((svc, path), ("authors", "data"))
             return httpx.Response(200, json={
                 "settings": {"secret": "x"}, "inbox": [{"id": "m", "name": "메일"}], "version": 3,
                 "prefs": [{"id": "p", "name": "메일 화면"}], "pins": [{"id": "q", "name": "메일 고정"}],
                 "authors": [{"id": "a", "name": "Kim Lee", "tags": ["x"]}, {"id": "b", "name": "Park"}, {"name": "no id"}]})
-        real, real_rack, mcp._portal, mcp._rack = mcp._portal, mcp._rack, fake, lambda: ("author_manager",)
+        real, real_rack, mcp._portal, mcp._rack = mcp._portal, mcp._rack, fake, lambda: ("authors",)
         try:
             tok = self.issue()
-            r = call(tok, "search", query="kim", service="author_manager")
+            r = call(tok, "search", query="kim", service="authors")
             hits = json.loads(r["content"][0]["text"])["hits"]
             self.assertEqual([h["id"] for h in hits], ["a"])
             self.assertEqual(hits[0]["tags"], ["x"])
-            r = call(tok, "search", query="메일", service="author_manager")
+            r = call(tok, "search", query="메일", service="authors")
             self.assertEqual(json.loads(r["content"][0]["text"])["hits"], [])
-            r = json.loads(call(tok, "get_record", service="author_manager", id="b")["content"][0]["text"])
+            r = json.loads(call(tok, "get_record", service="authors", id="b")["content"][0]["text"])
             self.assertEqual(r["record"]["name"], "Park")
-            self.assertTrue(call(tok, "get_record", service="author_manager", id="m")["isError"])
+            self.assertTrue(call(tok, "get_record", service="authors", id="m")["isError"])
             self.assertTrue(call(tok, "get_record", service="elog", id="m")["isError"])
         finally:
             mcp._portal, mcp._rack = real, real_rack
@@ -291,24 +291,24 @@ class Gates(unittest.TestCase):
                 return httpx.Response(200, json={"id": "회의 메모", "title": "t", "date": "", "tags": [], "fields": {},
                                                  "version": "1", "body": "b"})
             return httpx.Response(200, json={"authors": [{"id": "dee049b9", "name": "Park"}]})
-        real, real_rack, mcp._portal, mcp._rack = mcp._portal, mcp._rack, fake, lambda: ("author_manager",)
+        real, real_rack, mcp._portal, mcp._rack = mcp._portal, mcp._rack, fake, lambda: ("authors",)
         try:
             tok = self.issue()
-            r = call(tok, "get_record", path="http://testserver/pp/author_manager/authors/authors/dee049b9")
+            r = call(tok, "get_record", path="http://testserver/pp/authors/authors/authors/dee049b9")
             self.assertFalse(r["isError"], r)
             self.assertEqual(json.loads(r["content"][0]["text"])["record"]["name"], "Park")
-            self.assertEqual(asked[-1][:2], ("author_manager", "authors"))
+            self.assertEqual(asked[-1][:2], ("authors", "authors"))
             for tool in ("get_record", "get_note"):
                 r = call(tok, tool, path="http://testserver/pp/note/notes-job/notes/회의 메모")
                 self.assertFalse(r["isError"], r)
                 self.assertEqual(asked[-1], ("note", "notes-job", "notes/%ED%9A%8C%EC%9D%98%20%EB%A9%94%EB%AA%A8"))
             self.assertFalse(call(tok, "get_note", address="/pp/note/notes-job/notes/회의 메모")["isError"], "address = path")
             asked.clear()
-            r = call(tok, "get_record", path="https://elsewhere.example/pp/author_manager/authors/authors/dee049b9")
+            r = call(tok, "get_record", path="https://elsewhere.example/pp/authors/authors/authors/dee049b9")
             self.assertIn("다른 포털", r["content"][0]["text"])
-            for bad in ("/pp/author_manager/authors", "http://testserver/p/x/y/z/w", "/pp/note/n/notes/a%2Fb"):
+            for bad in ("/pp/authors/authors", "http://testserver/p/x/y/z/w", "/pp/note/n/notes/a%2Fb"):
                 self.assertTrue(call(tok, "get_record", path=bad)["isError"], bad)
-            self.assertTrue(call(tok, "get_note", path="/pp/author_manager/authors/authors/x")["isError"])
+            self.assertTrue(call(tok, "get_note", path="/pp/authors/authors/authors/x")["isError"])
             self.assertTrue(call(tok, "get_record")["isError"])
             self.assertEqual(asked, [])
         finally:
@@ -342,25 +342,25 @@ class Gates(unittest.TestCase):
         self.assertEqual(c.get("/api/admin/mcp-tokens", headers={"Authorization": f"Bearer {tok}"}).status_code, 401)
         self.assertEqual(c.post("/api/admin/mcp-tokens", headers=h, json={"name": " "}).status_code, 400)
         self.assertEqual(c.post("/api/admin/mcp-tokens", headers=h, json={"name": "x", "days": 0}).status_code, 400)
-        r = c.post("/api/admin/mcp-tokens", headers=h, json={"name": "화면", "scope": "note, author_manager"})
+        r = c.post("/api/admin/mcp-tokens", headers=h, json={"name": "화면", "scope": "note, authors"})
         self.assertEqual(r.status_code, 201)
         new = r.json()["token"]
         names = {t["name"]: t for t in c.get("/api/admin/mcp-tokens", headers=h).json()}
         row = names["화면"]
-        self.assertEqual((row["can_write"], row["scope"], row["owner"], row["revoked"]), (False, "note,author_manager", "admin", False))
+        self.assertEqual((row["can_write"], row["scope"], row["owner"], row["revoked"]), (False, "note,authors", "admin", False))
         self.assertNotIn(new, str(row))
         self.assertEqual(rpc(new, "ping").status_code, 200)
         self.assertEqual(c.delete(f"/api/admin/mcp-tokens/{row['id']}", headers=h).status_code, 200)
         self.assertEqual(rpc(new, "ping").status_code, 401)
 
     def test_rack_services_come_from_their_manifests(self):
-        for name, m in (("parameters", {"kind": "rack"}), ("author_manager", {"kind": "author", "capabilities": {"tags": True}}),
+        for name, m in (("parameters", {"kind": "rack"}), ("authors", {"kind": "author", "capabilities": {"tags": True}}),
                         ("asset_manager", {"kind": "asset"}), ("note", {"kind": "note", "capabilities": {"tags": True}})):
             d = mcp.registry.service_dir(name)
             d.mkdir(parents=True, exist_ok=True)
             (d / "service.json").write_text(json.dumps(m))
         got = mcp._rack()           # other tests add manifests of their own to the same data root
-        self.assertTrue({"author_manager", "parameters"} <= set(got) and not {"asset_manager", "note"} & set(got), got)
+        self.assertTrue({"authors", "parameters"} <= set(got) and not {"asset_manager", "note"} & set(got), got)
 
     def test_a_job_takes_what_people_write_and_keeps_what_jobrun_owns(self):
         jobs = [{"id": "jobrun-20261112-005005-915d7d", "title": "skim", "tags": ["job/915d7d", "spirit"]},
@@ -616,13 +616,13 @@ class Gates(unittest.TestCase):
             left.append((proj, record))
             return httpx.Response(200, json={"record": record})
         real, real_rack, real_inbox = mcp._portal, mcp._rack, mcp._inbox
-        mcp._portal, mcp._rack, mcp._inbox, real_of = fake, lambda: ("author_manager",), inbox, mcp._inbox_of
+        mcp._portal, mcp._rack, mcp._inbox, real_of = fake, lambda: ("authors",), inbox, mcp._inbox_of
         mcp._inbox_of = lambda grant, home: home.get("inbox", "")
-        mcp.registry.write_share_sets([{"id": "m1", "name": "m", "members": {"note": "n1", "author_manager": "authors", "inbox": "ib"}}])
+        mcp.registry.write_share_sets([{"id": "m1", "name": "m", "members": {"note": "n1", "authors": "authors", "inbox": "ib"}}])
         try:
             tok = self.issue(write=False)
             r = call(tok, "propose_tags", why="오늘 정리", set="m",
-                     items=[{"service": "note", "id": "x", "add": ["#STARK"]}, {"service": "author_manager", "id": "a1", "add": ["gain"]}])
+                     items=[{"service": "note", "id": "x", "add": ["#STARK"]}, {"service": "authors", "id": "a1", "add": ["gain"]}])
             self.assertFalse(r["isError"], r)
             self.assertEqual(len(left), 1)
             rec = left[0][1]
@@ -732,7 +732,7 @@ class Gates(unittest.TestCase):
                  "authors": [{"name": "K. Pion", "ref": "a-0001-kimp"}]},
                 {"id": "r-0002-kaon", "title": "Kaon flow", "date": "2019-05-01", "tags": ["kaon"]}],
                 "settings": {"x": 1}},
-            "author_manager": {"authors": [{"id": "a-0001-kimp", "name": "Kim Pion", "tags": ["SpiRIT"]}]},
+            "authors": {"authors": [{"id": "a-0001-kimp", "name": "Kim Pion", "tags": ["SpiRIT"]}]},
             "jobboard": {"jobs": jobs, "evaluations": [{"id": "E1", "task": "jobrun-1-aaaaaa", "text": "ok"}],
                          "approval": [{"id": "rule"}]},
             "parameters": {"sets": [{"id": "P1", "title": "skim pars"}]},
@@ -766,9 +766,9 @@ class Gates(unittest.TestCase):
                 return httpx.Response(200, json={"tags": n})
             return httpx.Response(404, json={"detail": "no"})
         world = {"jobboard": "jobboard", "parameters": "sets", "reference_manager": "papers",
-                 "author_manager": "authors", "note": "note"}
+                 "authors": "authors", "note": "note"}
         real = (mcp._portal, mcp._rack, mcp.registry.link_project, mcp.registry.share_for, mcp.registry.share_sets, mcp._note)
-        mcp._portal, mcp._rack = fake, (lambda: ("author_manager", "jobboard", "parameters", "reference_manager"))
+        mcp._portal, mcp._rack = fake, (lambda: ("authors", "jobboard", "parameters", "reference_manager"))
         mcp._note = lambda request, grant, method, path, **kw: fake(request, grant, "note", method, path, **kw)
         mcp.registry.link_project = lambda s, m=None: world.get(s, "")
         mcp.registry.share_for = lambda s, p: dict(world)
@@ -799,7 +799,7 @@ class Gates(unittest.TestCase):
         tok = self.issue(write=False)
         hits = self.out(tok, "find", query="pion")["hits"]
         self.assertEqual({(h["service"], h["id"]) for h in hits},
-                         {("reference_manager", "r-0001-pion"), ("author_manager", "a-0001-kimp"), ("note", "n1")})
+                         {("reference_manager", "r-0001-pion"), ("authors", "a-0001-kimp"), ("note", "n1")})
         self.assertEqual(hits[0]["id"], "r-0001-pion")          # in the title, and in a tag
         self.assertIn("Pion", next(h for h in hits if h["id"] == "r-0001-pion")["snippet"])
         ids = lambda **a: {h["id"] for h in self.out(tok, "find", **a)["hits"]}  # noqa: E731
@@ -895,7 +895,7 @@ class Gates(unittest.TestCase):
         allowed = mcp_tokens.allowed
         self.assertTrue(allowed("set:jobboard", "note", "notes-job"))
         self.assertFalse(allowed("set:jobboard", "note", "note"))
-        self.assertFalse(allowed("set:jobboard", "author_manager"))
+        self.assertFalse(allowed("set:jobboard", "authors"))
         self.assertFalse(allowed("set:gone", "note", "note"))           # a set that is gone opens nothing
         self.assertEqual(mcp_tokens.home("note,set:jobboard"), {"note": "notes-job", "jobboard": "jobboard"})
         seen = []
@@ -914,11 +914,11 @@ class Gates(unittest.TestCase):
             mcp._self = real_self
 
     def test_reads_cover_both_sets_and_a_delegate_stays_in_one_project(self):
-        sets = [{"name": "manage", "members": {"note": "note", "author_manager": "authors"}},
+        sets = [{"name": "manage", "members": {"note": "note", "authors": "authors"}},
                 {"name": "jobboard", "members": {"note": "notes-job", "jobboard": "jobboard"}}]
         real = (mcp.registry.share_sets, mcp.registry.link_project)
         mcp.registry.share_sets = lambda: (sets, True)
-        mcp.registry.link_project = lambda s, m=None: {"note": "note", "author_manager": "authors", "jobboard": "jobboard"}.get(s, "")
+        mcp.registry.link_project = lambda s, m=None: {"note": "note", "authors": "authors", "jobboard": "jobboard"}.get(s, "")
         self.addCleanup(lambda: setattr(mcp.registry, "share_sets", real[0]) or setattr(mcp.registry, "link_project", real[1]))
         # A token that opens everything, or both sets, reads note in BOTH projects; one bound to a set, its own.
         for scope in ("", "set:manage,set:jobboard"):
@@ -926,7 +926,7 @@ class Gates(unittest.TestCase):
             self.assertEqual(mcp._spread(g, ["note", "jobboard"]),
                              [("note", "note"), ("note", "notes-job"), ("jobboard", "jobboard")])
         g = mcp.Grant("jwt", True, "t", "set:jobboard", mcp_tokens.home("set:jobboard"))
-        self.assertEqual(mcp._spread(g, ["note", "author_manager"]), [("note", "notes-job")])
+        self.assertEqual(mcp._spread(g, ["note", "authors"]), [("note", "notes-job")])
         # delegate: no project named is the token's own project of that service, never the service as a whole.
         sent = []
 
@@ -940,7 +940,7 @@ class Gates(unittest.TestCase):
             with self.assertRaises(mcp.ToolError):
                 asyncio.run(mcp._delegate(None, g, {"service": "note", "project": "note", "task": "x"}))
             with self.assertRaises(mcp.ToolError):
-                asyncio.run(mcp._delegate(None, g, {"service": "author_manager", "task": "x"}))
+                asyncio.run(mcp._delegate(None, g, {"service": "authors", "task": "x"}))
         finally:
             mcp._self = real_self
         # The run's own token (scope svc/proj) defaults to that project, not the service's main one.
@@ -977,8 +977,8 @@ class Gates(unittest.TestCase):
         self.assertEqual(c.get("/api/inbox/sources").status_code, 401)
 
     def test_a_proposal_goes_to_the_inbox_of_the_set_it_names_made_where_that_set_says(self):
-        sets = [{"name": "manage", "members": {"note": "note", "academic_activities": "activities", "inbox": "inbox"}},
-                {"name": "jobboard", "members": {"note": "notes-job", "academic_activities": "acts-job", "inbox": "research"}},
+        sets = [{"name": "manage", "members": {"note": "note", "activities": "activities", "inbox": "inbox"}},
+                {"name": "jobboard", "members": {"note": "notes-job", "activities": "acts-job", "inbox": "research"}},
                 {"name": "bare", "members": {"note": "x"}}]
         real = mcp.registry.share_sets
         mcp.registry.share_sets = lambda: (sets, True)

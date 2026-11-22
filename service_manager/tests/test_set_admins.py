@@ -39,13 +39,13 @@ class SetAdmins(unittest.TestCase):
             db.commit()
             ids[n] = u.id
         # pa administers both projects of set "s"; other only one
-        for sv in ("note", "author_manager"):
+        for sv in ("note", "authors"):
             db.add(models.ServicePermission(user_id=ids["pa"], service_name=sv, project="p1", is_admin=True))
         db.add(models.ServicePermission(user_id=ids["other"], service_name="note", project="p1", is_admin=True))
         db.commit()
         db.close()
         cls.ids = ids
-        registry.write_share_sets([{"id": "s1", "name": "s", "members": {"note": "p1", "author_manager": "p1"}}])
+        registry.write_share_sets([{"id": "s1", "name": "s", "members": {"note": "p1", "authors": "p1"}}])
         login = lambda n: h(c.post("/api/auth/login", json={"username": n, "password": f"pw-{n}-1234"}).json()["access_token"])  # noqa: E731
         cls.pa, cls.other = login("pa"), login("other")
 

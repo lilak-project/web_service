@@ -1,6 +1,6 @@
 """Tokens for /mcp, issued from the machine's own shell until there is a screen.
 
-    python -m app.mcp_tokens new laptop --user admin [--read-only] [--days 180] [--scope note,author_manager/authors]
+    python -m app.mcp_tokens new laptop --user admin [--read-only] [--days 180] [--scope note,authors/authors]
     python -m app.mcp_tokens list
     python -m app.mcp_tokens revoke 3
 

@@ -102,6 +102,18 @@ def annotate_services(db: Session, user: models.User, raw: list[dict]) -> list[d
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+@router.get("/api/services/{svc}/version")
+def service_version(svc: str, user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
+    """Which code a service runs ({sha, url, pushed} or null): asked of git only here, when its
+    manage page opens — not for every service on every /api/services."""
+    if not (permissions.is_admin(user) or permissions.is_service_admin(db, user, svc)):
+        raise HTTPException(403, "관리자만 볼 수 있습니다.")
+    if not registry.manifest_path(svc).exists():
+        raise HTTPException(404, "서비스를 찾을 수 없습니다.")
+    from .. import gitinfo
+    return gitinfo.service_version((registry.read_manifest(svc).get("start") or {}).get("cwd"))
+
+
 @router.get("/api/services")
 def list_services(
     user: models.User = Depends(require_portal_user),

@@ -169,10 +169,10 @@
       "color": "#3f4651",
       "needs_kit": true,
       "bundle": [
-        "academic_activities",
-        "author_manager",
+        "activities",
+        "authors",
         "reference_manager",
-        "asset_manager2",
+        "inventory",
         "note",
         "project_manager",
         "inbox"
@@ -196,6 +196,7 @@
       "color": "#2563eb",
       "needs_kit": true,
       "bundle": [
+        "logbook",
         "parameters"
       ],
       "pip": [

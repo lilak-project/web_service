@@ -19,8 +19,8 @@ from urllib.parse import quote
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 # The list ?solo= opens, per service; a record of any other list has no page of its own.
-ITEMS = {"academic_activities": "activities", "author_manager": "authors", "reference_manager": "references",
-         "asset_manager2": "assets", "project_manager": "projects"}
+ITEMS = {"activities": "activities", "authors": "authors", "reference_manager": "references",
+         "inventory": "assets", "project_manager": "projects"}
 NAME_KEYS = ("name", "title", "citeKey", "engName", "assetId", "id")
 CAP = 30   # a bulk edit touches hundreds; the Summary wants the count, not the list
 
@@ -64,7 +64,7 @@ def records(root, day):
             continue
         name = next((str(r[k]) for k in NAME_KEYS if r.get(k)), f.stem)
         row = {"name": name[:80], "new": local_day(r.get("createdAt")) == day}
-        rid = r.get("assetId") if svc == "asset_manager2" else r.get("id")
+        rid = r.get("assetId") if svc == "inventory" else r.get("id")
         if f.parent.name == ITEMS.get(svc) and rid:
             row["link"] = f"/pp/{svc}/{f.parents[2].name}/?solo={quote(str(rid), safe='')}"
         out.setdefault(f.parent.name, []).append(row)

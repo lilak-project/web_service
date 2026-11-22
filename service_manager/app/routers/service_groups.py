@@ -133,8 +133,11 @@ def sync_set_groups() -> None:
     sets = [s for s in registry.share_sets()[0] if s.get("name")]
     seen: dict = {}
     for st in sets:
-        for svc in (st.get("members") or {}):
-            seen[svc] = seen.get(svc, 0) + 1
+        for svc, proj in (st.get("members") or {}).items():
+            # A whole-service card opens the service's main project, so a set holding
+            # another project of it needs that project's own card too.
+            other = proj != registry.link_project(svc, registry.read_manifest(svc))
+            seen[svc] = seen.get(svc, 0) + (2 if other else 1)
     hd = _home._read()
     for svc, n in seen.items():
         if n > 1 and svc not in set(hd.get("split_cards") or []):

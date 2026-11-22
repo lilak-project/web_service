@@ -26,7 +26,6 @@ router = APIRouter(tags=["services-lifecycle"])
 
 def raw_service(name: str) -> dict:
     """One service's launcher-level view: status (via its adapter) + cosmetics."""
-    from .. import gitinfo
     manifest = registry.read_manifest(name)
     adapter = get_adapter(manifest)
     st = adapter.status(name, manifest)
@@ -78,7 +77,6 @@ def raw_service(name: str) -> dict:
         "hidden": name in _hidden_services(),
         "live_hidden": name in _live_hidden(),
         "live_public": name in _live_public(),
-        "version": gitinfo.service_version((manifest.get("start") or {}).get("cwd")),  # {sha,date}|null
     }
 
 

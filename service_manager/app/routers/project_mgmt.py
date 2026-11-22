@@ -333,11 +333,12 @@ def reset_share_sets(_: models.User = Depends(require_portal_admin)):
 
 
 # What a set is usually made of, so one is made in one go rather than service by service.
-# ponytail: two shapes named here; a manager's own templates can live in share_sets.json when wanted.
+# ponytail: three shapes named here; a manager's own templates can live in share_sets.json when wanted.
 SET_TEMPLATES = [
     {"name": "jobboard", "services": ["jobboard", "project_manager", "inbox", "parameters", "reference_manager", "note"]},
-    {"name": "manage", "services": ["project_manager", "inbox", "academic_activities", "author_manager", "reference_manager",
+    {"name": "manage", "services": ["project_manager", "inbox", "activities", "authors", "reference_manager",
                                     "note"]},
+    {"name": "lilak flow", "services": ["lilak_flow", "logbook", "note", "project_manager", "inbox"]},
 ]
 # Joined to a set but kept off the cover: project_manager holds the set's projects,
 # which every service's tags tab shows and edits now, so its own card is not opened.

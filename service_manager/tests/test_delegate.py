@@ -26,7 +26,7 @@ class Delegate(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tok = c.post("/api/auth/setup", json={"password": "admin-pass-1"}).json()["access_token"]
-        for n in ("inbox", "note", "author_manager"):
+        for n in ("inbox", "note", "authors"):
             registry.write_manifest(n, {"kind": "rack", "mode": "managed",
                                         **({"capabilities": {"delegates": ["note"]}} if n == "inbox" else {})})
 
@@ -41,7 +41,7 @@ class Delegate(unittest.TestCase):
 
     def test_only_where_the_asking_service_is_registered_to_write(self):
         self.assertEqual(self.ask("note/note").status_code, 200)
-        self.assertEqual(self.ask("author_manager/x").status_code, 403)        # inbox does not write there
+        self.assertEqual(self.ask("authors/x").status_code, 403)        # inbox does not write there
         self.assertEqual(self.ask("inbox/inbox", svc="note").status_code, 403)   # note declares nowhere
 
     def test_an_update_brings_a_capability_the_seed_declares(self):
@@ -95,7 +95,7 @@ class Delegate(unittest.TestCase):
         try:
             self.assertIsNotNone(permissions.user_from_request(db, d, "/pp/note/note/api/notes"))
             self.assertIsNone(permissions.user_from_request(db, d, "/pp/note/other/api/notes"))
-            self.assertIsNone(permissions.user_from_request(db, d, "/pp/academic_activities/x/api/data"))
+            self.assertIsNone(permissions.user_from_request(db, d, "/pp/activities/x/api/data"))
         finally:
             db.close()
         # at the proxy, outside its scope it is refused, not handed on as a machine bearer

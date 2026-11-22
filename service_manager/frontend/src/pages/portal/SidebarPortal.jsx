@@ -1928,6 +1928,7 @@ export default function SidebarPortal({
               onRegroup={onRegroup} onCreateGroup={() => onCreateGroup?.()}
               onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup} onManageService={manageService}
               onRenameGroup={mineOn ? personal.renameGroup : undefined}
+              onHideCards={personal?.hideCard ? (keys) => { for (const k of keys) personal.hideCard(k, true) } : undefined}
               onInboxAll={() => { viaButton.current = true; openSettings('inbox') }}
               onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
             {/* The same message bar every other menu page has at its foot. */}
@@ -2009,6 +2010,7 @@ export default function SidebarPortal({
               onRegroup={onRegroup} onCreateGroup={() => onCreateGroup?.()}
               onSetMembers={onSetMembers} onDeleteGroup={onDeleteGroup} onManageService={manageService}
               onRenameGroup={mineOn ? personal.renameGroup : undefined}
+              onHideCards={personal?.hideCard ? (keys) => { for (const k of keys) personal.hideCard(k, true) } : undefined}
               onInboxAll={() => { viaButton.current = true; openSettings('inbox') }}
               onOpen={(s, proj) => (proj ? pickProject(s, proj) : openService(s))} />
           )}

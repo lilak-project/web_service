@@ -374,7 +374,7 @@ projects are skipped.
 **한국어** — `/mcp`는 Claude와 Codex 같은 에이전트가 노트와 랙 서비스를 도구로 쓰는 입구입니다. 토큰은 **설정 → 시스템 → MCP 토큰**에서 발급하고 끊습니다. 관리자만 볼 수 있습니다. 쉘에서는 `python -m app.mcp_tokens new|list|revoke`로 같은 일을 합니다.
 
 - **저장:** 해시만 저장합니다. 토큰 원문은 발급할 때 한 번만 보이고, 관리자도 다시 볼 수 없습니다. 잃어버리면 끊고 새로 발급합니다.
-- **권한:** 주인 계정이 들어갈 수 있는 곳 안에서만 동작합니다. 범위(`note`, `author_manager/authors`처럼 쉼표로 구분)를 주면 그 안으로 더 좁혀집니다. 비우면 주인 계정의 권한 전체입니다.
+- **권한:** 주인 계정이 들어갈 수 있는 곳 안에서만 동작합니다. 범위(`note`, `authors/authors`처럼 쉼표로 구분)를 주면 그 안으로 더 좁혀집니다. 비우면 주인 계정의 권한 전체입니다.
 - **쓰기:** 읽기 토큰은 조회와 받은편지함 제안만 합니다. 쓰기 토큰은 노트에 바로 씁니다. 랙 기록을 바로 고치는 도구는 없고, 일정은 제안만 할 수 있습니다.
 - **이슈:** `list_issues`는 관리자 토큰이면 모든 이슈를, 다른 토큰이면 주인의 이슈만 읽습니다. `reply_issue`(답과 완료)는 관리자의 쓰기 토큰만 합니다. 첨부 파일은 이름, 크기, 받을 경로만 넘깁니다.
 - **통하는 곳:** `/mcp`에서만 통합니다. `/api`와 `/pp`에서는 인증되지 않습니다.
@@ -385,7 +385,7 @@ projects are skipped.
 **English** — `/mcp` is where agents such as Claude and Codex use the notes and rack services as tools. Issue and revoke tokens under **Settings → System → MCP tokens** (managers only), or from a shell with `python -m app.mcp_tokens new|list|revoke`.
 
 - **Storage:** only a hash is kept. The token is shown once when issued and nobody can read it back; if it is lost, revoke it and issue another.
-- **Reach:** a token reaches only what its owner's account can. A scope (comma-separated, such as `note,author_manager/authors`) narrows that further; empty means all of the owner's access.
+- **Reach:** a token reaches only what its owner's account can. A scope (comma-separated, such as `note,authors/authors`) narrows that further; empty means all of the owner's access.
 - **Writing:** a read token can look things up and leave proposals in the inbox. A write token also writes notes directly. No tool changes rack records directly, and activities can only be proposed.
 - **Issues:** `list_issues` shows a manager's token every issue and any other token its owner's own; `reply_issue` (answer, resolve) is a manager's write token only. Attachments come as name, size and fetch path, never the file.
 - **Where it works:** at `/mcp` only. `/api` and `/pp` do not accept it.

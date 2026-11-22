@@ -31,6 +31,12 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
   const { t, lang } = useLang()
   const svc = service
   const isBuiltin = !!builtinKey                              // builtins: rename/icon/order only
+  // Which code it runs: asked of git only now, for this one service (not on every /services).
+  const [version, setVersion] = useState(null)
+  useEffect(() => {
+    if (isBuiltin) return
+    launcher.get(`/services/${svc.name}/version`).then((r) => setVersion(r.data)).catch(() => {})
+  }, [svc.name, isBuiltin])
   const startIcon = service.icon || initialIcon || 'lilak'   // the icon actually on the card
   const startColor = service.color || '#000000'
   const startLabel = isBuiltin ? (service.label || '') : (service.label || '')
@@ -149,23 +155,23 @@ export default function ServiceManagePanel({ service, builtinKey, initialIcon, f
           service that is its own git repo — one that lives inside the stack's
           repo would just report the stack's commit, so it reports nothing. A
           commit not yet pushed has no page to link to, and says so. */}
-      {!isBuiltin && service.version?.sha && (
-        <Panel title={tr("p_code_3")} hint={service.version.date || ''}>
+      {!isBuiltin && version?.sha && (
+        <Panel title={tr("p_code_3")} hint={version.date || ''}>
           <Field label={tr("p_repository")}>
-            {service.version.url ? (
-              <a href={service.version.url} target="_blank" rel="noreferrer" className="set-ext">
-                {service.version.url.replace(/^https?:\/\//, '')} ↗
+            {version.url ? (
+              <a href={version.url} target="_blank" rel="noreferrer" className="set-ext">
+                {version.url.replace(/^https?:\/\//, '')} ↗
               </a>
             ) : <span style={fieldMuted}>{tr("p_no_remote")}</span>}
           </Field>
           <Field label={tr("p_commit")}>
-            {service.version.url && service.version.pushed ? (
-              <a href={`${service.version.url}/commit/${service.version.sha}`} target="_blank" rel="noreferrer"
-                className="set-ext mono">{service.version.sha} ↗</a>
+            {version.url && version.pushed ? (
+              <a href={`${version.url}/commit/${version.sha}`} target="_blank" rel="noreferrer"
+                className="set-ext mono">{version.sha} ↗</a>
             ) : (
               <span className="mono" style={fieldMuted}
                 title={tr("p_not_pushed_to_the_remote")}>
-                {service.version.sha} · {tr("p_local")}
+                {version.sha} · {tr("p_local")}
               </span>
             )}
           </Field>

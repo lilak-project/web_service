@@ -36,7 +36,7 @@ function Swatch({ color }) {
   return <span style={{ width: 10, height: 10, flex: 'none', background: color || 'var(--dock-border-strong)' }} />
 }
 
-export default function RackView({ tab, look = 'rack', cards: allCards, bands = [], onGo, onManage, onChanged, readOnly = false }) {
+export default function RackView({ tab, look = 'rack', cards: allCards, bands = [], onGo, onManage, onChanged, onHideCards, readOnly = false }) {
   // A service's settings open as their own page (the manage panel) when the host can show it; else inline.
   const openSvc = (name) => (onManage ? onManage(name) : flip(name))
   // readOnly: a project admin sees the sets and makes new ones from a template; only a manager rearranges them.
@@ -87,17 +87,29 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
 
   // A set made from a template in one go: the projects it lacks are made, then joined.
   const [tpls, setTpls] = useState([])
-  const [mk, setMk] = useState({ tpl: 0, name: '', project: '' })
+  const [mk, setMk] = useState({ tpl: 0, name: '', project: '', hide: null })   // hide: services ticked, null = default
+  // Ticked to start hidden: a service whose cards this account already hides, all of them (the inbox, say).
+  const hideDefault = (svcs) => new Set(svcs.filter((v) => {
+    const own = (allCards || []).filter((c) => c.name === v)
+    return own.length > 0 && own.every((c) => c.hidden)
+  }))
+  const hideSet = mk.hide ?? hideDefault(tpls[mk.tpl]?.services || [])
   useEffect(() => {
     launcher.get('/share-sets/templates').then((r) => setTpls(r.data || [])).catch(() => {})
   }, [sets])
   const make = async () => {
     const t = tpls[mk.tpl]
+    // An empty name is the template's; the project defaults to the name, spaces made _.
+    const name = mk.name.trim() || t.name
     try {
-      const r = await launcher.post('/share-sets/make', { name: mk.name.trim(), project: mk.project.trim(), services: t.services })
+      const project = mk.project.trim() || name.replace(/\s+/g, '_')
+      const r = await launcher.post('/share-sets/make', { name, project, services: t.services })
       take(r.data)
-      setMsg({ tone: 'ok', text: tr('p_share_made', mk.name.trim(), r.data.made.length, r.data.joined.length) })
-      setMk({ ...mk, name: '', project: '' })
+      // The new project cards start hidden in this account's own bar where ticked.
+      const hide = t.services.filter((v) => hideSet.has(v)).map((v) => `${v}/${project}`)
+      if (hide.length) onHideCards?.(hide)
+      setMsg({ tone: 'ok', text: tr('p_share_made', name, r.data.made.length, r.data.joined.length) })
+      setMk({ ...mk, name: '', project: '', hide: null })
       onChanged?.()
     } catch (e) { setMsg({ tone: 'bad', text: errText(e) }) }
   }
@@ -359,13 +371,25 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
               {t.name}
             </button>
           ))}
-          <input placeholder={tr('p_share_tpl_name')} aria-label={tr('p_share_tpl_name')} value={mk.name}
+          <input placeholder={tpls[mk.tpl]?.name || tr('p_share_tpl_name')} aria-label={tr('p_share_tpl_name')} value={mk.name}
             onChange={(e) => setMk({ ...mk, name: e.target.value })} />
           <input placeholder={tr('p_share_tpl_project')} aria-label={tr('p_share_tpl_project')} value={mk.project}
             onChange={(e) => setMk({ ...mk, project: e.target.value })} />
-          <button type="button" disabled={!tpls[mk.tpl] || !mk.name.trim() || dirty} onClick={make}>{tr('p_share_tpl_make')}</button>
+          <button type="button" disabled={!tpls[mk.tpl] || dirty} title={dirty ? tr('p_share_tpl_save_first') : undefined} onClick={make}>{tr('p_share_tpl_make')}</button>
         </Row>
-        {tpls[mk.tpl] && <Row className="sub">{tpls[mk.tpl].services.join(' · ')}</Row>}
+        {tpls[mk.tpl] && (
+          <Row className="sub" style={{ flexWrap: 'wrap', gap: 6, height: 'auto', paddingTop: 6, paddingBottom: 6 }}>
+            {tpls[mk.tpl].services.map((v) => (
+              <label key={v} title={tr('p_share_tpl_hide_hint')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px',
+                border: '1px solid var(--dock-border-default)', background: hideSet.has(v) ? 'var(--dock-surface-sunken, transparent)' : 'var(--dock-surface)',
+                color: hideSet.has(v) ? 'var(--dock-text-tertiary, var(--dock-text-secondary))' : 'var(--dock-text-primary)', cursor: onHideCards ? 'pointer' : 'default' }}>
+                {onHideCards && <input type="checkbox" checked={hideSet.has(v)}
+                  onChange={() => setMk((m) => { const n = new Set(m.hide ?? hideSet); if (n.has(v)) n.delete(v); else n.add(v); return { ...m, hide: n } })} />}
+                {label(v)}{hideSet.has(v) && onHideCards ? ` · ${tr('p_share_tpl_hidden')}` : ''}
+              </label>
+            ))}
+          </Row>
+        )}
       </Panel>
 
       {(sets || []).map((st, i) => {
@@ -415,9 +439,13 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
               <input value={st.name} onChange={(e) => { const v = e.target.value; edit((s) => { s[i].name = v; return s }) }} />
             </Row>
             <Row>{inSet.length ? inSet.map(card) : <span className="sub">{tr('p_share_empty')}</span>}</Row>
+            {!readOnly && inSet.length > 0 && (
+              <SetNames set={st} cards={inSet} label={label} two={TWO}
+                onSaved={(svcs) => { for (const v of svcs) loadProjects(v); onChanged?.() }} />
+            )}
             {/* Admins of every project in the set at once (one per row of a set: n/all). */}
             {/* A project admin sees this on the sets that are wholly theirs (the API decides). */}
-            {st.id && !dirty && Object.keys(st.members || {}).length > 0 && (
+            {st.id && Object.keys(st.members || {}).length > 0 && (
               <AdminEditor key={`${st.id}:${JSON.stringify(st.members)}`} setKey={st.id}
                 scopes={Object.entries(st.members).map(([svc, proj]) => ({ svc, proj }))} />
             )}
@@ -430,5 +458,38 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
       </Panel>)}
       </>}
     </>
+  )
+}
+
+/** The display names of a set's projects (the folder id stays): one by one, or all as
+ *  "<service> (<set>)" at once. Saved on Enter or leaving the field. */
+function SetNames({ set, cards, label, two, onSaved }) {
+  const [draft, setDraft] = useState({})
+  const [err, setErr] = useState('')
+  const val = (c) => draft[c.key] ?? c.name
+  const save = async (list) => {
+    const todo = list.filter(([c, v]) => v.trim() && v.trim() !== c.name)
+    if (!todo.length) return
+    try {
+      for (const [c, v] of todo) await launcher.put(`/services/${c.svc}/projects/${c.proj}/name`, { name: v.trim() })
+      setErr(''); setDraft({}); onSaved([...new Set(todo.map(([c]) => c.svc))])
+    } catch (e) { setErr(e?.response?.data?.detail || tr('p_failed')) }
+  }
+  const suffix = (set.name || '').trim()
+  return (
+    <Row className="cols" style={{ ...two, height: 'auto', alignItems: 'start', paddingTop: 6, paddingBottom: 6 }}>
+      <span className="sub">{tr('p_share_card_names')}</span>
+      <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+        {cards.map((c) => (
+          <input key={c.key} value={val(c)} aria-label={label(c.svc)} title={label(c.svc)} style={{ width: 150 }}
+            onChange={(e) => { const v = e.target.value; setDraft((d) => ({ ...d, [c.key]: v })) }}
+            onKeyDown={(e) => { if (e.key === 'Enter') save([[c, val(c)]]); if (e.key === 'Escape') setDraft((d) => { const n = { ...d }; delete n[c.key]; return n }) }}
+            onBlur={() => save([[c, val(c)]])} />
+        ))}
+        <button type="button" disabled={!suffix} onClick={() => save(cards.map((c) => [c, `${label(c.svc)} (${suffix})`]))}>
+          {tr('p_share_name_all', suffix || '…')}</button>
+        {err && <Pill tone="bad">{err}</Pill>}
+      </span>
+    </Row>
   )
 }
