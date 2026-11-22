@@ -166,6 +166,8 @@ class Accounts(unittest.TestCase):
         self.assertEqual(registry.share_for("sharea", "second")["shareb"], "second")
         # In no set: it reads its main project's set.
         self.assertEqual(registry.share_for("sharelog", "second"), ok["sets"][1]["members"])
+        # …but its name is a member's only (the page's foot says it).
+        self.assertEqual((registry.share_name_for("sharelog", "main"), registry.share_name_for("sharelog", "second")), ("second", ""))
         self.assertTrue(c.delete("/api/share-sets", headers=admin).json()["stored"] is False)
         self.assertEqual(registry.share_for("sharelog", "main"), {"sharelog": "main", "sharejobs": "main"})
         # A set that keeps its name through "back to default" keeps its id (tokens and the group stay bound).

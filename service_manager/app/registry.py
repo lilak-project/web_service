@@ -313,3 +313,10 @@ def share_for(svc: str, proj: str) -> dict[str, str]:
         if main and (s.get("members") or {}).get(svc) == main:
             return dict(s["members"])
     return {}
+
+
+def share_name_for(svc: str, proj: str) -> str:
+    """The name of the set this project is a member of ('' when it is in none —
+    reading its main project's set does not make it one of that set)."""
+    sets, _ = share_sets()
+    return next((s.get("name") or "" for s in sets if (s.get("members") or {}).get(svc) == proj), "")

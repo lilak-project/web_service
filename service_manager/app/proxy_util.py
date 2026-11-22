@@ -203,7 +203,8 @@ async def stream_proxy(
             share = registry.share_for(service["name"], service["project"])
             links = {**registry.link_projects(), **share}
             if service["name"] in links:
-                service = {**service, "links": links, "share": share}
+                service = {**service, "links": links, "share": share,
+                           "shareName": registry.share_name_for(service["name"], service["project"])}
         body = inject_base(body, html_base, service)
         headers, set_cookies = _copy_headers(upstream, body_rewritten=True)
         resp = Response(content=body, status_code=upstream.status_code,
