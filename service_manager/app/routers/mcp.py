@@ -78,9 +78,11 @@ _SET = {"type": "string", "description": "A share set's name (list_services show
 SLIDES = (" A slide deck: slide 1 is the note's title and the first line under it; a line of just `---` or a "
           "`# heading` starts the next slide, and a slide too full for the page goes on to the next by itself. "
           "Markdown as usual (lists, `![[image]]`, $math$); keep each slide to a few lines. ratio: 4x3 (default), "
-          "16x9 or 1x1. A tex note cannot be slides.")
+          "16x9 or 1x1. A tex note cannot be slides. numbered: true numbers its headings (1, 1.1, …), false stops; "
+          "how it is shown, so a locked note takes it too.")
 _DECK = {"mode": {"type": "string", "enum": ["slide", "note"]},
-         "ratio": {"type": "string", "enum": ["4x3", "16x9", "1x1"]}}
+         "ratio": {"type": "string", "enum": ["4x3", "16x9", "1x1"]},
+         "numbered": {"type": "boolean"}}
 # How strong a job's evidence is (jobboard's Evidence); its state is a person's to raise, never an agent's.
 STRENGTH = ("measurement", "literature", "evaluated", "calculation", "assumption", "default")
 
@@ -173,6 +175,17 @@ TOOLS = [
                     "note (level doc). Marked as written through this token.",
      "inputSchema": _schema(["text"], id=_STR, path=_STR, address=_STR, text=_STR, n={"type": "integer"},
                             level={"type": "string", "enum": list(LEVELS)})},
+    {"name": "lock_note", "write": True,
+     "description": "Lock a note read-only: from then on nobody can change its body, title or to-dos; only comments "
+                    "(add_review, reply_review) can still be left. Unlocking is a person's, on the screen (whoever "
+                    "locked it, or a manager); unlock_note undoes it only for a note this token's owner locked. Use it e.g. "
+                    "to fix a report you have finished before a person reviews it. Marked as locked through this token. Returns id, locked_by, locked_via, locked_at.",
+     "inputSchema": _schema([], id=_STR, path=_STR, address=_STR)},
+    {"name": "unlock_note", "write": True,
+     "description": "Unlock a note lock_note (or this token's owner, on the screen) locked, to change it again. A note "
+                    "someone else locked stays locked, even with a manager's token: that is theirs to unlock, on the "
+                    "screen. Lock it again with lock_note when done. Returns id, readonly, locked_by.",
+     "inputSchema": _schema([], id=_STR, path=_STR, address=_STR)},
     {"name": "reply_review", "write": True,
      "description": "Answer a review comment (rid, its id from note_units), e.g. \"고침: ...\" after fixing what it "
                     "asked. Resolving it stays a person's, on the screen.",
@@ -328,6 +341,7 @@ class Grant(NamedTuple):
     who: str
     scope: str
     home: dict = {}          # {service: project} of the share set the token is bound to (scope set:NAME)
+    owner: str = ""          # the owner as note names a locker: e-mail, else username
 
 
 def _main(grant: Grant, svc: str) -> str:
@@ -381,6 +395,9 @@ def _ok(r: httpx.Response) -> dict:
         data = r.json()
     except ValueError:                           # the service's page, not its API
         raise ToolError(f"note 서비스 오류 ({r.status_code})")
+    if r.status_code == 423:                     # note's read-only lock: a person's, on the screen
+        raise ToolError("잠긴 노트입니다(읽기 전용). 본문·제목·할 일은 바꿀 수 없고 코멘트(add_review, reply_review)만 "
+                        "남길 수 있습니다. 잠금은 잠근 사람이나 관리자가 화면에서 풉니다.")
     if r.status_code >= 400:
         raise ToolError(str(data.get("detail") or f"note 서비스 오류 ({r.status_code})"))
     return data
@@ -499,6 +516,27 @@ async def _note_units(request, grant, args):
     return _ok(await _portal(request, grant, "note", "GET", f"{path}/units", proj, params={"level": level}))
 
 
+async def _lock_note(request, grant, args):
+    path, proj = _note_ref(request, args)
+    n = _ok(await _portal(request, grant, "note", "POST", f"{path}/lock", proj,
+                           json={"on": True, "via": grant.who or "mcp"}))
+    f = n.get("fields") or {}
+    return {"id": n.get("id"), "readonly": bool(f.get("readonly")), "locked_by": f.get("locked_by"),
+            "locked_via": f.get("locked_via"), "locked_at": f.get("locked_at")}
+
+
+async def _unlock_note(request, grant, args):
+    path, proj = _note_ref(request, args)
+    f = _ok(await _portal(request, grant, "note", "GET", path, proj)).get("fields") or {}
+    if not f.get("readonly"):
+        return {"id": args.get("id") or path.rsplit("/", 1)[-1], "readonly": False, "locked_by": None}
+    if not grant.owner or f.get("locked_by") != grant.owner:
+        raise ToolError(f"{f.get('locked_by') or '다른 사람'}이(가) 잠근 노트라 풀 수 없습니다. 잠근 사람이 화면에서 풉니다.")
+    n = _ok(await _portal(request, grant, "note", "POST", f"{path}/lock", proj, json={"on": False, "via": grant.who or "mcp"}))
+    nf = n.get("fields") or {}
+    return {"id": n.get("id"), "readonly": bool(nf.get("readonly")), "locked_by": nf.get("locked_by")}
+
+
 async def _add_review(request, grant, args):
     path, proj = _note_ref(request, args)
     level = args.get("level") or "sentence"
@@ -528,6 +566,12 @@ def _deck(args: dict, fields: dict) -> dict:
     if fields.get("format") == "tex" and args.get("mode") == "slide":
         raise ToolError("tex 노트는 슬라이드가 될 수 없습니다.")
     out = dict(fields)
+    if "numbered" in args:                       # as the screen does: true, or the key gone
+        if not isinstance(args["numbered"], bool):
+            raise ToolError("numbered 는 true 나 false 입니다.")
+        out.pop("numbered", None)
+        if args["numbered"]:
+            out["numbered"] = True
     if args.get("mode") == "note":
         out.pop("mode", None)
         out.pop("ratio", None)
@@ -539,7 +583,7 @@ def _deck(args: dict, fields: dict) -> dict:
 
 
 async def _add(request, grant, args):
-    fields = _deck(args, {}) if args.get("mode") else None
+    fields = _deck(args, {}) if args.get("mode") or "numbered" in args else None
     n = _ok(await _note(request, grant, "POST", "notes", json={"title": args["title"]}))
     # The service makes a note empty, then the body is saved like any edit.
     saved = await _note(request, grant, "PUT", _note_path(n),
@@ -585,10 +629,10 @@ async def _add_file(request, grant, args):
 
 
 async def _update(request, grant, args):
-    if not any(k in args for k in ("body", "title", "mode", "ratio")):
-        raise ToolError("body, title, mode 중 하나는 있어야 합니다.")
+    if not any(k in args for k in ("body", "title", "mode", "ratio", "numbered")):
+        raise ToolError("body, title, mode, numbered 중 하나는 있어야 합니다.")
     body = {"baseVersion": args["base_version"], **{k: args[k] for k in ("body", "title") if k in args}}
-    if "mode" in args or "ratio" in args:
+    if "mode" in args or "ratio" in args or "numbered" in args:
         # The other fields (a tex note's format, …) stay: they are read and sent back whole.
         cur = _ok(await _note(request, grant, "GET", _note_path(args)))
         body["fields"] = _deck(args, cur.get("fields") or {})
@@ -1564,7 +1608,7 @@ HANDLERS = {"tags": _tags, "find": _find, "related": _related, "my_tasks": _my_t
             "chat_rooms": _chat_rooms, "chat_read": _chat_read, "chat_send": _chat_send,
             "approve_job": _approve_job, "job_recipes": _job_recipes, "submit_job": _submit_job,
             "job_status": _job_status, "add_evaluation": _add_evaluation,
-            "note_units": _note_units, "list_issues": _list_issues, "reply_issue": _reply_issue, "add_review": _add_review, "reply_review": _reply_review, "guide": _guide}
+            "note_units": _note_units, "list_issues": _list_issues, "reply_issue": _reply_issue, "add_review": _add_review, "lock_note": _lock_note, "unlock_note": _unlock_note, "reply_review": _reply_review, "guide": _guide}
 PROPOSERS = {"propose_note": _propose_note, "propose_activity": _propose_activity, "propose_tags": _propose_tags}
 
 
@@ -1574,7 +1618,7 @@ def _authorize(token: str):
     try:
         found = mcp_tokens.owner_of(db, token)
         return Grant(portal_token(found[1]), found[0].can_write, found[0].name, found[0].scope,
-                     mcp_tokens.home(found[0].scope)) if found else None
+                     mcp_tokens.home(found[0].scope), found[1].email or found[1].username) if found else None
     finally:
         db.close()
 

@@ -55,6 +55,10 @@ class Gates(unittest.TestCase):
                 return httpx.Response(200, json={"id": "busy", "title": "b", "fields": {}, "version": "1", "body": "old\n\n"})
             if path == "notes/busy" and sum(c[:2] == ("PUT", "notes/busy") for c in cls.calls) == 1:
                 return httpx.Response(409, json={"detail": "moved on", "current": {}})
+            if path == "notes/locked" and method == "PUT":
+                return httpx.Response(423, json={"detail": "읽기 전용 노트입니다"})
+            if path == "notes/locked":
+                return httpx.Response(200, json={"id": "locked", "title": "l", "fields": {"readonly": True}, "version": "1", "body": "x"})
             if path == "notes/gone":
                 return httpx.Response(404, json={"detail": "그 노트가 없습니다."})
             if path == "notes/taken":
@@ -553,6 +557,24 @@ class Gates(unittest.TestCase):
             self.assertTrue(call(self.issue(write=False), "add_review", id="r", n=1, text="x")["isError"])
             self.assertNotIn("resolve_review", [t["name"] for t in mcp.TOOLS])
             self.assertEqual(asked, [])
+            self.assertTrue(call(self.issue(write=False), "lock_note", id="r")["isError"])
+            call(tok, "lock_note", id="r")
+            self.assertEqual(asked[-1][1:3] + (asked[-1][5],), ("POST", "notes/r/lock", {"on": True, "via": "t"}))
+            # unlock: only what the token's owner locked (the note itself lets a manager unlock anything)
+            locked = {"readonly": True, "locked_by": "someone@x.org"}
+            async def fake_locked(request, grant, svc, method, path, proj="", **kw):
+                asked.append((svc, method, path, proj, kw.get("params"), kw.get("json")))
+                if method == "GET":
+                    return httpx.Response(200, json={"id": "r", "title": "t", "version": "1", "body": "b", "fields": dict(locked)})
+                return httpx.Response(200, json={"id": "r", "fields": {}})
+            mcp._portal = fake_locked
+            r = call(tok, "unlock_note", id="r")
+            self.assertTrue(r["isError"])
+            self.assertIn("someone@x.org", r["content"][0]["text"])
+            self.assertNotEqual(asked[-1][1], "POST")
+            locked["locked_by"] = self.user.email or self.user.username
+            r = json.loads(call(tok, "unlock_note", id="r")["content"][0]["text"])
+            self.assertEqual((r["readonly"], asked[-1][1:3], asked[-1][5]), (False, ("POST", "notes/r/lock"), {"on": False, "via": "t"}))
         finally:
             mcp._portal = real
 
@@ -574,6 +596,14 @@ class Gates(unittest.TestCase):
         from app import tidy
         tidy._remember({"tidy-a", "mcp-b"})
         self.assertEqual(tidy._asked(), {"tidy-a"})                                # a no outlives the inbox's 10 days
+
+    def test_a_locked_note_says_so(self):
+        tok = self.issue()
+        for name, args in (("update_note", {"id": "locked", "base_version": "1", "body": "y"}),
+                           ("append_note", {"id": "locked", "text": "y"})):
+            r = call(tok, name, **args)
+            self.assertTrue(r["isError"])
+            self.assertIn("잠긴 노트", r["content"][0]["text"])
 
     def test_reports_as_on_the_issues_screen(self):
         from app import security
@@ -886,6 +916,15 @@ class Gates(unittest.TestCase):
         self.assertEqual(self.calls[-1][2], {"baseVersion": "1", "fields": {"mode": "slide"}})
         self.assertTrue(call(tok, "update_note", id="paper", base_version="1", mode="slide")["isError"])   # tex
         self.assertTrue(call(tok, "add_note", title="t", body="b", mode="slide", ratio="3x2")["isError"])
+        # heading numbers: a view field like mode, so no body has to go with it
+        self.calls.clear()
+        self.assertFalse(call(tok, "update_note", id="plain", base_version="1", numbered=True)["isError"])
+        self.assertEqual(self.calls[-1][2], {"baseVersion": "1", "fields": {"numbered": True}})
+        self.assertFalse(call(tok, "update_note", id="plain", base_version="1", numbered=False)["isError"])
+        self.assertNotIn("numbered", self.calls[-1][2]["fields"])
+        self.assertTrue(call(tok, "update_note", id="plain", base_version="1", numbered="yes")["isError"])
+        self.assertFalse(call(tok, "add_note", title="t", body="b", numbered=True)["isError"])
+        self.assertEqual(self.calls[-1][2]["fields"], {"numbered": True})
 
     def test_a_token_bound_to_a_set_goes_to_its_projects(self):
         sets = [{"name": "jobboard", "members": {"note": "notes-job", "jobboard": "jobboard"}}]
