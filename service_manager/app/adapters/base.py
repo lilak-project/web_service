@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import pathlib
 import socket
+import subprocess
 import threading
 import time
 import urllib.error
@@ -126,7 +127,28 @@ def _pid_alive(pid: int) -> bool:
     return False
 
 
-def _not_the_service(pid: int, port: int) -> bool:
+def _started_after(pid: int, since: float) -> bool:
+    """True when process `pid` began after `since` (a .pid file's mtime): the
+    process we spawned existed before we wrote its PID, so a later one only
+    shares the number. This is the check that works without procfs — on macOS
+    a reboot leaves `.pid` files whose numbers system processes then take
+    (seen: Metal's compiler service on an activity's PID), and the service was
+    never started again because its PID "was alive"."""
+    try:
+        out = subprocess.run(["ps", "-o", "etime=", "-p", str(pid)], capture_output=True, text=True, timeout=2).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if not out:
+        return False
+    days, _, clock = out.rpartition("-")
+    secs = 0
+    for part in clock.split(":"):
+        secs = secs * 60 + int(part or 0)
+    secs += int(days or 0) * 86400
+    return time.time() - secs > since + 5
+
+
+def _not_the_service(pid: int, port: int, since: Optional[float] = None) -> bool:
     """True when a LIVE recorded PID provably is not the service on `port`.
 
     `.pid` files outlive a container: after `docker compose up -d`/`restart` the
@@ -137,15 +159,17 @@ def _not_the_service(pid: int, port: int) -> bool:
     Both spawn paths export PORTAL_SERVICE_PORT=<port> to the child, so a process
     whose environment lacks it for this port is someone else. That works for any
     start command (a manifest's cmd is arbitrary, so matching the command line
-    could not). No procfs (macOS) or an unreadable environ → trust the PID;
-    the portal-itself check still applies there.
+    could not). No procfs (macOS) or an unreadable environ → a process that
+    started after the `.pid` was written (`since`) is someone else's; the
+    portal-itself check still applies there.
     """
     if pid in (os.getpid(), os.getppid()):
         return True
     try:
         env = pathlib.Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
     except OSError:
-        return False
+        # No procfs (macOS): a process younger than the `.pid` is not the one written there.
+        return since is not None and _started_after(pid, since)
     return f"PORTAL_SERVICE_PORT={port}".encode() not in env
 
 
@@ -203,7 +227,7 @@ def read_running_port(port_file: Path) -> Optional[int]:
     if pid_file.exists():
         try:
             pid = int(pid_file.read_text().strip())
-            if not _pid_alive(pid) or _not_the_service(pid, port):
+            if not _pid_alive(pid) or _not_the_service(pid, port, pid_file.stat().st_mtime):
                 _clear()
                 return None
         except Exception:

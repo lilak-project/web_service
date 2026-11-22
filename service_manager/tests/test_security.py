@@ -364,6 +364,24 @@ class Runtime(unittest.TestCase):
         finally:
             live.kill(); live.wait()
 
+    def test_pid_taken_after_a_reboot_is_not_running(self):
+        # A reboot keeps `.pid` files whose numbers the system then hands to its
+        # own processes (macOS: no procfs to read their environment). A process
+        # that began after the `.pid` was written cannot be the one written there.
+        d = TMP / "rebootpid"
+        d.mkdir(exist_ok=True)
+        pf = d / ".port"
+        other = subprocess.Popen(["sleep", "5"])
+        try:
+            pf.write_text("8258")
+            base.write_pid(pf, other.pid)
+            old = time.time() - 3600
+            os.utime(d / ".pid", (old, old))               # written an hour before it started
+            self.assertIsNone(base.read_running_port(pf))
+            self.assertFalse(pf.exists() or (d / ".pid").exists())
+        finally:
+            other.kill(); other.wait()
+
     def test_restart_running_brings_services_back(self):
         from app.adapters import get_adapter
         from app.adapters.managed import _port_file
