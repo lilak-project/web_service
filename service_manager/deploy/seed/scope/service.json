@@ -23,7 +23,8 @@
       {
         "file": "browse-path",
         "ko": "Browse 폴더 (한 줄에 하나, 뷰어가 읽을 수 있는 범위)",
-        "en": "Browse folders (one per line: what the viewer may read)"
+        "en": "Browse folders (one per line: what the viewer may read)",
+        "placeholder": "/data/acquisition/run\n/home/shared/scope"
       }
     ]
   },
