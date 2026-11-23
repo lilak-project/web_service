@@ -218,7 +218,27 @@ def _registered(entry: dict) -> bool:
     return all(registry.manifest_path(n).exists() for n, _ in _members(entry))
 
 
-def _new_capabilities(job_id: str, name: str, seed: Path) -> None:
+def _seed(name: str, entry: dict) -> Path:
+    """The manifest a service is installed from: a bundle's own `seed/<name>/`, else the
+    portal's `deploy/seed/<name>/`."""
+    seed = SERVICES_ROOT / entry["dir"] / "seed" / name / "service.json"
+    return seed if seed.exists() else SEED_ROOT / name / "service.json"
+
+
+def seed_capabilities() -> None:
+    """Every installed catalog service gains the capabilities its seed has added since it
+    was installed (scope's `project_files`): a `git pull` updates the seeds, not the
+    manifests copied from them. Run at portal start and after a service update."""
+    for e in _catalog()["services"]:
+        for n, _ in _members(e):
+            if registry.manifest_path(n).exists():
+                try:
+                    _new_capabilities(None, n, _seed(n, e))
+                except Exception as err:          # one odd manifest does not stop the rest
+                    print(f"[store] seed capabilities {n}: {err}", flush=True)
+
+
+def _new_capabilities(job_id: Optional[str], name: str, seed: Path) -> None:
     """A capability the seed declares and the registered manifest has never heard of is added
     (e.g. `delegates`, asked for by /api/delegate); one it already has, an admin's or not, stays —
     except that a list gains the seed's new entries."""
@@ -231,19 +251,18 @@ def _new_capabilities(job_id: str, name: str, seed: Path) -> None:
     new = {k: v for k, v in want.items() if k not in caps}
     # a list it has (e.g. `delegates`) gains the entries the seed added since; none are taken away
     new |= {k: caps[k] + [x for x in v if x not in caps[k]] for k, v in want.items()
-            if isinstance(v, list) and isinstance(caps.get(k), list) and set(v) - set(caps[k])}
+            if isinstance(v, list) and isinstance(caps.get(k), list) and any(x not in caps[k] for x in v)}
     if new:
         registry.write_manifest(name, {**m, "capabilities": {**caps, **new}})
-        _log(job_id, f"· '{name}' 매니페스트에 더함: {', '.join(new)}")
+        msg = f"· '{name}' 매니페스트에 더함: {', '.join(new)}"
+        _log(job_id, msg) if job_id else print(f"[store] {msg}", flush=True)
 
 
 def _register(job_id: str, name: str, entry: dict) -> bool:
     """Write the manifest (seed re-rooted at the local stack) + the DB row. A bundle
     carries its seeds (`seed/<name>/`); a service already registered keeps its own
     manifest (it may hold an admin's edits), and a missing entry project is made."""
-    seed = SERVICES_ROOT / entry["dir"] / "seed" / name / "service.json"
-    if not seed.exists():
-        seed = SEED_ROOT / name / "service.json"
+    seed = _seed(name, entry)
     if entry.get("bundle") and registry.manifest_path(name).exists():
         _new_capabilities(job_id, name, seed)
         _log(job_id, f"· '{name}' 이미 등록됨 — 그대로 둡니다")
@@ -410,6 +429,9 @@ def _update_one(job_id: str, entry: dict) -> None:
         return _set(job_id, status="error", error="백엔드 의존성 설치 실패")
     if not _cargo_build(job_id, repo_dir):
         return _set(job_id, status="error", error="Rust 빌드 실패")
+    for n, _ in _members(entry):
+        if registry.manifest_path(n).exists():
+            _new_capabilities(job_id, n, _seed(n, entry))
 
 
 def _run_build_portal(job_id: str, pull: bool) -> None:

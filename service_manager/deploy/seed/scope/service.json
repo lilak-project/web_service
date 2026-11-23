@@ -31,6 +31,6 @@
   "icon": "activity",
   "color": "#0c8599",
   "label": "Scope",
-  "live": true,
+  "live": false,
   "look": "neon"
 }

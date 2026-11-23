@@ -148,6 +148,12 @@ async def _security_preflight():
     # Bring up the services that asked to be running. Spawning them HERE is what
     # puts them in the portal's cgroup — and so under its memory ceiling — instead
     # of wherever whoever opened them first happened to be.
+    # Manifests gain what their seeds added since install (a pull updates seeds only).
+    try:
+        from .routers import store
+        store.seed_capabilities()
+    except Exception as e:                       # never blocks startup
+        print(f"[store] seed capabilities: {e}", flush=True)
     autostart.run()
 
     if warns:
