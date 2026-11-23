@@ -188,7 +188,22 @@ def _cargo_build(job_id: str, repo_dir: Path) -> bool:
     if not cargo:
         _log(job_id, "! cargo를 찾을 수 없습니다 (Rust 설치 필요)")
         return False
-    return _stream(job_id, [cargo, "build", "--release", "--locked"], cwd=repo_dir) == 0
+    if _stream(job_id, [cargo, "build", "--release", "--locked"], cwd=repo_dir) != 0:
+        return False
+    # Opening ROOT files needs a small C++ reader linked to LILAK and ROOT. Optional:
+    # without root-config or LILAK_PATH the viewer still reads GET files.
+    import os
+    reader = repo_dir / "build-root-reader.sh"
+    root_config = _tool("root-config")
+    lilak = os.environ.get("LILAK_PATH", "")
+    if reader.exists():
+        if root_config and lilak:
+            env = {"PATH": os.path.dirname(root_config) + os.pathsep + os.environ.get("PATH", "")}
+            if _stream(job_id, ["bash", str(reader)], cwd=repo_dir, env_extra=env) != 0:
+                _log(job_id, "⚠ ROOT 리더 빌드 실패 — GET 파일은 열리고 ROOT 파일만 안 열립니다")
+        else:
+            _log(job_id, "· ROOT 리더 건너뜀 (root-config 또는 LILAK_PATH 없음) — ROOT 파일은 못 엽니다")
+    return True
 
 
 def _members(entry: dict) -> list[tuple[str, Path]]:
