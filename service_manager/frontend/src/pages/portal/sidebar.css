@@ -655,6 +655,13 @@
 }
 .pl-card.off { opacity: .5; }
 .pl-group.drop { background: var(--dock-info-bg); }
+/* A share set's band refuses a dragged card: tinted, with an X over its title. */
+.pl-group.nodrop { background: var(--dock-danger-bg); position: relative; }
+.pl-group.nodrop::after {
+  content: "✕"; position: absolute; top: 4px; right: 14px;
+  font-size: var(--fs-plate); font-weight: 700; color: var(--dock-danger-text);
+  pointer-events: none;
+}
 .pl-gempty {
   margin: 2px 0 2px;
   padding: 10px; text-align: center;

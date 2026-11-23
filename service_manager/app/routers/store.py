@@ -123,6 +123,28 @@ def _prebuilt(repo_dir: Path) -> bool:
     return fe is None or (fe / "dist").is_dir()
 
 
+NEON_UI_PATH = SERVICES_ROOT / "neon_ui"
+
+
+def _uses_neon(fe: Path) -> bool:
+    """A frontend that source-aliases neon_ui (@neon) names it in its vite config."""
+    return any("neon_ui" in f.read_text(encoding="utf-8", errors="ignore")
+               for f in fe.glob("vite.config.*"))
+
+
+def _ensure_neon(job_id: str, fe: Path, npm: str) -> bool:
+    """neon_ui is source-aliased like the kit, so its own imports (react, uplot)
+    resolve against ITS node_modules. A host that deletes node_modules after a build
+    (to save space) must get them back before a NEON service builds."""
+    if not _uses_neon(fe) or (NEON_UI_PATH / "node_modules").exists():
+        return True
+    if not (NEON_UI_PATH / "package.json").exists():
+        _log(job_id, f"! neon_ui가 없습니다 ({NEON_UI_PATH})")
+        return False
+    _log(job_id, "· neon_ui 의존성 설치")
+    return _stream(job_id, [npm, "ci", "--no-audit", "--no-fund"], cwd=NEON_UI_PATH) == 0
+
+
 def _build_frontend(job_id: str, repo_dir: Path, needs_kit: bool) -> bool:
     """npm install + build the first frontend found (frontend/ then repo root).
     Returns False only on a FAILED build; no frontend at all is fine (backend-only)."""
@@ -135,6 +157,8 @@ def _build_frontend(job_id: str, repo_dir: Path, needs_kit: bool) -> bool:
         _log(job_id, "! npm을 찾을 수 없습니다 (Node 설치 필요)")
         return False
     env = {"LILAK_UI_PATH": str(LILAK_UI_PATH)} if needs_kit else {}
+    if not _ensure_neon(job_id, fe, npm):
+        return False
     if not (fe / "node_modules").exists():
         if _stream(job_id, [npm, "install", "--no-audit", "--no-fund"], cwd=fe, env_extra=env) != 0:
             return False

@@ -998,11 +998,16 @@ export default function SidebarPortal({
 
   // ── manage mode: drag to arrange ────────────────────────────────────────
   const gidOf = (key) => (groups || []).find((g) => (g.members || []).includes(key))?.id ?? null
+  // A share set's group follows its set: nothing goes in or out by dragging. Said
+  // while dragging (an X on the band, a no-drop cursor), not after the drop.
+  const setLocked = (gid) => !!(gid && (groups || []).find((g) => g.id === gid)?.share_set)
+  const refused = (gid) => setLocked(gid) || setLocked(gidOf(drag))
+  const noDrop = (e, gid) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'none'; moveDrop({ no: gid ?? NOGROUP_ID }) }
   const onDrop = async () => {
     const key = drag
     const at = dropAt
     setDrag(null); setDropAt(null)
-    if (!key || !at) return
+    if (!key || !at || at.no) return
     setParked((p) => p.filter((k) => k !== key))
     if (at.gid === SYSTEM_ID) {
       const present = SYSTEM_KEYS.filter((k) => (cards || []).some((c) => cardKey(c) === k))
@@ -1046,6 +1051,7 @@ export default function SidebarPortal({
     onDragEnd: () => { setDrag(null); setDropAt(null) },
     onDragOver: (e) => {
       if (!drag || drag === key) return
+      if (refused(gidOf(key))) return noDrop(e, gidOf(key))
       e.preventDefault(); e.stopPropagation()
       const r = e.currentTarget.getBoundingClientRect()
       moveDrop({ key, after: e.clientY > r.top + r.height / 2 })
@@ -1053,7 +1059,11 @@ export default function SidebarPortal({
     onDrop: (e) => { if (!drag) return; e.preventDefault(); e.stopPropagation(); onDrop() },
   })
   const bandProps = (gid) => (!manage ? {} : {
-    onDragOver: (e) => { if (!drag) return; e.preventDefault(); moveDrop({ gid }) },
+    onDragOver: (e) => {
+      if (!drag) return
+      if (refused(gid)) return noDrop(e, gid)
+      e.preventDefault(); moveDrop({ gid })
+    },
     onDrop: (e) => { e.preventDefault(); onDrop() },
   })
   // Reordering moves the OTHER cards, and a card that teleports to its new row
@@ -1661,6 +1671,7 @@ export default function SidebarPortal({
             <div key={g.id} className={`pl-group${g.fixed || g.loose ? ' auto' : ''}`
                 + `${sel?.svc === `#g:${g.id}` && view === 'manage' ? ' on' : ''}`
                 + `${dropAt?.gid === (g.fixed ? SYSTEM_ID : g.loose ? null : g.id) ? ' drop' : ''}`
+                + `${dropAt?.no === g.id ? ' nodrop' : ''}`
                 + `${dropAt?.band === gkey(g) ? (dropAt.after ? ' gafter' : ' gbefore') : ''}`
                 + `${g.hidden ? ' off' : ''}${dragG === gkey(g) ? ' dragging' : ''}`}
               {...bandDrop(g)}>
