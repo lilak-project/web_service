@@ -7,6 +7,7 @@ import { notify } from './settingsMsg'
 import LogBox from './LogBox'
 import SyncPanel from './SyncPanel'
 import AdminEditor from './AdminEditor'
+import ProjectFiles from './ProjectFiles'
 import { downloadFrom } from './download'
 
 /**
@@ -37,6 +38,9 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   // The project whose log is open under its row, "" = none. One at a time:
   // two logs open at once is two screens of text nobody reads together.
   const [logOf, setLogOf] = useState('')
+  // The service's per-project settings files (manifest project_files) and the project whose are open.
+  const [pfiles, setPfiles] = useState([])
+  const [filesOf, setFilesOf] = useState('')
   // The project whose own sync link is open under its row, and the projects
   // that have one (each travels by its own partner and token, not the service's).
   const [syncOf, setSyncOf] = useState('')
@@ -44,6 +48,9 @@ export default function ServiceProjects({ service, canManage, manage = false, on
   const loadLinked = () => launcher.get(`/admin/services/${svc}/sync`)
     .then((r) => setLinked(r.data.own_links || [])).catch(() => {})
   useEffect(() => { if (canManage && manage) loadLinked() }, [canManage, manage])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (canManage && manage) launcher.get(`/services/${svc}/project-files`).then((r) => setPfiles(r.data || [])).catch(() => {})
+  }, [canManage, manage, svc])
   // Which project the service's own card opens, "" = none (the list is shown).
   // ONE per service — the server keeps a single `entry_project`, so this
   // follows the service rather than remembering a press: a row that was the
@@ -257,6 +264,13 @@ export default function ServiceProjects({ service, canManage, manage = false, on
                   Sync
                 </Button>
               )}
+              {pfiles.length > 0 && (
+                <Button variant={filesOf === p.name ? 'primary' : 'secondary'} style={slot(W.btn)}
+                  title={t('p_projfile_hint')}
+                  onClick={() => setFilesOf((x) => (x === p.name ? '' : p.name))}>
+                  {t('p_projfile')}
+                </Button>
+              )}
               {(
                 <Button variant={logOf === p.name ? 'primary' : 'secondary'} style={slot(W.btn)}
                   title={t('portal_proj_log_hint')}
@@ -285,6 +299,7 @@ export default function ServiceProjects({ service, canManage, manage = false, on
                 <Button variant="secondary" onClick={() => setRepAsk(null)}>{t('portal_proj_close')}</Button>
               </Row>
             )}
+            {filesOf === p.name && <ProjectFiles svc={svc} proj={p.name} files={pfiles} />}
             {logOf === p.name && <LogBox url={`/services/${svc}/projects/${p.name}/log`} />}
             {syncOf === p.name && (
               <div style={{ padding: '0 14px 12px' }}>

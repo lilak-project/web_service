@@ -18,7 +18,14 @@
   },
   "capabilities": {
     "multi_project": true,
-    "import_export": false
+    "import_export": false,
+    "project_files": [
+      {
+        "file": "browse-path",
+        "ko": "Browse 폴더 (한 줄에 하나, 뷰어가 읽을 수 있는 범위)",
+        "en": "Browse folders (one per line: what the viewer may read)"
+      }
+    ]
   },
   "icon": "activity",
   "color": "#0c8599",

@@ -9,6 +9,7 @@ through `/pp/{svc}/{proj}/…` (the per-project reverse proxy). A service must b
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
@@ -150,6 +151,63 @@ def project_log(svc: str, proj: str, lines: int = 400,
     except OSError as e:
         raise HTTPException(500, f"로그를 읽을 수 없습니다: {e}")
     return {"service": svc, "project": proj, "path": str(logp), "text": text}
+
+
+def _project_files(svc: str) -> list[dict]:
+    """The settings files a service lets a manager edit per project, from its
+    manifest: capabilities.project_files = [{file, ko, en}] (e.g. scope's
+    browse-path, the folders its viewer may read)."""
+    caps = (registry.read_manifest(svc).get("capabilities") or {})
+    # A plain file name in the project folder: never a path.
+    return [f for f in caps.get("project_files") or []
+            if isinstance(f, dict) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", str(f.get("file", "")))]
+
+
+def _project_file(svc: str, proj: str, name: str) -> Path:
+    if name not in {f["file"] for f in _project_files(svc)}:
+        raise HTTPException(404, f"'{name}' is not a settings file of '{svc}'")
+    if proj not in {p["name"] for p in pr.list_projects(svc)}:
+        raise HTTPException(404, f"'{proj}' 없음")
+    return pr.project_dir(svc, proj) / name
+
+
+@router.get("/api/services/{svc}/project-files")
+def project_files(svc: str, _: models.User = Depends(require_portal_admin)):
+    _require_multi(svc)
+    return _project_files(svc)
+
+
+class ProjectFileText(BaseModel):
+    text: str
+
+
+@router.get("/api/services/{svc}/projects/{proj}/files/{name}")
+def read_project_file(svc: str, proj: str, name: str, _: models.User = Depends(require_portal_admin)):
+    """Manager-only: these files set what a service may reach on the host (scope's
+    browse-path is the edge of what its viewer can read)."""
+    _require_multi(svc)
+    path = _project_file(svc, proj, name)
+    return {"file": name, "text": path.read_text(encoding="utf-8") if path.is_file() else ""}
+
+
+@router.put("/api/services/{svc}/projects/{proj}/files/{name}")
+def write_project_file(svc: str, proj: str, name: str, body: ProjectFileText,
+                       _: models.User = Depends(require_portal_admin)):
+    """Save a project's settings file, then restart the project if it was running
+    (services read these at start); a stopped one picks it up on its next start."""
+    _require_multi(svc)
+    if len(body.text) > 64_000:
+        raise HTTPException(413, "too long")
+    path = _project_file(svc, proj, name)
+    path.write_text(body.text.rstrip("\n") + "\n" if body.text.strip() else "", encoding="utf-8")
+    was = pr.stop_project(svc, proj)
+    restarted = bool(was.get("stopped") or was.get("was_running"))
+    if restarted:
+        try:
+            pr.start_project(svc, proj)
+        except Exception as e:                                    # the file is saved either way
+            raise HTTPException(500, f"saved, but the restart failed: {e}")
+    return {"file": name, "restarted": restarted}
 
 
 class EntryProject(BaseModel):
