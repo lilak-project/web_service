@@ -123,3 +123,78 @@ def restart_running(_: models.User = Depends(require_portal_admin)):
             get_adapter(manifest).stop(name, manifest)
     threading.Thread(target=lambda: [_start(n, p) for n, p in targets], daemon=True).start()
     return {"restarting": [f"{n}/{p}" if p else n for n, p in targets]}
+
+
+# ── SSH tunnels (Mac portal only) ────────────────────────────────────────────
+# The list is ~/.ssh/config itself: every concrete Host with a LocalForward.
+# ponytail: Include/Match files are not followed; add when a tunnel lives in one.
+import os, re, signal, subprocess, sys
+from pathlib import Path
+
+
+def _tunnels() -> list[dict]:
+    if sys.platform != "darwin":                # a tunnel opens where the browser is
+        return []
+    cfg = Path.home() / ".ssh" / "config"
+    if not cfg.exists():
+        return []
+    out, cur = [], None
+    for line in cfg.read_text(errors="replace").splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) < 2 or parts[0].startswith("#"):
+            continue
+        key, val = parts[0].lower(), parts[1].strip()
+        if key in ("host", "match"):
+            name = val.split()[0]
+            cur = {"name": name, "hostname": "", "forwards": []} if key == "host" and not re.search(r"[*?!]", name) else None
+            if cur:
+                out.append(cur)
+        elif cur and key == "hostname":
+            cur["hostname"] = val
+        elif cur and key == "localforward":
+            m = re.match(r"(?:\S*:)?(\d+)\s+(\S+)", val)
+            if m:
+                cur["forwards"].append({"port": int(m.group(1)), "to": m.group(2)})
+    return [dict(t, port=t["forwards"][0]["port"], to=t["forwards"][0]["to"],
+                 up=adapter_base.port_alive(t["forwards"][0]["port"]))
+            for t in out if t["forwards"]]
+
+
+def _tunnel(name: str) -> dict:
+    t = next((t for t in _tunnels() if t["name"] == name), None)
+    if not t:
+        raise HTTPException(404, "no such tunnel in ~/.ssh/config")
+    return t
+
+
+@router.get("/tunnels")
+def list_tunnels(_: models.User = Depends(require_portal_admin)):
+    return _tunnels()
+
+
+@router.post("/tunnels/{name}/up")
+def tunnel_up(name: str, _: models.User = Depends(require_portal_admin)):
+    t = _tunnel(name)
+    if not t["up"]:
+        try:
+            r = subprocess.run(["ssh", "-fN", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+                                "-o", "ExitOnForwardFailure=yes", name],
+                               capture_output=True, text=True, timeout=25, stdin=subprocess.DEVNULL)
+        except subprocess.TimeoutExpired:
+            raise HTTPException(504, "ssh timed out")
+        if r.returncode != 0:
+            err = [l for l in r.stderr.splitlines() if re.search(r"ssh:|denied|refused|timed out|bind|error", l, re.I)]
+            raise HTTPException(502, (err[-1] if err else f"ssh exited {r.returncode}")[:300])
+    return _tunnel(name)
+
+
+@router.post("/tunnels/{name}/down")
+def tunnel_down(name: str, _: models.User = Depends(require_portal_admin)):
+    t = _tunnel(name)
+    pids = subprocess.run(["lsof", "-nP", "-t", f"-iTCP:{t['port']}", "-sTCP:LISTEN"],
+                          capture_output=True, text=True).stdout.split()
+    for pid in pids:                            # only the ssh holding the port, never anything else
+        comm = subprocess.run(["ps", "-p", pid, "-o", "comm="], capture_output=True, text=True).stdout.strip()
+        if comm.endswith("ssh"):
+            os.kill(int(pid), signal.SIGTERM)
+    return _tunnel(name)

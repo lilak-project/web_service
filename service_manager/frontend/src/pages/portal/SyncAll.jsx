@@ -91,6 +91,7 @@ export default function SyncAll() {
 
   return (
     <>
+      <Tunnels />
       <Panel title={tr('p_sa_requests')} hint={asked.length ? String(asked.length) : ''}>
         {asked.length === 0 && <Field label="">{<span style={fieldMuted}>{tr('p_sa_no_requests')}</span>}</Field>}
         {asked.map((g) => (
@@ -185,6 +186,38 @@ function History() {
           {r.pin && <span style={fieldMuted}>{tr('p_pin')} <b style={mono}>{r.pin}</b></span>}
           {r.error && <span style={{ color: 'var(--dock-danger-text)' }}>{r.error}</span>}
         </Field>))}
+    </Panel>
+  )
+}
+
+// SSH tunnels from this Mac (~/.ssh/config Hosts with a LocalForward). The
+// server answers an empty list anywhere but a Mac, so the panel stays away there.
+function Tunnels() {
+  const [list, setList] = useState([])
+  const [busy, setBusy] = useState('')
+  const load = () => launcher.get('/admin/system/tunnels').then((r) => setList(r.data)).catch(() => {})
+  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t) }, [])
+  async function act(name, what) {
+    setBusy(name)
+    try { await launcher.post(`/admin/system/tunnels/${encodeURIComponent(name)}/${what}`) }
+    catch (e) { notify(e?.response?.data?.detail || String(e), 'bad') }
+    setBusy(''); load()
+  }
+  if (!list.length) return null
+  return (
+    <Panel title={tr('p_tunnels')} right={<Button variant="secondary" onClick={load}>{tr('p_refresh')}</Button>}>
+      {list.map((t) => (
+        <Field key={t.name} label={t.name}>
+          {t.up ? <Pill tone="ok">{tr('p_tunnel_up')}</Pill> : <Pill>{tr('p_tunnel_down')}</Pill>}
+          <span style={{ ...fieldMuted, ...mono, flex: 1 }}>localhost:{t.port} → {t.hostname || t.name} {t.to}</span>
+          {t.up && <Button variant="secondary" onClick={() => window.open(`http://localhost:${t.port}`, '_blank')}>{tr('p_tunnel_open')}</Button>}
+          <Button variant={t.up ? 'secondary' : 'primary'} style={{ minWidth: 90 }} disabled={busy === t.name}
+            onClick={() => act(t.name, t.up ? 'down' : 'up')}>
+            {busy === t.name ? '…' : tr(t.up ? 'p_tunnel_disconnect' : 'p_tunnel_connect')}
+          </Button>
+        </Field>
+      ))}
+      <Field label="">{<span style={fieldMuted}>{tr('p_tunnel_hint')}</span>}</Field>
     </Panel>
   )
 }
