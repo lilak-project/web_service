@@ -413,3 +413,12 @@
    reads as somewhere else, and an arrow in the text that says so too. */
 .set-ext { color: var(--dock-info-text); text-decoration: none; overflow-wrap: anywhere; }
 .set-ext:hover { text-decoration: underline; text-underline-offset: 2px; }
+/* A project's settings file, typed in place under its row (ProjectFiles). */
+/* Laid out like the admins box (pl-projadm): a title line, then its list, under the elbow. */
+.pl-files { padding: 4px 12px 12px 32px; }
+.pl-files > div + div { margin-top: 10px; }
+.pl-filebar { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.pl-filelabel { font-size: var(--fs-body); color: var(--dock-text-primary); }
+.pl-filebar .pl-logpath { flex: 1; }
+/* Its entries, one row each, then the box that adds one: a RACK list in a white card. */
+.pl-filelist { background: var(--dock-surface); border: 1px solid var(--dock-border-strong); }
