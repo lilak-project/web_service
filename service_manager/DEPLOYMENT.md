@@ -93,6 +93,7 @@ their insecure dev state (see `app/main.py` → `_security_preflight`).
 | `EMAIL_VERIFY_DEV_ECHO` | on (local only) | **`0`** / auto-off | Stops codes & reset passwords leaking in API responses / 코드·비번 응답 노출 차단 |
 | `PORTAL_ALLOWED_ORIGINS` | `*` | `https://portal.example.org` | Lock CORS to your domain / CORS 도메인 제한 |
 | `PORTAL_BASE_URL` | `http://localhost:8025` | `https://…` | Serve over TLS; enables `Secure` cookie / TLS 및 Secure 쿠키 |
+| `PORTAL_AUTO_ADMIN` | off | **off** | `1` = a browser on the portal's own machine (loopback, no proxy) opens as `admin` with no password — a personal laptop only / 이 컴퓨터에서 열면 비밀번호 없이 admin, 개인 노트북 전용 |
 | `PORTAL_PASSWORD_MIN_LENGTH` | `8` | `8`+ | Minimum length on set / 설정 시 최소 길이 |
 | `PORTAL_REGISTER_TOKEN` | disabled | set only if using self-registration / 자가등록 쓸 때만 | Service self-registration bearer |
 | `RESEND_API_KEY` + `RESEND_FROM_EMAIL` | unset | **set** | Real email delivery (§5) / 실제 메일 발송 |

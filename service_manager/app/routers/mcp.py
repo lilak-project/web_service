@@ -138,6 +138,16 @@ TOOLS = [
      "description": "How a job is doing in jobrun: its state, error, the end of its log and its output files. "
                     "id: full id, jobrun id or 6-hex short id." + DATA,
      "inputSchema": _schema(["id"], id=_STR)},
+    {"name": "create_service", "write": True,
+     "description": "Manager only. Scaffold an empty lilak_ui (DOCK) service and register it with the portal "
+                    "(what the old Create service screen did). name: lowercase [a-z0-9_]; tabs: [{id, label, icon?, "
+                    "kind?}] ('community' = chat tab); settings: add a settings tab. Answers {job_id}; follow it with "
+                    "service_job until status is done or error.",
+     "inputSchema": _schema(["name"], name=_STR, service=_STR, brand=_STR, icon=_STR, color=_STR,
+                            tabs={"type": "array", "items": {"type": "object"}}, settings={"type": "boolean"})},
+    {"name": "service_job", "write": False,
+     "description": "Manager only. Progress of a create_service job: {status, error, name, log}.",
+     "inputSchema": _schema(["job_id"], job_id=_STR)},
     {"name": "list_services", "write": False,
      "description": "The services these tools read, each with its main project and every project you may enter.",
      "inputSchema": _schema()},
@@ -496,6 +506,29 @@ async def _list_issues(request, grant, args):
         for k in ("user_shape", "user_color"):
             x.pop(k, None)
     return {"reports": rows[:max(1, min(int(args.get("limit") or 50), 200))], "count": len(rows)}
+
+
+async def _create_service(request, grant, args):
+    body = {k: args[k] for k in ("name", "service", "brand", "icon", "color", "tabs", "settings") if k in args}
+    return _admin(await _self(request, grant, "POST", "/api/admin/services/scaffold", json=body))
+
+
+async def _service_job(request, grant, args):
+    return _admin(await _self(request, grant, "GET", f"/api/admin/services/scaffold/{quote(args['job_id'], safe='')}"))
+
+
+def _admin(r: httpx.Response) -> dict:
+    """A portal admin route's answer; refused unless the token's owner is a manager."""
+    try:
+        data = r.json()
+    except ValueError:
+        data = {}
+    if r.status_code in (401, 403):
+        raise ToolError("매니저만 쓸 수 있습니다.")
+    if r.status_code >= 400:
+        detail = data.get("detail")
+        raise ToolError(str(detail if detail else f"포털 오류 ({r.status_code})"))
+    return data
 
 
 async def _reply_issue(request, grant, args):
@@ -1652,7 +1685,7 @@ HANDLERS = {"tags": _tags, "find": _find, "related": _related, "my_tasks": _my_t
             "chat_rooms": _chat_rooms, "chat_read": _chat_read, "chat_send": _chat_send,
             "approve_job": _approve_job, "job_recipes": _job_recipes, "submit_job": _submit_job,
             "job_status": _job_status, "add_evaluation": _add_evaluation,
-            "note_units": _note_units, "list_issues": _list_issues, "reply_issue": _reply_issue, "add_review": _add_review, "lock_note": _lock_note, "unlock_note": _unlock_note, "reply_review": _reply_review, "guide": _guide}
+            "note_units": _note_units, "list_issues": _list_issues, "reply_issue": _reply_issue, "create_service": _create_service, "service_job": _service_job, "add_review": _add_review, "lock_note": _lock_note, "unlock_note": _unlock_note, "reply_review": _reply_review, "guide": _guide}
 PROPOSERS = {"propose_note": _propose_note, "propose_activity": _propose_activity, "propose_tags": _propose_tags}
 
 

@@ -24,7 +24,7 @@ import { notify } from './portal/settingsMsg'
  */
 
 // No builtin cards left: the icon lab was uninstalled, and making a service
-// lives in Home's "dock services" tab.
+// is the MCP's create_service.
 
 // Stable per-name fallback icon so a service without a stored icon still looks
 // distinct.
@@ -411,7 +411,15 @@ export default function ProjectsPage() {
   // the backend restarts) keeps it and tries again, signed out meanwhile.
   useEffect(() => {
     const tok = store.get(PORTAL_TOKEN_KEY)
-    if (!tok) { setAuthReady(true); return }
+    if (!tok) {
+      // Auto-admin mode (PORTAL_AUTO_ADMIN, this machine only): in as admin without a password.
+      // Anywhere else the route is not there (404) and the cover stays signed out.
+      launcher.post('/auth/auto')
+        .then(async (r) => { setPortalToken(r.data.access_token); setUser((await launcher.get('/auth/me')).data) })
+        .catch(() => {})
+        .finally(() => setAuthReady(true))
+      return
+    }
     setPortalToken(tok)
     let alive = true, timer = null
     const tryMe = () => {
@@ -654,12 +662,13 @@ export default function ProjectsPage() {
     members = (members || []).filter((k) => !fixedKeys.has(k))
     if (writeMine) {
       const id = 'm' + Math.random().toString(36).slice(2, 9)
-      return saveLayout((L) => {
+      await saveLayout((L) => {
         for (const k of members || []) dropFrom(L, k)
         L.groups.push({ id, name: name || t('p_group_n', L.groups.length + 1), members: [...(members || [])], hidden: false })
         L.order = [...L.order.filter((k) => k !== `#g:${id}`), `#g:${id}`]
         return L
       })
+      return id
     }
     try {
       const body = { name: name || t('p_group_n', groups.filter((g) => !g.loose).length + 1) }
@@ -668,6 +677,7 @@ export default function ProjectsPage() {
       // second call: create takes the name, membership is a patch.
       if (members?.length && data?.id) await launcher.put(`/admin/service-groups/${data.id}`, { members })
       await refresh()
+      return data?.id
     } catch (e) { notify(errText(e, t('p_failed')), 'bad') }
   }
 

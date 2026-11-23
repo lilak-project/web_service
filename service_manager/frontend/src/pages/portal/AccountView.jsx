@@ -58,16 +58,14 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
 
 // The settings sub-menu, shared so the header can drive it on narrow screens.
 // Pages only a manager sees; the menu marks them.
-export const MANAGER_PAGES = new Set(['map', 'dock', 'neon', 'sets', 'store', 'accounts', 'groups', 'invites', 'system', 'sync', 'handshake'])
+export const MANAGER_PAGES = new Set(['map', 'sets', 'store', 'accounts', 'groups', 'invites', 'system', 'sync', 'handshake'])
 export function settingsMenu(isManager, lang, canSets = false) {
   return [
     // Home and its pages first: the account menu is where the cover starts.
     ['home', 'home', tr("p_home")],
     ...(isManager ? [
-      // The three looks' services, then the sets that join their projects.
-      ['map', 'tree', tr("rack_title")],
-      ['dock', 'tree', tr("p_home_tab_dock")],
-      ['neon', 'tree', tr("p_home_tab_neon")],
+      // Every service (the three looks on one page), then the sets that join their projects.
+      ['map', 'tree', tr("p_home_tab_services")],
       ['sets', 'link', tr("p_rack_tab_sets")],
       ['store', 'gear', tr("p_home_tab_store")],
     ] : canSets ? [['sets', 'link', tr("p_rack_tab_sets")], ['invites', 'key', tr("p_invite_codes")]] : []),   // a project admin: sets, and codes for their projects

@@ -1725,6 +1725,7 @@ export default {
   p_share_split_ask: (a0) => `${a0} 카드가 다른 그룹에 있습니다. 서비스 카드는 그룹 하나에만 들어가니, 프로젝트별 카드로 나누어야 이 세트의 프로젝트를 옮길 수 있습니다. 나눌까요?`,
   p_share_split_yes: '나누고 진행',
   p_share_split_no: '나누지 않고 진행',
+  p_home_tab_services: '서비스',
   p_home_tab_dock: 'dock services',
   p_home_tab_neon: 'neon services',
   p_adm_title: '관리자',

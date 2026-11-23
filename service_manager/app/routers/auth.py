@@ -104,6 +104,28 @@ def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends
 
 
 SUPERUSER = "admin"
+
+
+def is_local(request: Request) -> bool:
+    """A request from this machine itself: a loopback peer and no proxy in between (a proxy on
+    this host — nginx, a tunnel — is loopback too, but adds X-Forwarded-For / Forwarded)."""
+    host = request.client.host if request.client else ""
+    return (host in ("127.0.0.1", "::1", "localhost")
+            and not request.headers.get("x-forwarded-for") and not request.headers.get("forwarded"))
+
+
+@router.post("/api/auth/auto", response_model=schemas.TokenResponse)
+def auto_admin(request: Request, db: Session = Depends(get_db)):
+    """Auto-admin mode (PORTAL_AUTO_ADMIN): sign in as `admin` without a password, but only
+    for a request from this machine. Off, or from anywhere else, it is not there (404)."""
+    if not config.AUTO_ADMIN or not is_local(request):
+        raise HTTPException(status_code=404, detail="Not Found")
+    user = db.query(models.User).filter(models.User.username == SUPERUSER, models.User.is_active == True).first()  # noqa: E712
+    if not user:
+        raise HTTPException(status_code=409, detail="admin 계정이 아직 없습니다. 먼저 설정하세요.")
+    return schemas.TokenResponse(access_token=portal_token(user), user_id=user.id,
+                                 username=user.username, role=user.role)
+
 _NAME_RE = re.compile(r"[\w.\-]{2,32}")
 RESERVED_NAMES = {SUPERUSER, "agent", "all", "everyone", "here", "portal", "system"}
 

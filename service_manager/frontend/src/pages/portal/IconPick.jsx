@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button, Icon, PICKER_ICONS, PROJECT_ICONS, searchIcons } from 'lilak-ui'
 
-// Shared visual icon picker (used by NewServiceView + ServiceManagePanel). Icons
+// Shared visual icon picker (used by ServiceManagePanel). Icons
 // render in DUOTONE — the house style for service marks.
 export const ICON_CHOICES = Array.from(new Set(PICKER_ICONS && PICKER_ICONS.length ? PICKER_ICONS : PROJECT_ICONS))
 // The mark a brand-new service starts with, before anyone picks one.

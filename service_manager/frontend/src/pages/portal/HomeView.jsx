@@ -5,7 +5,6 @@ import { launcher } from '../../api'
 import { Panel, Row, Pill } from './Field'
 import StoreView from './StoreView'
 import RackView from './RackView'
-import NewServiceView from './NewServiceView'
 
 const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.project_card ? `${c.name}/${c.project_card}` : c.name)
 
@@ -20,7 +19,7 @@ const cardKey = (c) => (c.builtin ? '@' + c.builtin : c.project_card ? `${c.name
  */
 export default function HomeView({ cards, groups, recent, onOpen, onInboxAll, isManager, storeOpen, onRefresh, iconFor, bands, onRackGo, view, onView, onManage, onRegroup, onCreateGroup, onRenameGroup, onSetMembers, onDeleteGroup, onManageService, onHideCards, tab: tabProp, onTab, canSets = false }) {
   // The account menu picks the tab now (tab/onTab); without them Home keeps its own tab row.
-  const [ownTab, setOwnTab] = useState(storeOpen ? 'store' : 'home')      // 'home' | 'map' | 'sets' | 'dock' | 'store'
+  const [ownTab, setOwnTab] = useState(storeOpen ? 'store' : 'home')      // 'home' | 'map' | 'sets' | 'store'
   const tabWanted = tabProp ?? ownTab
   const setTab = onTab ?? setOwnTab
   // Only a manager has the other tabs; anyone else is always on Home, whatever was asked.
@@ -226,7 +225,7 @@ export default function HomeView({ cards, groups, recent, onOpen, onInboxAll, is
     .filter(([g, list]) => list.length || (edit && !g.loose))
 
   // Rack services are a manager's: without them Home has one page and no tabs.
-  const tabs = isManager && tabProp == null ? [['home', tr('p_home')], ['map', tr('rack_title')], ['dock', tr('p_home_tab_dock')], ['neon', tr('p_home_tab_neon')], ['sets', tr('p_rack_tab_sets')], ['store', tr('p_home_tab_store')]] : []
+  const tabs = isManager && tabProp == null ? [['home', tr('p_home')], ['map', tr('p_home_tab_services')], ['sets', tr('p_rack_tab_sets')], ['store', tr('p_home_tab_store')]] : []
 
   return (
     <div className={`pl-mgpage pl-home${tabProp == null ? '' : ' nohead'}`}>
@@ -292,15 +291,15 @@ export default function HomeView({ cards, groups, recent, onOpen, onInboxAll, is
       {tab === 'home' && edit && <p className="pl-hedithint">{tr('p_home_edit_hint')}</p>}
 
       {tab === 'store' && <StoreView onChanged={onRefresh} />}
-      {/* The three looks, one list each: a service unfolds into what Manage sidebar
-          offers for it and its admins, a project into its admins. */}
-      {(tab === 'map' || tab === 'dock' || tab === 'neon') && (
-        <div className="pl-hrack">
-          <RackView tab="map" look={{ map: 'rack', dock: 'dock', neon: 'neon' }[tab]} cards={cards}
+      {/* Every service on one page, a list per look (rack, dock, neon): a service unfolds
+          into what Manage sidebar offers for it and its admins, a project into its admins.
+          Making a new service is the MCP's create_service now, not a screen. */}
+      {tab === 'map' && ['rack', 'dock', 'neon'].map((look) => (
+        <div key={look} className="pl-hrack">
+          <RackView tab="map" look={look} cards={cards}
             bands={bands} onChanged={onRefresh} onGo={onRackGo} onManage={onManageService} readOnly={!isManager} />
         </div>
-      )}
-      {tab === 'dock' && <NewServiceView onCreated={onRefresh} />}
+      ))}
 
       {tab === 'sets' && (
         <div className="pl-hrack">

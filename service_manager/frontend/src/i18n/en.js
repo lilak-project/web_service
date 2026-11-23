@@ -1725,6 +1725,7 @@ export default {
   p_share_split_ask: (a0) => `${a0} sits in another group. A service card can be in only one group, so its projects need cards of their own for this set's project to move. Split it?`,
   p_share_split_yes: 'Split and continue',
   p_share_split_no: 'Continue without splitting',
+  p_home_tab_services: 'services',
   p_home_tab_dock: 'dock services',
   p_home_tab_neon: 'neon services',
   p_adm_title: 'Admins',

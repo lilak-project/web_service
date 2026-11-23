@@ -134,6 +134,9 @@ async def _security_preflight():
         warns.append("EMAIL_VERIFY_DEV_ECHO is ON — verification codes / reset passwords are returned in HTTP responses. Do not expose publicly.")
     if config.CORS_ORIGINS == ["*"]:
         warns.append("CORS is open to any origin (*). Set PORTAL_ALLOWED_ORIGINS for production.")
+    if config.AUTO_ADMIN:
+        warns.append("PORTAL_AUTO_ADMIN is ON — anyone at THIS machine opens the portal as admin with no password "
+                      "(requests through a proxy or from other hosts still sign in).")
     if not config.BASE_URL.startswith("https://"):
         warns.append(f"PORTAL_BASE_URL is not https ({config.BASE_URL}). Serve the portal over TLS in production.")
     # Start the cross-portal sync poller (no-op unless a service is a 'sub' with an
@@ -172,7 +175,7 @@ async def _close_proxy_client():
 
 
 @app.get("/api/health")
-def health():
+def health(request: Request):
     from . import gitinfo, models
     from .db import SessionLocal
     # needs_setup: a portal with no accounts yet — the cover asks for the superuser's
@@ -188,7 +191,9 @@ def health():
     return {"ok": True, "service": "service_manager",
             "port": config.PORTAL_PORT, "data_root": str(config.DATA_ROOT),
             "host": gitinfo.hostname(), "version": gitinfo.portal_version(),
-            "needs_setup": needs_setup}
+            "needs_setup": needs_setup,
+            # The cover signs in as admin by itself (PORTAL_AUTO_ADMIN, from this machine only).
+            "auto_admin": config.AUTO_ADMIN and auth.is_local(request)}
 
 
 # Serve the AI integration guide so it's viewable/copyable from the portal UI.

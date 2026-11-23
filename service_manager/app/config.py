@@ -161,6 +161,10 @@ IS_LOCAL_DEV = (
 # deployment can't leak codes even if the operator forgets to set it.
 EMAIL_VERIFY_REQUIRED = os.environ.get("EMAIL_VERIFY_REQUIRED", "1") not in ("0", "false", "False")
 _echo_env = os.environ.get("EMAIL_VERIFY_DEV_ECHO")
+# Auto-admin mode: a portal opened FROM THIS MACHINE (loopback, not through a proxy) signs in
+# as `admin` with no password. For a personal laptop portal only; off unless set.
+AUTO_ADMIN = os.getenv("PORTAL_AUTO_ADMIN", "").lower() in ("1", "true", "yes", "on")
+
 EMAIL_VERIFY_DEV_ECHO = (
     (_echo_env not in ("0", "false", "False")) if _echo_env is not None else IS_LOCAL_DEV
 )

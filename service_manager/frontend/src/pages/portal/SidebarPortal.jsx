@@ -14,7 +14,6 @@ import { Panel } from './Field'
 import ServiceSingle from './ServiceSingle'
 import GroupManagePanel, { FixedGroupPanel } from './GroupManagePanel'
 import LinksView from './LinksView'
-import NewServiceView from './NewServiceView'
 import IconLabView from './IconLabView'
 import ArchivePanel from './ArchivePanel'
 import HomeView from './HomeView'
@@ -34,7 +33,7 @@ const cardAt = (cards, sel) => (cards || []).find((c) => cardKey(c) === sel?.svc
  *  portal, not services it runs, and an admin should not have to file them. */
 const SYSTEM_KEYS = []
 // The account menu's first pages are Home's (HomeView), the rest are settings (AccountView).
-const HOME_TABS = ['home', 'map', 'dock', 'neon', 'sets', 'store']
+const HOME_TABS = ['home', 'map', 'sets', 'store']
 const SYSTEM_ID = '@system'
 const NOGROUP_ID = '@none'
 // The name a materialised System band is stored under. Until something is
@@ -208,7 +207,8 @@ function readSel() {
 }
 // The open menu page (Share sets, Accounts …) rides in the URL as ?m=, so a
 // reload comes back to it instead of to Home.
-const readMenu = () => new URLSearchParams(window.location.search).get('m') || ''
+// dock and neon services were their own pages; they are on the services page now.
+const readMenu = () => { const m = new URLSearchParams(window.location.search).get('m') || ''; return m === 'dock' || m === 'neon' ? 'map' : m }
 // A service's manage page opened inside the menu rides as ?g= (+ &w=1 when opened as the
 // whole service), so a reload stays on it — under its menu page (?m=) — instead of Home.
 function readManage() {
@@ -1617,7 +1617,6 @@ export default function SidebarPortal({
   const builtinView = (b) => (
     b === 'iconlab' ? <IconLabView />
       : b === 'links' ? <LinksView links={links || []} onChanged={onRefresh} />
-          : b === 'newservice' ? <NewServiceView onCreated={onRefresh} />
           : null
   )
 
@@ -1685,7 +1684,7 @@ export default function SidebarPortal({
             /* A group is one tinted REGION spanning the bar's full width, with its
                cards inside it — a tinted title alone left the members looking like
                they had simply been indented under a heading. */
-            <div key={g.id} className={`pl-group${g.fixed || g.loose ? ' auto' : ''}`
+            <div key={g.id} data-gid={g.id} className={`pl-group${g.fixed || g.loose ? ' auto' : ''}`
                 + `${sel?.svc === `#g:${g.id}` && view === 'manage' ? ' on' : ''}`
                 + `${dropAt?.gid === (g.fixed ? SYSTEM_ID : g.loose ? null : g.id) ? ' drop' : ''}`
                 + `${dropAt?.no === g.id ? ' nodrop' : ''}`
@@ -1816,7 +1815,14 @@ export default function SidebarPortal({
             </button>
 
             <div className="pl-sep" />
-            <button type="button" className="pl-c2" onClick={() => onCreateGroup?.()}>
+            {/* The new group opens in its settings, and the bar scrolls down to it. */}
+            <button type="button" className="pl-c2" onClick={async () => {
+              const id = await onCreateGroup?.()
+              if (!id) return
+              openManageGroup({ id })
+              requestAnimationFrame(() => document.querySelector(`.pl-group[data-gid="${CSS.escape(String(id))}"]`)
+                ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
+            }}>
               <Icon name="folder-plus" size={15} />
               <span className="pl-txt">{tr("p_new_group")}</span>
             </button>

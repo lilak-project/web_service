@@ -103,6 +103,16 @@ class Gates(unittest.TestCase):
     def issue(self, write=True, days=30):
         return mcp_tokens.issue(self.db, "t", self.user, write, days)
 
+    def test_create_service_goes_to_the_scaffolder_as_the_token_owner(self):
+        tok = self.issue()
+        r = call(tok, "create_service", name="Bad Name")          # refused before any job starts
+        self.assertTrue(r["isError"])
+        self.assertIn("소문자", r["content"][0]["text"])
+        r = call(tok, "service_job", job_id="nope")
+        self.assertTrue(r["isError"])
+        r = call(self.issue(write=False), "create_service", name="fine")
+        self.assertIn("쓸 수 없는 도구", r["content"][0]["text"])
+
     def test_no_or_unknown_token_is_refused(self):
         self.assertEqual(c.post("/mcp", json={}).status_code, 401)
         self.assertEqual(rpc("lpm_nope", "ping").status_code, 401)
@@ -145,7 +155,7 @@ class Gates(unittest.TestCase):
         self.assertEqual(names, {"tags", "find", "related", "my_tasks", "job_context", "job_recipes", "guide", "job_status", "list_services", "search",
                                  "get_record", "by_tag",
                                  "search_notes", "get_note", "note_units", "list_issues", "propose_note", "propose_tags", "propose_activity", "agent_run",
-                                 "chat_rooms", "chat_read"})
+                                 "chat_rooms", "chat_read", "service_job"})
         r = call(tok, "add_note", title="x", body="y")
         self.assertTrue(r["isError"])
         self.assertEqual(self.calls, [])
@@ -330,6 +340,9 @@ class Gates(unittest.TestCase):
             self.assertFalse(r["isError"], r)
             self.assertEqual(json.loads(r["content"][0]["text"])["record"]["name"], "Park")
             self.assertEqual(asked[-1][:2], ("authors", "authors"))
+            # As copied from a page opened as localhost: the host's own name, and the version.
+            here = f"http://{mcp.gitinfo.hostname()}:{mcp.config.PORTAL_PORT}/pp/authors/authors/authors/dee049b9?v=be78c94"
+            self.assertFalse(call(tok, "get_record", path=here)["isError"])
             for tool in ("get_record", "get_note"):
                 r = call(tok, tool, path="http://testserver/pp/note/notes-job/notes/회의 메모")
                 self.assertFalse(r["isError"], r)

@@ -52,6 +52,21 @@ class Accounts(unittest.TestCase):
         self.assertIn(r.status_code, (200, 201), r.text)
         return r.json()["access_token"]
 
+    def test_auto_admin_only_when_on_and_only_from_this_machine(self):
+        from app import config
+        here = TestClient(main.app, client=("127.0.0.1", 50000))
+        self.assertEqual(here.post("/api/auth/auto").status_code, 404)              # off by default
+        config.AUTO_ADMIN = True
+        try:
+            r = here.post("/api/auth/auto")
+            self.assertEqual((r.status_code, r.json()["username"]), (200, "admin"))
+            self.assertEqual(c.post("/api/auth/auto").status_code, 404)             # another host
+            self.assertEqual(here.post("/api/auth/auto", headers={"X-Forwarded-For": "8.8.8.8"}).status_code, 404)  # via a proxy
+            self.assertTrue(here.get("/api/health").json()["auto_admin"])
+            self.assertFalse(c.get("/api/health").json()["auto_admin"])
+        finally:
+            config.AUTO_ADMIN = False
+
     def test_login_guessing_is_slowed(self):
         self.register("guessme")
         codes = [c.post("/api/auth/login", json={"username": "guessme", "password": f"wrong{i}"}).status_code
