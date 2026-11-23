@@ -293,11 +293,11 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
                 // Not a table row (.cols is one fixed height): the open panel grows with what it holds.
                 <Row key={`${at}/@`} style={{ display: 'block', height: 'auto', padding: '8px 12px 12px' }}>
                   <div style={{ minWidth: 0 }}>
+                    {s.multi_project ? <ServiceProjects service={s} canManage manage onChanged={() => { loadProjects(s.name); onChanged?.() }} />
+                      : <ServiceSingle service={s} canManage manage onChanged={onChanged} />}
                     <AdminEditor scopes={[{ svc: s.name, proj: '' }]} />
                     <ServiceManagePanel service={'service_label' in s ? { ...s, label: s.service_label, labels: s.service_labels } : s}
                       onChanged={onChanged} />
-                    {s.multi_project ? <ServiceProjects service={s} canManage manage onChanged={() => { loadProjects(s.name); onChanged?.() }} />
-                      : <ServiceSingle service={s} canManage manage onChanged={onChanged} />}
                   </div>
                 </Row>
               )

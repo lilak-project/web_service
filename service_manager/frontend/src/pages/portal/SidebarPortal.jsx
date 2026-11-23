@@ -209,10 +209,19 @@ function readSel() {
 // The open menu page (Share sets, Accounts …) rides in the URL as ?m=, so a
 // reload comes back to it instead of to Home.
 const readMenu = () => new URLSearchParams(window.location.search).get('m') || ''
-function writeSel(sel, menu) {
+// A service's manage page opened inside the menu rides as ?g= (+ &w=1 when opened as the
+// whole service), so a reload stays on it — under its menu page (?m=) — instead of Home.
+function readManage() {
+  const q = new URLSearchParams(window.location.search)
+  const g = q.get('g') || ''
+  return g ? { svc: g, proj: '', ...(q.get('w') ? { whole: true } : {}) } : null
+}
+function writeSel(sel, menu, mg = null) {
   const q = new URLSearchParams(window.location.search)
   if (sel?.svc) { q.set('s', sel.svc); sel.proj ? q.set('p', sel.proj) : q.delete('p') }
   else { q.delete('s'); q.delete('p') }
+  if (mg?.svc) { q.set('g', mg.svc); mg.whole ? q.set('w', '1') : q.delete('w') }
+  else { q.delete('g'); q.delete('w') }
   if (menu && menu !== 'home') q.set('m', menu)
   else q.delete('m')
   const qs = q.toString()
@@ -366,9 +375,10 @@ export default function SidebarPortal({
   const fold = useCallback(() => { if (!pinnedRef.current) setMini(true) }, [])
   // The old Service Manager card (?s=@store) lives on home now, opened.
   const storeLink = readSel()?.svc === '@store'
-  const [sel, setSel] = useState(() => (storeLink ? null : readSel()))        // { svc, proj } — mirrored in the URL
+  const manageLink = storeLink ? null : readManage()
+  const [sel, setSel] = useState(() => (storeLink ? null : manageLink || readSel()))        // { svc, proj } — mirrored in the URL
   // Live rides in the URL as ?m=live, so a reload stays on the wall.
-  const [view, setView] = useState(() => (readMenu() === 'live' ? 'live' : readSel() && !storeLink ? 'service' : 'empty'))  // service|settings|live|empty
+  const [view, setView] = useState(() => (manageLink ? 'manage' : readMenu() === 'live' ? 'live' : readSel() && !storeLink ? 'service' : 'empty'))  // service|settings|live|empty|manage
   // A record another service asked to open here ({ svc, proj, id }): a link in
   // one service's panel (a paper on an activity) lands on that record in its
   // own. Only the services the portal itself frames may ask.
@@ -497,7 +507,13 @@ export default function SidebarPortal({
     if (mini) setOpenSvcs(new Set())
   }, [mini])
   useEffect(() => { writeSet(SHUT_KEY, shut) }, [shut])
-  useEffect(() => { writeSel(view === 'service' ? sel : null, view === 'settings' ? settingsTab : view === 'live' ? 'live' : '') }, [sel, view, settingsTab])
+  // A restored manage page lights its menu page again (?m=), as when it was opened.
+  useEffect(() => { if (manageLink && readMenu()) onSettingsTab?.(readMenu()) }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    writeSel(view === 'service' ? sel : null,
+      view === 'settings' || view === 'manage' ? settingsTab : view === 'live' ? 'live' : '',
+      view === 'manage' ? sel : null)
+  }, [sel, view, settingsTab])
 
   // What `fit` needs to know without becoming a reason for it to re-run.
   useEffect(() => { if (manage && isManager) loadArchived() }, [manage, isManager, loadArchived])  // archive: a manager's
@@ -1498,6 +1514,9 @@ export default function SidebarPortal({
     const i = (fullOrder || []).indexOf(key)
     return (
       <>
+        {/* Its projects first: what a manager opens this page for most. */}
+        {!selSvc.builtin && selSvc.multi_project && <ServiceProjects service={selSvc} canManage manage onChanged={onRefresh} />}
+        {!selSvc.builtin && !selSvc.multi_project && <ServiceSingle service={selSvc} canManage manage onChanged={onRefresh} />}
         {/* In a box like every other part of the page; it draws nothing for a non-manager. */}
         {!selSvc.builtin && isManager && (
           <Panel bare title={tr('p_adm_title')}><AdminEditor boxed scopes={[{ svc: selSvc.name, proj: '' }]} /></Panel>
@@ -1514,8 +1533,6 @@ export default function SidebarPortal({
           }}
           onChanged={onRefresh} />
         {selSvc.builtin === 'links' && <LinksView links={links || []} manage onChanged={onRefresh} />}
-        {!selSvc.builtin && selSvc.multi_project && <ServiceProjects service={selSvc} canManage manage onChanged={onRefresh} />}
-        {!selSvc.builtin && !selSvc.multi_project && <ServiceSingle service={selSvc} canManage manage onChanged={onRefresh} />}
       </>
     )
   }
