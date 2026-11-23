@@ -243,6 +243,34 @@ class Gates(unittest.TestCase):
         with self.assertRaises(mcp.ToolError):
             asyncio.run(mcp._portal(None, grant, "authors", "GET", "data", "authors"))
 
+    def test_a_log_is_written_and_added_to(self):
+        sent = []
+
+        async def fake(request, grant, svc, method, path, proj="", **kw):
+            sent.append((svc, method, path, kw.get("json")))
+            if path == "records":
+                return httpx.Response(200, json={"record": {**kw["json"]["record"], "id": "L1"}})
+            if path == "data":
+                return httpx.Response(200, json={"logs": [{"id": "L1", "title": "t", "body": "first"}], "settings": {}})
+            if path == "records/update":
+                return httpx.Response(200, json={"record": {"id": "L1", "title": "t", **kw["json"]["fields"]}})
+            raise AssertionError(path)
+        real, mcp._portal = mcp._portal, fake
+        try:
+            tok = self.issue()
+            got = json.loads(call(tok, "add_log", title=" 서버 재시작 ", run="1-5", tags=["#ops"], date="2026-11-22", time="09:30")["content"][0]["text"])
+            rec = sent[0][3]["record"]
+            self.assertEqual((got["id"], sent[0][0], rec["title"], rec["run"], rec["tags"], rec["date"], rec["time"]),
+                             ("L1", "logbook", "서버 재시작", "1-5", ["ops"], "2026-11-22", "09:30"))
+            self.assertTrue(rec["author"] and rec["via"])
+            self.assertTrue(call(tok, "add_log", title="x", date="2026-13-40").get("isError"))
+            self.assertTrue(call(self.issue(write=False), "add_log", title="x").get("isError"))
+            call(tok, "append_log", id="L1", text="second")
+            self.assertEqual(sent[-1][3], {"key": "logs", "id": "L1", "fields": {"body": "first\n\nsecond\n"}})
+            self.assertTrue(call(tok, "append_log", id="nope", text="x").get("isError"))
+        finally:
+            mcp._portal = real
+
     def test_a_parameter_set_is_registered(self):
         sent = []
 

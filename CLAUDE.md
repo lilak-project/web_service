@@ -15,8 +15,8 @@ can share a build/deploy context and the shared UI kit:
 - **`asset_manager/`** — a managed multi-project static PWA service.
 - **`lilak_ui/`** — the shared React component kit. **Source-aliased** (not npm
   published) by every frontend via Vite. Editing it affects all of them.
-- **`lilak_rack/`** — the rack services (activity, author, reference, asset2, note,
-  project) in ONE repo with the `racklist/` frame they are drawn with and their shared
+- **`lilak_rack/`** — the rack services (activities, authors, reference_manager, inventory, note,
+  project_manager, inbox) in ONE repo with the `racklist/` frame they are drawn with and their shared
   backend `rackstore/`. Installed together (Service Manager → "rack services");
   services alias it as `racklist`. Its tests: `npx vitest run` + `tests/test_store_*.py`.
 - **`data/`** — all runtime data, kept **outside** the code repos (see below).
@@ -197,15 +197,18 @@ build; the elog/asset frontends are served by their own backends through the pro
   named after the set, its members are the set's project cards (a service in two sets is split into
   project cards), marked `share_set`; the group API refuses to change its members or delete it, and a
   personal layout may move or fold it but not refill it. Sets are made from templates (`SET_TEMPLATES`:
-  jobboard, manage) by a manager or a project admin (`/api/share-sets/make`).
+  jobboard, manage, lilak flow) by a manager or a project admin (`/api/share-sets/make`).
   A project admin sees Share sets read-only and may only make (or fill up their own) sets from a template.
 - **One install for every rack-framed service:** the catalog's `rack` entry carries `with: [log, pipeline]`
-  (`store._chain`), so installing or updating rack services also does lilak_log (parameters) and
+  (`store._chain`), so installing or updating rack services also does lilak_log (logbook, parameters) and
   lilak_pipeline (jobboard); those entries are `part_of: rack` and not offered on their own.
 - **A multi-project service can be drawn as one card per project** (right-click its card; `home.json`
   `split_cards`, expanded by `projects.split_cards` in `/api/services`). A project card is the service with
   `project_card` + `entry_project`, its key is `svc/proj` in group members and the home order, so its projects
   can sit in different groups. Group-wide tiers and grants skip project cards (`_service_members`).
+- **Three services were renamed 2026-11-21:** academic_activities → activities, author_manager → authors,
+  asset_manager2 → inventory (`scripts/rename-services.py` moves a portal's data; `main.RENAMED` sends an
+  old `/p`·`/pp` address on with a 307). The old `asset_manager` is another service and keeps its name.
 - Adding a service = write `data/<name>/service.json` + a `Service` DB row (via the
   admin Services UI, the `/api/handshake` self-registration, or directly). Set
   `capabilities.multi_project` for elog-style services.

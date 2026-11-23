@@ -230,6 +230,16 @@ TOOLS = [
      "description": "Add text to the end of a note, without reading it first or sending the whole body back. "
                     "Not for tex notes. Returns its id and new version.",
      "inputSchema": _schema(["id", "text"], id=_STR, text=_STR)},
+    {"name": "add_log", "write": True,
+     "description": "Write a log in the logbook service: what happened, on which run — for work that is not a job "
+                    "(a job's record is jobboard's). Only title is required; date (YYYY-MM-DD) and time (HH:MM) default "
+                    "to now, the author is this token's owner. run is one (42), a range (1-5) or several (1,3,7). tags "
+                    "are words without #. Returns its id.",
+     "inputSchema": _schema(["title"], title=_STR, body=_STR, run=_STR, category=_STR, date=_STR, time=_STR,
+                            tags={"type": "array", "items": _STR}, project=_STR)},
+    {"name": "append_log", "write": True,
+     "description": "Add text to the end of a log's body, by the id add_log or search returned.",
+     "inputSchema": _schema(["id", "text"], id=_STR, text=_STR, project=_STR)},
     {"name": "add_params", "write": True,
      "description": "Register a parameter set in the parameters service: the text of a parameter file (format "
                     "lilak-par for LILAK .par/.mac/.conf, get-xcfg for GET DAQ .xcfg; others are kept as text). A set "
@@ -751,6 +761,40 @@ async def _propose_activity(request, grant, args):
     home = _set_home(args)
     return await _leave(request, grant, "activity", args, fields,
                         home.get("activities") or _main(grant, "activities"), home)
+
+
+async def _add_log(request, grant, args):
+    title = str(args.get("title") or "").strip()
+    if not title:
+        raise ToolError("title 이 비어 있습니다.")
+    now = datetime.now().astimezone()
+    day, at = (args.get("date") or now.strftime("%Y-%m-%d")), (args.get("time") or now.strftime("%H:%M"))
+    if not _real_date(day) or not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", at):
+        raise ToolError("date 는 YYYY-MM-DD, time 은 HH:MM 입니다.")
+    tags = [str(t).strip().lstrip("#") for t in args.get("tags") or [] if str(t).strip().lstrip("#")]
+    # The author as the logbook page stamps it (the person's e-mail); the token is named beside it.
+    rec = {"title": title, "body": str(args.get("body") or ""), "run": str(args.get("run") or "").strip(),
+           "category": str(args.get("category") or "").strip(), "tags": tags, "date": day, "time": at,
+           "author": grant.owner or grant.who, "via": grant.who, "files": []}
+    got = _ok(await _portal(request, grant, "logbook", "POST", "records", args.get("project") or "",
+                            json={"key": "logs", "record": rec}))["record"]
+    return {"id": got["id"], "title": got["title"], "date": got["date"], "time": got["time"]}
+
+
+async def _append_log(request, grant, args):
+    text = str(args.get("text") or "").strip()
+    if not text:
+        raise ToolError("덧붙일 내용이 비어 있습니다.")
+    # ponytail: read then write without a version, so a body edited in the same
+    # moment loses that edit; give /api/records/update a baseUpdatedAt if it bites.
+    proj, recs = await _records(request, grant, "logbook", args.get("project"))
+    rec = next((r for k, r in recs if k == "logs" and str(r["id"]) == args["id"]), None)
+    if rec is None:
+        raise ToolError("그 로그가 없습니다.")
+    body = f"{str(rec.get('body') or '').rstrip()}\n\n{text}\n".lstrip()
+    got = _ok(await _portal(request, grant, "logbook", "POST", "records/update", proj,
+                            json={"key": "logs", "id": rec["id"], "fields": {"body": body}}))["record"]
+    return {"id": got["id"], "title": got.get("title"), "updatedAt": got.get("updatedAt")}
 
 
 async def _add_params(request, grant, args):
@@ -1604,7 +1648,7 @@ HANDLERS = {"tags": _tags, "find": _find, "related": _related, "my_tasks": _my_t
             "list_services": _list_services, "search": _search_rack, "get_record": _get_record, "by_tag": _by_tag,
             "search_notes": _search, "get_note": _get, "add_note": _add, "update_note": _update,
             "append_note": _append, "add_file": _add_file, "update_job": _update_job,
-            "add_params": _add_params, "delegate": _delegate, "agent_run": _agent_run,
+            "add_params": _add_params, "add_log": _add_log, "append_log": _append_log, "delegate": _delegate, "agent_run": _agent_run,
             "chat_rooms": _chat_rooms, "chat_read": _chat_read, "chat_send": _chat_send,
             "approve_job": _approve_job, "job_recipes": _job_recipes, "submit_job": _submit_job,
             "job_status": _job_status, "add_evaluation": _add_evaluation,
