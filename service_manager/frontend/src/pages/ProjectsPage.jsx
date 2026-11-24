@@ -537,7 +537,11 @@ export default function ProjectsPage() {
   // Every card, hidden ones included: the sidebar has its own manage mode and
   // does its own hiding — filtering here meant a card hidden from the bar
   // vanished from manage mode too, with no way left to bring it back.
-  const named0 = (projects || []).map(inLang)
+  const named0 = [...(projects || []).map(inLang),
+    // Live mode as a card of its own, so it can sit in a group like any service. Hidden
+    // until a manager shows it (Manage sidebar → Default → drop it on the hide target).
+    ...(user ? [{ builtin: 'live', name: '@live', label: bi.live?.label || t('p_live_mode'),
+      icon: bi.live?.icon || 'broadcast', color: bi.live?.color, hidden: bi.live?.hidden ?? true }] : [])]
   // This account's own bar (prefs.layout): order, groups, hidden cards, its own
   // names. Absent, the account sees the manager's default. A manager chooses in
   // manage mode which of the two it is arranging (layoutTarget).

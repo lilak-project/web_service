@@ -1455,6 +1455,7 @@ export default function SidebarPortal({
     // jobboard) never leaves that set, and stayed lit beside the one in the panel.
     const on = ((view === 'service' || view === 'manage' || signedOut)
       && (sel?.svc === key || (!!s.project_card && sel?.svc === s.name && sel?.proj === s.project_card))) || listOpen
+      || (s.builtin === 'live' && view === 'live')
     return (
       <div key={key} style={{ display: 'contents' }}>
         {dropLine(key, false)}
@@ -1467,6 +1468,7 @@ export default function SidebarPortal({
           <button type="button" className="pl-row"
             onClick={() => {
               if (manage) { openManage(s); return }
+              if (s.builtin === 'live') { view === 'live' ? setView('empty') : enterLive(); return }
               // One project nominated: the card IS that project.
               if (!manage && !signedOut && s.multi_project && s.entry_project) {
                 pickProject(s, s.entry_project); return

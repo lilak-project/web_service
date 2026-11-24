@@ -23,7 +23,7 @@ from ..deps import require_portal_admin
 router = APIRouter(tags=["portal-home"])
 
 _FILE = config.DATA_ROOT / "_portal" / "home.json"
-_BUILTINS = ("iconlab", "newservice", "store", "links", "rack")
+_BUILTINS = ("iconlab", "newservice", "store", "links", "rack", "live")
 
 
 def _read() -> dict:
