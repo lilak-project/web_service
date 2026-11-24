@@ -426,7 +426,7 @@ class PrefsBody(BaseModel):
 def _clean_layout(d: dict) -> dict:
     """Keep only the known shape, with bounded sizes: a personal layout is
     {order:[key], groups:[{id,name,members:[key],hidden}], hidden:[key],
-     labels:{key:name}, looseHidden:bool}. Keys are card keys or "#g:<id>"."""
+     labels:{key:name}, looseHidden:bool, setOrder:{gid:[key]}}. Keys are card keys or "#g:<id>"."""
     def keys(v, n=2000):
         out = [str(k)[:200] for k in (v or []) if isinstance(k, (str, int)) and str(k).strip()]
         if len(out) > n:
@@ -446,7 +446,10 @@ def _clean_layout(d: dict) -> dict:
     if len(labels) > 2000:
         raise HTTPException(400, "사이드바 배치가 너무 큽니다.")
     return {"order": keys(d.get("order")), "groups": groups, "hidden": keys(d.get("hidden")),
-            "labels": labels, "looseHidden": bool(d.get("looseHidden"))}
+            "labels": labels, "looseHidden": bool(d.get("looseHidden")),
+            # A share set's group is not this account's to refill, only to reorder: {group id: [key]}.
+            "setOrder": {str(k)[:40]: keys(v, 200) for k, v in list((d.get("setOrder") or {}).items())[:200]
+                         if isinstance(v, list)}}
 
 
 @router.get("/api/account/prefs")
@@ -564,6 +567,8 @@ def request_email_change(body: EmailBody, user: models.User = Depends(require_po
         raise HTTPException(400, "이미 사용 중인 이메일입니다.")
     user.pending_email = email
     db.commit()
+    from .. import held
+    held.release(held.pid("email", str(user.id)))        # asked again after an opinion: it waits again
     return {"ok": True, "pending_email": email, "note": "관리자 승인 후 변경됩니다."}
 
 
@@ -717,6 +722,8 @@ def admin_approve_email(uid: int, body: ApproveEmailBody, _: models.User = Depen
         u.email_verified_at = datetime.utcnow()
     u.pending_email = None
     db.commit()
+    from .. import held
+    held.drop(held.pid("email", str(u.id)))
     return _account_view(db, u)
 
 

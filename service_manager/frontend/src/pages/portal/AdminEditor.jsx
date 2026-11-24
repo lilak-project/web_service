@@ -66,7 +66,7 @@ export default function AdminEditor({ scopes, setKey, boxed = false }) {
         const lines = [
           ...admins.map(({ u, n }) => (
             <>
-              <span>{u.username}</span>
+              <span style={fieldChip}>{u.username}</span>
               {u.display_name && u.display_name !== u.username && <span style={fieldMuted}>{u.display_name}</span>}
               {scopes.length > 1 && <span style={fieldMuted}>{n}/{scopes.length}</span>}
               <span className="sp" style={{ flex: 1 }} />
@@ -74,9 +74,9 @@ export default function AdminEditor({ scopes, setKey, boxed = false }) {
             </>
           )),
           ...rows.filter((r) => r.via.length).map(({ u, via }) => (
-            <><span>{u.username}</span><span style={fieldMuted}>{tr('p_adm_via', via.join(', '))}</span></>
+            <><span style={fieldChip}>{u.username}</span><span style={fieldMuted}>{tr('p_adm_via', via.join(', '))}</span></>
           )),
-          ...managers.map((m) => <><span>{m}</span><span style={fieldMuted}>{tr('p_adm_manager_all')}</span></>),
+          ...managers.map((m) => <><span style={fieldChip}>{m}</span><span style={fieldMuted}>{tr('p_adm_manager_all')}</span></>),
         ]
         return (lines.length ? lines : [<span style={fieldMuted}>—</span>]).map((line, i) => (
           <Field key={i} label={i === 0 ? tr('p_adm_title') : ''}>{line}</Field>

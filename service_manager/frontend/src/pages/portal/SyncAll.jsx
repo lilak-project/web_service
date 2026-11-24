@@ -182,7 +182,9 @@ function History() {
         <Field key={i} label={`${r.dir === 'sent' ? '→' : '←'} ${r.svc}${r.project ? '/' + r.project : ''}`}>
           <span style={{ ...fieldMuted, ...mono }}>{when(r.at)}</span>
           <span style={mono}>{r.url}{r.name ? ` (${r.name})` : ''}{r.by ? ` · ${r.by}` : ''}</span>
-          <Pill tone={['joined', 'approved'].includes(r.status) ? 'ok' : r.status === 'pending' ? 'warn' : undefined}>{r.status}</Pill>
+          <Pill tone={['joined', 'approved'].includes(r.status) ? 'ok' : ['pending', 'held'].includes(r.status) ? 'warn' : undefined}>{r.status}</Pill>
+          {/* The other server held the request with an opinion: what it said. */}
+          {(r.comments || []).map((m, j) => <span key={j} style={fieldMuted}>{m.by}: {m.text}</span>)}
           {r.pin && <span style={fieldMuted}>{tr('p_pin')} <b style={mono}>{r.pin}</b></span>}
           {r.error && <span style={{ color: 'var(--dock-danger-text)' }}>{r.error}</span>}
         </Field>))}

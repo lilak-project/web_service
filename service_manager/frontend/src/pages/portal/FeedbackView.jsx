@@ -354,7 +354,8 @@ function IssueSync({ L, folded }) {
           : <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://portal.stellarpiece.com" style={{ ...fieldInput, flex: 1, minWidth: 220 }} />
               <Button variant="primary" onClick={() => run(launcher.post('/admin/issues/link', { url }), L('요청했습니다 — main 관리자에게 확인 번호를 알려 주세요', 'Asked — tell main\'s admin the pin'))}>{L('main 에 연결 요청', 'Ask main')}</Button>
-              {st.pending && <span>{st.pending.url} · {L('확인 번호', 'pin')} <b>{st.pending.pin}</b> · {st.pending.status}</span>}
+              {st.pending && <span>{st.pending.url} · {L('확인 번호', 'pin')} <b>{st.pending.pin}</b> · {st.pending.held ? L('보류', 'held') : st.pending.status}
+                {(st.pending.comments || []).map((m, j) => <span key={j}> · {m.by}: {m.text}</span>)}</span>}
             </div>)}
         {st.requests.map((r) => (
           <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

@@ -21,7 +21,8 @@ export default function IconPick({ value, onChange, disabled, color }) {
   const ref = useRef(null)
   const btnRef = useRef(null)
 
-  const POP_W = 7 * 34 + 16, POP_H = 300
+  // 7 cells + gaps + padding + border, and room for the grid's scrollbar (always drawn on some Macs).
+  const POP_W = 7 * 30 + 6 * 4 + 16 + 2 + 16, POP_H = 300
   function place() {
     const b = btnRef.current?.getBoundingClientRect()
     if (!b) return
@@ -71,7 +72,7 @@ export default function IconPick({ value, onChange, disabled, color }) {
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="search…"
             style={{ height: 28, borderRadius: 'var(--rack-radius, 0)', fontSize: 'var(--fs-medium, 14px)', padding: '0 9px',
               backgroundColor: 'var(--dock-input-bg)', color: 'var(--dock-text-primary)', border: '1px solid var(--dock-input-border)' }} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 30px)', gap: 4, overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 30px)', gap: 4, overflowY: 'auto', overflowX: 'hidden', scrollbarGutter: 'stable' }}>
             {shown.map((ic) => (
               // set-plain: the grid lives inside a settings panel, whose one
               // button rule would give each 30px cell 11px of side padding and

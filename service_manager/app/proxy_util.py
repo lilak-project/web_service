@@ -25,7 +25,7 @@ import httpx
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
-from . import registry
+from . import gitinfo, registry
 
 
 def login_redirect_or_401(request: Request) -> HTTPException:
@@ -86,6 +86,10 @@ def service_facts(name: str, manifest: dict, project: str = "") -> dict:
         "color": manifest.get("color") or "",
         "icon": manifest.get("icon") or "",
         "project": project,
+        # Which portal and which build of it: a record address copied from a
+        # page opened as localhost still says where it is from (racklist pathline).
+        "host": gitinfo.hostname(),
+        "version": gitinfo.portal_version() or "",
     }
 
 

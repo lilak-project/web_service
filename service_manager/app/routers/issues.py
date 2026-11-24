@@ -630,6 +630,10 @@ def link_status(rid: str, claim: str = ""):
         if not r or not secrets.compare_digest(r.get("claim", ""), claim or ""):
             raise HTTPException(404, "요청을 찾을 수 없습니다 (만료되었을 수 있습니다).")
         out["status"] = r["status"]
+        if r["status"] == "pending":         # held by this side's manager: the opinions, for the asker to read
+            from .. import held
+            h = held.get(held.pid("issues", str(rid)))
+            out.update(held=h["held"], comments=h["comments"])
         if r["status"] == "approved" and r.get("token"):
             out["token"] = r.pop("token")
             r["status"] = "delivered"
@@ -651,6 +655,10 @@ def _check_pending() -> None:
         st = {"status": "joined", "main": {"url": p["url"], "token": r.json()["token"]}}
     elif r.status_code == 200 and r.json().get("status") == "rejected":
         st = {"status": "rejected"}
+    elif r.status_code == 200 and (r.json().get("held"), r.json().get("comments") or []) != (p.get("held"), p.get("comments") or []):
+        got = r.json()                         # still waiting, with main's opinion: kept to show beside the request
+        _edit(lambda d: d["pending"].update(held=bool(got.get("held")), comments=got.get("comments") or []))
+        return
     else:
         return
 
@@ -670,7 +678,7 @@ def admin_state(_: models.User = Depends(require_portal_admin)):
             "webhook_url": f"{config.BASE_URL}/api/github/webhook", "kinds": kinds(),
             "accept_external": accepts_external(),
             "main": {"url": d["main"]["url"]} if _main() else None,
-            "pending": {k: (d.get("pending") or {}).get(k) for k in ("url", "pin", "status")} if d.get("pending") else None,
+            "pending": {k: (d.get("pending") or {}).get(k) for k in ("url", "pin", "status", "held", "comments")} if d.get("pending") else None,
             "requests": [{k: r.get(k) for k in ("id", "at", "from_url", "from_name", "by")} | {"pin": sync.pin(r["claim"])}
                          for r in d.get("requests") or [] if r.get("status") == "pending"],
             "subs": [{k: s.get(k) for k in ("name", "url", "at")} for s in d.get("subs") or []]}

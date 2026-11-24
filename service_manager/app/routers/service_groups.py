@@ -171,6 +171,9 @@ def sync_set_groups() -> None:
         if st.get("id"):
             g["share_set_id"] = st["id"]
         g.pop("labels", None)
+        # Cards already in the group keep the order they were dragged into; new ones go last.
+        had = {k: i for i, k in enumerate(g.get("members", []))}
+        keys.sort(key=lambda k: had.get(k, len(had)))
         g["members"] = _clean_members(d, g["id"], keys)
     _write(d)
 
@@ -290,8 +293,13 @@ def update_group(gid: str, body: GroupBody, _: models.User = Depends(require_por
         _write(d)
         return lo
     g = _find(d, gid)
+    # A set's group may be reordered, not refilled. The sidebar sends the cards it shows;
+    # members it does not show (hidden in sets) keep their place at the end.
     if g.get("share_set") and body.members is not None:
-        raise HTTPException(400, "공유 세트로 만든 그룹입니다. 구성은 Share sets에서 바꿉니다.")
+        had = g.get("members", [])
+        if not set(body.members) <= set(had):
+            raise HTTPException(400, "공유 세트로 만든 그룹입니다. 구성은 Share sets에서 바꿉니다.")
+        body.members = list(dict.fromkeys(body.members)) + [k for k in had if k not in body.members]
     _apply(g, body, d)
     _write(d)
     return g

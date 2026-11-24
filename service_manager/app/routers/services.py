@@ -167,6 +167,10 @@ def create_access_request(
     if not _pending(db, user.id, name, proj):
         db.add(AccessRequest(user_id=user.id, service_name=name, project=proj))
         db.commit()
+    else:                                    # asked again after an opinion: a held one waits again
+        from .. import held
+        for r in db.query(AccessRequest).filter_by(user_id=user.id, service_name=name, project=proj, status="pending"):
+            held.release(held.pid("access", str(r.id)))
     return {"requested": True}
 
 
@@ -408,19 +412,40 @@ def _to_resolve(db: Session, user: models.User) -> list:
 def my_requests(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
     """What the account card counts: requests waiting for this account's answer, and the
     answers to its own that it has not looked at yet."""
+    from .. import held
     seen = set(prefs.get(user).get("req_seen") or [])
+    said = prefs.get(user).get("held_seen") or {}        # {pid: opinions read so far}
     mine = db.query(AccessRequest).filter(AccessRequest.user_id == user.id).order_by(AccessRequest.id.desc()).limit(20).all()
-    rows = [{"id": r.id, "service": r.service_name, "project": r.project, "status": r.status,
-             "created_at": r.created_at.isoformat() if r.created_at else None,
-             "unseen": r.status != "pending" and r.id not in seen} for r in mine]
-    return {"mine": rows, "unseen": sum(r["unseen"] for r in rows), "to_resolve": len(_to_resolve(db, user))}
+    rows = []
+    for r in mine:
+        # A pending one a manager put on hold says so, with the opinions (to read, and to ask again).
+        p = held.pid("access", str(r.id))
+        h = held.get(p) if r.status == "pending" else {"held": False, "comments": []}
+        rows.append({"id": r.id, "service": r.service_name, "project": r.project,
+                     "status": "held" if h["held"] else r.status, "comments": h["comments"],
+                     "created_at": r.created_at.isoformat() if r.created_at else None,
+                     "unseen": (r.status != "pending" and r.id not in seen) or len(h["comments"]) > int(said.get(p) or 0)})
+    out = {"mine": rows, "unseen": sum(r["unseen"] for r in rows), "to_resolve": len(_to_resolve(db, user))}
+    if user.pending_email:                   # its change of address, waiting or held with an opinion
+        p = held.pid("email", str(user.id))
+        h = held.get(p)
+        out["email"] = {"pending": user.pending_email, "status": "held" if h["held"] else "waiting", "comments": h["comments"]}
+        out["unseen"] += len(h["comments"]) > int(said.get(p) or 0)
+    if permissions.is_admin(user):           # host paths a service asked for, waiting for a manager
+        from . import reach
+        out["paths_waiting"] = reach.waiting()
+    return out
 
 
 @router.post("/api/access-requests/seen")
 def my_requests_seen(user: models.User = Depends(require_portal_user), db: Session = Depends(get_db)):
     rows = db.query(AccessRequest.id).filter(AccessRequest.user_id == user.id, AccessRequest.status != "pending") \
         .order_by(AccessRequest.id.desc()).limit(20).all()
-    prefs.put(user, req_seen=[r.id for r in rows])
+    from .. import held
+    pids = [held.pid("email", str(user.id))] + [held.pid("access", str(r.id)) for r in db.query(AccessRequest.id).filter(
+        AccessRequest.user_id == user.id, AccessRequest.status == "pending").all()]
+    prefs.put(user, req_seen=[r.id for r in rows],
+              held_seen={p: n for p in pids if (n := len(held.get(p)["comments"]))})
     db.commit()
     return {"ok": True}
 
@@ -468,6 +493,8 @@ def admin_resolve_request(
     else:
         raise HTTPException(status_code=400, detail="action must be approve or reject")
     db.commit()
+    from .. import held
+    held.drop(held.pid("access", str(r.id)))
     return {"id": rid, "status": r.status}
 
 

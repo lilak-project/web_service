@@ -91,6 +91,10 @@
   min-height: var(--rack-ctl);
   padding: 0 9px;
   border-radius: var(--rack-radius, 0);
+  /* Seen before it is clicked: a box with an edge, not a grey bar. */
+  border: 1px solid var(--dock-input-border);
+  background: var(--dock-input-bg);
+  color: var(--dock-text-primary);
 }
 :is(.set-panel, .set-card, .set-row) textarea { padding: 7px 9px; }
 :is(.pl-setpage, .pl-mgpage, .svc-mg) :is(h2, h3) { font-size: var(--fs-medium, 14px); font-weight: var(--rack-weight); margin: 12px 0 5px; }
@@ -131,8 +135,12 @@
   background: none; border: 0; padding: 0; margin: 0;
   font: inherit; color: inherit; cursor: pointer;
 }
-.set-bar .set-fold svg { transition: transform .12s; flex-shrink: 0; }
+.set-bar .set-fold svg { transition: transform .2s; flex-shrink: 0; }
 .set-bar .set-fold.open svg { transform: rotate(90deg); }
+.set-foldbody { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .2s ease; }
+.set-foldbody.open { grid-template-rows: 1fr; }
+.set-foldbody > div { overflow: hidden; min-height: 0; }
+@media (prefers-reduced-motion: reduce) { .set-foldbody { transition: none; } }
 .set-bar .sp { flex: 1; }
 .set-bar .hint { color: var(--dock-info-text); }
 /* Irreversible things get their own panel, one per page, at the bottom. */

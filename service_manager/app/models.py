@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Integer, String, Text, UniqueConstraint,
+    Boolean, Column, DateTime, Float, Integer, String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base
 
@@ -266,6 +266,22 @@ class McpToken(Base):
     revoked_at = Column(DateTime, nullable=True)
     last_used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_now)
+
+
+class McpConnection(Base):
+    """An MCP client the portal has seen: one row per MCP session (the Mcp-Session-Id handed out at
+    initialize), else per token and address. Kept SEEN_DAYS (routers/mcp.py); times are epoch seconds."""
+    __tablename__ = "portal_mcp_connections"
+
+    sid = Column(String(80), primary_key=True)
+    token_id = Column(Integer, nullable=False, index=True)
+    client = Column(String(80), nullable=False, default="")
+    agent = Column(String(120), nullable=False, default="")
+    where = Column(String(64), nullable=False, default="")
+    calls = Column(Integer, nullable=False, default=0)
+    tool = Column(String(64), nullable=False, default="")
+    first = Column(Float, nullable=False)
+    last = Column(Float, nullable=False, index=True)
 
 
 class Passkey(Base):

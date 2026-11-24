@@ -563,13 +563,18 @@ export default function SidebarPortal({
   }, [isManager, user?.id])  // eslint-disable-line react-hooks/exhaustive-deps
   // Access requests waiting for this account's answer + answers to its own it has not seen.
   const [reqN, setReqN] = useState(0)
+  const [pathsN, setPathsN] = useState(0)          // host paths a service asked for, waiting for a manager
+  const [mineN, setMineN] = useState(0)            // answers to this account's own requests, not yet seen
   useEffect(() => {
-    if (!user) { setReqN(0); return }
-    const ask = () => launcher.get('/access-requests').then((r) => setReqN((r.data.to_resolve || 0) + (r.data.unseen || 0))).catch(() => {})
+    if (!user) { setReqN(0); setPathsN(0); return }
+    const ask = () => launcher.get('/access-requests').then((r) => {
+      setReqN((r.data.to_resolve || 0) + (r.data.unseen || 0)); setPathsN(r.data.paths_waiting || 0); setMineN(r.data.unseen || 0)
+    }).catch(() => {})
     ask()
-    const t = setInterval(ask, 60000)
+    const t = setInterval(() => { if (document.visibilityState === 'visible') ask() }, 15000)
     window.addEventListener('portal:requests', ask)
-    return () => { clearInterval(t); window.removeEventListener('portal:requests', ask) }
+    window.addEventListener('focus', ask)
+    return () => { clearInterval(t); window.removeEventListener('portal:requests', ask); window.removeEventListener('focus', ask) }
   }, [user?.id])  // eslint-disable-line react-hooks/exhaustive-deps
   const [chatGo, setChatGo] = useState(null)        // { room, text, n } — a framed page asked for the chat
   const [agentFocus, setAgentFocus] = useState(null) // a run a framed page asked to show (Agents)
@@ -1017,7 +1022,8 @@ export default function SidebarPortal({
   // A share set's group follows its set: nothing goes in or out by dragging. Said
   // while dragging (an X on the band, a no-drop cursor), not after the drop.
   const setLocked = (gid) => !!(gid && (groups || []).find((g) => g.id === gid)?.share_set)
-  const refused = (gid) => setLocked(gid) || setLocked(gidOf(drag))
+  // Moving a card within its own set's group only reorders it, which is allowed.
+  const refused = (gid) => gid !== gidOf(drag) && (setLocked(gid) || setLocked(gidOf(drag)))
   const noDrop = (e, gid) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'none'; moveDrop({ no: gid ?? NOGROUP_ID }) }
   const onDrop = async () => {
     const key = drag
@@ -1078,7 +1084,16 @@ export default function SidebarPortal({
     onDragOver: (e) => {
       if (!drag) return
       if (refused(gid)) return noDrop(e, gid)
-      e.preventDefault(); moveDrop({ gid })
+      e.preventDefault()
+      // In the gap between a band's cards the line goes to the nearest gap, not the
+      // whole band: only the band's title (or an empty band) means "to its end".
+      const cs = e.target.closest?.('.pl-gitems') && [...e.currentTarget.querySelectorAll('.pl-card[data-key]')]
+        .filter((n) => n.closest('.pl-group') === e.currentTarget && !n.parentElement.closest('.pl-card[data-key]'))
+      if (cs?.length) {
+        const c = cs.find((n) => { const r = n.getBoundingClientRect(); return e.clientY < r.top + r.height / 2 })
+        return moveDrop(c ? { key: c.dataset.key, after: false } : { key: cs[cs.length - 1].dataset.key, after: true })
+      }
+      moveDrop({ gid })
     },
     onDrop: (e) => { e.preventDefault(); onDrop() },
   })
@@ -1756,9 +1771,11 @@ export default function SidebarPortal({
                 {(unread > 0 || atMe > 0) && !chatOpen && <b className={`pc-unread${atMe > 0 ? ' at' : ''}`}>{atMe > 0 ? `@${atMe}` : unread > 99 ? '99+' : unread}</b>}
                 {/* What waits for this person's yes: access requests, and inbox candidates — the
                     inbox has no card of its own on the bar (hidden), so its count shows here. */}
-                {reqN + inbox.items.length > 0 && <b className="pc-unread pc-reqs"
-                  title={[reqN > 0 && `${tr('p_access_requests')} ${reqN}`, inbox.items.length > 0 && `Inbox ${inbox.items.length}`].filter(Boolean).join(' · ')}>
-                  {reqN + inbox.items.length > 99 ? '99+' : reqN + inbox.items.length}</b>}
+                {/* The inbox holds what waits for this account (requests and paths included); beside it only the answers to its own requests. */}
+                {mineN + inbox.items.length > 0 && <b className="pc-unread pc-reqs"
+                  title={[mineN > 0 && `${tr('p_my_requests')} ${mineN}`,
+                    inbox.items.length > 0 && `Inbox ${inbox.items.length}`].filter(Boolean).join(' · ')}>
+                  {mineN + inbox.items.length > 99 ? '99+' : mineN + inbox.items.length}</b>}
                 {issuesN > 0 && <b className="pc-unread pc-issues" title={`${tr('p_feedback')} ${issuesN}`}>{issuesN > 99 ? '99+' : issuesN}</b>}
               </span>
               <span className="pl-txt">{user?.username}</span>
@@ -1888,6 +1905,7 @@ export default function SidebarPortal({
                   onClick={() => { if (view !== 'settings') { setSel(null); setView('settings') } onSettingsTab?.(key) }}>
                   <span className="pl-txt">{label}</span>
                   {key === 'me' && reqN > 0 && <b className="pl-badge" style={{ position: 'static' }}>{reqN > 99 ? '99+' : reqN}</b>}
+                  {key === 'paths' && pathsN > 0 && <b className="pl-badge" style={{ position: 'static' }}>{pathsN > 99 ? '99+' : pathsN}</b>}
                   {key === 'inbox' && inbox.items.length > 0 && <b className="pl-badge" style={{ position: 'static' }}>{inbox.items.length > 99 ? '99+' : inbox.items.length}</b>}
                   {key === 'feedback' && issuesN > 0 && <b className="pl-badge pl-issues" style={{ position: 'static' }}>{issuesN > 99 ? '99+' : issuesN}</b>}
                   {MANAGER_PAGES.has(key) && <Icon name="crown" size={13} className="pl-c2mgr" aria-label={tr('p_manager')} />}

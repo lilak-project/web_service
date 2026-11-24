@@ -214,6 +214,70 @@ def delegate(person_auth: str, to: str, minutes: int = 5) -> str:
         raise PermissionError(said or f"delegate {to} → {e.code}") from None
 
 
+_reach_cache: dict = {}                         # real path -> (expiry_monotonic, {status, comments})
+_REACH_TTL = 10
+
+
+def reach(path, why: str = "") -> bool:
+    """May this service use `path`, a host path outside the portal's data folder? (reach_status says why not.)"""
+    return reach_status(path, why) == "approved"
+
+
+def reach_status(path, why: str = "") -> str:
+    return reach_info(path, why)["status"]
+
+
+def reach_info(path, why: str = "", again: bool = False) -> dict:
+    """{status, comments} for one host path this service wants to use. `comments` is what the
+    portal's manager said when putting the request on hold ([{by, via, at, text}]); `again=True`
+    asks anew after that (a changed reason, a narrower need), and a held request waits again.
+
+    status: "approved", "waiting" (asked, no manager has answered), "held" (a manager answered with
+    an opinion instead of yes or no: read `comments`), "blocked", "outside" (not in the home
+    folder: no request is made for it, a manager adds such a path by hand), or "unreachable" (the
+    portal did not answer: treated as a no) — for one host path this service wants to use.
+
+    Anything under PORTAL_DATA_ROOT is the portal's own and always yes. For the rest the portal
+    decides (POST /api/reach/check, shown this service's PORTAL_SERVICE_KEY): its manager approves
+    paths per service on the account menu's Outside paths page, and a path asked for the first
+    time waits there. Answers are kept a few seconds. A service run on its own (no portal) is
+    not asked; a portal that cannot be reached is a no."""
+    real = os.path.realpath(os.path.expanduser(str(path)))
+    root = os.environ.get("PORTAL_DATA_ROOT")
+    if root and (real == os.path.realpath(root) or real.startswith(os.path.realpath(root).rstrip("/") + "/")):
+        return {"status": "approved", "comments": []}
+    if not (_PORTAL_PORT and os.environ.get("PORTAL_SERVICE_KEY")):
+        return {"status": "approved", "comments": []}
+    now = time.monotonic()
+    hit = _reach_cache.get(real)
+    if hit and hit[0] > now and not again:
+        return hit[1]
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{_PORTAL_PORT}/api/reach/check", method="POST",
+        data=json.dumps({"path": real, "why": why, "again": bool(again)}).encode(),
+        headers={"Content-Type": "application/json",
+                 "X-Portal-Service": os.environ.get("PORTAL_SERVICE", ""),
+                 "X-Portal-Service-Key": os.environ.get("PORTAL_SERVICE_KEY", "")})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            got = json.loads(r.read())
+            ok = {"status": "approved" if got.get("allowed") else (got.get("status") or "blocked"),
+                  "comments": got.get("comments") or []}
+    except Exception:                          # noqa: BLE001 — unreachable or refused: not allowed
+        ok = {"status": "unreachable", "comments": []}
+    if len(_reach_cache) > 512:
+        _reach_cache.clear()
+    _reach_cache[real] = (now + _REACH_TTL, ok)
+    return ok
+
+
+def require_reach(path, why: str = "") -> None:
+    """reach(), refusing with what to do about it."""
+    if not reach(path, why):
+        raise HTTPException(403, f"이 경로는 포털에서 승인되지 않았습니다: {path} — 매니저가 계정 메뉴의 "
+                                 "'바깥 경로'에서 승인하면 쓸 수 있습니다.")
+
+
 def _portal_db_path() -> Path:
     root = Path(os.environ.get("PORTAL_DATA_ROOT", "/app/data"))
     return root / "_portal" / "portal.db"
@@ -244,5 +308,5 @@ def list_accounts() -> list[dict]:
 __all__ = [
     "SECRET_KEY", "ALGORITHM", "MANAGER_COLOR",
     "decode_token", "bearer_from_request", "introspect", "fresh_payload",
-    "identity", "list_accounts", "delegate",
+    "identity", "list_accounts", "delegate", "reach", "reach_status", "reach_info", "require_reach",
 ]

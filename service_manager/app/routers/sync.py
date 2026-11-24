@@ -476,6 +476,10 @@ def pair_status(svc: str, rid: str, claim: str = ""):
     if not r or not _secrets.compare_digest(r.get("claim", ""), claim or ""):
         raise HTTPException(404, "요청을 찾을 수 없습니다 (만료되었을 수 있습니다).")
     out = {"status": r["status"], "project": r.get("project") or "", "two_way": bool(r.get("accept_push"))}
+    if r["status"] == "pending":             # put on hold by this side's manager: the opinions, for the asker to read
+        from .. import held
+        h = held.get(held.pid("sync", r.get("batch") or f"{svc}:{rid}"))
+        out.update(held=h["held"], comments=h["comments"])
     if r["status"] == "approved" and r.get("token"):
         out["token"] = r.pop("token")
         r["status"] = "delivered"
@@ -592,6 +596,9 @@ def _check_pending(svc: str) -> list:
             continue
         except Exception:                        # noqa: BLE001 — main away: next time
             continue
+        if st["status"] == "pending" and (st.get("held"), st.get("comments") or []) != (p.get("held"), p.get("comments") or []):
+            p.update(held=bool(st.get("held")), comments=st.get("comments") or [])     # main's opinion, shown on the Sync page
+            changed = True
         if st["status"] == "rejected":
             p["status"], changed = "rejected", True
         elif st.get("token"):
@@ -1245,8 +1252,9 @@ def all_history(_: models.User = Depends(require_portal_admin)):
     for svc in registry.list_service_names():
         for p in sync.read_list(svc, "sync-pending.json"):
             out.append({"dir": "sent", "svc": svc, "url": p.get("url"), "project": p.get("project") or "",
-                        "status": p.get("status"), "pin": p.get("bpin") or p.get("pin"), "at": p.get("at"),
-                        "two_way": bool(p.get("two_way")), "error": p.get("error")})
+                        "status": "held" if p.get("status") == "pending" and p.get("held") else p.get("status"),
+                        "pin": p.get("bpin") or p.get("pin"), "at": p.get("at"),
+                        "two_way": bool(p.get("two_way")), "error": p.get("error"), "comments": p.get("comments") or []})
         for r in sync.read_list(svc, "sync-requests.json"):
             out.append({"dir": "got", "svc": svc, "url": r.get("from_url"), "name": r.get("from_name"),
                         "by": r.get("by"), "project": r.get("project") or "", "status": r.get("status"),

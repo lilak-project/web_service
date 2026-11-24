@@ -40,7 +40,6 @@ export function Panel({ title, hint, right, danger, bare, fold, open: openProp, 
   // nothing outside the panel needs to know — and a panel you closed stays shut
   // while you work in the one below it.
   const [open, setOpen] = useState(openProp !== false)
-  const shown = !fold || open
   return (
     <section className={`set-panel${danger ? ' danger' : ''}`} style={style}>
       {(title || hint || right || strip) && (
@@ -50,7 +49,7 @@ export function Panel({ title, hint, right, danger, bare, fold, open: openProp, 
           {!strip && (fold ? (
             // The click reaches the strip, which folds; the button is here for the keyboard.
             <button type="button" className={`set-plain set-fold${open ? ' open' : ''}`} aria-expanded={open}>
-              <Icon name="caret-right" size={12} />
+              <Icon name="caret-right" size={15} weight="bold" />
               <b>{title}</b>
             </button>
           ) : title && <b>{title}</b>)}
@@ -59,7 +58,12 @@ export function Panel({ title, hint, right, danger, bare, fold, open: openProp, 
           {fold && right ? <span style={{ display: 'contents' }} onClick={(e) => e.stopPropagation()}>{right}</span> : right}
         </header>
       )}
-      {shown && (bare ? children : <div className={FIELD_CARD_CLASS}>{children}</div>)}
+      {fold
+        // Kept mounted and slid shut (grid rows 1fr → 0fr), so folding animates.
+        ? <div className={`set-foldbody${open ? ' open' : ''}`} inert={open ? undefined : ''}>
+            <div>{bare ? children : <div className={FIELD_CARD_CLASS}>{children}</div>}</div>
+          </div>
+        : bare ? children : <div className={FIELD_CARD_CLASS}>{children}</div>}
     </section>
   )
 }
@@ -103,7 +107,7 @@ export const fieldMuted = { ...FIELD_TEXT, color: 'var(--dock-text-secondary)' }
 export const fieldChip = {
   display: 'inline-flex', alignItems: 'center', gap: 4, ...FIELD_TEXT,
   padding: '0 4px 0 8px', borderRadius: 'var(--rack-radius, 0)',
-  border: '1px solid var(--dock-border-subtle)', background: 'var(--dock-surface-2)' }
+  border: '1px solid var(--dock-border-strong)', background: 'color-mix(in srgb, var(--dock-text-primary) 12%, var(--dock-surface-2))' }
 
 /** The one input style, for the places that cannot use a plain <input>. */
 export const fieldInput = {

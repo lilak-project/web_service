@@ -576,7 +576,12 @@ export default function ProjectsPage() {
   const fixedKeys = new Set(fixedGroups.flatMap((g) => g.members || []))
   const fixedIds = new Set(fixedGroups.map((g) => g.id))
   const shownGroups = mine
-    ? [...fixedGroups,
+    ? [...fixedGroups.map((g) => {
+      // This account's own order for a set's group; cards it has not placed go last.
+      const o = layout.setOrder?.[g.id] || []
+      const at = (k) => (o.indexOf(k) < 0 ? 1e4 : o.indexOf(k))
+      return { ...g, members: [...(g.members || [])].sort((a, b) => at(a) - at(b)) }
+    }),
       ...layout.groups.filter((g) => !g.share_set && !fixedIds.has(g.id))
         .map((g) => ({ ...g, members: g.members.filter((k) => !fixedKeys.has(k)), label: g.name, personal: true })),
       { ...looseG, hidden: !!layout.looseHidden }]
@@ -645,7 +650,11 @@ export default function ProjectsPage() {
   // A band draws its cards in its group's member order: a move inside a group
   // is that list, rewritten.
   async function setMembers(gid, members) {
-    if (fixedIds.has(gid) || members.some((k) => fixedKeys.has(k))) return lockedMsg()
+    // A set's group: the shared layout may reorder its own cards, nothing else.
+    const own = new Set(fixedGroups.find((g) => g.id === gid)?.members || [])
+    const reorder = fixedIds.has(gid) && members.every((k) => own.has(k))
+    if (!reorder && (fixedIds.has(gid) || members.some((k) => fixedKeys.has(k)))) return lockedMsg()
+    if (reorder && writeMine) return saveLayout((L) => ({ ...L, setOrder: { ...(L.setOrder || {}), [gid]: members } }))
     if (writeMine) {
       return saveLayout((L) => { for (const k of members) dropFrom(L, k); const g = L.groups.find((x) => x.id === gid); if (g) g.members = members; return L })
     }

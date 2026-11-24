@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from . import config
 from . import autostart
 from .routers import service_groups  # noqa: E402
-from .routers import accounts, agent, auth, chat, passkeys, home, iconlab, inbox, issues, links, mcp, project_mgmt, projects, proxy, reports, scaffold, services, store, sync as sync_router, system
+from .routers import accounts, agent, auth, chat, passkeys, home, iconlab, inbox, issues, links, mcp, project_mgmt, projects, proxy, reach, reports, scaffold, services, store, sync as sync_router, system
 
 config.ensure_dirs()
 
@@ -108,6 +108,7 @@ app.include_router(iconlab.router)
 app.include_router(reports.router)         # /api/reports + /api/admin/reports (feedback)
 app.include_router(issues.router)          # /api/github/webhook + /api/issues/* (reports ↔ GitHub / main portal)
 app.include_router(inbox.router)           # /api/inbox/sources (the caller's inbox projects, for the cover)
+app.include_router(reach.router)           # /api/reach/check + /api/admin/reach (host paths a service may use)
 app.include_router(system.router)          # /api/admin/system/ports (managed-service port window)
 app.include_router(project_mgmt.router)   # /api/services/{svc}/projects… + /pp/…
 app.include_router(projects.router)

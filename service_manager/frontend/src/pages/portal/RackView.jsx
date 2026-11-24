@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { tr } from 'lilak-ui'
 import { launcher, errText } from '../../api'
 import { useLang } from '../../context/LangContext'
-import { Panel, Row, Pill } from './Field'
+import { Panel, Row, Pill, fieldChip } from './Field'
 import AdminEditor from './AdminEditor'
 import ServiceManagePanel from './ServiceManagePanel'
 import ServiceProjects from './ServiceProjects'
@@ -184,12 +184,34 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
     </div>
   )
   const zoneStyle = (at) => (over === at ? { outline: '2px solid var(--dock-info-text)', outlineOffset: -1 } : undefined)
-  const card = (c) => {
+  // A card's name is changed on the card: click the name, type, Enter (Esc drops it). The folder id stays.
+  const [naming, setNaming] = useState(null)       // { key, v }
+  const rename = async (c, v) => {
+    setNaming(null)
+    if (!v.trim() || v.trim() === c.name) return
+    try { await launcher.put(`/services/${c.svc}/projects/${c.proj}/name`, { name: v.trim() }); loadProjects(c.svc); onChanged?.() }
+    catch (e) { setMsg({ tone: 'bad', text: errText(e) }) }
+  }
+  // "Unify names": every card of a set as "<service> (<set>)". The first click only shows it on the
+  // cards (old struck, new beside it); Apply saves, Cancel leaves the names as they were.
+  const [unify, setUnify] = useState(null)          // the set index being previewed
+  const unified = (st, c) => `${label(c.svc)} (${st.name.trim()})`
+  const nameAll = async (st, inSet) => {
+    setUnify(null)
+    const todo = inSet.filter((c) => unified(st, c) !== c.name)
+    try {
+      for (const c of todo) await launcher.put(`/services/${c.svc}/projects/${c.proj}/name`, { name: unified(st, c) })
+      for (const v of new Set(todo.map((c) => c.svc))) loadProjects(v)
+      if (todo.length) onChanged?.()
+    } catch (e) { setMsg({ tone: 'bad', text: errText(e) }) }
+  }
+  const card = (c, to) => {                          // to: the name it would get (Unify names preview)
     const on = picked.has(c.key)
+    const typing = naming?.key === c.key
     return (
       // Not a <button>: Firefox will not drag one.
-      <div key={c.key} role="button" tabIndex={0} aria-pressed={on} draggable onClick={() => toggle(c.key)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(c.key) } }}
+      <div key={c.key} role="button" tabIndex={0} aria-pressed={on} draggable={!typing} onClick={() => typing || toggle(c.key)}
+        onKeyDown={(e) => { if (typing) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(c.key) } }}
         onDragStart={(e) => {
           dragged.current = on ? pickedCards : [c]
           e.dataTransfer.effectAllowed = 'move'
@@ -204,7 +226,16 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
         <span style={{ width: 5, flex: 'none', background: c.color || 'var(--dock-border-strong)' }} />
         <span style={{ display: 'flex', flexDirection: 'column', padding: '4px 10px', lineHeight: 1.35 }}>
           <span style={{ color: 'var(--dock-text-secondary)', fontSize: 'var(--fs-small)' }}>{label(c.svc)}</span>
-          <span>{c.name}</span>
+          {to !== undefined && to !== c.name
+            ? <span><s style={{ color: 'var(--dock-text-secondary)' }}>{c.name}</s> → <b style={{ fontWeight: 600 }}>{to}</b></span>
+            : typing
+            ? <input autoFocus value={naming.v} aria-label={label(c.svc)} style={{ width: 150 }}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setNaming({ key: c.key, v: e.target.value })}
+                onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.dataset.cancel = '1'; rename(c, naming.v) } if (e.key === 'Escape') { e.currentTarget.dataset.cancel = '1'; setNaming(null) } }}
+                onBlur={(e) => e.currentTarget.dataset.cancel || rename(c, naming.v)} />
+            : <span title={readOnly ? undefined : tr('p_share_click_rename')} style={readOnly ? undefined : { cursor: 'text' }}
+                onClick={readOnly ? undefined : (e) => { e.stopPropagation(); setNaming({ key: c.key, v: c.name }) }}>{c.name}</span>}
         </span>
       </div>
     )
@@ -366,12 +397,22 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
         <Row className="sub">{tr('p_share_tpl_explain')}</Row>
         <Row style={{ gap: 6, flexWrap: 'wrap' }}>
           {/* Buttons, not a <select>: in the portal frame a native menu swallowed the next click. */}
-          {tpls.map((t, k) => (
-            <button key={k} type="button" aria-pressed={mk.tpl === k} onClick={() => setMk({ ...mk, tpl: k })}
-              style={mk.tpl === k ? { fontWeight: 600, borderColor: 'var(--dock-border-focus)' } : undefined}>
-              {t.name}
-            </button>
-          ))}
+          {tpls.map((t, k) => {
+            const on = mk.tpl === k
+            // A tile like the set cards: picked = the same blue as a picked card. `set-plain` keeps the
+            // panel's outlined-button rule off it.
+            return (
+              <button key={k} type="button" className="set-plain" aria-pressed={on} onClick={() => setMk({ ...mk, tpl: k })}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, padding: '5px 12px', minWidth: 120,
+                  font: 'inherit', textAlign: 'left', cursor: 'pointer', color: 'var(--dock-text-primary)',
+                  border: `1px solid ${on ? 'var(--dock-info-text)' : 'var(--dock-border-default)'}`,
+                  boxShadow: on ? 'inset 0 0 0 1px var(--dock-info-text)' : 'none',
+                  background: on ? 'var(--dock-info-bg)' : 'var(--dock-surface)' }}>
+                <span>{t.name}</span>
+                <span style={{ color: 'var(--dock-text-secondary)', fontSize: 'var(--fs-small)' }}>{tr('p_share_tpl_n', t.services.length)}</span>
+              </button>
+            )
+          })}
           <input placeholder={tpls[mk.tpl]?.name || tr('p_share_tpl_name')} aria-label={tr('p_share_tpl_name')} value={mk.name}
             onChange={(e) => setMk({ ...mk, name: e.target.value })} />
           <input placeholder={tr('p_share_tpl_project')} aria-label={tr('p_share_tpl_project')} value={mk.project}
@@ -396,12 +437,14 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
       {(sets || []).map((st, i) => {
         const inSet = cards.filter((c) => st.members?.[c.svc] === c.proj)
         return (
-          zone(i, <Panel title={st.name} hint={tr('p_share_n', inSet.length)} bare style={zoneStyle(i)}
+          zone(i, <Panel title={st.name} hint={tr('p_share_n', inSet.length)} bare fold style={zoneStyle(i)}
             right={(
               <span style={{ display: 'flex', gap: 6 }}>
                 {/* The set's sidebar group follows it on its own (service_groups.sync_set_groups). */}
                 {!readOnly && <>
                   <button type="button" disabled={!picked.size || twoOfOne} onClick={() => moveHere(i)}>{tr('p_share_move_here')}</button>
+                  {inSet.length > 0 && <button type="button" disabled={!st.name.trim()} title={tr('p_share_click_rename')}
+                    aria-pressed={unify === i} onClick={() => setUnify(unify === i ? null : i)}>{tr('p_share_name_all')}</button>}
                   <button type="button" onClick={() => edit((s) => s.filter((_, k) => k !== i))}>{tr('p_share_delete_set')}</button>
                 </>}
                 {mayIssue(st) && <button type="button" disabled={dirty} title={dirty ? tr('p_share_tok_save_first') : undefined}
@@ -412,7 +455,7 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
               <Row className="sub" style={{ flexWrap: 'wrap', gap: 8 }}>
                 <span>{tr('p_share_tok_bound')}</span>
                 {boundTo(st).length ? boundTo(st).map((t) => (
-                  <span key={t.id}><b>{t.name}</b> · {t.can_write ? tr('p_mcp_write') : tr('p_mcp_read')} · {tr('p_mcp_used')} {t.last_used_at
+                  <span key={t.id}><span style={fieldChip}>{t.name}</span> · {t.can_write ? tr('p_mcp_write') : tr('p_mcp_read')} · {tr('p_mcp_used')} {t.last_used_at
                     ? new Date(`${t.last_used_at}Z`).toLocaleString('sv').slice(0, 16) : tr('p_mcp_never')}</span>
                 )) : <span>{tr('p_share_tok_none')}</span>}
               </Row>
@@ -439,11 +482,17 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
               <span className="sub">{tr('p_share_name')}</span>
               <input value={st.name} onChange={(e) => { const v = e.target.value; edit((s) => { s[i].name = v; return s }) }} />
             </Row>
-            <Row>{inSet.length ? inSet.map(card) : <span className="sub">{tr('p_share_empty')}</span>}</Row>
-            {!readOnly && inSet.length > 0 && (
-              <SetNames set={st} cards={inSet} label={label} two={TWO}
-                onSaved={(svcs) => { for (const v of svcs) loadProjects(v); onChanged?.() }} />
-            )}
+            <Row>{inSet.length ? inSet.map((c) => card(c, unify === i ? unified(st, c) : undefined)) : <span className="sub">{tr('p_share_empty')}</span>}</Row>
+            {unify === i && (() => {
+              const n = inSet.filter((c) => unified(st, c) !== c.name).length
+              return (
+                <Row style={{ background: 'var(--dock-info-bg)', gap: 6 }}>
+                  <span style={{ flex: 1 }}>{n ? tr('p_share_unify_ask', n, st.name.trim()) : tr('p_share_unify_none')}</span>
+                  {n > 0 && <button type="button" onClick={() => nameAll(st, inSet)}>{tr('p_share_unify_apply')}</button>}
+                  <button type="button" onClick={() => setUnify(null)}>{tr('p_cancel')}</button>
+                </Row>
+              )
+            })()}
             {/* Admins of every project in the set at once (one per row of a set: n/all). */}
             {/* A project admin sees this on the sets that are wholly theirs (the API decides). */}
             {st.id && Object.keys(st.members || {}).length > 0 && (
@@ -454,43 +503,10 @@ export default function RackView({ tab, look = 'rack', cards: allCards, bands = 
         )
       })}
 
-      {zone('out', <Panel title={tr('p_share_outside')} hint={tr('p_share_n', outside.length)} bare style={zoneStyle('out')}>
+      {zone('out', <Panel title={tr('p_share_outside')} hint={tr('p_share_n', outside.length)} bare fold style={zoneStyle('out')}>
         <Row>{outside.length ? outside.map(card) : <span className="sub">{tr('p_share_empty')}</span>}</Row>
       </Panel>)}
       </>}
     </>
-  )
-}
-
-/** The display names of a set's projects (the folder id stays): one by one, or all as
- *  "<service> (<set>)" at once. Saved on Enter or leaving the field. */
-function SetNames({ set, cards, label, two, onSaved }) {
-  const [draft, setDraft] = useState({})
-  const [err, setErr] = useState('')
-  const val = (c) => draft[c.key] ?? c.name
-  const save = async (list) => {
-    const todo = list.filter(([c, v]) => v.trim() && v.trim() !== c.name)
-    if (!todo.length) return
-    try {
-      for (const [c, v] of todo) await launcher.put(`/services/${c.svc}/projects/${c.proj}/name`, { name: v.trim() })
-      setErr(''); setDraft({}); onSaved([...new Set(todo.map(([c]) => c.svc))])
-    } catch (e) { setErr(e?.response?.data?.detail || tr('p_failed')) }
-  }
-  const suffix = (set.name || '').trim()
-  return (
-    <Row className="cols" style={{ ...two, height: 'auto', alignItems: 'start', paddingTop: 6, paddingBottom: 6 }}>
-      <span className="sub">{tr('p_share_card_names')}</span>
-      <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-        {cards.map((c) => (
-          <input key={c.key} value={val(c)} aria-label={label(c.svc)} title={label(c.svc)} style={{ width: 150 }}
-            onChange={(e) => { const v = e.target.value; setDraft((d) => ({ ...d, [c.key]: v })) }}
-            onKeyDown={(e) => { if (e.key === 'Enter') save([[c, val(c)]]); if (e.key === 'Escape') setDraft((d) => { const n = { ...d }; delete n[c.key]; return n }) }}
-            onBlur={() => save([[c, val(c)]])} />
-        ))}
-        <button type="button" disabled={!suffix} onClick={() => save(cards.map((c) => [c, `${label(c.svc)} (${suffix})`]))}>
-          {tr('p_share_name_all', suffix || '…')}</button>
-        {err && <Pill tone="bad">{err}</Pill>}
-      </span>
-    </Row>
   )
 }

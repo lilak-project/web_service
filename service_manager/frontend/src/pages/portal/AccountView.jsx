@@ -5,8 +5,10 @@ import { launcher } from '../../api'
 import { useLang } from '../../context/LangContext'
 import GroupsAdmin from './GroupsAdmin'
 import InvitesAdmin from './InvitesAdmin'
+import PathsAdmin from './PathsAdmin'
 import { Field, FieldActions, Panel, Row, Pill, fieldGrid, fieldInput, fieldMuted, fieldChip, FIELD_TEXT, FIELD_CARD_CLASS } from './Field'
 import SystemAdmin from './SystemAdmin'
+import McpView from './McpView'
 import SyncAll from './SyncAll'
 import { notify } from './settingsMsg'
 import FeedbackView from './FeedbackView'
@@ -58,7 +60,7 @@ function PwPrompt({ title, confirmLabel, cancelLabel, onSubmit, onCancel }) {
 
 // The settings sub-menu, shared so the header can drive it on narrow screens.
 // Pages only a manager sees; the menu marks them.
-export const MANAGER_PAGES = new Set(['map', 'sets', 'store', 'accounts', 'groups', 'invites', 'system', 'sync', 'handshake'])
+export const MANAGER_PAGES = new Set(['map', 'sets', 'store', 'accounts', 'groups', 'invites', 'paths', 'system', 'mcp', 'sync', 'handshake'])
 export function settingsMenu(isManager, lang, canSets = false) {
   return [
     // Home and its pages first: the account menu is where the cover starts.
@@ -78,7 +80,9 @@ export function settingsMenu(isManager, lang, canSets = false) {
       ['accounts', 'users', tr("p_accounts")],
       ['groups', 'tree', tr("p_groups")],
       ['invites', 'key', tr("p_invite_codes")],
+      ['paths', 'folder', tr("p_paths_title")],      // host paths each service may use (outside the portal's data)
       ['system', 'sliders', tr("p_system")],
+      ['mcp', 'robot', 'MCP'],
       ['sync', 'link', tr("p_sa_tab")],
       ['handshake', 'plug', tr("p_handshake")],
     ] : []),
@@ -121,6 +125,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   const [services, setServices] = useState([])
   const [requests, setRequests] = useState([])
   const [mine, setMine] = useState([])                 // my own access requests, newest first
+  const [mailAsk, setMailAsk] = useState(null)         // my change of address, when held: { status, comments }
   const [groupFilter, setGroupFilter] = useState('')
   const [tabInner, setTabInner] = useState('me')       // uncontrolled fallback
   const tab = tabProp ?? tabInner                      // 'me' | 'feedback' | 'accounts' | …
@@ -143,6 +148,7 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
       setRequests((await launcher.get('/admin/access-requests')).data)
       const mr = (await launcher.get('/access-requests')).data
       setMine(mr.mine || [])
+      setMailAsk(mr.email || null)
       if (mr.unseen) launcher.post('/access-requests/seen').then(() => window.dispatchEvent(new Event('portal:requests'))).catch(() => {})
       if (isManager) {
         setUsers((await launcher.get('/admin/users?detail=1')).data)
@@ -264,8 +270,12 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
       ))}
     </Panel>
   )
-  const reqTone = { approved: 'ok', rejected: 'bad' }
-  const reqWord = { approved: tr("p_approved"), rejected: tr("p_rejected_2"), pending: tr("p_req_waiting") }
+  const reqTone = { approved: 'ok', rejected: 'bad', held: 'warn' }
+  const reqWord = { approved: tr("p_approved"), rejected: tr("p_rejected_2"), pending: tr("p_req_waiting"), held: tr("p_ib_st_held") }
+  // What the one who decides said when holding a request: read here, then ask again.
+  const said = (list) => (list || []).map((m, i) => (
+    <span key={i} className="sub" style={{ flexBasis: '100%' }}>{m.by}: {m.text}</span>
+  ))
 
   const MyAccount = (
     <>
@@ -277,6 +287,11 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
               <span className="mono">{r.service}{r.project ? '/' + r.project : ''}</span>
               <Pill tone={reqTone[r.status]}>{reqWord[r.status] || r.status}</Pill>
               <span className="sub">{(r.created_at || '').slice(0, 10)}</span>
+              {r.status === 'held' && (<>
+                <span className="sp" />
+                <Button variant="secondary" onClick={() => run(launcher.post('/access-requests', { service: r.service, project: r.project || '' }), () => tr("p_req_again_done"))}>{tr("p_req_again")}</Button>
+              </>)}
+              {said(r.comments)}
             </Row>
           ))}
         </Panel>
@@ -333,6 +348,8 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
           <span>{me.email}</span>
           {verifyChip}
           {me.pending_email && <span style={fieldChip}>{tr("p_pending")}: {me.pending_email}</span>}
+          {mailAsk?.status === 'held' && <Pill tone="warn">{tr("p_ib_st_held")}</Pill>}
+          {said(mailAsk?.comments)}
         </Field>
 
         <Field label={tr("p_change_email")}>
@@ -552,13 +569,15 @@ export default function AccountView({ isManager, onChanged, onAccountGone, tab: 
   )
 
   const content = tab === 'me' ? MyAccount
-    : tab === 'inbox' ? <InboxView decided />
+    : tab === 'inbox' ? <InboxView decided isManager={isManager} />
     : tab === 'feedback' ? <FeedbackView isManager={isManager} me={me?.username} />
     : tab === 'agents' ? <AgentsView isManager={isManager} focus={agentFocus} />
     : tab === 'accounts' ? Accounts
     : tab === 'groups' ? <GroupsAdmin users={users} services={services} onChanged={load} />
     : tab === 'invites' ? <InvitesAdmin services={services} onChanged={load} scopes={isManager ? null : (me.admin_scopes || [])} />
+    : tab === 'paths' ? <PathsAdmin />
     : tab === 'system' ? <SystemAdmin />
+    : tab === 'mcp' ? <McpView />
     : tab === 'sync' ? <SyncAll />
     : tab === 'handshake' ? <GuideView onChanged={onChanged} />
     : MyAccount

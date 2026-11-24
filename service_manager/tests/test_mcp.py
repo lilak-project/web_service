@@ -45,6 +45,8 @@ class Gates(unittest.TestCase):
         cls.db = SessionLocal()
         cls.user = cls.db.query(models.User).filter(models.User.username == "admin").one()
         cls.calls = []
+        # Proposals here come from unregistered tokens: in the grace period (sender tests move it).
+        mcp.GRACE_UNTIL = "9999-12-31"
 
         # Stands in for the service behind /pp: a write to `taken` is a conflict.
         async def fake(request, grant, method, path, **kw):
@@ -81,7 +83,7 @@ class Gates(unittest.TestCase):
 
         async def inbox(request, grant, record, proj=""):
             cls.proposed.append(record)
-            return httpx.Response(200, json={"record": record})
+            return httpx.Response(200, json={**record, "status": "waiting"})       # the inbox answers with the card
         cls.proposed, cls.real_inbox, mcp._inbox = [], mcp._inbox, inbox
         # Which set's inbox (no inbox service installed here): the named set's, else "inbox".
         cls.real_inbox_of, mcp._inbox_of = mcp._inbox_of, lambda g, home: home.get("inbox") or "inbox"
@@ -112,6 +114,26 @@ class Gates(unittest.TestCase):
         self.assertTrue(r["isError"])
         r = call(self.issue(write=False), "create_service", name="fine")
         self.assertIn("쓸 수 없는 도구", r["content"][0]["text"])
+
+    def test_connections_name_the_client_its_token_and_its_calls(self):
+        admin = c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]
+        tok = mcp_tokens.issue(self.db, "conn-test", self.user, False, 30)
+        r = c.post("/mcp", headers={"Authorization": f"Bearer {tok}", "X-Forwarded-For": "6.6.6.6, 10.0.0.7"},
+                   json={"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                         "params": {"clientInfo": {"name": "claude-code", "version": "9.9"}}})
+        sid = r.headers["mcp-session-id"]
+        c.post("/mcp", headers={"Authorization": f"Bearer {tok}", "Mcp-Session-Id": sid, "X-Forwarded-For": "6.6.6.6, 10.0.0.7"},
+               json={"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "nope", "arguments": {}}})
+        self.assertEqual(c.get("/api/admin/mcp-connections", headers={"Authorization": f"Bearer {tok}"}).status_code, 401)
+        rows = [x for x in c.get("/api/admin/mcp-connections", headers={"Authorization": f"Bearer {admin}"}).json()
+                if x["token"] == "conn-test"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["client"], rows[0]["calls"], rows[0]["tool"], rows[0]["owner"], rows[0]["write"]),
+                         ("claude-code 9.9", 1, "nope", self.user.email or "admin", False))
+        self.assertNotIn(sid, str(rows))
+        self.assertEqual(rows[0]["where"], "10.0.0.7")           # the hop the front proxy wrote, not the client's claim
+        # kept in the DB, so a restart (a fresh process reading the table) still lists it
+        self.assertEqual(self.db.get(models.McpConnection, sid).calls, 1)
 
     def test_no_or_unknown_token_is_refused(self):
         self.assertEqual(c.post("/mcp", json={}).status_code, 401)
@@ -154,7 +176,7 @@ class Gates(unittest.TestCase):
         names = {t["name"] for t in rpc(tok, "tools/list").json()["result"]["tools"]}
         self.assertEqual(names, {"tags", "find", "related", "my_tasks", "job_context", "job_recipes", "guide", "job_status", "list_services", "search",
                                  "get_record", "by_tag",
-                                 "search_notes", "get_note", "note_units", "list_issues", "propose_note", "propose_tags", "propose_activity", "agent_run",
+                                 "search_notes", "get_note", "note_units", "list_issues", "propose_note", "propose_tags", "propose_activity", "agent_run", "my_proposals", "register_sender",
                                  "chat_rooms", "chat_read", "service_job"})
         r = call(tok, "add_note", title="x", body="y")
         self.assertTrue(r["isError"])
@@ -195,13 +217,13 @@ class Gates(unittest.TestCase):
         self.assertFalse(r["isError"])
         self.assertEqual(self.calls, [])                 # the note service was not touched
         rec = self.proposed[0]
-        self.assertEqual((rec["target"], rec["status"], rec["title"], rec["remark"]), ("note", "waiting", "제목", "확인 부탁"))
+        self.assertEqual((rec["target"], rec.get("status"), rec["title"], rec["remark"]), ("note", None, "제목", "확인 부탁"))  # the inbox sets it
         self.assertNotIn("feedback", rec)
 
     def test_a_proposal_cannot_set_its_own_status_or_feedback(self):
         r = call(self.issue(), "propose_note", title="t", body="b", why="w", status="approved", feedback="ok")
         self.assertFalse(r["isError"])
-        self.assertEqual(self.proposed[0]["status"], "waiting")
+        self.assertNotIn("status", self.proposed[0])
         self.assertNotIn("feedback", self.proposed[0])
 
     def test_a_proposal_names_a_new_note_or_a_real_one(self):
@@ -225,7 +247,7 @@ class Gates(unittest.TestCase):
         r = call(tok, "propose_activity", **why, name="TAMU", start="2026-11-20", kind="연구출장", status="approved", id="x")
         self.assertFalse(r["isError"])
         rec = self.proposed[0]
-        self.assertEqual((rec["target"], rec["status"], rec["name"], rec["start"]), ("activity", "waiting", "TAMU", "2026-11-20"))
+        self.assertEqual((rec["target"], rec.get("status"), rec["name"], rec["start"]), ("activity", None, "TAMU", "2026-11-20"))
         self.assertTrue(rec["id"].startswith("mcp-"))
 
     def test_an_activity_change_names_a_real_one_and_something_to_change(self):
@@ -252,6 +274,19 @@ class Gates(unittest.TestCase):
         grant = mcp.Grant("jwt", True, "t", "note")
         with self.assertRaises(mcp.ToolError):
             asyncio.run(mcp._portal(None, grant, "authors", "GET", "data", "authors"))
+
+    def test_a_tokens_scope_changes_in_place_and_holds_on_the_next_call(self):
+        tok = self.issue()
+        row = mcp_tokens.owner_of(self.db, tok)[0]
+        admin = c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]
+        h = {"Authorization": f"Bearer {admin}"}
+        self.assertEqual(c.put(f"/api/admin/mcp-tokens/{row.id}", headers=h, json={"scope": " note , authors "}).status_code, 200)
+        self.db.expire_all()
+        self.assertEqual(self.db.get(models.McpToken, row.id).scope, "note,authors")
+        self.assertTrue(mcp_tokens.allowed(self.db.get(models.McpToken, row.id).scope, "note"))
+        self.assertFalse(mcp_tokens.allowed(self.db.get(models.McpToken, row.id).scope, "inventory"))
+        self.assertEqual(c.put(f"/api/admin/mcp-tokens/{row.id}", headers=h, json={"scope": "set:nosuchset"}).status_code, 400)
+        self.assertEqual(c.put(f"/api/admin/mcp-tokens/{row.id}", json={"scope": ""}).status_code, 401)
 
     def test_a_log_is_written_and_added_to(self):
         sent = []
@@ -378,6 +413,113 @@ class Gates(unittest.TestCase):
             self.assertTrue(call(tok, "search", query="job", service="inbox")["isError"])     # not a readable service
         finally:
             mcp._self, mcp.registry.share_sets = real, real_sets
+
+    def test_held_proposals_are_read_back_and_sent_again_changed(self):
+        sets = [{"name": "manage", "members": {"note": "note", "inbox": "inbox"}}]
+        said = [{"by": "kim", "via": "", "at": "2026-11-24T10:00:00+09:00", "text": "제목을 고쳐 주세요"}]
+        # what the inbox's /api/mine gives THIS token: its own cards only (the inbox picks them by sender.via)
+        cards = [{"id": "mine-held", "kind": "note", "status": "held", "title": "옛 제목", "date": "2026-11-20",
+                  "remark": "w", "comments": said, "round": 0},
+                 {"id": "mine-done", "kind": "note", "status": "approved", "title": "x", "date": "2026-11-21", "comments": []}]
+        asked = []
+
+        async def inbox(request, grant, method, proj, path, **kw):
+            asked.append((grant.who, method, proj, path, kw.get("json"), kw.get("params")))
+            if path == "mine":
+                want = (kw.get("params") or {}).get("status")
+                return httpx.Response(200, json={"items": [c for c in cards if not want or c["status"] == want]})
+            return httpx.Response(200, json={"id": path.split("/")[1], "status": "waiting"})
+        real, real_sets, mcp._as_sender, mcp.registry.share_sets = mcp._as_sender, mcp.registry.share_sets, inbox, lambda: (sets, True)
+        try:
+            tok = self.issue()
+            r = json.loads(call(tok, "my_proposals")["content"][0]["text"])
+            self.assertEqual([(x["id"], x["status"]) for x in r["proposals"]], [("mine-held", "held"), ("mine-done", "approved")])
+            self.assertEqual((r["held"], r["proposals"][0]["comments"]), (1, said))     # what the person said comes back
+            json.loads(call(tok, "my_proposals", status="held")["content"][0]["text"])
+            self.assertEqual(asked[-1][5], {"status": "held"})
+            for bad in ("mine-done", "gone"):                                             # decided / not this token's
+                self.assertTrue(call(tok, "propose_note", title="새 제목", body="b", why="고침", revise=bad)["isError"], bad)
+            self.assertTrue(call(tok, "propose_activity", why="w", name="n", start="2026-11-30", revise="mine-held")["isError"])
+            asked.clear()
+            r = json.loads(call(tok, "propose_note", title="새 제목", body="b", why="고침", revise="mine-held",
+                                reply="제목 바꿨습니다")["content"][0]["text"])
+            self.assertEqual((r["id"], r["status"], r["revised"]), ("mine-held", "waiting", True))
+            self.assertEqual(self.proposed, [])                                           # the same card, not a new one
+            who, method, proj, path, body, _ = asked[-1]
+            self.assertEqual((who, method, proj, path), ("t", "POST", "inbox", "inbox/mine-held/resubmit"))
+            self.assertEqual((body["fields"]["title"], body["fields"]["remark"], body["text"]), ("새 제목", "고침", "제목 바꿨습니다"))
+            self.assertNotIn("status", body["fields"])
+        finally:
+            mcp._as_sender, mcp.registry.share_sets = real, real_sets
+
+    def test_a_proposal_goes_in_as_this_token(self):
+        """The inbox stamps the sender from the token it is called with: a delegated one, that inbox only, via = this token."""
+        from app import security
+        got = {}
+
+        class Client:
+            def __init__(self, **kw):
+                got["auth"] = kw["headers"]["Authorization"].split()[1]
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def request(self, method, url, **kw):
+                got["url"] = url
+                return httpx.Response(200, json={"id": "c1"})
+        real = mcp.httpx.AsyncClient
+        mcp.httpx.AsyncClient = Client
+        try:
+            tok = self.issue()
+            grant = mcp._authorize(tok)
+            import asyncio
+            asyncio.run(mcp._as_sender(type("R", (), {"app": None})(), grant, "POST", "research", "propose", json={}))
+        finally:
+            mcp.httpx.AsyncClient = real
+        claims = security.decode_access_token(got["auth"])
+        self.assertEqual((got["url"], claims["scope"], claims["via"]), ("/pp/inbox/research/api/propose", "inbox/research", "t"))   # via = the token name
+
+    def test_only_a_registered_sender_leaves_candidates(self):
+        from app import senders
+        tok = self.issue()
+        tid = mcp._authorize(tok).tid
+        note = dict(title="t", body="b", why="w")
+        try:
+            r = json.loads(call(tok, "propose_note", **note)["content"][0]["text"])   # grace: let in, told
+            self.assertIn("register_sender", r["notice"])
+            mcp.GRACE_UNTIL = "2000-01-01"
+            r = call(tok, "propose_note", **note)
+            self.assertTrue(r["isError"])
+            self.assertIn("register_sender", r["content"][0]["text"])
+            self.assertTrue(call(tok, "register_sender", name="정리", reads="sometimes", kinds=["note"])["isError"])
+            r = json.loads(call(tok, "register_sender", name="메일 정리", reads="never", kinds=["note"])["content"][0]["text"])
+            self.assertEqual((r["status"], r["row"]["token"]), ("waiting", "t"))
+            self.assertTrue(call(tok, "propose_note", **note)["isError"])                       # still waits for a yes
+            senders.decide(tid, True)                                                           # a manager's yes
+            self.proposed.clear()
+            r = json.loads(call(tok, "propose_note", **note)["content"][0]["text"])
+            self.assertNotIn("notice", r)
+            self.assertEqual(self.proposed[-1]["sendsAs"], {"name": "메일 정리", "kinds": ["note"], "mode": "never",
+                                                            "reads": "읽지 않음", "holdable": False})
+            self.assertTrue(call(tok, "propose_activity", why="w", name="n", start="2026-11-30")["isError"])   # notes only
+            senders.register(tid, "t", "x", "정리", ["note", "activity"], "schedule", "매일 10시")
+            self.assertFalse(call(tok, "propose_activity", why="w", name="n", start="2026-11-30")["isError"])
+            self.assertEqual(self.proposed[-1]["sendsAs"]["reads"], "매일 10시")
+            senders.drop(tid)
+            self.assertTrue(call(tok, "propose_note", **note)["isError"])                       # dropped
+            # the daily tag task's tokens: registered from the start, only on a portal that never registered anyone
+            seeded = mcp_tokens.issue(self.db, "set-manage", self.user, True, 30)
+            mcp._seed_senders()                                                                 # the file is there: no
+            self.assertTrue(call(seeded, "propose_note", **note)["isError"])
+            senders._file().unlink()
+            mcp._seed_senders()
+            self.assertFalse(call(seeded, "propose_note", **note)["isError"])
+            self.assertEqual(senders.info(mcp._authorize(seeded).tid)["row"]["reads"], "session")
+        finally:
+            mcp.GRACE_UNTIL = "9999-12-31"
 
     def test_managers_issue_and_revoke_tokens_and_others_cannot(self):
         admin = c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]
@@ -685,7 +827,7 @@ class Gates(unittest.TestCase):
 
         async def inbox(request, grant, record, proj):
             left.append((proj, record))
-            return httpx.Response(200, json={"record": record})
+            return httpx.Response(200, json=record)
         real, real_rack, real_inbox = mcp._portal, mcp._rack, mcp._inbox
         mcp._portal, mcp._rack, mcp._inbox, real_of = fake, lambda: ("authors",), inbox, mcp._inbox_of
         mcp._inbox_of = lambda grant, home: home.get("inbox", "")
@@ -1053,7 +1195,7 @@ class Gates(unittest.TestCase):
                          [{"svc": "inbox", "proj": "research", "set": "jobboard"}])
         admin = c.post("/api/auth/login", json={"username": "admin", "password": "admin-pass-1"}).json()["access_token"]
         self.assertEqual([s["set"] for s in c.get("/api/inbox/sources", headers={"Authorization": f"Bearer {admin}"}).json()],
-                         ["manage", "jobboard"])
+                         ["portal", "manage", "jobboard"])       # a manager also has the portal's own (paths, requests)
         self.assertEqual(c.get("/api/inbox/sources").status_code, 401)
 
     def test_a_proposal_goes_to_the_inbox_of_the_set_it_names_made_where_that_set_says(self):
@@ -1067,7 +1209,7 @@ class Gates(unittest.TestCase):
 
         async def inbox(request, grant, record, proj):
             went.append((proj, record.get("destProj")))
-            return httpx.Response(200, json={"record": record})
+            return httpx.Response(200, json=record)
         real_inbox, mcp._inbox = mcp._inbox, inbox
         try:
             g = mcp.Grant("jwt", True, "t", "", {})

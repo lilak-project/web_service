@@ -15,7 +15,10 @@ An MCP token is valid here only: it is no portal JWT, so /api and /pp refuse it.
 """
 import json
 import logging
+import os
 import re
+import secrets
+import time
 import uuid
 from datetime import date, datetime
 from pathlib import Path
@@ -29,7 +32,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import config, mcp_tokens, models, permissions, registry, security
+from .. import config, gitinfo, mcp_tokens, models, senders, permissions, registry, security
 from ..db import SessionLocal, get_db
 from ..deps import portal_token, require_portal_admin, require_portal_user
 
@@ -74,6 +77,9 @@ _WITHIN = {**_WHERE, "set": {"type": "string", "description": "A share set's nam
 _SET = {"type": "string", "description": "A share set's name (list_services shows them): leave the candidate in that "
                                          "set's inbox, where its people approve it. Omit for your token's set, "
                                          "else the main one."}
+_REVISE = {"type": "string", "description": "The id of a candidate of yours a person held with a comment "
+                                            "(my_proposals): send it again, changed, as the same card instead of a new one."}
+_REPLY = {"type": "string", "description": "With revise: a word to the reviewers on what you changed (added to its comments)."}
 # A slide deck is a markdown note with `mode: slide` (and a ratio) in its front matter (note's slides.jsx).
 SLIDES = (" A slide deck: slide 1 is the note's title and the first line under it; a line of just `---` or a "
           "`# heading` starts the next slide, and a slide too full for the page goes on to the next by itself. "
@@ -132,7 +138,7 @@ TOOLS = [
                     "there is one. why is shown to the person deciding. Returns the candidate's id: get_record with "
                     "service inbox and that id shows status (waiting, approved, discarded) and, once approved, "
                     "made.id, the job's id. Then write goal and why with update_job. 쓰는 법은 guide.",
-     "inputSchema": _schema(["recipe", "project", "why"], recipe=_STR, project=_STR, why=_STR, server=_STR,
+     "inputSchema": _schema(["recipe", "project", "why"], recipe=_STR, project=_STR, why=_STR, server=_STR, revise=_REVISE, reply=_REPLY,
                             params={"type": "object"})},
     {"name": "job_status", "write": False,
      "description": "How a job is doing in jobrun: its state, error, the end of its log and its output files. "
@@ -299,18 +305,37 @@ TOOLS = [
      "inputSchema": _schema(["id", "text"], id=_STR, text=_STR,
                             verdict={"type": "string", "enum": ["good", "bad", "unsure"]},
                             by={"type": "string", "enum": ["person", "agent"]}, file=_STR)},
+    {"name": "register_sender", "write": False,
+     "description": "Before leaving anything in an inbox (propose_*, submit_job), a token is registered as a sender. "
+                    "name: what people see (e.g. 메일 정리); kinds: what it sends (note, activity, tags, job, "
+                    "note_delete, record_delete); reads: when it reads a held candidate's comments — schedule "
+                    "(reads_at says when, e.g. 매일 10시·17시), session (only while a session runs) or never (its "
+                    "candidates cannot be held, only approved or discarded). A manager approves, rejects or holds "
+                    "the request in the portal's inbox: call this again to see its status and comments, and again "
+                    "with changes after a hold or a no (it waits again). Already approved: the same words keep it so.",
+     "inputSchema": _schema(["name", "reads"], name=_STR, reads_at=_STR,
+                            reads={"type": "string", "enum": ["schedule", "session", "never"]},
+                            kinds={"type": "array", "items": {"type": "string", "enum": [
+                                "note", "activity", "tags", "job", "note_delete", "record_delete"]}})},
+    {"name": "my_proposals", "write": False,
+     "description": "What this token proposed (propose_note, propose_activity, propose_tags, submit_job) and how "
+                    "each stands: held (a person held it with comments: read `comments`, change it and send it "
+                    "again with the same tool and revise=<its id>, reply=<what you changed>), waiting, approved, checked or discarded. Held "
+                    "ones come first; comments made while you were away are here too. Look at this when a session starts.",
+     "inputSchema": _schema([], status={"type": "string", "enum": ["held", "waiting", "approved", "checked", "discarded"]},
+                            project=_STR, limit={"type": "integer", "minimum": 1, "maximum": 200})},
     {"name": "propose_note", "write": False, "proposes": True,
      "description": "Ask the owner instead of writing: leaves a candidate in the inbox, and the note "
                     "is made or added to only if they approve. Give title for a new note, or match_id to add to an "
                     "existing one. For the owner's own notes, or text you are not sure they want. "
                     "`why` is shown beside it.",
-     "inputSchema": _schema(["body", "why"], body=_STR, why=_STR, title=_STR, tags=_STR, match_id=_STR, set=_SET)},
+     "inputSchema": _schema(["body", "why"], body=_STR, why=_STR, title=_STR, tags=_STR, match_id=_STR, set=_SET, revise=_REVISE, reply=_REPLY)},
     {"name": "propose_tags", "write": False, "proposes": True,
      "description": "Propose tags for records and notes, as ONE inbox candidate the owner approves item by item; "
                     "nothing is tagged until they do. items: [{service, id, project?, add: [tag, ...]}] (note "
                     "included; tags without #). Look the tags up with `tags` first and prefer ones in use. "
                     "`why` is shown beside it.",
-     "inputSchema": _schema(["why"], why=_STR, set=_SET, items={"type": "array", "items": {
+     "inputSchema": _schema(["why"], why=_STR, set=_SET, revise=_REVISE, reply=_REPLY, items={"type": "array", "items": {
          "type": "object", "properties": {"service": _STR, "id": _STR, "project": _STR,
                                           "add": {"type": "array", "items": _STR}}, "required": ["service", "id", "add"]}})},
     {"name": "propose_activity", "write": False, "proposes": True,
@@ -318,7 +343,7 @@ TOOLS = [
                     "made until they do. New: name and start (YYYY-MM-DD) are required. To change an existing "
                     "activity, give match_id and only the fields that change. Times are HH:MM. "
                     "start/end are the event's days; tripStart/tripEnd the trip's. `why` is shown beside it.",
-     "inputSchema": _schema(["why"], why=_STR, match_id=_STR, set=_SET,
+     "inputSchema": _schema(["why"], why=_STR, match_id=_STR, set=_SET, revise=_REVISE, reply=_REPLY,
                             **{k: ({"type": "string", "enum": list(KINDS)} if k == "kind" else _STR)
                                for k in UPDATABLE})},
     {"name": "delegate", "write": True,
@@ -362,6 +387,7 @@ class Grant(NamedTuple):
     scope: str
     home: dict = {}          # {service: project} of the share set the token is bound to (scope set:NAME)
     owner: str = ""          # the owner as note names a locker: e-mail, else username
+    tid: int = 0             # the token's row, for the connection list
 
 
 def _main(grant: Grant, svc: str) -> str:
@@ -400,10 +426,33 @@ def _inbox_of(grant: Grant, home: dict) -> str:
     return proj
 
 
+def _sender(grant: Grant) -> str:
+    """How the inbox knows this token among its owner's: the `via` its candidates are stamped with
+    (the token's name, as app/senders.py finds a sender by)."""
+    return grant.who
+
+
+async def _as_sender(request: Request, grant: Grant, method: str, proj: str, path: str, **kw) -> httpx.Response:
+    """A call to one set's inbox as the token's owner AND this token (`via`), so the inbox stamps and reads
+    back what this token sent and nothing else of the owner's. A delegated portal token: that one inbox,
+    a few minutes."""
+    from ..deps import portal_token as mint
+    with SessionLocal() as db:
+        t = db.get(models.McpToken, grant.tid)
+        user = db.get(models.User, t.user_id) if t else None
+        if not user:
+            raise ToolError("토큰의 주인을 찾지 못했습니다.")
+        jwt = mint(user, scope=f"inbox/{proj}", via=_sender(grant), minutes=5)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=request.app), base_url="http://portal",
+                                 timeout=60, headers={"Authorization": f"Bearer {jwt}", "Accept": "application/json"}) as c:
+        return await c.request(method, f"/pp/inbox/{proj}/api/{path}", **kw)
+
+
 async def _inbox(request: Request, grant: Grant, record: dict, proj: str) -> httpx.Response:
     # Straight through the proxy, not _portal: proposing is open to any token, whatever its scope;
     # the proxy's project rule (a set's inbox is open to whoever is in the set) is what holds.
-    return await _self(request, grant, "POST", f"/pp/inbox/{proj}/api/records", json={"key": "inbox", "record": record})
+    # The inbox stamps the sender and sets status, round and comments itself.
+    return await _as_sender(request, grant, "POST", proj, "propose", json={"record": record})
 
 
 async def _activities(request: Request, grant: Grant) -> httpx.Response:
@@ -455,7 +504,8 @@ def _from_path(request: Request, line: str) -> dict:
     u = urlsplit(line.strip())
     if u.netloc:
         ours = {request.url.netloc, request.headers.get("x-forwarded-host", "")} | \
-               {urlsplit(o).netloc for o in config.CORS_ORIGINS if o != "*"}
+               {urlsplit(o).netloc for o in config.CORS_ORIGINS if o != "*"} | \
+               {gitinfo.hostname(), f"{gitinfo.hostname()}:{config.PORTAL_PORT}"}   # how a page opened as localhost names it
         if u.netloc not in ours - {""}:
             raise ToolError(f"{u.scheme}://{u.netloc} 는 다른 포털의 항목입니다. 그 포털에 연결된 MCP로 읽으세요.")
     parts = [unquote(x) for x in u.path.strip("/").split("/")]
@@ -706,10 +756,147 @@ async def _leave(request, grant, target, args, fields, dest: str = "", home: dic
     """A candidate in the set's inbox (`home`: the named set). What the screen reads, by name: nothing from the
     caller beyond `fields`, so no status or feedback (the mail task trusts that
     field as the owner's word). `dest`: the project of its target service approving makes it in."""
-    record = {"id": f"mcp-{uuid.uuid4().hex}", "target": target, "status": "waiting", "from": f"MCP {grant.who}",
+    said, sends_as = _may_send(grant, target)    # only a registered sender leaves candidates (app/senders.py)
+    if said and said[0]:
+        raise ToolError(said[1])
+    out = await _leave_as(request, grant, target, args, fields, dest, home, sends_as)
+    return {**out, "notice": said[1]} if said else out
+
+
+# Tokens that sent before registration existed: until this day they still may, with a notice.
+# ponytail: one date for all, an env var to move it.
+GRACE_UNTIL = os.environ.get("MCP_SENDER_GRACE_UNTIL", "2026-12-01")
+READS_SAID = {"session": "세션 중에만", "never": "읽지 않음"}
+# Registered from the start, on a portal that has never registered anyone: the daily tag task's tokens
+# (shared with every Claude Code session). The mail task drops files into the inbox, not through MCP.
+SEED = {"set-manage": ("Claude Code 세션 · 태그 정리", ["note", "activity", "tags"]),
+        "set-jobboard": ("Claude Code 세션 · 태그 정리", ["note", "tags", "job"])}
+
+
+def _may_send(grant: Grant, kind: str) -> tuple:
+    """(None or (refuse, why), sendsAs or None): may this token leave a `kind` candidate, and as whom."""
+    got = senders.info(grant.tid)
+    row = got["row"]
+    if got["status"] == "approved":
+        if kind not in row["kinds"]:
+            return (True, f"이 토큰은 보내는 곳 '{row['name']}'으로 {', '.join(row['kinds'])} 만 보내도록 등록되어 있습니다. "
+                          "register_sender 로 종류를 더해 다시 신청하세요."), None
+        return None, {"name": row["name"], "kinds": row["kinds"], "mode": row["reads"],
+                      "reads": row.get("reads_at") or READS_SAID.get(row["reads"], ""), "holdable": row["reads"] != "never"}
+    why = {"waiting": "보내는 곳 등록 신청이 매니저 승인을 기다리고 있습니다.",
+           "held": "보내는 곳 등록 신청이 보류되었습니다. register_sender 결과의 comments 를 읽고 고쳐 다시 신청하세요.",
+           "rejected": "보내는 곳 등록 신청이 거절되었습니다. 고쳐서 register_sender 로 다시 신청할 수 있습니다."}.get(
+        got["status"], "받은편지함에 후보를 넣으려면 먼저 보내는 곳으로 등록하세요(register_sender: 이름, 보내는 종류, 답을 읽는 때).")
+    if date.today().isoformat() < GRACE_UNTIL:
+        return (False, f"{why} {GRACE_UNTIL}부터는 등록하지 않은 토큰의 후보를 받지 않습니다."), None
+    return (True, why), None
+
+
+def _seed_senders() -> None:
+    if senders._file().exists():
+        return
+    db = SessionLocal()
+    try:
+        for t in db.query(models.McpToken).filter(models.McpToken.name.in_(list(SEED)), models.McpToken.revoked_at.is_(None)):
+            u = db.get(models.User, t.user_id)
+            senders.register(t.id, t.name, (u.email or u.username) if u else "", *SEED[t.name], "session")
+    finally:
+        db.close()
+
+
+async def _leave_as(request, grant, target, args, fields, dest, home, sends_as) -> dict:
+    # sendsAs: who sent it as the inbox shows it, and whether it may be held (a sender that never reads: no)
+    record = {"id": f"mcp-{uuid.uuid4().hex}", "target": target, "from": f"MCP {grant.who}",
+              **({"sendsAs": sends_as} if sends_as else {}),
               "date": date.today().isoformat(), "remark": args["why"], **fields, **({"destProj": dest} if dest else {})}
+    if (args.get("revise") or "").strip():
+        return await _revise(request, grant, args["revise"].strip(), record, str(args.get("reply") or ""))
     proj = _inbox_of(grant, home or {})
-    return {"id": _ok(await _inbox(request, grant, record, proj))["record"]["id"], "status": "waiting", "inbox": proj}
+    return {"id": _ok(await _inbox(request, grant, record, proj))["id"], "status": "waiting", "inbox": proj}
+
+
+# A person may hold a candidate with a comment (GitHub's "request changes") instead of approving or
+# discarding it. The token that sent it reads that with my_proposals and sends it again, changed, by
+# passing its id as `revise`: the same card comes back waiting (round + 1), the comments kept.
+# The inbox service keeps all of it (lilak_rack inbox: /api/propose, /api/mine, /api/inbox/{id}/resubmit).
+
+
+def _inbox_projs(grant: Grant, proj: str = "") -> list:
+    """Every inbox this token may read: the named one, else its set's, every set's, the main one."""
+    if proj:
+        return [proj]
+    sets, _ = registry.share_sets()
+    return [p for p in dict.fromkeys([grant.home.get("inbox", "")] + [(s.get("members") or {}).get("inbox", "") for s in sets]
+                                     + [registry.link_project("inbox")]) if p]
+
+
+async def _inbox_rows(request: Request, grant: Grant, proj: str = ""):
+    """(project, candidate) over every inbox this token's owner may read; one it may not is passed by."""
+    for p in _inbox_projs(grant, proj):
+        r = await _self(request, grant, "GET", f"/pp/inbox/{p}/api/data")
+        if r.status_code == 200:
+            for x in r.json().get("inbox") or []:
+                if isinstance(x, dict):
+                    yield p, x
+
+
+async def _mine(request: Request, grant: Grant, proj: str = "", status: str = ""):
+    """(project, card) of what this token sent, over every inbox it may reach."""
+    for p in _inbox_projs(grant, proj):
+        r = await _as_sender(request, grant, "GET", p, "mine", params={"status": status} if status else {})
+        if r.status_code == 200 and r.headers.get("content-type", "").startswith("application/json"):
+            for x in r.json().get("items") or []:          # (an inbox from before /api/mine answers its page)
+                if isinstance(x, dict):
+                    yield p, x
+
+
+async def _revise(request: Request, grant: Grant, rid: str, record: dict, comment: str) -> dict:
+    hit = None
+    async for p, x in _mine(request, grant):
+        if str(x.get("id")) == rid:
+            hit = (p, x)
+            break
+    if not hit:
+        raise ToolError("이 토큰이 낸 그 후보가 없습니다. my_proposals 로 id 를 확인하세요.")
+    proj, old = hit
+    if old.get("kind") != record["target"]:
+        raise ToolError(f"이 후보는 {old.get('kind')} 입니다. 같은 도구로 고쳐 내세요.")
+    if old.get("status") != "held":
+        raise ToolError(f"보류된 후보만 고쳐 낼 수 있습니다(지금 {old.get('status')}). 새로 내세요.")
+    fields = {k: v for k, v in record.items() if k not in ("id", "date")}
+    _ok(await _as_sender(request, grant, "POST", proj, f"inbox/{quote(rid, safe='')}/resubmit",
+                         json={"fields": fields, **({"text": comment.strip()} if comment.strip() else {})}))
+    return {"id": rid, "status": "waiting", "inbox": proj, "revised": True}
+
+
+def _proposal(p: str, x: dict) -> dict:
+    """A card as its sender reads it back: what it is, how it stands, what people said."""
+    return {"id": x.get("id"), "inbox": p, "target": x.get("kind"), "status": x.get("status", "waiting"),
+            "title": x.get("title") or "", "date": x.get("date"), "why": x.get("remark"),
+            "decided_at": x.get("decidedAt") or None, "round": x.get("round") or 0,
+            "comments": x.get("comments") or [], "made": x.get("made")}
+
+
+async def _register_sender(request, grant, args):
+    kinds = args.get("kinds") or []
+    if not isinstance(kinds, list):
+        raise ToolError("kinds 는 목록입니다: " + ", ".join(senders.KINDS))
+    try:
+        got = senders.apply(grant.tid, grant.who, grant.owner, args["name"], kinds, args["reads"], args.get("reads_at") or "")
+    except ValueError as e:
+        raise ToolError(str(e)) from None
+    return {**got, "next": {"waiting": "매니저가 포털 받은편지함에서 승인하면 후보를 넣을 수 있습니다.",
+                            "held": "comments 를 읽고 고쳐서 register_sender 를 다시 부르세요.",
+                            "approved": ""}.get(got["status"], "")}
+
+
+async def _my_proposals(request, grant, args):
+    out = [_proposal(p, x) async for p, x in _mine(request, grant, args.get("project") or "", (args.get("status") or "").strip())]
+    # held first (they wait on us), then waiting, then the decided; newest first in each
+    rank = {"held": 0, "waiting": 1}
+    out.sort(key=lambda x: str(x.get("decided_at") or x.get("date") or ""), reverse=True)
+    out.sort(key=lambda x: rank.get(x["status"], 2))
+    return {"proposals": out[:int(args.get("limit") or 50)], "held": sum(x["status"] == "held" for x in out)}
 
 
 def _set_home(args: dict) -> dict:
@@ -964,17 +1151,9 @@ async def _get_record(request, grant, args):
         # A set's inbox, read here only, by the id a proposal returned: how it stands, and once
         # approved what it made (made.id). Search and by_tag do not see it; any token may ask, and
         # the proxy lets through only the inboxes of the sets its owner is in.
-        sets, _ = registry.share_sets()
-        projs = [args["project"]] if args.get("project") else \
-            list(dict.fromkeys([grant.home.get("inbox", "")] + [(s.get("members") or {}).get("inbox", "") for s in sets]
-                               + [registry.link_project("inbox")]))
-        for proj in filter(None, projs):
-            r = await _self(request, grant, "GET", f"/pp/inbox/{proj}/api/data")
-            if r.status_code != 200:
-                continue
-            hit = next((x for x in r.json().get("inbox") or [] if str(x.get("id")) == args["id"]), None)
-            if hit:
-                return {"service": "inbox", "project": proj, "key": "inbox", "record": hit}
+        async for proj, x in _inbox_rows(request, grant, args.get("project") or ""):
+            if str(x.get("id")) == args["id"]:
+                return {"service": "inbox", "project": proj, "key": "inbox", "record": x}
         raise ToolError("그 기록이 없습니다.")
     # No project named: the record may sit in either of the service's projects (one per share set).
     for svc, p in _pairs_of(grant, args):
@@ -1685,7 +1864,7 @@ HANDLERS = {"tags": _tags, "find": _find, "related": _related, "my_tasks": _my_t
             "chat_rooms": _chat_rooms, "chat_read": _chat_read, "chat_send": _chat_send,
             "approve_job": _approve_job, "job_recipes": _job_recipes, "submit_job": _submit_job,
             "job_status": _job_status, "add_evaluation": _add_evaluation,
-            "note_units": _note_units, "list_issues": _list_issues, "reply_issue": _reply_issue, "create_service": _create_service, "service_job": _service_job, "add_review": _add_review, "lock_note": _lock_note, "unlock_note": _unlock_note, "reply_review": _reply_review, "guide": _guide}
+            "note_units": _note_units, "list_issues": _list_issues, "reply_issue": _reply_issue, "create_service": _create_service, "service_job": _service_job, "add_review": _add_review, "lock_note": _lock_note, "my_proposals": _my_proposals, "register_sender": _register_sender, "unlock_note": _unlock_note, "reply_review": _reply_review, "guide": _guide}
 PROPOSERS = {"propose_note": _propose_note, "propose_activity": _propose_activity, "propose_tags": _propose_tags}
 
 
@@ -1695,7 +1874,7 @@ def _authorize(token: str):
     try:
         found = mcp_tokens.owner_of(db, token)
         return Grant(portal_token(found[1]), found[0].can_write, found[0].name, found[0].scope,
-                     mcp_tokens.home(found[0].scope), found[1].email or found[1].username) if found else None
+                     mcp_tokens.home(found[0].scope), found[1].email or found[1].username, found[0].id) if found else None
     finally:
         db.close()
 
@@ -1744,6 +1923,41 @@ def _listed(can_write: bool) -> list:
             for t in TOOLS if can_write or not t["write"]]
 
 
+# Who is connected: one row per MCP session (the Mcp-Session-Id we hand out at initialize), else per
+# token and address for a client that sends none. A table, so it outlives a portal restart.
+SEEN_DAYS = 7
+
+
+def _where(request: Request) -> str:
+    from .auth import _addr          # the hop the front proxy wrote, not the first (the client's own word)
+    return _addr(request) or "?"
+
+
+def _seen(request: Request, grant: Grant, method: str, params: dict) -> str:
+    now = time.time()
+    sid = secrets.token_urlsafe(12) if method == "initialize" else \
+        (request.headers.get("mcp-session-id") or f"{grant.tid}@{_where(request)}")[:80]
+    with SessionLocal() as db:
+        db.query(models.McpConnection).filter(models.McpConnection.last < now - SEEN_DAYS * 86400).delete()
+        row = db.get(models.McpConnection, sid)
+        if not row or row.token_id != grant.tid:       # an id another token made is not this one's to update
+            if row:
+                sid = f"{grant.tid}@{_where(request)}"
+                row = db.get(models.McpConnection, sid)
+            if not row:
+                row = models.McpConnection(sid=sid, token_id=grant.tid, first=now, calls=0, client="", tool="")
+                db.add(row)
+        row.last, row.where, row.agent = now, _where(request)[:64], request.headers.get("user-agent", "")[:120]
+        if method == "initialize":
+            info = params.get("clientInfo") or {}
+            row.client = f"{info.get('name', '')} {info.get('version', '')}".strip()[:80]
+        if method == "tools/call":
+            row.calls = (row.calls or 0) + 1
+            row.tool = str(params.get("name", ""))[:64]
+        db.commit()
+    return sid
+
+
 @router.post("/mcp")
 async def mcp(request: Request, authorization: str = Header(default="")):
     token = security.bearer(authorization)
@@ -1763,11 +1977,14 @@ async def mcp(request: Request, authorization: str = Header(default="")):
     if "id" not in msg:
         return Response(status_code=202)             # a notification wants no answer
     rid, method, params = msg["id"], msg["method"], msg.get("params") or {}
+    sid = _seen(request, grant, method, params if isinstance(params, dict) else {})
     if method == "initialize":
         asked = params.get("protocolVersion")
-        return reply(rid, {"protocolVersion": asked if asked in VERSIONS else VERSIONS[0],
-                           "capabilities": {"tools": {}},
-                           "serverInfo": {"name": "lilak-rack", "version": "1"}})
+        r = reply(rid, {"protocolVersion": asked if asked in VERSIONS else VERSIONS[0],
+                        "capabilities": {"tools": {}},
+                        "serverInfo": {"name": "lilak-rack", "version": "1"}})
+        r.headers["Mcp-Session-Id"] = sid        # the client sends it back, so later calls find its name
+        return r
     if method == "ping":
         return reply(rid, {})
     if method == "tools/list":
@@ -1805,6 +2022,21 @@ def list_tokens(_: models.User = Depends(require_portal_admin), db: Session = De
     return [_token_row(db, t) for t in db.query(models.McpToken).order_by(models.McpToken.id.desc())]
 
 
+@router.get("/api/admin/mcp-connections")
+def connections(_: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)) -> list:
+    """Every MCP client seen in the last SEEN_DAYS, newest first, with its token as it is now (name, set, owner)."""
+    out = []
+    for c in db.query(models.McpConnection).filter(models.McpConnection.last >= time.time() - SEEN_DAYS * 86400) \
+            .order_by(models.McpConnection.last.desc()):
+        t = db.get(models.McpToken, c.token_id)
+        u = db.get(models.User, t.user_id) if t else None
+        out.append({"tid": c.token_id, "token": t.name if t else "?", "scope": t.scope if t else "",
+                    "scope_label": mcp_tokens.label(t.scope) if t else "", "owner": (u.email or u.username) if u else "?",
+                    "write": bool(t and t.can_write), "client": c.client, "agent": c.agent, "where": c.where,
+                    "calls": c.calls, "tool": c.tool, "first": c.first, "last": c.last})
+    return out
+
+
 @router.post("/api/admin/mcp-tokens", status_code=201)
 def new_token(body: NewToken, user: models.User = Depends(require_portal_admin), db: Session = Depends(get_db)) -> dict:
     name, scope = body.name.strip(), ",".join(p.strip() for p in body.scope.split(",") if p.strip())
@@ -1819,6 +2051,29 @@ def new_token(body: NewToken, user: models.User = Depends(require_portal_admin),
         return {"token": mcp_tokens.issue(db, name, user, body.can_write, body.days, scope)}
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+class TokenScope(BaseModel):
+    scope: str = ""
+
+
+@router.put("/api/admin/mcp-tokens/{token_id}")
+def rescope_token(token_id: int, body: TokenScope, _: models.User = Depends(require_portal_admin),
+                  db: Session = Depends(get_db)) -> dict:
+    """A token's reach, changed in place: the scope is read on every call, so a client already
+    connected keeps its token and gets the new reach on its next call."""
+    t = db.get(models.McpToken, token_id)
+    if not t or t.revoked_at:
+        raise HTTPException(404, "그 토큰이 없습니다.")
+    scope = ",".join(p.strip() for p in body.scope.split(",") if p.strip())
+    if len(scope) > 512:
+        raise HTTPException(400, "범위가 너무 깁니다.")
+    try:
+        t.scope = mcp_tokens.bind_sets(scope)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    db.commit()
+    return {"ok": True, "scope_label": mcp_tokens.label(t.scope)}
 
 
 @router.delete("/api/admin/mcp-tokens/{token_id}")
@@ -1885,3 +2140,6 @@ async def tidy_empty_notes(request: Request, dry_run: bool = True, _: models.Use
     """The empty-note sweep now (app/tidy.py); dry_run (the default) only lists what it would ask."""
     from .. import tidy
     return {"dry_run": dry_run, "found": await tidy.sweep(request.app, dry_run)}
+
+
+_seed_senders()      # once, on a portal that has never registered a sender
