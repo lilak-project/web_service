@@ -552,7 +552,10 @@ export default function ProjectsPage() {
     // A project card is named by its project (one name everywhere); an account's own
     // name is for service cards only.
     ? named0.map((c) => { const k = cardKey(c); const own = c.project_card ? '' : layout.labels[k] || ''
-      return { ...c, hidden: !!c.hidden || layout.hidden.includes(k),
+      // The live card is hidden only by default: an account may bring it back
+      // (shown) unless a manager hid it outright (bi.live.hidden true).
+      const byDefault = c.builtin === 'live' && bi.live?.hidden == null
+      return { ...c, hidden: layout.hidden.includes(k) || (byDefault ? !(layout.shown || []).includes(k) : !!c.hidden),
         label: own || c.label, my_label: own, default_label: c.label } })
     : named0
   const cardsAll = sortByHome(named, homeCfg?.order || [])
@@ -621,7 +624,11 @@ export default function ProjectsPage() {
     target: isManager ? layoutTarget : 'mine',
     setTarget: (v) => setLayoutTarget(v),
     reset: async () => { layoutRef.current = null; setLayout(null); try { await launcher.put('/account/prefs', { layout: null }) } catch { /* kept locally */ } },
-    hideCard: (key, h) => saveLayout((L) => { L.hidden = h ? [...new Set([...L.hidden, key])] : L.hidden.filter((k) => k !== key); return L }),
+    hideCard: (key, h) => saveLayout((L) => {
+      L.hidden = h ? [...new Set([...L.hidden, key])] : L.hidden.filter((k) => k !== key)
+      L.shown = h ? (L.shown || []).filter((k) => k !== key) : [...new Set([...(L.shown || []), key])]
+      return L
+    }),
     setLabel: (key, name) => saveLayout((L) => { if (name.trim()) L.labels[key] = name.trim(); else delete L.labels[key]; return L }),
     renameGroup: (id, name) => saveLayout((L) => { const g = L.groups.find((x) => x.id === id); if (g) g.name = name.trim(); return L }),
     hideGroup: (id, h) => saveLayout((L) => {

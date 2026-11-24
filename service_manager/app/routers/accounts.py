@@ -426,7 +426,7 @@ class PrefsBody(BaseModel):
 def _clean_layout(d: dict) -> dict:
     """Keep only the known shape, with bounded sizes: a personal layout is
     {order:[key], groups:[{id,name,members:[key],hidden}], hidden:[key],
-     labels:{key:name}, looseHidden:bool, setOrder:{gid:[key]}}. Keys are card keys or "#g:<id>"."""
+     labels:{key:name}, looseHidden:bool, setOrder:{gid:[key]}, shown:[key]}. Keys are card keys or "#g:<id>"."""
     def keys(v, n=2000):
         out = [str(k)[:200] for k in (v or []) if isinstance(k, (str, int)) and str(k).strip()]
         if len(out) > n:
@@ -446,6 +446,8 @@ def _clean_layout(d: dict) -> dict:
     if len(labels) > 2000:
         raise HTTPException(400, "사이드바 배치가 너무 큽니다.")
     return {"order": keys(d.get("order")), "groups": groups, "hidden": keys(d.get("hidden")),
+            # cards hidden by default (the live card) that this account brought back
+            "shown": keys(d.get("shown"), 50),
             "labels": labels, "looseHidden": bool(d.get("looseHidden")),
             # A share set's group is not this account's to refill, only to reorder: {group id: [key]}.
             "setOrder": {str(k)[:40]: keys(v, 200) for k, v in list((d.get("setOrder") or {}).items())[:200]
