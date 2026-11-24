@@ -1915,7 +1915,7 @@ export default {
   pc_cmd_opts: (c, o) => `/${c} 뒤에: ${o}`,
   pc_report_preview: (k, s, n) => `보낼 것: ${k} 이슈 · 제목 "${s}"${n ? ` · 첨부 ${n}개` : ''}`,
   pc_att_n: (n) => `첨부 ${n}개`,
-  pc_cmd_d_todo: '오늘 Daily 노트에 할 일 넣기 — >> 2026-11-20 으로 마감일 (>> . 은 오늘)',
+  pc_cmd_d_todo: '오늘 Daily 노트에 할 일 넣기 — >> 2026-11-20 으로 마감일 (>> . 이나 >> 0 은 오늘, >> +3 은 사흘 뒤)',
   pc_cmd_todo_usage: '/todo 할 일 [>> 마감일]',
   pc_cmd_todo_done: (t, x) => `${t}에 할 일 추가: ${x}`,
   pc_cmd_todo_fail: (e) => `할 일을 넣지 못했습니다: ${e}`,

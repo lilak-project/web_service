@@ -59,11 +59,17 @@ function parseReport(line) {
  *  the note page's `daily` button makes it when there is none yet. A `>> day` in `text` becomes
  *  its due day (see dueMark). */
 const WDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-/** `>> 2026-11-5`, `>>today`, `>> .`, `>> 오늘` → `» 2026-11-05`: the form the note page
- *  draws as a due chip (its editor makes the same change as you type). */
-export const dueMark = (text, day) => text.replace(/(^|\s)(?:>>|»|📅)\s*(today|\.|오늘|\d{4}-\d{1,2}-\d{1,2})(?=\s|$)/i,
+/** `>> 2026-11-5`, `>>today`, `>> .`, `>> 오늘`, `>> 0`, `>> +3`, `>> -1` → `» 2026-11-05`:
+ *  the form the note page draws as a due chip (its editor makes the same change as you type).
+ *  A number is days from today. */
+export const dueMark = (text, day) => text.replace(/(^|\s)(?:>>|»|📅)\s*(today|\.|오늘|\d{4}-\d{1,2}-\d{1,2}|[+-]?\d{1,3})(?=\s|$)/i,
   (_, sp, d) => {
-    if (/^(today|\.|오늘)$/i.test(d)) return `${sp}» ${day}`
+    if (/^(today|\.|오늘)$/i.test(d)) d = '0'
+    if (/^[+-]?\d{1,3}$/.test(d)) {
+      const [y, m, dd] = day.split('-').map(Number)
+      const t = new Date(y, m - 1, dd + Number(d))
+      return `${sp}» ${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+    }
     const [y, m, dd] = d.split('-')
     return `${sp}» ${y}-${m.padStart(2, '0')}-${dd.padStart(2, '0')}`
   })
